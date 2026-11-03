@@ -146,6 +146,23 @@ final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
     for (var i = 0; i < _maxRows; i++) {
       if (i < rows.length) {
         final row = rows[i];
+        final fields = <String, String>{
+          'kind': row.kind.name,
+          'spent_minor': row.spent?.minorUnits.toString() ?? '',
+          'spent_currency': row.spent?.currency ?? '',
+          'cap_minor': row.cap?.minorUnits.toString() ?? '',
+          'cap_currency': row.cap?.currency ?? '',
+          'extra_used_value': row.extraUsed?.value ?? '',
+          'extra_used_unit': row.extraUsed?.unit ?? '',
+          'extra_cap_value': row.extraCap?.value ?? '',
+          'extra_cap_unit': row.extraCap?.unit ?? '',
+        };
+        for (final entry in fields.entries) {
+          await HomeWidget.saveWidgetData<String>(
+            'row_${i}_${entry.key}',
+            entry.value,
+          );
+        }
         await HomeWidget.saveWidgetData<String>(
           'row_${i}_percent',
           row.percentText,
@@ -174,6 +191,19 @@ final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
           row.accentArgb.toRadixString(16).padLeft(8, '0'),
         );
       } else {
+        for (final field in [
+          'kind',
+          'spent_minor',
+          'spent_currency',
+          'cap_minor',
+          'cap_currency',
+          'extra_used_value',
+          'extra_used_unit',
+          'extra_cap_value',
+          'extra_cap_unit',
+        ]) {
+          await HomeWidget.saveWidgetData<String>('row_${i}_$field', '');
+        }
         await HomeWidget.saveWidgetData<String>('row_${i}_percent', '');
         await HomeWidget.saveWidgetData<String>('row_${i}_credits', '');
         await HomeWidget.saveWidgetData<String>('row_${i}_label', '');

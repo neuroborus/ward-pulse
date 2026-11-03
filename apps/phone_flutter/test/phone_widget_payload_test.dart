@@ -12,7 +12,7 @@ void main() {
     File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
   );
 
-  test('builds remaining rows from available percent metrics', () {
+  test('builds remaining and expense rows from available metrics', () {
     final payload = buildPhoneWidgetPayload(
       _asConnection(snapshot),
       const PhoneWidgetPreferences(),
@@ -21,7 +21,11 @@ void main() {
     expect(payload.rows, isNotEmpty);
     for (final row in payload.rows) {
       expect(row.remainingPercent, inInclusiveRange(0, 100));
-      expect(row.line, contains('% left ·'));
+      if (row.kind == PhoneWidgetRowKind.budget) {
+        expect(row.line, contains(row.spent!.label));
+      } else {
+        expect(row.line, contains('% left ·'));
+      }
     }
   });
 
@@ -236,11 +240,90 @@ void main() {
     expect(payload.rows, hasLength(1));
     final row = payload.rows.single;
     expect(row.label, 'Anthropic platform · Today');
-    expect(row.familyLabel, 'Anthropic platform');
+    expect(row.familyLabel, 'Anthropic');
     expect(row.poolLabel, 'Today');
     expect(row.resetsAt, isNull);
     expect(row.creditsSuffix, isNull);
   });
+
+  test(
+    'budget states transfer actual Money without inventing percentages or resets',
+    () {
+      final account = _asConnection(snapshot).primaryAccount!.toJson();
+      const spent = Money(minorUnits: -9007199254740993, currency: 'EUR');
+      const mismatched = Money(minorUnits: 10000, currency: 'USD');
+      account['today'] = {
+        ...BudgetState.unknownPeriod('today').toJson(),
+        'spent': spent.toJson(),
+        'limit': mismatched.toJson(),
+        'usedPercent': 10.0,
+      };
+      final source = DashboardSnapshot.fromJson({
+        ...snapshot.toJson(),
+        'accounts': [account],
+      });
+      final row =
+          buildPhoneWidgetPayload(
+            source,
+            const PhoneWidgetPreferences(
+              selectedIds: ['budget.anthropic.platform.today'],
+            ),
+          ).rows.single;
+      expect(row.kind, PhoneWidgetRowKind.budget);
+      expect(row.spent!.minorUnits, spent.minorUnits);
+      expect(row.spent!.currency, 'EUR');
+      expect(row.cap!.currency, 'USD');
+      expect(row.remainingPercent, isNull);
+      expect(row.percentText, isEmpty);
+      expect(row.resetsAt, isNull);
+      expect(
+        phoneWidgetPayloadSubtitle(
+          source,
+          const PhoneWidgetPreferences(
+            selectedIds: ['budget.anthropic.platform.today'],
+          ),
+        ),
+        contains('Cap unavailable'),
+      );
+    },
+  );
+
+  test(
+    'Extra usage preserves independent used and cap quantities in reported units',
+    () {
+      final account =
+          _asConnection(snapshot).primaryAccount!.toJson()
+            ..['allowances'] = [
+              {
+                ..._allowance('claude-extra-usage', 'Extra usage', 20),
+                'source': 'purchased',
+                'used':
+                    const Quantity(
+                      value: '12.500000',
+                      unit: 'Credits',
+                    ).toJson(),
+                'limit': null,
+              },
+            ];
+      final source = DashboardSnapshot.fromJson({
+        ...snapshot.toJson(),
+        'accounts': [account],
+      });
+      final row =
+          buildPhoneWidgetPayload(
+            source,
+            const PhoneWidgetPreferences(
+              selectedIds: ['allowance.claude.claude-extra-usage'],
+            ),
+          ).rows.single;
+      expect(row.remainingPercent, 80);
+      expect(row.extraUsed!.value, '12.500000');
+      expect(row.extraUsed!.unit, 'Credits');
+      expect(row.extraCap, isNull);
+      expect(row.creditsSuffix, isNull);
+      expect(row.resetsAt, isNull);
+    },
+  );
 
   test('family accents follow the family named in the metric id', () {
     final claude = providerFamilyColor('claude').toARGB32();

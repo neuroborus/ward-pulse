@@ -8,6 +8,91 @@ import 'package:ward_pulse_phone/widget/phone_widget_payload.dart';
 
 void main() {
   test(
+    'widget expenses distinguish known uncapped, saved unknown and empty defaults',
+    () {
+      expect(
+        phoneWidgetMoneyText(
+          const Money(minorUnits: -9223372036854775808, currency: 'EUR'),
+        ),
+        '-EUR 92233720368547758.08',
+      );
+      final source = DashboardSnapshot.fromJson({
+        ...DashboardSnapshot.empty().toJson(),
+        'accounts': [
+          {
+            'accountId': 'local-report',
+            'provider': 'claude',
+            'connection': 'anthropic.platform',
+            'status': 'ok',
+            'credits': <Object>[],
+            'buckets': <Object>[],
+            'modelBreakdown': <Object>[],
+            'allowances': <Object>[],
+            for (final period in ['today', 'week', 'month'])
+              period: {
+                ...BudgetState.unknownPeriod(period).toJson(),
+                if (period == 'today')
+                  'spent': const Money(minorUnits: 0, currency: 'EUR').toJson(),
+              },
+          },
+        ],
+      });
+      final known = phoneWidgetCatalog(
+        source,
+      ).singleWhere((m) => m.id.endsWith('.today'));
+      expect(phoneWidgetMetricIsAvailable(known), isTrue);
+      expect(
+        known.isAvailable,
+        isFalse,
+        reason: 'Shared Watch cap eligibility stays unchanged.',
+      );
+      expect(
+        resolvePhoneWidgetMetrics(
+          source,
+          const PhoneWidgetPreferences(),
+        ).map((m) => m.id),
+        ['budget.anthropic.platform.today'],
+      );
+      expect(
+        phoneWidgetMetricSubtitle(known),
+        contains('EUR 0.00 spent · No cap'),
+      );
+      const saved = PhoneWidgetPreferences(
+        selectedIds: ['budget.anthropic.platform.week'],
+      );
+      final unknown = resolvePhoneWidgetMetrics(source, saved).single;
+      expect(phoneWidgetMetricIsAvailable(unknown), isFalse);
+      expect(
+        phoneWidgetPayloadSubtitle(source, saved),
+        contains('Unavailable'),
+      );
+      expect(phoneWidgetPayloadSubtitle(source, saved), isNot(contains('%')));
+      expect(
+        phoneWidgetPayloadSubtitle(
+          source,
+          const PhoneWidgetPreferences(selectedIds: []),
+        ),
+        'No metrics selected',
+      );
+      expect(
+        phoneWidgetPayloadSubtitle(
+          DashboardSnapshot.empty(),
+          const PhoneWidgetPreferences(),
+        ),
+        'No default metrics available',
+      );
+      const missing = PhoneWidgetPreferences(
+        selectedIds: ['allowance.claude.missing'],
+      );
+      expect(resolvePhoneWidgetMetrics(source, missing), isEmpty);
+      expect(
+        phoneWidgetPayloadSubtitle(source, missing),
+        '1 selected · No current metrics available',
+      );
+    },
+  );
+
+  test(
     'widget keeps six independent rows even when three watch pairs would not fit',
     () {
       final base = DashboardSnapshot.fromJsonString(

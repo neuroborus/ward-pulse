@@ -81,7 +81,75 @@ List<WatchRingMetric> phoneWidgetCatalog(
   );
 }
 
-/// Resolves widget metrics: available percent metrics, prefs order.
+/// Widget eligibility is local: a known expense needs no local cap.
+bool phoneWidgetMetricIsAvailable(WatchRingMetric metric) =>
+    connectionFromBudgetRingId(metric.id) != null
+        ? metric.spent != null
+        : metric.isAvailable;
+
+bool _savedUnknownBudget(WatchRingMetric metric) =>
+    metric.spent == null &&
+    ['budget.anthropic.platform.', 'budget.cursor.platform.'].any(
+      (prefix) => [
+        'today',
+        'week',
+        'month',
+      ].any((period) => metric.id == '$prefix$period'),
+    );
+
+/// A percentage requires both a usable cap and the reported percentage.
+int? phoneWidgetRemainingPercent(WatchRingMetric metric) {
+  if (connectionFromBudgetRingId(metric.id) != null) {
+    final spent = metric.spent;
+    final cap = metric.limit;
+    if (spent == null ||
+        cap == null ||
+        cap.minorUnits <= 0 ||
+        cap.currency != spent.currency)
+      return null;
+  }
+  final used = metric.usedPercent;
+  return used == null || !used.isFinite || used < 0
+      ? null
+      : (100 - used).clamp(0, 100).round();
+}
+
+String phoneWidgetMetricValue(WatchRingMetric metric) {
+  if (connectionFromBudgetRingId(metric.id) == null) {
+    final percent = phoneWidgetRemainingPercent(metric);
+    return percent == null ? 'Unavailable' : '$percent% left';
+  }
+  final spent = metric.spent;
+  if (spent == null) return 'Unavailable';
+  final cap = metric.limit;
+  if (cap == null) return '${phoneWidgetMoneyText(spent)} spent · No cap';
+  if (cap.minorUnits <= 0 || cap.currency != spent.currency) {
+    return '${phoneWidgetMoneyText(spent)} spent · Cap unavailable';
+  }
+  final percent = phoneWidgetRemainingPercent(metric);
+  return '${phoneWidgetMoneyText(spent)} spent / ${phoneWidgetMoneyText(cap)} cap · '
+      '${percent == null ? 'Percentage unavailable' : '$percent% left'}';
+}
+
+/// Avoid abs overflow for the minimum signed minor-unit value.
+String phoneWidgetMoneyText(Money money) {
+  final amount = BigInt.parse(money.minorUnits.toString());
+  final absolute = amount.abs();
+  final hundred = BigInt.from(100);
+  return '${amount.isNegative ? '-' : ''}${money.currency} '
+      '${absolute ~/ hundred}.${(absolute % hundred).toString().padLeft(2, '0')}';
+}
+
+String phoneWidgetMetricSubtitle(WatchRingMetric metric) {
+  if (connectionFromBudgetRingId(metric.id) != null) {
+    return '${phoneWidgetMetricValue(metric)} · ${metric.status.label}';
+  }
+  return phoneWidgetMetricIsAvailable(metric)
+      ? metric.catalogSubtitle
+      : metric.unavailableReason ?? 'Unavailable · ${metric.status.label}';
+}
+
+/// Resolves widget metrics in prefs order, retaining supported saved unknown budgets.
 ///
 /// Exhausted meters (`usedPercent >= 100`) stay selectable / visible as 0% left
 /// so sibling pools (e.g. Cursor Models + Other Models) remain together.
@@ -98,7 +166,10 @@ List<WatchRingMetric> resolvePhoneWidgetMetrics(
   };
   return [
     for (final id in preferences.migratedIds)
-      if (catalog[id] case final metric? when metric.isAvailable) metric,
+      if (catalog[id] case final metric?
+          when phoneWidgetMetricIsAvailable(metric) ||
+              _savedUnknownBudget(metric))
+        metric,
   ];
 }
 
@@ -109,7 +180,7 @@ List<WatchRingMetric> _defaultPhoneWidgetMetrics(DashboardSnapshot snapshot) {
   final purchased = <WatchRingMetric>[];
   final budgets = <WatchRingMetric>[];
   for (final metric in phoneWidgetCatalog(snapshot)) {
-    if (!metric.isAvailable) {
+    if (!phoneWidgetMetricIsAvailable(metric)) {
       continue;
     }
     if (metric.id.startsWith('budget.')) {
@@ -161,14 +232,24 @@ String phoneWidgetPayloadSubtitle(
     resolvePhoneWidgetMetrics(snapshot, preferences),
   );
   if (metrics.isEmpty) {
-    return 'No metrics selected';
+    if (preferences.usesDefaults) return 'No default metrics available';
+    return preferences.migratedIds.isEmpty
+        ? 'No metrics selected'
+        : '${preferences.migratedIds.length} selected · No current metrics available';
   }
-  if (metrics.length == 1) {
+  final configured =
+      preferences.usesDefaults
+          ? metrics.length
+          : preferences.migratedIds.length;
+  if (metrics.length == 1 && configured == 1) {
     final metric = metrics.single;
-    return '${metric.catalogTitle} ${metric.remainingPercent!.round()}% left';
+    return '${metric.catalogTitle} · ${phoneWidgetMetricValue(metric)}';
   }
-  return '${metrics.length} metrics · '
-      '${metrics.map((m) => m.catalogTitle).join(', ')}';
+  final unavailable =
+      configured - metrics.where(phoneWidgetMetricIsAvailable).length;
+  return '$configured selected · ${metrics.length} current metrics · '
+      '${metrics.map((m) => m.catalogTitle).join(', ')}'
+      '${unavailable > 0 ? ' · $unavailable unavailable' : ''}';
 }
 
 abstract interface class PhoneWidgetPreferenceStore {

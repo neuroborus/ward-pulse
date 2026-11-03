@@ -101,6 +101,15 @@ void main() {
       'pool',
       'resets_at',
       'color',
+      'kind',
+      'spent_minor',
+      'spent_currency',
+      'cap_minor',
+      'cap_currency',
+      'extra_used_value',
+      'extra_used_unit',
+      'extra_cap_value',
+      'extra_cap_unit',
     ];
     final data = <String, Object?>{
       'row_count': phoneWidgetSlotCount,
@@ -127,7 +136,20 @@ void main() {
     expect(data['row_count'], 1);
     expect(data['row_0_label'], 'Retained metric');
     expect(data['row_0_percent'], '46% left');
-    for (final field in ['credits', 'family', 'pool', 'resets_at']) {
+    for (final field in [
+      'credits',
+      'family',
+      'pool',
+      'resets_at',
+      'spent_minor',
+      'spent_currency',
+      'cap_minor',
+      'cap_currency',
+      'extra_used_value',
+      'extra_used_unit',
+      'extra_cap_value',
+      'extra_cap_unit',
+    ]) {
       expect(
         data['row_0_$field'],
         '',
@@ -151,6 +173,77 @@ void main() {
     }
     expect(calls.where((call) => call.method == 'updateWidget'), hasLength(2));
   });
+
+  test(
+    'Money and Quantity transitions retain exact strings and clear obsolete fields',
+    () async {
+      final data = <String, Object?>{};
+      _bindWidgetStorage(data, calls: <MethodCall>[]);
+      Future<void> write(PhoneWidgetRow row) =>
+          HomeWidgetPhoneWidgetSyncService.writeHomeWidgetPayload(
+            PhoneWidgetPayload(rows: [row], stale: false),
+          );
+      await write(
+        const PhoneWidgetRow(
+          label: 'Expense',
+          remainingPercent: 40,
+          accentArgb: 0xff91c4b1,
+          kind: PhoneWidgetRowKind.budget,
+          spent: Money(minorUnits: -9007199254740993, currency: 'EUR'),
+          cap: Money(minorUnits: 10000, currency: 'EUR'),
+        ),
+      );
+      expect(data['row_0_kind'], 'budget');
+      expect(data['row_0_spent_minor'], '-9007199254740993');
+      expect(data['row_0_spent_currency'], 'EUR');
+      expect(data['row_0_cap_minor'], '10000');
+      await write(
+        const PhoneWidgetRow(
+          label: 'Uncapped',
+          remainingPercent: null,
+          accentArgb: 0xff91c4b1,
+          kind: PhoneWidgetRowKind.budget,
+          spent: Money(minorUnits: 0, currency: 'EUR'),
+        ),
+      );
+      expect(data['row_0_spent_minor'], '0');
+      expect(data['row_0_cap_minor'], '');
+      expect(data['row_0_cap_currency'], '');
+      expect(data['row_0_percent'], '');
+      await write(
+        const PhoneWidgetRow(
+          label: 'Extra',
+          remainingPercent: 80,
+          accentArgb: 0xff91c4b1,
+          extraUsed: Quantity(value: '12.500000', unit: 'Credits'),
+        ),
+      );
+      expect(data['row_0_kind'], 'allowance');
+      expect(data['row_0_extra_used_value'], '12.500000');
+      expect(data['row_0_extra_used_unit'], 'Credits');
+      for (final field in [
+        'spent_minor',
+        'spent_currency',
+        'cap_minor',
+        'cap_currency',
+        'extra_cap_value',
+        'extra_cap_unit',
+      ]) {
+        expect(data['row_0_$field'], '');
+      }
+      await write(
+        const PhoneWidgetRow(
+          label: 'Unavailable expense',
+          remainingPercent: null,
+          accentArgb: 0xff91c4b1,
+          kind: PhoneWidgetRowKind.budget,
+        ),
+      );
+      for (final field in ['percent', 'extra_used_value', 'extra_used_unit']) {
+        expect(data['row_0_$field'], '');
+      }
+    },
+  );
 
   for (final data in <Map<String, Object?>>[
     {},

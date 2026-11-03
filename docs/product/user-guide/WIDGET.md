@@ -1,7 +1,7 @@
 # Home widget
 
-The WardPulse home widget shows selected remaining percentages, applicable purchased
-credits and reported reset times. It is updated from the phone's reporting and has its
+The WardPulse home widget shows selected allowances, reported expenses, applicable purchased
+credits and real reset times. It is updated from the phone's reporting and has its
 own metric choices.
 
 ## Add and configure it
@@ -30,15 +30,23 @@ Widget updates continue while saved watch choices need correction. Selected exha
 **Claude Extra usage** can be selected when Claude reports a usable percentage. A missing
 monthly cap does not disable an otherwise usable percentage. When its percentage is
 unavailable, the choice remains unavailable; a saved choice can still be removed. Missing
-amounts or caps are not filled in as zero or Unlimited. The widget's Extra usage row shows
-a percentage; read the monthly used amount and cap on **Dashboard**.
+amounts or caps are not filled in as zero or Unlimited. Its right-hand details show used
+and cap amounts independently in the reported units, such as Credits. These describe usage,
+not purchased credits left; a monthly reset is not estimated.
 
-Console and Cursor Team budget choices currently need known spend, a positive usable
-same-currency local cap and a usable percentage. Known zero spend is valid; missing
-cost is not zero. An unavailable saved choice can still be deselected. Read API spend
-without a local cap and Claude monthly used/cap Credits on **Dashboard**: those amount rows are not yet
-part of this widget. Budget periods use UTC Today, Monday Week and calendar Month; they
-have no provider-supplied reset to display. Local caps do not stop provider spending.
+Console and Cursor Team expenses can be selected with known spend even without a local
+cap. Known zero is valid; missing spend is unavailable. Saved unavailable choices can still
+be removed. With a usable same-currency cap and reported percentage, the row shows percent
+left and actual spent/cap details. Without a cap it shows the amount and **No cap**. A present
+unusable cap shows **Cap unavailable**; a usable cap without a percentage shows
+**Percentage unavailable**. Amounts keep their reported currency and cents. Missing spend
+shows a dash and **Unavailable**, rather than an invented number.
+
+**Next widget payload** distinguishes an empty choice, no available default metrics and
+saved choices without current results. It describes the configured/current payload; your
+launcher's size determines which complete rows and details are visible. Budget periods use
+UTC Today, Monday Week and calendar Month, with no inferred reset. Local caps do not stop
+provider spending.
 
 Lower remaining percentages appear first. The phone's metric selection is shared by
 placed WardPulse widgets; each widget's size determines how much is visible.
@@ -46,8 +54,9 @@ placed WardPulse widgets; each widget's size determines how much is visible.
 ## Resize for the information you need
 
 Press and hold the placed widget to reveal your launcher's resize handles. Drag the side
-handles to change width and the top or bottom handles to change height. The card fills
-that allocation and centers its complete content, with space around fewer rows.
+handles to change width and the top or bottom handles to change height. A compact card
+is centered within that allocation, leaving unused exterior space transparent. The whole
+allocation remains tappable; transparent space does not give launcher cells back.
 
 The widget keeps its own text size when the phone's font-size or bold-text setting changes.
 Resize the widget to make room for more information.
@@ -59,9 +68,9 @@ rather than placing more metrics side by side.
 
 | Available width | Columns shown |
 | --- | --- |
-| Narrow | Remaining percentage |
-| Medium | Remaining percentage and full provider/metric label |
-| Wide | Remaining percentage, label and applicable purchased balance/reset time |
+| Narrow | Complete percentage or self-contained expense amount |
+| Medium | Primary value and full provider/metric label |
+| Wide | Primary value, label and applicable expense, Extra or purchased/reset details |
 
 Labels use two lines for the provider and full pool name, including **Cursor / Models**.
 Purchased credits appear as a compact balance such as `32.4K`; `K` and `M` mean thousands
@@ -70,8 +79,9 @@ It uses your phone's local time, for example **Reset 10 Feb 11:45**. Missing res
 omitted, and a displayed boundary does not itself confirm that capacity has returned.
 
 When width is tight, a reset may disappear before a purchased balance. Further narrowing
-hides the complete right-hand details column, then labels. Percentages retain their size;
-rows and columns are omitted whole rather than cut off. Increasing width adds information
+hides the complete right-hand details column, then labels. Expense amounts retain their
+currency and sign, using a smaller size only when the normal size cannot fit
+after columns are hidden. Rows and columns are omitted whole rather than cut off. Increasing width adds information
 columns, not more metric rows.
 
 ### Height changes the rows
@@ -80,17 +90,19 @@ The widget shows complete rows that fit, up to your six selected metrics. Shorte
 hides rows from the bottom without deselecting them. Increase its height to reveal more.
 The number that fits depends on your launcher's allocation and the actual labels/values.
 
-- **No metrics** means no selected metrics are available, including a deliberately empty
-  selection. Check the Widget tab and provider data.
+- **No metrics** means there are no current rows to show, including a deliberately empty
+  selection or unavailable allowance choices. A saved expense with missing spend can still
+  appear as an **Unavailable** row. Check the Widget tab and provider data.
 - **Resize widget** means metrics exist but no complete row fits. Increase the available
   width or height. Exceptionally tiny widgets may expose this state through accessibility
   without drawing text that would be cut off.
 - **STALE** means earlier data is retained after a failed refresh. The badge needs space
-  above the rows, so a stale widget may show fewer rows. Refresh the phone when
+  in the same header as the mark, without reserving another row. Refresh the phone when
   network/provider access is available; see [Sync](/guide/sync#offline-failed-refresh-and-restart).
 
 A missing value is not invented as zero. Accessibility retains each visible metric's full
-identity even when its label is hidden, and describes purchased/reset details when displayed.
+identity even when its label is hidden, and describes only displayed details and resets.
+Expense spend, Extra used/cap and purchased credits left have distinct meanings.
 
 ## Open the app from the widget
 
@@ -105,7 +117,7 @@ For an old widget, missing rows or delayed updates, use
 
 The following October 2026 images show the former widget renderer. They preserve earlier
 examples of width and height changes; they do not show the current typography, reset line
-or full-allocation card.
+or intrinsic card with transparent unused exterior.
 
 ### Earlier wide widget
 

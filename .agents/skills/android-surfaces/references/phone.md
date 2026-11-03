@@ -31,27 +31,34 @@ background sync, transport, storage, diagnostics and build work.
   status, Providers connection hub, and Settings.
 - Phase 14 primary tabs: Dashboard → Watchface → Widget → Providers → Settings. Watchface owns
   Wear/WFF ring-slot prefs; Widget owns phone home-widget prefs and the Android App Widget
-  (`PHONE_WIDGET_DESIGN.md`, revised 2026-11-01). The phone widget fills the actual
-  launcher allocation and centers compact complete rows/columns, up to six selections.
-  Keep expanded Claude/Codex windows, stable IDs/migrations, tightest-first ordering,
-  exhausted `0%`, unavailable omission and finite purchased-credit eligibility.
-  Render every visible string with the exact bundled Noto Regular/Bold through the bounded
-  native bitmap route (30/26/18/16/11 hierarchy; 12 Regular for complete empty/no-fit copy),
-  independent of fontScale, system family and force-bold. Measure actual glyphs; omit a reset
-  that crowds a valid balance, then whole detail and label columns by width and trailing
-  rows by height. Preserve two-line family/pool names, including Cursor/Models; never
-  ellipsize, shrink typography, substitute a system face or mutate host-owned options.
-  Keep the quiet mark clear; stale fitting and painting share the measured 11 Bold padded
-  line plus 2dp. Exceptionally tiny hosts retain an accessible fallback without clipped text.
-  Carry only the selected allowance's real optional reset through the phone-private cache;
-  clear absent/removed fields and safely retain old flat-label caches. Use device-local
-  English `Reset DD MMM HH:mm`, with no inferred budget reset, ticker or fabricated rollover.
-  Keep one root accessibility summary with full identity for every visible row, omit hidden
-  rows and announce purchased/reset meaning only when displayed. Keep the image decorative
-  and preserve cold/warm Dashboard tap/readiness behavior. Descriptive Widget-tab language,
-  credentials, fetching and phone-watch transport stay with their existing owners.
-  Regenerate review/picker art through `tools/render-phone-widget-designs.mjs`; illustrative
-  values and former-renderer captures are not replacement native acceptance.
+  (`PHONE_WIDGET_DESIGN.md`, revised 2026-11-03). Preserve the full launcher allocation
+  and tap area while centering an intrinsic card inside a transparent root. The existing
+  background and decorative layers live in the inner card; STALE and mark share one
+  nominal 19dp header. Native metrics determine width, full rows and bottom padding.
+  Keep six independent selections, stable IDs/migrations, explicit empty/default meaning,
+  expanded windows, the current comparator, exhausted zero and separate purchased credits.
+  Widget-local known-spend budgets need no cap; saved supported unknown budgets remain
+  unavailable rows, while unsupported/missing saved choices stay removable without fake rows.
+  Preserve shared Watch eligibility and F05. Carry exact Money minor-unit/currency and
+  independent Extra used/applicable-cap Quantity strings through the private cache, clearing
+  absent/removed fields and preserving legacy decoding when the discriminator is absent.
+  Distinguish no cap, unusable cap, missing spend, percentage unavailable and missing Quantity.
+  Render complete Money with reported currency/sign/cents at 30 Bold; exhaust released
+  whole-column width before 26 Bold, never 18, clipping, ellipsis or an 84-unit refusal.
+  Keep budget spent/cap at 18 Bold/11 Regular; Extra uses one 18 Bold used/cap line, with
+  independent missing amounts and actual units; purchased balances remain 26 Bold.
+  Use exact bundled Noto through the existing bounded native painter, glyph checks,
+  4096-side/platform-or-8MiB limits and at most two variants. Preserve whole-column fallback,
+  trailing-row fallback only for height/memory, complete empty/no-fit text at 12 Regular,
+  and accessibility-only fallback when copy cannot fit. Never hide width-unfit Money by
+  dropping selected rows. Measure complete right details and reset footprints; retain real
+  selected-allowance UTC resets below their own right balance, device-local English
+  `Reset DD MMM HH:mm` and timezone redraw. Invent no budget/sibling reset or as-of.
+  Accessibility keeps full identity and only visible values/details/reset, distinguishing
+  spend, remaining purchased credits and Extra Credits used/cap. Preserve publication,
+  coalescing and cold/warm Dashboard taps. Generator-owned widget/picker exports and named
+  guides travel with the correction; historical art and dated evidence remain protected.
+  Illustrative USD/UTC art is not provider/native/alpha proof; HOST acceptance stays pending.
   Watchface collapses ordinary Claude windows, choosing the tightest known window including
   zero, while Fable stays separately selectable and pairs only when both halves are selected;
   exhausted selected watch metrics remain visible after the 2026-10-13 revision. Do not keep

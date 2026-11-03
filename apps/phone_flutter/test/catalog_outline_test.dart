@@ -9,6 +9,58 @@ import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 import 'package:ward_pulse_phone/widget/widget_screen.dart';
 
 void main() {
+  testWidgets(
+    'known uncapped spend can be selected only in the widget picker',
+    (tester) async {
+      final snapshot = DashboardSnapshot.fromJson({
+        ...DashboardSnapshot.empty().toJson(),
+        'accounts': [
+          {
+            'accountId': 'local-report',
+            'provider': 'claude',
+            'connection': 'anthropic.platform',
+            'status': 'ok',
+            'credits': <Object>[],
+            'buckets': <Object>[],
+            'modelBreakdown': <Object>[],
+            'allowances': <Object>[],
+            for (final period in ['today', 'week', 'month'])
+              period: {
+                ...BudgetState.unknownPeriod(period).toJson(),
+                if (period == 'today')
+                  'spent': const Money(minorUnits: 0, currency: 'USD').toJson(),
+              },
+          },
+        ],
+      });
+      List<String>? saved;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: WidgetScreen(
+              snapshot: snapshot,
+              preferences: const PhoneWidgetPreferences(selectedIds: []),
+              onPreferencesChanged: (value) async {
+                saved = value.selectedIds;
+              },
+              onRefresh: () async {},
+            ),
+          ),
+        ),
+      );
+      final today = find.widgetWithText(CheckboxListTile, 'Today');
+      expect(tester.widget<CheckboxListTile>(today).onChanged, isNotNull);
+      await tester.ensureVisible(today);
+      await tester.tap(today);
+      await tester.pump();
+      expect(saved, ['budget.anthropic.platform.today']);
+      final watchMetric = watchRingCatalog(
+        snapshot,
+      ).singleWhere((m) => m.id.endsWith('.today'));
+      expect(watchMetric.isAvailable, isFalse);
+    },
+  );
+
   WatchRingMetric metric(String id, String label) => WatchRingMetric(
     id: id,
     label: label,

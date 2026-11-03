@@ -103,6 +103,11 @@ class WardPulseAppWidget : AppWidgetProvider() {
                 stored("row_${index}_credits"), stored("row_${index}_resets_at"), zone,
                 stored("row_${index}_color").toLongOrNull(16)?.toInt()
                     ?: context.getColor(R.color.ward_pulse_widget_fallback),
+                stored("row_${index}_kind"),
+                stored("row_${index}_spent_minor"), stored("row_${index}_spent_currency"),
+                stored("row_${index}_cap_minor"), stored("row_${index}_cap_currency"),
+                stored("row_${index}_extra_used_value"), stored("row_${index}_extra_used_unit"),
+                stored("row_${index}_extra_cap_value"), stored("row_${index}_extra_cap_unit"),
             )
         }
         val density = context.resources.displayMetrics.density
@@ -114,6 +119,11 @@ class WardPulseAppWidget : AppWidgetProvider() {
             width, height, density, rows, empty, stale, renderer, byteBudget, mark.allocationByteCount,
         )
         val images = renderer.render(plan)
+        val card = plan.card
+        views.setViewVisibility(R.id.widget_card, if (card == null) View.GONE else View.VISIBLE)
+        views.setViewPadding(R.id.widget_root, card?.left ?: 0, card?.top ?: 0,
+            if (card == null) 0 else width - card.right,
+            if (card == null) 0 else height - card.bottom)
         val layerIds = mapOf(
             PhoneWidgetLayout.Layer.PRIMARY to R.id.widget_primary,
             PhoneWidgetLayout.Layer.MUTED to R.id.widget_muted,
@@ -125,14 +135,16 @@ class WardPulseAppWidget : AppWidgetProvider() {
             views.setImageViewBitmap(viewId, image?.bitmap)
             views.setViewVisibility(viewId, if (image == null) View.GONE else View.VISIBLE)
             val bounds = image?.bounds
-            views.setViewPadding(viewId, bounds?.left ?: 0, bounds?.top ?: 0,
-                if (bounds == null) 0 else width - bounds.right,
-                if (bounds == null) 0 else height - bounds.bottom)
+            views.setViewPadding(viewId,
+                if (bounds == null || card == null) 0 else bounds.left - card.left,
+                if (bounds == null || card == null) 0 else bounds.top - card.top,
+                if (bounds == null || card == null) 0 else card.right - bounds.right,
+                if (bounds == null || card == null) 0 else card.bottom - bounds.bottom)
         }
         val showMark = images != null && plan.mark
         views.setImageViewBitmap(R.id.widget_watermark, if (showMark) mark else null)
         views.setViewVisibility(R.id.widget_watermark, if (showMark) View.VISIBLE else View.GONE)
-        val description = mutableListOf(context.getString(R.string.ward_pulse_widget_description))
+        val description = mutableListOf(context.getString(R.string.ward_pulse_widget_title))
         if (stale) description.add(context.getString(R.string.ward_pulse_widget_stale))
         if (images != null && plan.state == PhoneWidgetLayout.EmptyState.NONE) {
             for (row in plan.rows) description.add(PhoneWidgetLayout.rowDescription(row))

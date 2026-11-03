@@ -101,10 +101,12 @@ A successful request or empty usage history does not establish no charges for al
 Refreshing WardPulse cannot make the provider publish missing buckets sooner.
 
 **Budget limits** are local advisory caps, not provider spending controls. Setting no cap
-still shows known spend on Dashboard. A budget choice on Watchface or Widget needs known
-spend, a positive same-currency cap and a usable percentage. Unavailable choices explain
-what is missing; saved choices remain removable. The current widget displays percentages,
-not uncapped spend amounts. See [Dashboard](/guide/dashboard#spend-history-and-model-detail),
+still shows known spend on Dashboard and makes it selectable on Widget. Widget keeps the
+reported amount and currency, with **No cap**, **Cap unavailable** or **Percentage unavailable**
+when applicable; missing spend stays **Unavailable**. Watchface budget rings still require
+known spend, a positive same-currency cap and a usable percentage. Saved unavailable
+choices remain removable. Widget Extra usage details keep independent monthly used/cap
+Credits, distinct from purchased credits left. See [Dashboard](/guide/dashboard#spend-history-and-model-detail),
 [Watch](/guide/watch#choose-usage-rings) and [Widget](/guide/widget#add-and-configure-it).
 
 ## Reconnect, change or remove a connection

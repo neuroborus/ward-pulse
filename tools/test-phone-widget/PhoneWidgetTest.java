@@ -63,6 +63,10 @@ public final class PhoneWidgetTest {
             check(run.x >= 0 && run.y >= 0 && run.x + run.glyphs.width() <= plan.width
                             && run.y + run.glyphs.height() <= plan.height,
                     "Every complete text box stays within its allocation.");
+            check(plan.card != null && run.x >= plan.card.left && run.y >= plan.card.top
+                            && run.x + run.glyphs.width() <= plan.card.right
+                            && run.y + run.glyphs.height() <= plan.card.bottom,
+                    "Every visible glyph remains inside the intrinsic card.");
         }
         for (PhoneWidgetLayout.Bar bar : plan.bars) {
             check(bar.x >= 0 && bar.y >= 0 && bar.x + bar.width <= plan.width
@@ -85,6 +89,10 @@ public final class PhoneWidgetTest {
                         && run.style == PhoneWidgetLayout.Style.POOL),
                 "Cursor Models uses the complete second label line.");
         checkBounds(full);
+        check(full.card.width() == 331 && full.card.height() == 339
+                        && full.card.left == (full.width - full.card.width()) / 2
+                        && full.card.top == (full.height - full.card.height()) / 2,
+                "Measured content plus header and padding defines a centered intrinsic card.");
         PhoneWidgetLayout.Plan labels = fit(266, 184, false);
         check(labels.rows.size() == 3 && labels.rows.get(0).labels
                         && !labels.rows.get(0).credits && !labels.rows.get(0).reset,
@@ -111,10 +119,12 @@ public final class PhoneWidgetTest {
                 "Do not clip a primary token below its measured width.");
         check(fit(360, 183, false).rows.size() == 3, "Exact three-row height fits.");
         check(fit(360, 182, false).rows.size() == 2, "Omit a complete trailing row.");
-        PhoneWidgetLayout.Plan stale = fit(360, 200, true);
-        check(stale.rows.size() == 3 && stale.staleInset == 17,
-                "Fitting reserves the same padded badge line and two-pixel gap.");
-        check(fit(360, 199, true).rows.size() == 2, "Stale height boundary stays complete.");
+        PhoneWidgetLayout.Plan stale = fit(360, 183, true);
+        check(stale.rows.size() == 3 && stale.staleInset == 0,
+                "Stale and mark share the measured header without adding another inset.");
+        check(fit(360, 182, true).rows.size() == 2, "Shared-header height boundary stays complete.");
+        check(fit(360, 339, true).rows.size() == 6,
+                "All six stale rows fit when the shared header and row block fit.");
         PhoneWidgetLayout.TextRun badge = stale.text.stream()
                 .filter(run -> run.style == PhoneWidgetLayout.Style.STALE).findFirst().orElseThrow();
         check(badge.y - badge.glyphs.top + badge.glyphs.lineBottom + 2 <= stale.rows.get(0).top,
@@ -170,6 +180,107 @@ public final class PhoneWidgetTest {
         check(dense.rows.size() == 6 && dense.bitmapBytes() * 2 <= PhoneWidgetLayout.MAX_BITMAP_BYTES,
                 "Two bounded density-specific variants retain the reference rows.");
         checkBounds(dense);
+    }
+
+    private static PhoneWidgetLayout.Row budget(String percent, String spent, String cap,
+            String capCurrency) {
+        return PhoneWidgetLayout.Row.fromCache("OpenAI platform · Today", "OpenAI", "Today",
+                percent, "", "2028-02-10T09:15:00Z", ZoneId.of("UTC"), 0xff65d78a,
+                "budget", spent, "USD", cap, capCurrency, "", "", "", "");
+    }
+
+    private static PhoneWidgetLayout.Plan fitRow(PhoneWidgetLayout.Row row, int width) {
+        return PhoneWidgetLayout.fit(width, 184, 1, Collections.singletonList(row), false, false,
+                metrics(1), PhoneWidgetLayout.MAX_BITMAP_BYTES, 0);
+    }
+
+    private static void dataAndMoneyCases() {
+        check(PhoneWidgetLayout.moneyText("-9007199254740993", "EUR")
+                        .equals("-EUR 90071992547409.93"),
+                "Money preserves signs, codes and cents beyond double precision.");
+        check(PhoneWidgetLayout.moneyText("-9223372036854775808", "USD")
+                        .equals("-USD 92233720368547758.08"),
+                "The minimum signed integer is formatted without abs overflow.");
+        PhoneWidgetLayout.Row capped = budget("50% left", "1234", "10000", "USD");
+        PhoneWidgetLayout.VisibleRow full = fitRow(capped, 500).rows.get(0);
+        check(PhoneWidgetLayout.rowDescription(full).equals(
+                        "OpenAI platform · Today, 50% remaining, USD 12.34 spent, Cap USD 100.00"),
+                "Capped budgets describe actual spending and cap, never purchased credits.");
+        check(!full.reset && capped.reset.isEmpty(), "Budget cache resets are never inferred or reused.");
+        PhoneWidgetLayout.Row uncapped = budget("", "0", "", "");
+        check(PhoneWidgetLayout.rowDescription(fitRow(uncapped, 500).rows.get(0))
+                        .equals("OpenAI platform · Today, USD 0.00 spent, No cap"),
+                "Known zero and no cap retain their independent meaning.");
+        PhoneWidgetLayout.Row unknown = budget("80% left", "", "10000", "USD");
+        check(unknown.percent.isEmpty() && unknown.primary(true).equals("—")
+                        && unknown.lower.equals("Unavailable"),
+                "Incomplete new budget caches never fall back to a stale percentage.");
+        check(budget("50%", "1234", "0", "USD").lower.equals("Cap unavailable")
+                        && budget("50%", "1234", "10000", "EUR").percent.isEmpty(),
+                "Unusable and mismatched caps do not invent a percentage.");
+        check(budget("", "1234", "10000", "USD").lower
+                        .equals("Cap USD 100.00 · Percentage unavailable"),
+                "A usable cap without a reported percentage has a distinct state.");
+        PhoneWidgetLayout.Row legacy = PhoneWidgetLayout.Row.fromCache("Legacy", "", "", "50% left",
+                "", "", ZoneId.of("UTC"), 0, "", "1234", "USD", "", "", "", "", "", "");
+        check(!legacy.budget && legacy.percent.equals("50%"),
+                "Missing discriminator preserves legacy decoding even with leftover optional fields.");
+        PhoneWidgetLayout.Row extra = PhoneWidgetLayout.Row.fromCache("Claude · Extra usage", "Claude",
+                "Extra usage", "80%", "", "2028-02-10T09:15:00Z", ZoneId.of("UTC"), 0,
+                "allowance", "", "", "", "", "12.50", "Credits", "", "");
+        String extraSpeech = PhoneWidgetLayout.rowDescription(fitRow(extra, 500).rows.get(0));
+        check(extraSpeech.contains("12.50 Credits used, Cap unavailable")
+                        && !extraSpeech.contains("purchased") && extraSpeech.contains("Reset"),
+                "Extra usage keeps real used units and reset without inventing its missing cap.");
+        PhoneWidgetLayout.Row capOnly = PhoneWidgetLayout.Row.fromCache("Extra", "Claude", "Extra",
+                "80%", "", "", ZoneId.of("UTC"), 0, "allowance", "", "", "", "",
+                "", "", "50", "Credits");
+        check(capOnly.detailDescription.equals("Used unavailable, 50 Credits cap"),
+                "A known Extra cap survives a missing used amount independently.");
+        PhoneWidgetLayout.Row both = PhoneWidgetLayout.Row.fromCache("Extra", "Claude", "Extra",
+                "80%", "", "", ZoneId.of("UTC"), 0, "allowance", "", "", "", "",
+                "12.50", "Credits", "50", "Credits");
+        check(both.detail.equals("12.50 / 50 Credits")
+                        && both.detailStyle == PhoneWidgetLayout.Style.FAMILY
+                        && PhoneWidgetLayout.rowDescription(fitRow(both, 500).rows.get(0))
+                                .contains("12.50 Credits used, 50 Credits cap"),
+                "Extra uses one 18 Bold actual-unit line with distinct used/cap meaning.");
+
+        PhoneWidgetLayout.Measurer moneyMetrics = (text, style) -> {
+            PhoneWidgetLayout.Glyphs base = metrics(1).measure(text, style);
+            if (!text.startsWith("USD ")) return base;
+            int width = style == PhoneWidgetLayout.Style.PERCENT ? 180
+                    : style == PhoneWidgetLayout.Style.CREDIT ? 150 : 110;
+            return new PhoneWidgetLayout.Glyphs(0, base.top, width, base.bottom,
+                    base.lineTop, base.lineBottom, true);
+        };
+        for (int width : new int[] {260, 224, 223, 194, 193}) {
+            PhoneWidgetLayout.Plan plan = PhoneWidgetLayout.fit(width, 184, 1,
+                    Collections.singletonList(capped), false, false, moneyMetrics,
+                    PhoneWidgetLayout.MAX_BITMAP_BYTES, 0);
+            if (width < 194) {
+                check(plan.state == PhoneWidgetLayout.EmptyState.RESIZE,
+                        "A complete Money token that cannot fit at 26 retains honest NoFit.");
+            } else {
+                PhoneWidgetLayout.TextRun value = plan.text.stream()
+                        .filter(run -> run.text.equals("USD 12.34")).findFirst().orElseThrow();
+                check(value.style == (width >= 224 ? PhoneWidgetLayout.Style.PERCENT
+                                : PhoneWidgetLayout.Style.CREDIT),
+                        "Release whole omitted columns before using only the approved 30/26 sizes.");
+                checkBounds(plan);
+            }
+        }
+        PhoneWidgetLayout.Plan fractional = PhoneWidgetLayout.fit(229, 184, 1.1f,
+                Collections.singletonList(capped), false, false, moneyMetrics,
+                PhoneWidgetLayout.MAX_BITMAP_BYTES, 0);
+        check(fractional.text.stream().anyMatch(run -> run.text.equals("USD 12.34")
+                        && run.style == PhoneWidgetLayout.Style.CREDIT),
+                "Fractional-density padding uses the same rounded components as actual layout.");
+        checkBounds(fractional);
+        PhoneWidgetLayout.Plan unfitTail = PhoneWidgetLayout.fit(193, 184, 1,
+                Arrays.asList(row("Claude", "5h", "50%", "", ""), capped), false, false,
+                moneyMetrics, PhoneWidgetLayout.MAX_BITMAP_BYTES, 0);
+        check(unfitTail.rows.isEmpty(), "Trailing-row fallback cannot hide a width-unfit Money row.");
     }
 
     private static void cacheAndCalendarCases() {
@@ -245,6 +356,7 @@ public final class PhoneWidgetTest {
 
         layoutCases();
         cacheAndCalendarCases();
+        dataAndMoneyCases();
         check(PhoneWidgetLayout.emptyState(0, false, 0) == PhoneWidgetLayout.EmptyState.NO_METRICS,
                 "Truly empty payload.");
         check(PhoneWidgetLayout.emptyState(3, true, 0) == PhoneWidgetLayout.EmptyState.NO_METRICS,

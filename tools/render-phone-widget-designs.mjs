@@ -81,17 +81,18 @@ async function loadTheme(variant) {
 
 /** Sanitized illustration only; these values never enter a runtime payload. */
 const REVIEW_ROWS = [
-  { family: 'Cursor', pool: 'Other Models', percent: '0%', color: FAMILY.cursor,
-    reset: 'Reset 12 Feb 09:15' },
-  { family: 'Claude', pool: '5-hour session', percent: '22%', color: FAMILY.claude,
-    reset: 'Reset 10 Feb 11:45' },
-  { family: 'Codex', pool: 'Weekly plan', percent: '46%', credits: '32.4K', color: FAMILY.codex,
-    reset: 'Reset 17 Feb 14:30' },
-  { family: 'Claude', pool: 'Weekly plan', percent: '71%', color: FAMILY.claude },
-  { family: 'Codex', pool: '5-hour session', percent: '85%', credits: '32.4K', color: FAMILY.codex,
-    reset: 'Reset 10 Feb 16:00' },
+  { family: 'Codex', pool: 'Weekly plan', percent: '0%', credits: '42.6K', color: FAMILY.codex,
+    reset: 'Reset 06 Nov 07:25' },
+  { family: 'Cursor', pool: 'Other Models', percent: '64%', color: FAMILY.cursor,
+    reset: 'Reset 18 Nov 18:52' },
+  { family: 'Claude', pool: 'Weekly plan', percent: '66%', color: FAMILY.claude,
+    reset: 'Reset 08 Nov 08:00' },
+  { family: 'Claude', pool: 'Fable weekly', percent: '100%', color: '#FF603D',
+    reset: 'Reset 08 Nov 08:00' },
   { family: 'Cursor', pool: 'Models', percent: '100%', color: FAMILY.cursorOwn,
-    reset: 'Reset 12 Feb 09:15' },
+    reset: 'Reset 18 Nov 18:52' },
+  { family: 'OpenAI', pool: 'Today', percent: '100%', color: FAMILY.codex,
+    spent: 'USD 12.34', cap: 'Cap USD 10000.00' },
 ]
 
 const light = await loadTheme('values')
@@ -103,9 +104,9 @@ const variants = [
   { file: 'widget-narrow.svg', theme: light, width: 150, height: 184, columns: 1, rows: 3 },
   { file: 'widget-empty.svg', theme: light, width: 220, height: 88, columns: 1, rows: 0,
     message: 'No metrics' },
-  { file: 'widget-stale.svg', theme: light, width: 360, height: 344, columns: 3, rows: 5, stale: true },
-  { file: 'widget-stale-dark.svg', theme: dark, width: 360, height: 344, columns: 3, rows: 5, stale: true },
-  { file: 'widget-stale-narrow.svg', theme: light, width: 150, height: 184, columns: 1, rows: 2, stale: true },
+  { file: 'widget-stale.svg', theme: light, width: 360, height: 344, columns: 3, rows: 6, stale: true },
+  { file: 'widget-stale-dark.svg', theme: dark, width: 360, height: 344, columns: 3, rows: 6, stale: true },
+  { file: 'widget-stale-narrow.svg', theme: light, width: 150, height: 184, columns: 1, rows: 3, stale: true },
   { file: 'widget-stale-short.svg', theme: light, width: 150, height: 88, columns: 1, rows: 0,
     stale: true, message: 'Resize widget' },
 ]
@@ -158,78 +159,80 @@ for frame in config['variants']:
     canvas = Image.new('RGBA', (width*scale, height*scale))
     draw = ImageDraw.Draw(canvas)
     outline = rgba(theme['outlineColor'])[:3] + (round(theme['outlineOpacity']*255),)
-    draw.rounded_rectangle((1, 1, width*scale-2, height*scale-2), radius=20*scale,
-        fill=rgba(theme['surface']), outline=outline, width=scale)
     label = 'Illustrative bundled-font widget review: ' + frame['file']
     svg = ['<?xml version="1.0" encoding="UTF-8"?>',
         '<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s" role="img" aria-label="%s">' % (width, height, width, height, html.escape(label, quote=True)),
-        '<title>Illustrative review art; not native device acceptance or live provider data</title>',
-        '<rect x="0.5" y="0.5" width="%s" height="%s" rx="20" fill="%s" stroke="%s" stroke-opacity="%s"/>' % (width-1, height-1, theme['surface'], theme['outlineColor'], theme['outlineOpacity'])]
+        '<title>Illustrative review art; not native device acceptance or live provider data</title>']
     boxes = []
     def place(item, x, y, bounds):
         assert x >= bounds[0] and y >= bounds[1] and x+item['w'] <= bounds[2]+0.01 and y+item['h'] <= bounds[3]+0.01, 'complete review glyph must fit'
         svg.append('<image x="%.3f" y="%.3f" width="%.3f" height="%.3f" href="data:image/png;base64,%s"/>' % (x, y, item['w'], item['h'], item['png']))
         canvas.alpha_composite(item['image'], (round(x*scale), round(y*scale)))
         boxes.append((x, y, x+item['w'], y+item['h']))
+    rows = config['rows'][:frame['rows']]
+    measured = []
+    for row in rows:
+        detail, lower = row.get('spent', row.get('credits')), row.get('cap', row.get('reset'))
+        measured.append({
+            'percent': glyph(row['percent'], 30, 'bold', theme['onSurface']),
+            'family': glyph(row['family'], 18, 'bold', theme['onSurface']),
+            'pool': glyph(row['pool'], 16, 'regular', theme['muted']),
+            'detail': glyph(detail, 18 if row.get('spent') else 26, 'bold', theme['onSurface']) if detail else None,
+            'lower': glyph(lower, 11, 'regular', theme['muted']) if lower else None})
+    columns = frame['columns']
+    row_height, row_gap, header, bottom = 44, 8, 19, 16
+    badge = glyph('STALE', 11, 'bold', theme['stale']) if frame.get('stale') else None
+    if badge:
+        ascent, descent = fonts[(11, 'bold')].getmetrics()
+        header = max(header, (ascent+descent)/scale+2)
+    message = glyph(frame['message'], 12, 'regular', theme['muted']) if not rows else None
+    percent_width = max([item['percent']['w'] for item in measured] or [0])
+    label_width = max([max(item['family']['w'], item['pool']['w']) for item in measured] or [0])
+    detail_width = max([item[k]['w'] for item in measured for k in ('detail', 'lower') if item[k]] or [0])
+    group_width = 12+percent_width + (6+label_width if columns >= 2 else 0) + (6+detail_width if columns == 3 else 0)
+    group_height = len(rows)*row_height + max(0,len(rows)-1)*row_gap
+    card_width = max((message['w'] if message else group_width)+32, 68+(badge['w']+6 if badge else 0))
+    card_height = header+(message['h'] if message else group_height)+bottom
+    card_x, card_y = (width-card_width)/2, (height-card_height)/2
+    assert card_x >= 0 and card_y >= 0, 'complete intrinsic review card must fit'
+    draw.rounded_rectangle((round(card_x*scale)+1, round(card_y*scale)+1,
+        round((card_x+card_width)*scale)-2, round((card_y+card_height)*scale)-2),
+        radius=20*scale, fill=rgba(theme['surface']), outline=outline, width=scale)
+    svg.append('<rect x="%.3f" y="%.3f" width="%.3f" height="%.3f" rx="20" fill="%s" stroke="%s" stroke-opacity="%s"/>' %
+        (card_x+0.5,card_y+0.5,card_width-1,card_height-1,theme['surface'],theme['outlineColor'],theme['outlineOpacity']))
     tint = rgba(theme['watermark'])
     mark = Image.new('RGBA', logo.size, tint[:3]+(255,))
     mark.putalpha(logo.getchannel('A').point(lambda value: round(value*tint[3]/255*0.55)))
     mark_width, mark_height = 36, 36*mark.height/mark.width
-    mark_box = (width-16-mark_width, 2, width-16, 2+mark_height)
     mark_item = {'image': mark.resize((round(mark_width*scale), round(mark_height*scale)), Image.Resampling.LANCZOS),
         'png': encoded(mark), 'w': mark_width, 'h': mark_height}
-    place(mark_item, mark_box[0], mark_box[1], (0, 0, width, height))
-    row_height, row_gap, top, bottom = 44, 8, 19, 16
-    badge_inset = 0
-    if frame.get('stale'):
-        badge = glyph('STALE', 11, 'bold', theme['stale'])
-        badge_font = fonts[(11, 'bold')]
-        ascent, descent = badge_font.getmetrics()
-        badge_inset = (ascent+descent)/scale + 2
-        place(badge, 16, top, (0, 0, width, top+badge_inset))
-    start = top + badge_inset
-    if frame['rows'] == 0:
-        message = glyph(frame['message'], 12, 'regular', theme['muted'])
-        place(message, (width-message['w'])/2, start+(height-start-bottom-message['h'])/2,
-            (16, start, width-16, height-bottom))
+    place(mark_item, card_x+card_width-16-mark_width, card_y+2, (0,0,width,height))
+    if badge:
+        place(badge, card_x+16, card_y+2, (card_x,card_y,card_x+card_width,card_y+header))
+    start = card_y+header
+    if message:
+        place(message, (width-message['w'])/2, start, (card_x,start,card_x+card_width,height))
     else:
-        rows = config['rows'][:frame['rows']]
-        measured = []
-        for row in rows:
-            measured.append({
-                'percent': glyph(row['percent'], 30, 'bold', theme['onSurface']),
-                'family': glyph(row['family'], 18, 'bold', theme['onSurface']),
-                'pool': glyph(row['pool'], 16, 'regular', theme['muted']),
-                'credits': glyph(row['credits'], 26, 'bold', theme['onSurface']) if row.get('credits') else None,
-                'reset': glyph(row['reset'], 11, 'regular', theme['muted']) if row.get('reset') else None})
-        percent_width = max(item['percent']['w'] for item in measured)
-        label_width = max(max(item['family']['w'], item['pool']['w']) for item in measured)
-        detail_width = max([item[k]['w'] for item in measured for k in ('credits', 'reset') if item[k]] or [0])
-        columns = frame['columns']
-        group_width = 12+percent_width + (6+label_width if columns >= 2 else 0) + (6+detail_width if columns == 3 else 0)
-        group_height = len(rows)*row_height + (len(rows)-1)*row_gap
-        x = (width-group_width)/2
-        y = start+(height-start-bottom-group_height)/2
-        assert x >= 16 and y >= start and y+group_height <= height-bottom, 'complete review rows and columns must fit'
+        x, y = (width-group_width)/2, start
         for row, item in zip(rows, measured):
             draw.rounded_rectangle((round(x*scale), round((y+2)*scale), round((x+3)*scale), round((y+row_height-2)*scale)), radius=1.5*scale, fill=rgba(row['color']))
-            svg.append('<rect x="%.3f" y="%.3f" width="3" height="40" rx="1.5" fill="%s"/>' % (x, y+2, row['color']))
-            place(item['percent'], x+12, y+(row_height-item['percent']['h'])/2, (x+12, y, x+12+percent_width, y+row_height))
+            svg.append('<rect x="%.3f" y="%.3f" width="3" height="40" rx="1.5" fill="%s"/>' % (x,y+2,row['color']))
+            place(item['percent'], x+12, y+(row_height-item['percent']['h'])/2, (x+12,y,x+12+percent_width,y+row_height))
             if columns >= 2:
                 label_x = x+12+percent_width+6
                 family, pool = item['family'], item['pool']
                 label_y = y+(row_height-family['h']-3-pool['h'])/2
-                place(family, label_x+(label_width-family['w'])/2, label_y, (label_x, y, label_x+label_width, y+row_height))
-                place(pool, label_x+(label_width-pool['w'])/2, label_y+family['h']+3, (label_x, y, label_x+label_width, y+row_height))
+                place(family,label_x+(label_width-family['w'])/2,label_y,(label_x,y,label_x+label_width,y+row_height))
+                place(pool,label_x+(label_width-pool['w'])/2,label_y+family['h']+3,(label_x,y,label_x+label_width,y+row_height))
             if columns == 3:
                 end = x+group_width
-                if item['credits']:
-                    credit = item['credits']
-                    credit_y = y+29-3-credit['h'] if item['reset'] else y+(row_height-credit['h'])/2
-                    place(credit, end-credit['w'], credit_y, (end-detail_width, y, end, y+row_height))
-                if item['reset']:
-                    reset = item['reset']
-                    place(reset, end-reset['w'], y+29, (end-detail_width, y, end, y+row_height))
+                if item['detail']:
+                    detail = item['detail']
+                    detail_y = y+29-3-detail['h'] if item['lower'] else y+(row_height-detail['h'])/2
+                    place(detail,end-detail['w'],detail_y,(end-detail_width,y,end,y+row_height))
+                if item['lower']:
+                    lower = item['lower']
+                    place(lower,end-lower['w'],y+29,(end-detail_width,y,end,y+row_height))
             y += row_height+row_gap
     # Actual ink boxes must stay disjoint from one another and the quiet mark.
     for index, a in enumerate(boxes):
@@ -278,6 +281,7 @@ print(json.dumps(frames))
   const description = 'Widget preview. Illustrative example only. ' + REVIEW_ROWS.map((row) =>
     `${row.family}, ${row.pool}, ${row.percent} remaining` +
     (row.credits ? `, ${row.credits} purchased credits` : '') +
+    (row.spent ? `, ${row.spent} spent, ${row.cap}` : '') +
     (row.reset ? `, ${row.reset}` : '')).join('. ') + '.'
   const pattern = /<string name="ward_pulse_widget_preview_description"[^>]*>[^<]*<\/string>/
   assert.ok(pattern.test(strings), 'picker accessibility description must retain its owning resource')

@@ -169,9 +169,10 @@ without a cap. Money rounds to cents; a tiny positive amount can display as zero
 limit keeps its stored value; it now compares against extra-paid calendar-month spend.
 Review whether that amount still suits your intended limit. A percentage needs available
 spend and a positive USD ceiling. An unset ceiling differs from a saved zero ceiling, which
-cannot produce a percentage. This same budget-percentage rule applies to Console and
-Cursor Team choices on Watchface and Widget; it is separate from Plan on-demand Credits.
-The current widget needs that percentage and does not show Team spend as amount rows.
+cannot produce a percentage. Watchface budget rings keep that cap/percentage requirement.
+Widget can select known Team spend without a cap and shows the amount with **No cap**; unusable
+caps and missing percentages have separate unavailable states. Missing spend stays
+**Unavailable**. These expenses remain separate from Plan on-demand Credits.
 Unavailable periods stay listed, and saved choices remain removable. Caps do not stop
 requests or change the team's provider-side spending controls.
 

@@ -6,7 +6,9 @@ import '../sync/credit_request_runway.dart';
 import '../sync/watch_credits_glance.dart';
 import 'phone_widget_preferences.dart';
 
-/// One rendered home-widget row (remaining language).
+enum PhoneWidgetRowKind { allowance, budget }
+
+/// Private, lossless metric data; native layout decides which details fit.
 final class PhoneWidgetRow {
   const PhoneWidgetRow({
     required this.label,
@@ -16,11 +18,21 @@ final class PhoneWidgetRow {
     this.familyLabel,
     this.poolLabel,
     this.resetsAt,
+    this.kind = PhoneWidgetRowKind.allowance,
+    this.spent,
+    this.cap,
+    this.extraUsed,
+    this.extraCap,
   });
 
   /// Complete identity retained for old caches and descriptive payload strings.
   final String label;
-  final int remainingPercent;
+  final int? remainingPercent;
+  final PhoneWidgetRowKind kind;
+  final Money? spent;
+  final Money? cap;
+  final Quantity? extraUsed;
+  final Quantity? extraCap;
 
   /// Explicit display lines; absent when only a legacy flat label is available.
   final String? familyLabel;
@@ -36,11 +48,15 @@ final class PhoneWidgetRow {
   final String? creditsSuffix;
 
   /// Fixed percent column for the launcher table layout.
-  String get percentText => '$remainingPercent% left';
+  String get percentText =>
+      remainingPercent == null ? '' : '$remainingPercent% left';
 
-  /// Widget-tab / tests line: `% left` · label · optional credits (matches columns).
+  /// Descriptive payload line, separate from native column visibility.
   String get line {
     final credits = creditsSuffix;
+    if (kind == PhoneWidgetRowKind.budget) {
+      return '${spent == null ? 'Unavailable' : phoneWidgetMoneyText(spent!)} · $label';
+    }
     if (credits == null) {
       return '$percentText · $label';
     }
@@ -48,7 +64,7 @@ final class PhoneWidgetRow {
   }
 }
 
-/// Snapshot + prefs → home-widget rows (unavailable already omitted).
+/// Snapshot + prefs → rows, including supported saved unknown budgets.
 final class PhoneWidgetPayload {
   const PhoneWidgetPayload({required this.rows, required this.stale});
 
@@ -82,8 +98,7 @@ PhoneWidgetRow _phoneWidgetRow(
   final connection = connectionFromBudgetRingId(metric.id);
   final String? family;
   if (connection != null) {
-    final name = providerFamilyLabel(connection.provider);
-    family = '$name ${connectionKindLabel(connection.kind)}';
+    family = providerFamilyLabel(connection.provider);
   } else if (provider != null) {
     family = providerDisplayLabel(provider);
   } else {
@@ -95,14 +110,24 @@ PhoneWidgetRow _phoneWidgetRow(
       metric.id == cursorOwnPoolId && metric.label == 'Cursor Models'
           ? 'Models'
           : metric.label;
+  final allowance = _phoneWidgetAllowance(snapshot, metric.id);
+  final extra = metric.id == 'allowance.claude.claude-extra-usage';
   return PhoneWidgetRow(
     label: metric.catalogTitle,
     familyLabel: family,
     poolLabel: family == null ? null : pool,
-    remainingPercent: metric.remainingPercent!.round(),
+    remainingPercent: phoneWidgetRemainingPercent(metric),
+    kind:
+        connection == null
+            ? PhoneWidgetRowKind.allowance
+            : PhoneWidgetRowKind.budget,
+    spent: metric.spent,
+    cap: metric.limit,
+    extraUsed: extra ? allowance?.used : null,
+    extraCap: extra ? allowance?.limit : null,
     accentArgb: phoneWidgetAccentArgb(metric.id),
     creditsSuffix: phoneWidgetCreditsSuffix(snapshot, metric.id),
-    resetsAt: _phoneWidgetAllowance(snapshot, metric.id)?.resetsAt,
+    resetsAt: allowance?.resetsAt,
   );
 }
 

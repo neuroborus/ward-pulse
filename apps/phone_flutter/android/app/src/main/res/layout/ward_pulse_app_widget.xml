@@ -4,55 +4,63 @@
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/ward_pulse_widget_background"
+    android:background="@android:color/transparent"
     android:importantForAccessibility="yes"
     android:contentDescription="@string/ward_pulse_widget_description">
 
-    <ImageView
-        android:id="@+id/widget_accents"
+    <FrameLayout
+        android:id="@+id/widget_card"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:scaleType="center"
-        android:importantForAccessibility="no"
-        android:contentDescription="@null" />
-    <ImageView
-        android:id="@+id/widget_primary"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:scaleType="center"
-        android:tint="@color/ward_pulse_widget_on_surface"
-        android:tintMode="src_in"
-        android:importantForAccessibility="no"
-        android:contentDescription="@null" />
-    <ImageView
-        android:id="@+id/widget_muted"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:scaleType="center"
-        android:tint="@color/ward_pulse_widget_muted"
-        android:tintMode="src_in"
-        android:importantForAccessibility="no"
-        android:contentDescription="@null" />
-    <ImageView
-        android:id="@+id/widget_stale"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:scaleType="center"
-        android:tint="@color/ward_pulse_widget_stale"
-        android:tintMode="src_in"
-        android:importantForAccessibility="no"
-        android:contentDescription="@null" />
-    <ImageView
-        android:id="@+id/widget_watermark"
-        android:layout_width="36dp"
-        android:layout_height="15dp"
-        android:layout_gravity="top|end"
-        android:layout_marginTop="2dp"
-        android:layout_marginEnd="16dp"
-        android:scaleType="fitCenter"
-        android:tint="@color/ward_pulse_widget_watermark"
-        android:tintMode="src_in"
-        android:alpha="0.55"
-        android:importantForAccessibility="no"
-        android:contentDescription="@null" />
+        android:background="@drawable/ward_pulse_widget_background"
+        android:importantForAccessibility="no">
+
+        <ImageView
+            android:id="@+id/widget_accents"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="center"
+            android:importantForAccessibility="no"
+            android:contentDescription="@null" />
+        <ImageView
+            android:id="@+id/widget_primary"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="center"
+            android:tint="@color/ward_pulse_widget_on_surface"
+            android:tintMode="src_in"
+            android:importantForAccessibility="no"
+            android:contentDescription="@null" />
+        <ImageView
+            android:id="@+id/widget_muted"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="center"
+            android:tint="@color/ward_pulse_widget_muted"
+            android:tintMode="src_in"
+            android:importantForAccessibility="no"
+            android:contentDescription="@null" />
+        <ImageView
+            android:id="@+id/widget_stale"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="center"
+            android:tint="@color/ward_pulse_widget_stale"
+            android:tintMode="src_in"
+            android:importantForAccessibility="no"
+            android:contentDescription="@null" />
+        <ImageView
+            android:id="@+id/widget_watermark"
+            android:layout_width="36dp"
+            android:layout_height="15dp"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="2dp"
+            android:layout_marginEnd="16dp"
+            android:scaleType="fitCenter"
+            android:tint="@color/ward_pulse_widget_watermark"
+            android:tintMode="src_in"
+            android:alpha="0.55"
+            android:importantForAccessibility="no"
+            android:contentDescription="@null" />
+    </FrameLayout>
 </FrameLayout>

@@ -46,7 +46,7 @@ class _WidgetScreenState extends State<WidgetScreen> {
   }
 
   Future<void> _toggleMetric(WatchRingMetric metric, bool selected) async {
-    if (selected && !metric.isAvailable) {
+    if (selected && !phoneWidgetMetricIsAvailable(metric)) {
       return;
     }
     final ids = [..._effectiveIds];
@@ -113,7 +113,7 @@ class _WidgetScreenState extends State<WidgetScreen> {
                   // that the cap alone leaves looking broken.
                   '$usedSlots of $phoneWidgetSlotCount slots used · '
                   'independent of Watchface · Claude windows stay separate · '
-                  'credits append like Glance · exhausted pools show as 0% left',
+                  'reported expenses and allowance details · exhausted pools show as 0% left',
                 ),
               ),
               if (catalog.isEmpty) ...[
@@ -122,7 +122,7 @@ class _WidgetScreenState extends State<WidgetScreen> {
                   title: Text('No metrics yet'),
                   subtitle: Text(
                     'Connect a provider under Providers · plan windows and '
-                    'budget limits fill these slots.',
+                    'reported expenses fill these slots.',
                   ),
                 ),
               ],
@@ -189,15 +189,16 @@ class _MetricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canToggle = selected || (metric.isAvailable && !atCapacity);
-    final reason = metric.unavailableReason;
+    final available = phoneWidgetMetricIsAvailable(metric);
+    final canToggle = selected || (available && !atCapacity);
+    final reason = available ? null : metric.unavailableReason;
     return CheckboxListTile(
       secondary:
           reason == null
               ? const Icon(Icons.data_usage_outlined)
               : Tooltip(message: reason, child: const Icon(Icons.help_outline)),
       title: Text(title),
-      subtitle: Text(metric.catalogSubtitle),
+      subtitle: Text(phoneWidgetMetricSubtitle(metric)),
       value: selected,
       onChanged: canToggle ? (value) => onChanged(value ?? false) : null,
     );
