@@ -50,10 +50,11 @@ subscription or Claude plan login does not grant this access. Console API expens
 separate from Claude Plan's monthly Extra usage Credits; neither supplies the other's data.
 See Claude's explanation of [how subscription and API billing differ](https://support.claude.com/en/articles/9876003-i-have-a-paid-claude-subscription-pro-max-team-or-enterprise-plans-why-is-claude-api-usage-billed-separately-from-my-paid-claude-plan).
 
-The provider supports Admin keys and qualifying personal or service-account keys with
-organization reporting rights. Personal/service keys must not be workspace-scoped.
-An organization scope or key prefix alone does not prove eligibility or permissions.
-WardPulse's reporting row accepts a key; it does not use Claude plan's authorization code.
+WardPulse uses one **ordinary organization-scoped API key** with actual reporting rights
+for the linked account. Leave workspace scope unset. WardPulse rejects Console **Admin**
+keys, including values starting with `sk-ant-admin`; replace one in this same reporting row.
+A key without that marker still needs organization eligibility and account rights. This
+reporting field is separate from Claude plan's authorization-code field.
 
 ### Convert an individual organization
 
@@ -61,18 +62,27 @@ Individual Console API organizations do not have Admin API access. The Console f
 observed in October 2026 was **Settings → Organization → Convert to team organization →
 Convert to team**, followed by organization details and API-use questions. Review the
 current Console prompts and your organization's eligibility before changing it. Selecting
-**Scope: Organization** for a key does not convert the organization. Conversion is separate
+**organization scope** for a key does not convert the organization. Conversion is separate
 from buying a claude.ai Team chat plan; availability, terms and reversal are not guaranteed.
 
 ### Connect the key
 
-1. Open **Providers → Anthropic → Organization reporting**.
-2. Enter the complete reporting key in **Value** and an optional phone-local **Label**.
-3. Tap **Save** and read the result beside that reporting row. **Checking…** means a
-   request is running; **Connected** means reporting succeeded for the saved key.
+1. Select the intended organization in Claude Console and open **API keys → Create key**.
+2. Choose a name and expiry using the controls Console offers.
+3. Set **Linked account** to **yourself** and leave workspace scope unset. The linked
+   account must have the organization's reporting rights; a subscription plan does not grant them.
+4. Create the key and copy its value when shown. It is shown only once.
+5. Open **Providers → Anthropic → Organization reporting** in WardPulse.
+6. Paste the complete key in **Value** and optionally add a phone-local **Label**.
+7. Tap **Save** and read that row's check result. **Checking…** means a report request is
+   running; **Connected** requires a successful live check for the current saved key.
 
-**Key rejected** calls for checking or replacing that key. For **Access denied**, review
-both the organization's reporting access and the key's rights/scope. A connected Claude
+A Console Admin value is rejected locally before a report request. For a saved Admin
+key, **Key rejected** explains that you need an ordinary organization-scoped replacement.
+Open the row, enter it in **Value** and **Save**. Policy rejection keeps the previous key,
+label and cached report; it does not verify access or erase previous data.
+Other **Key rejected** results call for checking or replacing the key. For **Access denied**,
+review both the organization's reporting access and the key's rights/scope. A connected Claude
 plan cannot verify the reporting key. Do not share keys in issues or screenshots.
 
 ### Read Console expenses
@@ -83,8 +93,9 @@ the first calendar day UTC. These periods are not your Claude Plan window or bil
 **As of** is the source's successful report time, displayed in your phone's local timezone;
 retained **Stale** data keeps that earlier time and those earlier amounts.
 
-**USD 0.00** is a known reported zero. **No spend reported** means a complete amount was
-not established. Console costs arrive in daily buckets: missing the current day's cost
+Known Money is displayed to whole cents. **USD 0.00** can be a reported zero or a tiny
+positive amount rounded to zero cents; it is not proof of no charges. **No spend reported**
+means a complete amount was not established. Console costs arrive in daily buckets: missing the current day's cost
 bucket can leave a period unavailable even when older days or request history are present.
 A successful request or empty usage history does not establish no charges for all time.
 Refreshing WardPulse cannot make the provider publish missing buckets sooner.
@@ -99,6 +110,7 @@ not uncapped spend amounts. See [Dashboard](/guide/dashboard#spend-history-and-m
 ## Reconnect, change or remove a connection
 
 Use **Reconnect** or **Disconnect** for Claude plan. For Organization reporting, replace
-**Value**, change only **Label** with Value blank, or **Remove** the saved key. Removing
-it in WardPulse does not revoke it at the provider. See
+**Value** and tap **Save**, change only **Label** with Value blank, or **Remove** the saved
+key. **Cancel** discards the unsaved edit. Blank Value preserves the saved key; the field
+never displays it back. Removing it in WardPulse does not revoke it at the provider. See
 [connection management](/guide/providers#reconnect-change-or-remove-a-connection).

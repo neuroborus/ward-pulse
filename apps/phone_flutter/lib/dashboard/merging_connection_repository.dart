@@ -229,6 +229,28 @@ final class MergingConnectionRepository extends DashboardRepository {
     CredentialVersion? version,
   ) {
     if (connection == null || loadCredentialReport == null) return failure;
+    final localRejection = failure.reportingOutcomes.any(
+      (outcome) =>
+          connection == ProviderConnections.anthropicPlatform &&
+          outcome.connection == connection &&
+          outcome.source == ReportingOutcomeSource.local &&
+          outcome.category == ReportingOutcomeCategory.authenticationRejected,
+    );
+    if (localRejection && failure.issue == DashboardSyncIssue.authentication) {
+      return DashboardLoadException.withOutcomes(
+        issue: failure.issue,
+        details: failure.details,
+        reportingOutcomes: [
+          ConnectionReportingOutcome(
+            connection: connection!,
+            category: ReportingOutcomeCategory.authenticationRejected,
+            source: ReportingOutcomeSource.local,
+            freshness: ReportingOutcomeFreshness.current,
+            credentialVersion: version,
+          ),
+        ],
+      );
+    }
     final category = switch (failure.issue) {
       DashboardSyncIssue.authentication =>
         ReportingOutcomeCategory.authenticationRejected,

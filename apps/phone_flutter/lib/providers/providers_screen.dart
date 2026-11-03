@@ -254,6 +254,15 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
             hasCredential:
                 (_hasSecret[key] ?? false) || _readFailures.contains(key),
             initialLabel: _labels[key],
+            guidance:
+                id == ProviderConnections.anthropicPlatform
+                    ? '$anthropicReportingKeyGuidance '
+                        'The key is encrypted on this phone and sent only to Anthropic.'
+                    : null,
+            valueValidator:
+                id == ProviderConnections.anthropicPlatform
+                    ? validateAnthropicReportingKey
+                    : null,
           ),
     );
     if (change == null) {
@@ -506,8 +515,13 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
             : hasSecret != true
             ? 'Not connected'
             : outcome != null &&
-                outcome.source == ReportingOutcomeSource.live &&
-                outcome.freshness == ReportingOutcomeFreshness.current
+                outcome.freshness == ReportingOutcomeFreshness.current &&
+                (outcome.source == ReportingOutcomeSource.live ||
+                    (outcome.connection ==
+                            ProviderConnections.anthropicPlatform &&
+                        outcome.source == ReportingOutcomeSource.local &&
+                        outcome.category ==
+                            ReportingOutcomeCategory.authenticationRejected))
             ? outcome.label
             : 'Not verified';
     final supporting =

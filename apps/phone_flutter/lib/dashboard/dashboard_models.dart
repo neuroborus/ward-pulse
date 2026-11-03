@@ -72,6 +72,10 @@ final class ConnectionReportingOutcome {
 
   String get supportingCopy => switch (category) {
     ReportingOutcomeCategory.success => '',
+    ReportingOutcomeCategory.authenticationRejected
+        when connection == ProviderConnections.anthropicPlatform &&
+            source == ReportingOutcomeSource.local =>
+      anthropicReportingKeyGuidance,
     ReportingOutcomeCategory.authenticationRejected =>
       'Check the key and try again.',
     ReportingOutcomeCategory.accessDenied =>

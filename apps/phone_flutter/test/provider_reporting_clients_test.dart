@@ -2,12 +2,65 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
+import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting_clients.dart';
 import 'package:ward_pulse_phone/sync/report_period.dart';
 
 void main() {
   group('AnthropicReportingClient', () {
+    test(
+      'Admin marker rejection is local and sends no HTTP requests',
+      () async {
+        final transport = _FakeTransport({});
+        final client = AnthropicReportingClient(
+          http: ProviderReportingHttp(transport: transport),
+        );
+        for (final candidate in [
+          'sk-ant-admin-synthetic',
+          '  sk-ant-admin01-synthetic  ',
+        ]) {
+          await expectLater(
+            client.fetchDailyReports(
+              apiKey: candidate,
+              start: DateTime.utc(2026, 11, 1),
+              end: DateTime.utc(2026, 11, 3),
+            ),
+            throwsA(
+              isA<ProviderReportingException>()
+                  .having(
+                    (error) => error.failure,
+                    'failure',
+                    ProviderReportingFailure.authentication,
+                  )
+                  .having(
+                    (error) => error.outcome?.connection,
+                    'connection',
+                    ProviderConnections.anthropicPlatform,
+                  )
+                  .having(
+                    (error) => error.outcome?.category,
+                    'category',
+                    ReportingOutcomeCategory.authenticationRejected,
+                  )
+                  .having(
+                    (error) => error.outcome?.source,
+                    'source',
+                    ReportingOutcomeSource.local,
+                  )
+                  .having(
+                    (error) => error.details,
+                    'nonsecret details',
+                    isNull,
+                  ),
+            ),
+          );
+        }
+        expect(transport.requests, isEmpty);
+      },
+    );
+
     test('splits UTC usage ranges and paginates both bucket widths', () async {
       final transport = _FakeTransport({
         '/v1/organizations/usage_report/messages': [
@@ -26,7 +79,7 @@ void main() {
       );
 
       final reports = await client.fetchDailyReports(
-        adminApiKey: 'secret-admin-key',
+        apiKey: 'sk-ant-api03-synthetic',
         start: DateTime.parse('2026-07-01T03:00:00+03:00'),
         end: DateTime.parse('2026-07-20T01:00:00+13:00'),
       );
@@ -38,7 +91,7 @@ void main() {
               .where((request) => request.uri.path.endsWith('/messages'))
               .toList();
       for (final request in usageRequests) {
-        expect(request.headers['x-api-key'], 'secret-admin-key');
+        expect(request.headers['x-api-key'], 'sk-ant-api03-synthetic');
         expect(request.headers['anthropic-version'], '2023-06-01');
         expect(request.headers.containsKey('Authorization'), isFalse);
         expect(request.uri.queryParametersAll['group_by[]'], ['model']);
@@ -103,7 +156,7 @@ void main() {
         );
       }
       expect(costRequests[1].uri.queryParameters['page'], 'cost-2');
-      expect(reports.usage.join(), isNot(contains('secret-admin-key')));
+      expect(reports.usage.join(), isNot(contains('sk-ant-api03-synthetic')));
     });
 
     for (final scenario in [
@@ -123,7 +176,7 @@ void main() {
 
         await expectLater(
           client.fetchDailyReports(
-            adminApiKey: 'synthetic-key',
+            apiKey: 'synthetic-key',
             start: DateTime.utc(2026, 7, 18),
             end: DateTime.utc(2026, 7, 19),
           ),
@@ -173,7 +226,7 @@ void main() {
         );
 
         final reports = await client.fetchDailyReports(
-          adminApiKey: 'synthetic-key',
+          apiKey: 'synthetic-key',
           start: scenario.start,
           end: scenario.end,
         );
@@ -228,7 +281,7 @@ void main() {
         await AnthropicReportingClient(
           http: ProviderReportingHttp(transport: transport),
         ).fetchDailyReports(
-          adminApiKey: 'synthetic-key',
+          apiKey: 'synthetic-key',
           start: DateTime.utc(2026, 7),
           end: DateTime.parse(end),
         );
@@ -256,7 +309,7 @@ void main() {
         );
 
         final reports = await client.fetchDailyReports(
-          adminApiKey: 'synthetic-key',
+          apiKey: 'synthetic-key',
           start: start,
           end: DateTime.utc(2026, 7, 19, 12),
         );
@@ -284,7 +337,7 @@ void main() {
 
       await expectLater(
         client.fetchDailyReports(
-          adminApiKey: 'secret-admin-key',
+          apiKey: 'sk-ant-api03-synthetic',
           start: DateTime.utc(2026, 7, 1),
           end: DateTime.utc(2026, 7, 19, 12),
         ),

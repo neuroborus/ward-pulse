@@ -71,9 +71,10 @@ DashboardLoadException mapReportingError(
   }
   if (error is ProviderReportingException) {
     logger.record(reportingSyncEvent(error.failure), details: error.details);
-    return DashboardLoadException(
+    return DashboardLoadException.withOutcomes(
       issue: reportingIssue(error.failure),
       details: error.details,
+      reportingOutcomes: [if (error.outcome case final outcome?) outcome],
     );
   }
   final details = loadFailureDetails(error);

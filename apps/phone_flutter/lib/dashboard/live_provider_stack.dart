@@ -90,7 +90,7 @@ DashboardRepository buildLiveProviderStack({
     loadCredentialReport: (key) async {
       final period = ReportPeriodBounds.utc(now());
       final reports = await anthropicClient.fetchDailyReports(
-        adminApiKey: key,
+        apiKey: key,
         start: period.reportStart,
         end: period.generatedAt,
       );

@@ -50,14 +50,19 @@ Check the setup for the named connection:
 - [OpenAI Platform reporting](/guide/providers-openai#platform-reporting) needs an organization
   Admin key, not an ordinary project key.
 - [Anthropic Organization reporting](/guide/providers-anthropic#organization-reporting)
-  needs an eligible Console organization and key with reporting rights, outside workspace
-  scope. A working Claude plan login does not establish these permissions.
+  needs an ordinary organization-scoped key linked to an account with reporting rights,
+  outside workspace scope. Replace Console Admin keys in this row's **Value** field and
+  **Save**. WardPulse rejects their documented marker before requesting a report and keeps
+  the saved key, label and cache on rejection. **Cancel** leaves the edit unsaved. A
+  candidate without that marker or a working Claude plan login does not establish reporting
+  permissions.
 - [Cursor Team Admin API](/guide/providers-cursor#team-admin-api) needs a Team key with reporting
   access; check [General → View team resources](/guide/providers-cursor#team-key-permissions).
 
 Console reporting can be Connected while a required daily cost bucket is missing. Partial
 history does not establish complete Today/Week/Month totals or no charges. Keep unavailable
-cost distinct from known zero. Console and Cursor Team budget percentages need known spend
+cost distinct from known zero. Money rounds to whole cents, so a tiny positive charge can
+also display as zero cents. Console and Cursor Team budget percentages need known spend
 and a positive same-currency cap; read known spend without a cap on Dashboard. Saved unavailable
 choices remain removable. An unset cap is not a provider outage. Retained Stale amounts keep
 the source's previous successful time, even when a sibling source updates.

@@ -80,9 +80,9 @@ Each rule, and the guard or function that enforces it:
 | 6, the top mark is a way in | the app-bar badge is an `InkResponse` calling `_revealProblem`, which selects the Dashboard tab and then scrolls to `dashboardProblems(…).first`, read off the same order the screen renders with |
 | 7, distinct glyphs | `_statusIcon` in `status_pill.dart`, one icon per status |
 
-Four tests in `dashboard_screen_test.dart` hold it: *aggregate spend card shows money and
-nothing to measure it* (a card with nothing to mark carries no pill), *shows allowances from
-every connected provider* (healthy families render no `Badge` at all), *shows Cursor Models and
+Tests in `dashboard_screen_test.dart` hold it: *reporting expenses align per source and stay
+separate from Plan balances* (Money stays independent of caps and account status),
+*shows allowances from every connected provider* (healthy families render no `Badge` at all), *shows Cursor Models and
 Other Models plan pools* (the healthy pool carries no pill, the rate-limited one carries its
 own glyph, and the header carries the count `1`), and *a family joining reranks, and the badge
 follows the cards* (what the app-bar mark scrolls to follows the rendered order).
@@ -157,15 +157,23 @@ Month spend is aggregated only for ordering; mixed currencies are never added.
 reranking on the existing family identity/status changes. No common Plan/API remainder
 is displayed; unrelated Dashboard summaries remain.
 
-**Console expense correction, 2026-11-03.** For provider `claude` with exact connection
-`anthropic.platform`, render source-owned Today/Week/Month Money below its caption, separate
-from aggregate cards and partial history. Known zero remains visible without a cap; missing
-cost says No spend reported. Show the optional Local cap independently, without inventing a
-percentage or unhealthy mark from an unset cap. Keep the actual account status and original
-successful as-of time visible, including retained Stale data. Budget evaluation without a
-cap is not a new source failure. Claude Plan monthly Extra Credits remain independent.
-This is a source correction with HOST/native presentation acceptance still pending; it does
-not update the dated device measurements or establish positive live Console expense.
+**Source expense revision 2026-11-03.** Reporting connections `openai.platform`,
+`anthropic.platform` and `cursor.platform` each render one compact `_SourceExpenseBlock`
+inside their owning account, using aligned Today/Week/Month rows or equal-width columns
+at the existing 760px source-width breakpoint. Known Plan connections are excluded;
+legacy/OpenAI/Mock accounts retain their existing per-account budget-capability fallback.
+The source caption, account status and original successful As of time appear once inside
+the block. A legacy source without a distinct caption uses Expenses beneath its existing
+family header. Narrow allowance content stretches consistently. There are no duplicate global
+Platform spend cards; domain totals, caps, Alerts, navigation, ranking and rollups remain.
+
+Known positive and zero Money remain visible without a cap. Missing cost says No spend
+reported, even with partial history. Local cap: Not set invents neither a percentage nor
+an unhealthy source mark; the account status remains authoritative. Retained Stale reports
+keep their original successful time. Histories and models remain below their own source;
+Claude Plan monthly Extra Credits and prepaid available balances remain independent.
+HOST/native presentation acceptance remains pending; this revision establishes no new device
+measurement or positive live Console expense.
 
 The locked status and balance rules above and below still apply: count each
 account's unhealthy cards, otherwise one for an unhealthy account, and sum these
@@ -202,6 +210,11 @@ a healthy sibling, cached report or saved label never verifies a reporting crede
   insufficient reporting access, and distinct wording for request, rate-limit,
   saved-key-read and reporting-data failures. An optional user label supplements the
   connection name; it never replaces the family and connection kind.
+- Anthropic Console Admin-marker rejection is local, current and credential-versioned.
+  Show explicit ordinary-organization-key replacement guidance and the same Edit key action;
+  it cannot establish Connected or erase the saved secret, label, cache or selections.
+  The optional Anthropic-only editor validator also rejects nonempty replacements, while
+  blank-value label edits, Cancel and Remove retain their existing semantics.
 - **Edit key**, where offered, opens that exact reporting connection's key editor.
   A reporting failure must not direct the user to the sibling plan login. Providers
   keeps status and supporting text below the connection details, readable when text

@@ -344,9 +344,10 @@ token totals. Complete-day normalization therefore retains current-period Unknow
 collection. The separate 10:49 normalized cache corroborates unavailability; it establishes
 neither identical app-key/wire inputs, all-time no-charge behavior nor positive expenses.
 
-Console Dashboard periods show known Money independently of optional local caps, including
-zero; missing cost stays unavailable. Source as-of/status and partial history remain
-separate from aggregate spend and from Claude Plan monthly Extra Credits. Existing common
+Each reporting account's Dashboard expense block shows known Money independently of optional
+local caps, including zero; missing cost stays unavailable. Source as-of/status and partial
+history remain source-owned, separate from Claude Plan monthly Extra Credits. The duplicate
+global spend cards are removed; domain totals and budget evaluation remain intact. Existing common
 Anthropic/Cursor budget catalogue, selection and publication remain: known spend plus a
 positive usable same-currency cap and percentage are required. Preserve every stored ID,
 null default, explicit empty selection, unavailable removal and capacity rule. No exclusion,
@@ -371,11 +372,27 @@ is separate from buying a claude.ai Team chat plan. The owner reported a success
 reporting connection after conversion; that report is not an independent new API probe
 or a guarantee of eligibility, free conversion or reversal for other accounts.
 
-Organization-scoped personal keys use the linked account's reporting permissions;
-eligible service-account keys must also be outside workspace scope. Console Admin keys
-are a separate supported type without the personal-key Scope selector. Claude Enterprise
-Analytics keys are for another service. None of these reporting credentials replaces the
-separate **Claude plan** login.
+WardPulse policy selects **one ordinary organization-scoped reporting key**, linked to an
+account with actual reporting rights and outside workspace scope. The Console creation path
+is organization → API keys → Create key → name/expiry → Linked account: yourself → no
+workspace scope → copy once. Providers → Anthropic → Organization reporting accepts it in
+Value with an optional Label; Save starts the existing reporting check. Account rights and
+organization eligibility are independent of Claude subscription plans. This field introduces
+no reporting OAuth, second runtime credential or management permission.
+
+The official [Admin API authentication contract](https://platform.claude.com/docs/en/manage-claude/admin-api#authentication)
+documents the `sk-ant-admin` marker, and [Which key do you need?](https://platform.claude.com/docs/en/manage-claude/admin-api-keys#which-key-do-you-need)
+identifies Console Admin keys as `sk-ant-admin01-…`. Although the provider supports that key
+type for reports, WardPulse excludes it by product policy. `validateAnthropicReportingKey`
+in `apps/phone_flutter/lib/providers/provider_connection.dart` rejects trimmed values with
+that marker in the editor and shared reporting client before HTTP. Marker absence proves no
+scope or rights; ordinary candidates still undergo the existing reporting request checks.
+Local `authenticationRejected` survives error mapping and captured-version attribution,
+with replacement guidance in Providers and Edit key targeting the same connection. Only a
+current live success establishes Connected. Policy rejection retains the previous secret,
+label, cache and settings; blank-value label edits, Cancel, Remove and explicit replacement
+keep their existing semantics. Claude Enterprise Analytics is a different service. Reporting
+credentials do not replace the separate Claude plan login.
 
 Scope:
 

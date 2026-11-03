@@ -161,7 +161,9 @@ request units. If no team activity is reported, **Usage history** may be absent.
 applicable Cursor fees. Included usage does not contribute to these amounts, even when it
 appears in request history. Today starts at midnight UTC, Week on Monday UTC, and Month on
 the first day of the calendar month UTC; these are not billing-cycle totals or personal-plan
-percentages.
+percentages. These amounts share one compact source expense card with its status and original
+successful **As of** time, including when Stale. Known positive and zero spend remain visible
+without a cap. Money rounds to cents; a tiny positive amount can display as zero cents.
 
 **Budget limits** under Providers are local advisory ceilings. Your existing Cursor Month
 limit keeps its stored value; it now compares against extra-paid calendar-month spend.

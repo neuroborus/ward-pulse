@@ -4,8 +4,10 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
 
 ## Credential Rules
 
-- Provider credentials stay on the phone that owns the provider transport. OpenAI, Anthropic, and
-  Cursor platform Admin API keys are entered on the phone; ChatGPT/Codex sign-in uses OpenAI's
+- Provider credentials are encrypted on the phone that owns the provider transport and used
+  to authenticate requests directly to their provider. Reporting uses one OpenAI organization
+  Admin key, one ordinary organization-scoped Anthropic key with actual linked-account rights,
+  or one Cursor Team key per corresponding row; ChatGPT/Codex sign-in uses OpenAI's
   device-code flow. Claude subscription uses Claude Code's PKCE authorization-code flow (browser
   plus pasted callback code); Cursor plan uses an experimental in-app WebView dashboard sign-in
   that captures the `WorkosCursorSessionToken` cookie (optional Advanced paste remains for
@@ -15,7 +17,14 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
   fixed-key installs migrate without requiring another login.
 - Saved credentials are never displayed in full. Credential entry may reveal only the current unsaved value after an explicit user action.
 - Optional user-defined labels for API-key connections are plain phone-local display metadata. They are stored beside the credential reference, never concatenated into the secret value, and never sent to Wear OS.
-- Credentials are never sent to a WardPulse cloud service in the MVP.
+- Anthropic Organization reporting excludes the documented Console Admin marker
+  `sk-ant-admin` by app policy. The same nonsecret validator runs before saving a nonempty
+  new/replacement value and before any report request with a saved value. Marker absence
+  proves neither organization scope nor reporting rights. A policy rejection produces local,
+  credential-versioned authentication feedback; it does not delete or rewrite the saved key,
+  label, cached report or preferences. Explicit replacement and Remove retain their normal
+  lifecycle barriers; blank-value label edits and Cancel do not replace credentials.
+- Credentials are never sent to a WardPulse cloud service or the watch in the MVP.
 - Wear OS surfaces receive dashboard summaries, not provider credentials.
 - Android encrypted credential data is excluded from backup because its key is device-bound.
 

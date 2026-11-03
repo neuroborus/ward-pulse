@@ -276,6 +276,87 @@ void main() {
       },
     );
 
+    testWidgets(
+      'Anthropic local rejection is visible but cannot establish Connected',
+      (tester) async {
+        final store = _MemoryCredentialStore();
+        const id = ProviderConnections.anthropicPlatform;
+        await store.writeSecret(id, 'sk-ant-admin01-synthetic');
+        ConnectionReportingUpdate local(
+          ReportingOutcomeCategory category,
+          ReportingOutcomeFreshness freshness,
+        ) => ConnectionReportingUpdate(
+          connection: id,
+          credentialVersion: store.version(id),
+          outcome: ConnectionReportingOutcome(
+            connection: id,
+            credentialVersion: store.version(id),
+            category: category,
+            source: ReportingOutcomeSource.local,
+            freshness: freshness,
+          ),
+        );
+        await show(tester, store, {
+          id: local(
+            ReportingOutcomeCategory.authenticationRejected,
+            ReportingOutcomeFreshness.current,
+          ),
+        });
+        expect(
+          _inRow('Organization reporting', find.text('Key rejected')),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining(anthropicReportingKeyGuidance),
+          findsOneWidget,
+        );
+        expect(
+          _inRow('Organization reporting', find.text('Connected')),
+          findsNothing,
+        );
+        await tester.tap(find.text('Organization reporting'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Value (leave blank to keep)'),
+          'sk-ant-admin01-replacement',
+        );
+        await tester.tap(find.text('Save'));
+        await tester.pumpAndSettle();
+        expect(find.text(anthropicReportingKeyGuidance), findsOneWidget);
+        expect(await store.readSecret(id), 'sk-ant-admin01-synthetic');
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        await show(tester, store, {
+          id: local(
+            ReportingOutcomeCategory.success,
+            ReportingOutcomeFreshness.current,
+          ),
+        });
+        expect(
+          _inRow('Organization reporting', find.text('Not verified')),
+          findsOneWidget,
+        );
+        await show(tester, store, {
+          id: local(
+            ReportingOutcomeCategory.authenticationRejected,
+            ReportingOutcomeFreshness.stale,
+          ),
+        });
+        expect(
+          _inRow('Organization reporting', find.text('Not verified')),
+          findsOneWidget,
+        );
+        await show(tester, store, {
+          id: proof(store, id, ReportingOutcomeCategory.success),
+        });
+        expect(
+          _inRow('Organization reporting', find.text('Connected')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
     testWidgets('label-only save and Cancel preserve proof and do not poll', (
       tester,
     ) async {

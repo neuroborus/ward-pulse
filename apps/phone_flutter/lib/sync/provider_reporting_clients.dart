@@ -1,6 +1,8 @@
 import 'dart:convert';
 
+import '../dashboard/dashboard_models.dart';
 import '../providers/cursor_session_token.dart';
+import '../providers/provider_connection.dart';
 import 'provider_reporting.dart';
 import 'report_period.dart';
 
@@ -13,10 +15,20 @@ final class AnthropicReportingClient {
   final Uri _baseUri;
 
   Future<({List<String> usage, List<String> costs})> fetchDailyReports({
-    required String adminApiKey,
+    required String apiKey,
     required DateTime start,
     required DateTime end,
   }) async {
+    if (validateAnthropicReportingKey(apiKey) != null) {
+      throw const ProviderReportingException(
+        ProviderReportingFailure.authentication,
+        outcome: ConnectionReportingOutcome(
+          connection: ProviderConnections.anthropicPlatform,
+          category: ReportingOutcomeCategory.authenticationRejected,
+          source: ReportingOutcomeSource.local,
+        ),
+      );
+    }
     if (!start.isBefore(end))
       return (usage: const <String>[], costs: const <String>[]);
 
@@ -31,7 +43,7 @@ final class AnthropicReportingClient {
       usage.addAll(
         await _fetchPages(
           path: '/v1/organizations/usage_report/messages',
-          adminApiKey: adminApiKey,
+          apiKey: apiKey,
           start: start,
           end: midnight,
           bucketWidth: '1d',
@@ -44,7 +56,7 @@ final class AnthropicReportingClient {
     usage.addAll(
       await _fetchPages(
         path: '/v1/organizations/usage_report/messages',
-        adminApiKey: adminApiKey,
+        apiKey: apiKey,
         start: start.isAfter(midnight) ? start : midnight,
         end: utcEnd,
         bucketWidth: '1m',
@@ -55,7 +67,7 @@ final class AnthropicReportingClient {
     );
     final costs = await _fetchPages(
       path: '/v1/organizations/cost_report',
-      adminApiKey: adminApiKey,
+      apiKey: apiKey,
       start: start,
       end: costEnd,
       bucketWidth: '1d',
@@ -68,7 +80,7 @@ final class AnthropicReportingClient {
 
   Future<List<String>> _fetchPages({
     required String path,
-    required String adminApiKey,
+    required String apiKey,
     required DateTime start,
     required DateTime end,
     required String bucketWidth,
@@ -93,7 +105,7 @@ final class AnthropicReportingClient {
       };
       final response = await _http.get(
         _baseUri.replace(path: path, queryParameters: parameters),
-        headers: {'x-api-key': adminApiKey, 'anthropic-version': '2023-06-01'},
+        headers: {'x-api-key': apiKey, 'anthropic-version': '2023-06-01'},
         label: label,
       );
       pages.add(response.body);

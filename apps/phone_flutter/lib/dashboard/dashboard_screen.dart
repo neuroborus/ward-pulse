@@ -183,7 +183,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               !_isClaudePlan(account) &&
               ConnectedCapabilities.fromAccounts([account]).showAllowances,
         );
-    final showPlatformSpend = true;
 
     return PullToRefreshList(
       onRefresh: widget.onRefresh,
@@ -226,14 +225,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _SectionHeader(title: 'Alerts'),
         const SizedBox(height: 8),
         _AlertsPanel(alerts: snapshot.alerts),
-        // Platform spend sits below primary plan/token surfaces — $0 + Unknown
-        // is easy to misread as "Codex is empty" when shown near the top.
-        if (showPlatformSpend && caps.showBudgets) ...[
-          const SizedBox(height: 16),
-          _SectionHeader(title: 'Platform spend'),
-          const SizedBox(height: 8),
-          _BudgetCards(snapshot: snapshot),
-        ] else if (showPlatformSpend && caps.showSpendGap) ...[
+        if (caps.showSpendGap &&
+            !snapshot.accounts.any(_showsSourceExpenses)) ...[
           const SizedBox(height: 16),
           _CapabilityGapRow(
             title: 'Spend',
@@ -488,49 +481,6 @@ class AllowanceSummaryCard extends StatelessWidget {
   }
 }
 
-/// Spend of one period, with an optional connection-local advisory cap.
-///
-/// Limits are per connection, so the total has no ceiling to measure against:
-/// no bar, no percentage, and no status pill that would read `Unknown` forever.
-class BudgetSummaryCard extends StatelessWidget {
-  const BudgetSummaryCard({
-    super.key,
-    required this.title,
-    required this.state,
-    this.supportingText,
-  });
-
-  final String title;
-  final BudgetState state;
-  final String? supportingText;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final spentLabel = state.spent?.label;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: textTheme.titleMedium),
-            const SizedBox(height: 14),
-            spentLabel == null
-                ? const Text('No spend reported')
-                : Text(spentLabel, style: textTheme.headlineSmall),
-            if (supportingText case final text?) ...[
-              const SizedBox(height: 10),
-              Text(text),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _SyncHeader extends StatelessWidget {
   const _SyncHeader({required this.snapshot, this.onEditReportingKey});
 
@@ -626,48 +576,6 @@ class ReportingFailures extends StatelessWidget {
               ),
             ),
       ],
-    );
-  }
-}
-
-class _BudgetCards extends StatelessWidget {
-  const _BudgetCards({required this.snapshot});
-
-  final DashboardSnapshot snapshot;
-
-  @override
-  Widget build(BuildContext context) {
-    final cards = [
-      BudgetSummaryCard(title: 'Today', state: snapshot.todayTotal),
-      BudgetSummaryCard(title: 'Week', state: snapshot.weekTotal),
-      BudgetSummaryCard(title: 'Month', state: snapshot.monthTotal),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 760) {
-          return Column(
-            // A money-only card has no full-width row left to stretch it.
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final card in cards) ...[
-                card,
-                if (card != cards.last) const SizedBox(height: 12),
-              ],
-            ],
-          );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final card in cards) ...[
-              Expanded(child: card),
-              if (card != cards.last) const SizedBox(width: 12),
-            ],
-          ],
-        );
-      },
     );
   }
 }
@@ -959,6 +867,135 @@ bool _isClaudePlan(ProviderSnapshot account) =>
     account.provider == 'claude' &&
     account.connection == ProviderConnections.claudePlan.storageKey;
 
+bool _showsSourceExpenses(ProviderSnapshot account) {
+  final connection = ProviderConnectionId.fromStorageKey(
+    account.connection ?? '',
+  );
+  if (connection?.kind == ConnectionKind.plan) return false;
+  if (connection == ProviderConnections.openAiPlatform ||
+      connection == ProviderConnections.anthropicPlatform ||
+      connection == ProviderConnections.cursorPlatform) {
+    return true;
+  }
+  return ConnectedCapabilities.fromAccounts([account]).showBudgets;
+}
+
+/// One account's reported Money and optional advisory caps, never Plan balances.
+class _SourceExpenseBlock extends StatelessWidget {
+  const _SourceExpenseBlock({required this.account, required this.caption});
+
+  final ProviderSnapshot account;
+  final String? caption;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final budgets = [account.today, account.week, account.month];
+    Widget period(BudgetState budget, {required bool wide}) {
+      final title = Text(budget.periodLabel, style: textTheme.titleSmall);
+      final amount = Text(
+        budget.spent?.label ?? 'No spend reported',
+        style: textTheme.titleMedium,
+        textAlign: wide ? TextAlign.start : TextAlign.end,
+      );
+      final cap = Text(
+        'Local cap: ${budget.limit?.label ?? 'Not set'}',
+        style: textTheme.bodySmall,
+        textAlign: wide ? TextAlign.start : TextAlign.end,
+      );
+      return KeyedSubtree(
+        key: ValueKey('source-expense.${budget.period}'),
+        child:
+            wide
+                ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [title, const SizedBox(height: 8), amount, cap],
+                )
+                : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 2, child: title),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [amount, cap],
+                      ),
+                    ),
+                  ],
+                ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 760;
+        final periods = [
+          for (final budget in budgets) period(budget, wide: wide),
+        ];
+        return Card(
+          key: ValueKey('source-expenses.${account.accountId}'),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        caption ?? 'Expenses',
+                        style: textTheme.titleSmall,
+                      ),
+                    ),
+                    if (account.status != ProviderStatus.ok)
+                      StatusPill(status: account.status),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                wide
+                    ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final (index, content) in periods.indexed) ...[
+                          if (index > 0) const SizedBox(width: 12),
+                          Expanded(child: content),
+                        ],
+                      ],
+                    )
+                    : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final (index, content) in periods.indexed) ...[
+                          if (index > 0) const SizedBox(height: 12),
+                          content,
+                        ],
+                      ],
+                    ),
+                const SizedBox(height: 12),
+                if (account.lastSuccessfulSyncAt case final asOf?)
+                  Tooltip(
+                    message: formatUtc(asOf),
+                    child: Text(
+                      'As of ${formatLocal(asOf)}',
+                      style: textTheme.bodySmall,
+                    ),
+                  )
+                else
+                  Text(
+                    'Last successful report unavailable',
+                    style: textTheme.bodySmall,
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _ProviderDashboardSourceView extends StatelessWidget {
   const _ProviderDashboardSourceView({
     required this.account,
@@ -972,17 +1009,8 @@ class _ProviderDashboardSourceView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isConsole =
-        account.provider == 'claude' &&
-        account.connection == ProviderConnections.anthropicPlatform.storageKey;
+    final showExpenses = _showsSourceExpenses(account);
     final cards = [
-      if (isConsole)
-        for (final budget in [account.today, account.week, account.month])
-          BudgetSummaryCard(
-            title: budget.periodLabel,
-            state: budget,
-            supportingText: 'Local cap: ${budget.limit?.label ?? 'Not set'}',
-          ),
       for (final allowance in account.allowances)
         AllowanceSummaryCard(
           allowance: allowance,
@@ -1014,36 +1042,23 @@ class _ProviderDashboardSourceView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (caption case final caption?) ...[
-          Text(caption, style: Theme.of(context).textTheme.titleSmall),
+        if (!showExpenses && caption != null) ...[
+          Text(caption!, style: Theme.of(context).textTheme.titleSmall),
           if (cards.isNotEmpty ||
               account.buckets.isNotEmpty ||
               account.modelBreakdown.isNotEmpty)
             const SizedBox(height: 8),
         ],
-        if (isConsole) ...[
-          Wrap(
-            spacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              if (account.lastSuccessfulSyncAt case final asOf?)
-                Tooltip(
-                  message: formatUtc(asOf),
-                  child: Text('As of ${formatLocal(asOf)}'),
-                )
-              else
-                const Text('Last successful report unavailable'),
-              if (account.status != ProviderStatus.ok)
-                StatusPill(status: account.status),
-            ],
-          ),
-          const SizedBox(height: 8),
+        if (showExpenses) ...[
+          _SourceExpenseBlock(account: account, caption: caption),
+          if (cards.isNotEmpty) const SizedBox(height: 12),
         ],
         if (cards.isNotEmpty)
           LayoutBuilder(
             builder: (context, constraints) {
               if (constraints.maxWidth < 760) {
                 return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     for (final card in cards) ...[
                       card,
@@ -1065,17 +1080,18 @@ class _ProviderDashboardSourceView extends StatelessWidget {
             },
           ),
         if (account.buckets.isNotEmpty) ...[
-          if (cards.isNotEmpty) const SizedBox(height: 12),
+          if (showExpenses || cards.isNotEmpty) const SizedBox(height: 12),
           UsageHistoryChart(buckets: account.buckets, accent: accent),
         ],
         if (account.modelBreakdown.isNotEmpty) ...[
-          if (cards.isNotEmpty || account.buckets.isNotEmpty)
+          if (showExpenses || cards.isNotEmpty || account.buckets.isNotEmpty)
             const SizedBox(height: 12),
           _SectionHeader(title: 'Model usage'),
           const SizedBox(height: 8),
           _ModelUsagePanel(models: account.modelBreakdown, accent: accent),
         ],
-        if (cards.isEmpty &&
+        if (!showExpenses &&
+            cards.isEmpty &&
             account.buckets.isEmpty &&
             account.modelBreakdown.isEmpty)
           Text(

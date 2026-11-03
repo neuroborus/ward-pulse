@@ -29,7 +29,11 @@ by <span id="save-the-token">[saving the token in WardPulse](/guide/providers-cu
 
 ## Check the connection
 
-For a supported reporting connection, saving a key starts a check. Read the result beside
+Use the key type for the reporting row: OpenAI organization **Admin**, Anthropic **ordinary
+organization-scoped**, or Cursor **Team**. Each needs the account's corresponding reporting
+rights; a personal plan login does not supply them. Anthropic Console Admin values are
+rejected locally, including on replacement, without changing the previous saved state.
+For an accepted reporting value, saving the key starts a check. Read the result beside
 the same connection:
 
 | Status | What to do |
@@ -37,13 +41,15 @@ the same connection:
 | **Checking…** | Wait for the report request to finish. |
 | **Connected** | Reporting succeeded. Open Dashboard to read the available data. |
 | **Not verified** | Reporting access for the saved key has not been confirmed. Refresh when available. |
-| **Key rejected** | Check or replace the key in this reporting row. |
+| **Key rejected** | Check or replace the key in this reporting row. Anthropic Console Admin keys need an ordinary organization-scoped replacement. |
 | **Access denied** | Check the key's reporting permissions and the account's access at the provider. |
 | **Could not check** | Check the phone's connection and retry when available. |
 
 A saved key alone does not mean Connected. A working plan login also does not confirm the
-reporting key beside it. Connected can still show zero or no history before the provider
-has usage to report. See [Troubleshooting](/guide/troubleshooting) for other messages.
+reporting key beside it. Connected describes current live access, not complete published
+data. A source can have unknown totals or partial history while cost buckets are still
+unpublished; retained Stale data keeps its original successful time. See
+[Troubleshooting](/guide/troubleshooting) for other messages.
 
 ## Reconnect, change or remove a connection
 

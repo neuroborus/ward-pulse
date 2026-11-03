@@ -47,15 +47,18 @@ also keeps exhausted rows as **0% left**. See [Watch](/guide/watch) and [Widget]
 ## Spend, history and model detail
 
 API reporting can show **Today**, **Week** and **Month** spend where available. A missing
-spend report is not proof of zero billing. Console's source cards show known spend,
+spend report is not proof of zero billing. Each reporting source's compact expense card
+shows known spend,
 including zero, with **Local cap** shown separately. **Not set** does not hide known spend
 or itself mean an unhealthy source. A cap does not enforce provider billing. **As of** is
 that source's successful report time in local time; **Stale** retains its previous values
 and time, independently of the Dashboard's latest update. Today starts at midnight UTC,
 Week on Monday UTC, and Month on the first calendar day UTC.
 
-Aggregate spend cards remain separate from per-source amounts. Partial history bars do not
-establish a complete total: a missing daily cost bucket can leave a period unavailable.
+Each source has aligned Today/Week/Month rows, or equal-width columns on a wide screen,
+with one source status and **As of** time. Read the card beside its source label.
+Known Money rounds to whole cents, so a tiny positive amount may display as **USD 0.00**.
+Partial history bars do not establish a complete total: a missing daily cost bucket can leave a period unavailable.
 History and **Model usage** appear when the provider
 supplies usable data; WardPulse does not create a local log of your prompts or a continuous
 activity history.

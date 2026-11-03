@@ -10,6 +10,16 @@ enum ProviderFamily { openai, anthropic, cursor }
 
 enum ConnectionKind { plan, platform }
 
+const anthropicReportingKeyGuidance =
+    'Use an ordinary organization-scoped API key with reporting access. '
+    'Replace Console Admin keys; WardPulse does not accept them for reporting.';
+
+/// Marker exclusion is product policy, not proof of a candidate's access rights.
+String? validateAnthropicReportingKey(String value) =>
+    value.trim().startsWith('sk-ant-admin')
+        ? anthropicReportingKeyGuidance
+        : null;
+
 final class ProviderConnectionId {
   const ProviderConnectionId({required this.provider, required this.kind});
 
@@ -142,7 +152,8 @@ List<ProviderConnection> providerConnectionCatalog({
     ProviderConnection(
       id: ProviderConnections.anthropicPlatform,
       title: 'Organization reporting',
-      subtitle: 'Organization key with reporting access',
+      subtitle:
+          'Ordinary organization key with reporting access · no Admin keys',
       secretHint: 'API key',
       displayName:
           platformLabels[ProviderConnections.anthropicPlatform.storageKey],

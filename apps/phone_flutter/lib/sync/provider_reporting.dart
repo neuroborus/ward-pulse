@@ -16,10 +16,13 @@ enum ProviderReportingFailure {
 
 /// Reporting failure with details that never carry raw provider payloads.
 final class ProviderReportingException implements Exception {
-  const ProviderReportingException(this.failure, {this.details});
+  const ProviderReportingException(this.failure, {this.details, this.outcome});
 
   final ProviderReportingFailure failure;
   final String? details;
+
+  /// Nonsecret provenance for a classified preflight rejection.
+  final ConnectionReportingOutcome? outcome;
 
   @override
   String toString() => 'Provider reporting failed: ${failure.name}.';

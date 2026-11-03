@@ -1,11 +1,101 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_theme.dart';
 import 'package:ward_pulse_phone/providers/credential_dialog.dart';
+import 'package:ward_pulse_phone/providers/provider_connection.dart';
 
 const _keyboardTop = 640.0 - 280.0;
 
 void main() {
+  for (final installed in [false, true]) {
+    testWidgets(
+      'Anthropic validates ${installed ? 'replacement' : 'new'} values before Save',
+      (tester) async {
+        final outcome = await _openCredential(
+          tester,
+          hasCredential: installed,
+          valueValidator: validateAnthropicReportingKey,
+        );
+        final value = find.widgetWithText(
+          TextFormField,
+          installed ? 'Value (leave blank to keep)' : 'Value',
+        );
+        await tester.enterText(
+          value,
+          installed ? '  sk-ant-admin01-synthetic  ' : 'sk-ant-admin-synthetic',
+        );
+        await tester.tap(find.text('Save'));
+        await tester.pumpAndSettle();
+        expect(outcome.completed, isFalse);
+        final error = find.text(anthropicReportingKeyGuidance);
+        expect(error, findsOneWidget);
+        expect(
+          tester.renderObject<RenderParagraph>(error).didExceedMaxLines,
+          isFalse,
+        );
+        await tester.ensureVisible(error);
+        await tester.pumpAndSettle();
+        final viewport = tester.getRect(
+          find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.byType(SingleChildScrollView),
+          ),
+        );
+        final errorBounds = tester.getRect(error);
+        expect(errorBounds.top, greaterThanOrEqualTo(viewport.top));
+        expect(errorBounds.bottom, lessThanOrEqualTo(viewport.bottom));
+        expect(errorBounds.bottom, lessThanOrEqualTo(_keyboardTop));
+        _expectActionsAboveKeyboard(tester);
+
+        await tester.enterText(value, '  sk-ant-api03-synthetic  ');
+        await tester.tap(find.text('Save'));
+        await tester.pumpAndSettle();
+        expect(outcome.change?.value, 'sk-ant-api03-synthetic');
+        expect(outcome.change?.remove, isFalse);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('blank label-only, Cancel and Remove bypass value validation', (
+    tester,
+  ) async {
+    var validations = 0;
+    final outcome = await _openCredential(
+      tester,
+      hasCredential: true,
+      valueValidator: (_) {
+        validations++;
+        return 'Rejected candidate';
+      },
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Label (optional)'),
+      'New label',
+    );
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(outcome.change?.updateLabelOnly, isTrue);
+    expect(outcome.change?.label, 'New label');
+    for (final action in ['Cancel', 'Remove']) {
+      await tester.tap(find.text('Open credential'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Value (leave blank to keep)'),
+        'invalid-candidate',
+      );
+      await tester.tap(find.text(action));
+      await tester.pumpAndSettle();
+      if (action == 'Cancel') {
+        expect(outcome.change, isNull);
+      } else {
+        expect(outcome.change?.remove, isTrue);
+      }
+    }
+    expect(validations, 0);
+  });
+
   testWidgets(
     'large credential form validates and cancels above the keyboard',
     (tester) async {
@@ -156,6 +246,8 @@ Future<_CredentialOutcome> _openCredential(
   String? guidance,
   bool autofocus = true,
   bool allowLabel = true,
+  bool hasCredential = false,
+  String? Function(String)? valueValidator,
   FakeViewPadding initialViewInsets = const FakeViewPadding(bottom: 280),
 }) async {
   tester.view.devicePixelRatio = 1;
@@ -188,7 +280,8 @@ Future<_CredentialOutcome> _openCredential(
                           title: 'Anthropic · Organization reporting',
                           hint: 'API key',
                           allowLabel: allowLabel,
-                          hasCredential: false,
+                          hasCredential: hasCredential,
+                          valueValidator: valueValidator,
                           guidance: guidance,
                           autofocus: autofocus,
                         ),

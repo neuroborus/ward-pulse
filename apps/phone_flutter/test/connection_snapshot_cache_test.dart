@@ -218,6 +218,96 @@ void main() {
     );
 
     test(
+      'saved Admin rejection preserves legacy credential, label and shared-stack cache until replacement',
+      () async {
+        const id = ProviderConnections.anthropicPlatform;
+        final credentials = store('ui');
+        secure.values['wardpulse.${id.storageKey}.secret'] =
+            'sk-ant-admin01-synthetic';
+        await credentials.writeLabel(id, 'Saved organization');
+        final version = (await credentials.readVersion(id))!;
+        final snapshots = cache('ui', id.storageKey);
+        final original = _snapshot('claude', id.storageKey, firstAt, 77);
+        expect(await snapshots.store(original, version), isTrue);
+        final savedSecrets = Map<String, String>.from(secure.values);
+        final originalCache =
+            (await snapshots.capture()).snapshot!.toJsonString();
+        final transport = _EmptyReportingTransport();
+        var normalizations = 0;
+        final repository = buildLiveProviderStack(
+          credentialStore: credentials,
+          claudeAccountService: const EmptyClaudeAccountService(),
+          openAiAndCodex: const NoProvidersDashboardRepository(),
+          caches: {id.storageKey: snapshots},
+          clock: () => nextAt,
+          anthropicReportingClient: AnthropicReportingClient(
+            http: ProviderReportingHttp(transport: transport),
+          ),
+          normalizeAnthropicReport: (_) {
+            normalizations++;
+            return _snapshot(
+              'claude',
+              id.storageKey,
+              nextAt,
+              88,
+            ).toJsonString();
+          },
+          mergeSnapshots: _merge,
+          logger: const _SilentLogger(),
+        );
+        final updates = <ConnectionReportingUpdate>[];
+        final retained = await repository.loadObserved(updates.add);
+        expect(transport.requests, isEmpty);
+        expect(normalizations, 0);
+        expect(secure.values, savedSecrets);
+        expect(await credentials.readLabel(id), 'Saved organization');
+        expect(await credentials.readSecret(id), 'sk-ant-admin01-synthetic');
+        expect((await credentials.readVersion(id))!.sameCache(version), isTrue);
+        expect(
+          (await snapshots.capture()).snapshot!.toJsonString(),
+          originalCache,
+        );
+        expect(retained.accounts.single.status, ProviderStatus.stale);
+        expect(retained.accounts.single.today.spent?.minorUnits, 77);
+        expect(retained.accounts.single.lastSuccessfulSyncAt, firstAt);
+        final rejection = retained.reportingOutcomes.single;
+        expect(rejection.connection, id);
+        expect(
+          rejection.category,
+          ReportingOutcomeCategory.authenticationRejected,
+        );
+        expect(rejection.source, ReportingOutcomeSource.local);
+        expect(rejection.freshness, ReportingOutcomeFreshness.current);
+        expect(rejection.credentialVersion!.sameCache(version), isTrue);
+        expect(rejection.supportingCopy, anthropicReportingKeyGuidance);
+        expect(rejection.canEditKey, isTrue);
+        final reported =
+            updates.where((update) => update.outcome != null).single;
+        expect(reported.outcome?.source, ReportingOutcomeSource.local);
+        expect(reported.credentialVersion!.sameCache(version), isTrue);
+        expect(retained.toJsonString(), isNot(contains('sk-ant-admin')));
+
+        await credentials.writeSecret(id, 'sk-ant-api03-synthetic');
+        repository.invalidate();
+        updates.clear();
+        final recovered = await repository.loadObserved(updates.add);
+        final replacement = (await credentials.readVersion(id))!;
+        expect(replacement.sameCache(version), isFalse);
+        expect(await credentials.readLabel(id), 'Saved organization');
+        expect(transport.requests, isNotEmpty);
+        expect(normalizations, 1);
+        expect(recovered.accounts.single.today.spent?.minorUnits, 88);
+        expect(recovered.accounts.single.lastSuccessfulSyncAt, nextAt);
+        final success = recovered.reportingOutcomes.single;
+        expect(success.category, ReportingOutcomeCategory.success);
+        expect(success.source, ReportingOutcomeSource.live);
+        expect(success.freshness, ReportingOutcomeFreshness.current);
+        expect(success.credentialVersion!.sameCache(replacement), isTrue);
+        expect((await snapshots.capture()).snapshot!.generatedAt, nextAt);
+      },
+    );
+
+    test(
       'shared factories collect every reporting connection with captured bounds',
       () async {
         final credentials = store('ui');

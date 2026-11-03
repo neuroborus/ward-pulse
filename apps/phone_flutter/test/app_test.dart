@@ -842,8 +842,8 @@ void main() {
     expect(find.text('No alerts'), findsOneWidget);
 
     await tester.scrollUntilVisible(
-      find.text('Platform spend'),
-      300,
+      find.byKey(const ValueKey('source-expense.today')),
+      -300,
       scrollable: dashboard,
     );
     expect(find.text('Today'), findsWidgets);
@@ -2651,9 +2651,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Organization reporting'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextFormField).first, 'synthetic-key');
+      await tester.enterText(_credentialValueField(), 'synthetic-key');
       await tester.enterText(
-        find.byType(TextFormField).last,
+        find.widgetWithText(TextFormField, 'Label (optional)'),
         'Synthetic label',
       );
       await tester.tap(find.text('Save'));
@@ -2707,7 +2707,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Organization reporting'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextFormField).first, 'synthetic-key');
+      await tester.enterText(_credentialValueField(), 'synthetic-key');
       await tester.tap(find.text('Save'));
       await tester.pump();
       await tester.pump();
@@ -3012,7 +3012,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Organization reporting'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextFormField).first, 'synthetic-key');
+    await tester.enterText(_credentialValueField(), 'synthetic-key');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(find.text('Could not update credential'), findsOneWidget);
@@ -3083,10 +3083,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        tester
-            .widget<TextFormField>(find.byType(TextFormField).first)
-            .controller!
-            .text,
+        tester.widget<TextFormField>(_credentialValueField()).controller!.text,
         isEmpty,
       );
       expect(find.text('Remove'), findsOneWidget);
@@ -3118,10 +3115,7 @@ void main() {
     expect(find.text('Not connected'), findsWidgets);
     await tester.tap(find.text('Platform reporting'));
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byType(TextFormField).first,
-      'secret-admin-key',
-    );
+    await tester.enterText(_credentialValueField(), 'secret-admin-key');
     expect(
       tester.widget<TextField>(find.byType(TextField).first).obscureText,
       isTrue,
@@ -3179,11 +3173,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Platform reporting'));
     await tester.pumpAndSettle();
+    await tester.enterText(_credentialValueField(), 'secret-admin-key');
     await tester.enterText(
-      find.byType(TextFormField).at(0),
-      'secret-admin-key',
+      find.widgetWithText(TextFormField, 'Label (optional)'),
+      'Work org key',
     );
-    await tester.enterText(find.byType(TextFormField).at(1), 'Work org key');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
@@ -4391,13 +4385,22 @@ final class _NotificationChoice
   }
 }
 
+Finder _credentialValueField() => find.ancestor(
+  of: find.byWidgetPredicate(
+    (widget) =>
+        widget is TextField &&
+        (widget.decoration?.labelText?.startsWith('Value') ?? false),
+  ),
+  matching: find.byType(TextFormField),
+);
+
 /// Mock fixture as a real connection: mock accounts hold no metric slots.
 DashboardSnapshot _asConnection(DashboardSnapshot snapshot) {
   final account =
       Map<String, Object?>.from(snapshot.primaryAccount!.toJson())
         ..['accountId'] = 'anthropic-platform'
         ..['provider'] = 'claude'
-        ..['connection'] = 'anthropic.platform';
+        ..['connection'] = ProviderConnections.anthropicPlatform.storageKey;
   return DashboardSnapshot.fromJson({
     ...snapshot.toJson(),
     'accounts': [account],
