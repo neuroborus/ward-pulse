@@ -93,7 +93,51 @@ class MiniRemainingArcPaintTest {
         }
     }
 
-    private fun paint(remaining: Float, color: Int, side: Int, stroke: Float): IntArray {
+    @Test
+    fun genuineFullHasAUniformClosedContourWhileRoundedFullRemainsPartial() {
+        scales.forEach { scale ->
+            val side = (39f * scale).roundToInt()
+            val stroke = 5f * scale
+            val colors = pairedColors + listOf(RingFamily.CLAUDE, RingFamily.CLAUDE_FABLE)
+            colors.forEach { color ->
+                val context = "scale=$scale color=0x${"%08X".format(color)} side=$side stroke=$stroke"
+                val full = paint(1f, color, side, stroke, isFull = true)
+                assertEquals("Full centre: $context", background, full[(side / 2) * side + side / 2])
+                listOf(0.0, 90.0, 180.0, 270.0).forEach { angle ->
+                    assertEquals("Full centreline at $angle: $context", color, full[pointAt(angle, side, stroke)])
+                }
+                full.forEachIndexed { index, pixel ->
+                    val opposite = full.lastIndex - index
+                    // A uniform circle is invariant under 180-degree rotation,
+                    // including both contour edges at the top join. Allow one
+                    // quantization unit per channel for native antialiasing.
+                    assertTrue(
+                        "Uneven full contour: $context pixel=(${index % side},${index / side}) " +
+                            "argb=0x${"%08X".format(pixel)} opposite=0x${"%08X".format(full[opposite])}",
+                        colorDistance(pixel, full[opposite]) <= 3,
+                    )
+                }
+                // Both a displayed 100% partial and a partial rounded to Float 1
+                // must retain the compensated join rather than the closed contour.
+                listOf(0.999f, 1f).forEach { remaining ->
+                    val partial = paint(remaining, color, side, stroke)
+                    val top = pointAt(0.0, side, stroke)
+                    assertTrue(
+                        "Partial promoted to full: $context remaining=$remaining",
+                        colorDistance(partial[top], color) > colorDistance(full[top], color),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun paint(
+        remaining: Float,
+        color: Int,
+        side: Int,
+        stroke: Float,
+        isFull: Boolean = false,
+    ): IntArray {
         val bitmap = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
         try {
             CanvasDrawScope().draw(
@@ -103,7 +147,7 @@ class MiniRemainingArcPaintTest {
                 size = Size(side.toFloat(), side.toFloat()),
             ) {
                 drawRect(Color(background))
-                drawMiniRemainingArc(remaining, Color(color), stroke)
+                drawMiniRemainingArc(remaining, Color(color), stroke, isFull)
             }
             return IntArray(side * side).also {
                 bitmap.getPixels(it, 0, side, 0, 0, side, side)

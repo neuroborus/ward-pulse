@@ -37,10 +37,7 @@
     <circle cx="65" cy="154" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
     <circle cx="65" cy="154" r="17" fill="none" stroke="#E8915A"
-      stroke-width="5" stroke-linecap="round"
-      stroke-dasharray="101.81415022205297 106.81415022205297"
-      stroke-dashoffset="-2.5"
-      transform="rotate(-90 65 154)" />
+      stroke-width="5" />
     <text x="96.5" y="145.5"
       font-family="Noto Sans, sans-serif" font-size="22"
       font-weight="700" fill="#F4FBF8">Claude plan · Sonnet weekly</text>
@@ -50,17 +47,11 @@
     <circle cx="65" cy="229" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
     <circle cx="65" cy="229" r="17" fill="none" stroke="#7E93B8"
-      stroke-width="5" stroke-linecap="round"
-      stroke-dasharray="101.81415022205297 106.81415022205297"
-      stroke-dashoffset="-2.5"
-      transform="rotate(-90 65 229)" />
+      stroke-width="5" />
     <circle cx="116" cy="229" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
     <circle cx="116" cy="229" r="17" fill="none" stroke="#67E8D4"
-      stroke-width="5" stroke-linecap="round"
-      stroke-dasharray="101.81415022205297 106.81415022205297"
-      stroke-dashoffset="-2.5"
-      transform="rotate(-90 116 229)" />
+      stroke-width="5" />
     <text x="147.5" y="222.5"
       font-family="Noto Sans, sans-serif" font-size="27"
       font-weight="700" fill="#F4FBF8">Cursor plan</text>
@@ -70,17 +61,11 @@
     <circle cx="65" cy="304" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
     <circle cx="65" cy="304" r="17" fill="none" stroke="#65D78A"
-      stroke-width="5" stroke-linecap="round"
-      stroke-dasharray="101.81415022205297 106.81415022205297"
-      stroke-dashoffset="-2.5"
-      transform="rotate(-90 65 304)" />
+      stroke-width="5" />
     <circle cx="116" cy="304" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
     <circle cx="116" cy="304" r="17" fill="none" stroke="#186020"
-      stroke-width="5" stroke-linecap="round"
-      stroke-dasharray="101.81415022205297 106.81415022205297"
-      stroke-dashoffset="-2.5"
-      transform="rotate(-90 116 304)" />
+      stroke-width="5" />
     <text x="147.5" y="297.5"
       font-family="Noto Sans, sans-serif" font-size="27"
       font-weight="700" fill="#F4FBF8">Codex plan</text>

@@ -98,16 +98,24 @@ function esc(text) {
     .replaceAll('>', '&gt;')
 }
 
-function miniArc({ cx, cy, r, thickness, remaining, color }) {
+function miniArc({ cx, cy, r, thickness, used, color }) {
+  const isFull = used === 0
   const circ = 2 * Math.PI * r
-  const left = Math.max(0, Math.min(remaining, 1))
+  const left = Math.max(0, Math.min(1 - used, 1))
   if (left === 0) {
     return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
       stroke-width="${thickness}" />`
   }
+  if (isFull) {
+    return `
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
+      stroke-width="${thickness}" />
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}"
+      stroke-width="${thickness}" />`
+  }
   const paint = circ * left
-  const used = circ * (1 - left)
+  const usedLength = circ * (1 - left)
   const roundEnds = paint > thickness
   const capInset = roundEnds ? thickness / 2 : 0
   return `
@@ -116,7 +124,7 @@ function miniArc({ cx, cy, r, thickness, remaining, color }) {
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}"
       stroke-width="${thickness}" stroke-linecap="${roundEnds ? 'round' : 'butt'}"
       stroke-dasharray="${paint - 2 * capInset} ${circ}"
-      stroke-dashoffset="${-(used + capInset)}"
+      stroke-dashoffset="${-(usedLength + capInset)}"
       transform="rotate(-90 ${cx} ${cy})" />`
 }
 
@@ -452,14 +460,13 @@ async function glanceSvg({
     if (scrolling) body += `<defs><clipPath id="legendClip"><rect x="${blockLeft}" y="${availableTop}" width="${blockW - 6}" height="${viewportH}"/></clipPath></defs><g clip-path="url(#legendClip)">`
 
     for (const { row, title, sub, height } of measured) {
-      const remaining = 1 - row.used
       const rowMid = y + height / 2
       body += miniArc({
         cx: arcX,
         cy: rowMid,
         r: miniR,
         thickness: miniT,
-        remaining,
+        used: row.used,
         color: row.family.color,
       })
       if (row.split) {
@@ -468,7 +475,7 @@ async function glanceSvg({
           cy: rowMid,
           r: miniR,
           thickness: miniT,
-          remaining: 1 - row.split.used,
+          used: row.split.used,
           color: row.split.family.color,
         })
       }

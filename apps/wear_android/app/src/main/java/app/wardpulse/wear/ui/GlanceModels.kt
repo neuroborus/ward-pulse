@@ -21,11 +21,13 @@ data class GlanceLegendRowModel(
     val colorArgb: Int,
     val secondaryArc: GlanceLegendArcModel? = null,
     val exhaustedPercentRanges: List<IntRange> = emptyList(),
+    val isFull: Boolean = false,
 )
 
 data class GlanceLegendArcModel(
     val remainingFraction: Float,
     val colorArgb: Int,
+    val isFull: Boolean = false,
 )
 
 /**
@@ -92,7 +94,11 @@ fun glanceLegendRows(summary: WatchDashboardSummary): List<GlanceLegendRowModel>
                         ring.id,
                         "$firstPercent · $secondPercent left",
                     ),
-                    secondaryArc = GlanceLegendArcModel(outer.remainingFraction, outer.colorArgb),
+                    secondaryArc = GlanceLegendArcModel(
+                        remainingFraction = outer.remainingFraction,
+                        colorArgb = outer.colorArgb,
+                        isFull = outer.isFull,
+                    ),
                     exhaustedPercentRanges = buildList {
                         if (ring.usedPercent >= 100.0) add(0 until firstPercent.length)
                         if (split.usedPercent >= 100.0) add(secondStart until secondStart + secondPercent.length)
@@ -112,6 +118,8 @@ private fun glanceLegendRow(
     if (!usedPercent.isFinite() || usedPercent < 0.0) {
         return null
     }
+    // Subtraction and Float conversion can both round positive usage to full.
+    val isFull = usedPercent == 0.0
     val remaining = remainingPercent(usedPercent)
     return GlanceLegendRowModel(
         title = glancePrimaryLabel(ringId, label),
@@ -119,6 +127,7 @@ private fun glanceLegendRow(
         remainingFraction = (remaining / 100.0).toFloat(),
         colorArgb = RingFamily.colorArgb(ringId),
         exhaustedPercentRanges = if (usedPercent >= 100.0) listOf(0 until 2) else emptyList(),
+        isFull = isFull,
     )
 }
 

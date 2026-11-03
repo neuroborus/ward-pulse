@@ -259,6 +259,55 @@ class GlanceModelsTest {
     }
 
     @Test
+    fun legendRows_onlyOriginalZeroIsFullBeforeRemainingLosesPrecision() {
+        for ((used, expectedFraction) in listOf(
+            0.0 to 1f,
+            0.1 to 0.999f,
+            0.000001 to 1f,
+            Double.MIN_VALUE to 1f,
+        )) {
+            val ring = cursorPair(used, used).copy(split = null)
+            val row = glanceLegendRows(baseSummary(rings = listOf(ring))).single()
+            assertEquals("100% left", row.subtitle)
+            assertEquals(expectedFraction, row.remainingFraction)
+            assertEquals("used=$used", used == 0.0, row.isFull)
+        }
+    }
+
+    @Test
+    fun legendRows_keepFullDistinctFromRoundedFullInBothArcPositions() {
+        for (partialUsed in listOf(0.1, 0.000001, Double.MIN_VALUE)) {
+            for ((innerUsed, outerUsed) in listOf(0.0 to partialUsed, partialUsed to 0.0)) {
+                val row = glanceLegendRows(baseSummary(rings = listOf(cursorPair(innerUsed, outerUsed)))).single()
+                val outer = requireNotNull(row.secondaryArc)
+                assertEquals("100% · 100% left", row.subtitle)
+                assertEquals("inner used=$innerUsed", innerUsed == 0.0, row.isFull)
+                assertEquals("outer used=$outerUsed", outerUsed == 0.0, outer.isFull)
+                assertEquals(if (innerUsed == 0.1) 0.999f else 1f, row.remainingFraction)
+                assertEquals(if (outerUsed == 0.1) 0.999f else 1f, outer.remainingFraction)
+            }
+        }
+    }
+
+    @Test
+    fun legendRows_preserveFullClassificationForEitherKnownSurvivor() {
+        for (used in listOf(0.0, 0.1, 0.000001, Double.MIN_VALUE)) {
+            for (ring in listOf(
+                cursorPair(used, Double.NaN),
+                cursorPair(Double.NaN, used),
+                fablePair(used, Double.NaN),
+                fablePair(Double.NaN, used),
+            )) {
+                val row = glanceLegendRows(baseSummary(rings = listOf(ring))).single()
+                assertNull(row.secondaryArc)
+                assertEquals("100% left", row.subtitle)
+                assertEquals(if (used == 0.1) 0.999f else 1f, row.remainingFraction)
+                assertEquals("used=$used ring=$ring", used == 0.0, row.isFull)
+            }
+        }
+    }
+
+    @Test
     fun legendRows_roundingToZeroDoesNotMarkPositiveCapacityExhausted() {
         val row = glanceLegendRows(baseSummary(rings = listOf(cursorPair(99.96, 100.0)))).single()
         assertEquals("0% · 0% left", row.subtitle)

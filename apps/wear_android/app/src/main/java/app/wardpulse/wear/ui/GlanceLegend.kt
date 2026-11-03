@@ -584,6 +584,7 @@ private fun GlanceLegendRow(row: GlanceMeasuredRow, metrics: GlanceMetrics, gap:
     ) {
         MiniRemainingArc(
             remainingFraction = model.remainingFraction,
+            isFull = model.isFull,
             color = Color(model.colorArgb),
             stroke = metrics.miniStroke,
             modifier = Modifier.size(metrics.miniArcSize),
@@ -592,6 +593,7 @@ private fun GlanceLegendRow(row: GlanceMeasuredRow, metrics: GlanceMetrics, gap:
             Spacer(modifier = Modifier.width(metrics.textGap))
             MiniRemainingArc(
                 remainingFraction = arc.remainingFraction,
+                isFull = arc.isFull,
                 color = Color(arc.colorArgb),
                 stroke = metrics.miniStroke,
                 modifier = Modifier.size(metrics.miniArcSize),
@@ -632,13 +634,14 @@ internal fun glanceSubtitleText(row: GlanceLegendRowModel): AnnotatedString =
 @Composable
 private fun MiniRemainingArc(
     remainingFraction: Float,
+    isFull: Boolean,
     color: Color,
     stroke: Dp,
     modifier: Modifier = Modifier,
 ) {
     val strokeWidth = with(LocalDensity.current) { stroke.toPx() }
     Canvas(modifier = modifier) {
-        drawMiniRemainingArc(remainingFraction, color, strokeWidth)
+        drawMiniRemainingArc(remainingFraction, color, strokeWidth, isFull)
     }
 }
 
@@ -647,6 +650,7 @@ internal fun DrawScope.drawMiniRemainingArc(
     remainingFraction: Float,
     color: Color,
     strokeWidth: Float,
+    isFull: Boolean = false,
 ) {
     val inset = strokeWidth / 2f
     val arcSize = Size(size.width - inset * 2f, size.height - inset * 2f)
@@ -661,7 +665,13 @@ internal fun DrawScope.drawMiniRemainingArc(
         style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
     )
     val remaining = remainingFraction.coerceIn(0f, 1f)
-    if (remaining > 0f) {
+    if (isFull) {
+        drawCircle(
+            color = color,
+            radius = arcSize.width / 2f,
+            style = Stroke(width = strokeWidth),
+        )
+    } else if (remaining > 0f) {
         val span = remaining * 360f
         val capDegrees =
             Math.toDegrees((strokeWidth / 2f / (arcSize.width / 2f)).toDouble()).toFloat()

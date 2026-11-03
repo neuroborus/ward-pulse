@@ -5,6 +5,16 @@
 watch-face baseline in [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md): this screen is a
 **text legend** for face ring colors, not a face clone.
 
+## Revision 2026-11-03 — exact-full mini-circle closure
+
+Only validated original `usedPercent == 0` gets a uniform closed family contour at 12,
+including either paired half and a known survivor. Classify before subtraction or Float
+conversion; finite partials stay partial even when displayed as `100%` or converted to
+Float `1`, without an epsilon or snap floor. Geometry and existing partial cap rules stay
+unchanged. Source arithmetic is **NOT executed RED**; native paint and normal Round
+Fable used=0 evidence remain **Pending** for post-execution HOST verification. Earlier
+displayed-100%-open observations retain their dated evidence limits.
+
 ## Revision 2026-11-01 — Claude / Fable rendering
 
 The selected pair title is **Claude / Fable**, recognized only for inner
@@ -662,7 +672,8 @@ Rules:
   and percentages always put the inner pool first (left), outer pool second (right),
   independently of which percentage is tighter.
 - Mini arc = **remaining** (`100 - usedPercent`), family color from the face palette and the
-  same clockwise-from-12 melt as the watch face (usage gap opens at 12). Longer spans
+  same clockwise-from-12 melt as the watch face (usage gap opens at 12). Genuine full uses
+  the closed contour defined in the exact-full revision above. Longer partial spans
   compensate the round caps' half-stroke reach by drawing the sweep short by one cap at
   each end; without that a nearly full row reads as a closed ring (`WATCH_RING_DESIGN.md`,
   Ring geometry). If those two cap allowances would consume the span, use flat ends and
