@@ -366,7 +366,40 @@ fn anthropic_platform_account(
         "costPages": [CLAUDE_COST_FIXTURE]
     })
     .to_string();
-    anthropic_provider_snapshot_from_report_json(&dated_report(&report, anchor)?)
+    let mut report: Value = serde_json::from_str(&dated_report(&report, anchor)?)
+        .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))?;
+    let captured = DemoTime::parse(
+        report["generatedAt"]
+            .as_str()
+            .ok_or(DebugDemoDashboardError::InvalidAnchor)?,
+    )?;
+    report["capturedEndMicros"] = json!(captured.0 * 1_000_000);
+    let mut costs: Value = serde_json::from_str(
+        report["costPages"][0]
+            .as_str()
+            .ok_or(DebugDemoDashboardError::InvalidAnchor)?,
+    )
+    .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))?;
+    let days = costs["data"]
+        .as_array_mut()
+        .ok_or(DebugDemoDashboardError::InvalidAnchor)?;
+    let start = captured.week_start()?.0.min(captured.month_start(false)?.0);
+    // These explicit empty buckets are synthetic coverage, never evidence of live costs.
+    for seconds in (start..captured.0).step_by(DAY_SECONDS as usize) {
+        let day = DemoTime(seconds).stamp();
+        if !days
+            .iter()
+            .any(|bucket| bucket["starting_at"].as_str() == Some(day.as_str()))
+        {
+            days.push(json!({
+                "starting_at": day,
+                "ending_at": DemoTime::new(seconds + DAY_SECONDS)?.stamp(),
+                "results": []
+            }));
+        }
+    }
+    report["costPages"] = json!([costs.to_string()]);
+    anthropic_provider_snapshot_from_report_json(&report.to_string())
         .map(|report| report.provider_snapshot)
         .map_err(|error| DebugDemoDashboardError::Build(error.to_string()))
 }
@@ -716,19 +749,20 @@ mod tests {
         let left = debug_multi_provider_dashboard_json(7).expect("left");
         let right = debug_multi_provider_dashboard_json(7).expect("right");
         assert_eq!(left, right);
-        // FNV-1a of the complete seed-7 JSON, recorded before adding the anchor.
-        assert_eq!(
-            left.bytes().fold(0xcbf29ce484222325_u64, |hash, byte| (hash
-                ^ u64::from(byte))
-            .wrapping_mul(0x100000001b3)),
-            3_512_970_002_277_323_788
-        );
         assert_eq!(
             left,
             debug_multi_provider_dashboard_json_at(7, None).unwrap()
         );
         let snapshot: DashboardSnapshot = serde_json::from_str(&left).unwrap();
         assert_eq!(snapshot.accounts.len(), 6);
+        let anthropic = snapshot
+            .accounts
+            .iter()
+            .find(|account| account.connection.as_deref() == Some("anthropic.platform"))
+            .unwrap();
+        for budget in [&anthropic.today, &anthropic.week, &anthropic.month] {
+            assert!(budget.spent.is_some());
+        }
         let cursor = snapshot
             .accounts
             .iter()
@@ -863,10 +897,20 @@ mod tests {
                     account.last_successful_sync_at.as_ref().unwrap().as_str(),
                     anchor
                 );
-                assert_eq!(account.buckets.len(), previous.buckets.len());
-                for (bucket, old_bucket) in account.buckets.iter().zip(&previous.buckets) {
+                let anthropic = account.connection.as_deref() == Some("anthropic.platform");
+                let history: Vec<_> = account
+                    .buckets
+                    .iter()
+                    .filter(|bucket| !anthropic || bucket.input_tokens.is_some())
+                    .collect();
+                let old_history: Vec<_> = previous
+                    .buckets
+                    .iter()
+                    .filter(|bucket| !anthropic || bucket.input_tokens.is_some())
+                    .collect();
+                assert_eq!(history.len(), old_history.len());
+                for (bucket, old_bucket) in history.iter().zip(&old_history) {
                     let start = DemoTime::parse(bucket.start_at.as_str()).unwrap();
-                    let end = DemoTime::parse(bucket.end_at.as_str()).unwrap();
                     let old_start = DemoTime::parse(old_bucket.start_at.as_str()).unwrap();
                     let old_sync = DemoTime::parse(
                         previous.last_successful_sync_at.as_ref().unwrap().as_str(),
@@ -878,9 +922,31 @@ mod tests {
                         "{:?} history",
                         account.connection
                     );
+                    assert_eq!(bucket.input_tokens, old_bucket.input_tokens);
+                    assert_eq!(bucket.cached_tokens, old_bucket.cached_tokens);
+                }
+                for bucket in &account.buckets {
+                    let start = DemoTime::parse(bucket.start_at.as_str()).unwrap();
+                    let end = DemoTime::parse(bucket.end_at.as_str()).unwrap();
                     assert_eq!(start.0.rem_euclid(DAY_SECONDS), 0);
                     assert_eq!(end.0 - start.0, DAY_SECONDS);
                     assert!(start.0 <= time.day_start().0);
+                }
+                if anthropic {
+                    let start = time
+                        .week_start()
+                        .unwrap()
+                        .0
+                        .min(time.month_start(false).unwrap().0);
+                    let covered = account
+                        .buckets
+                        .iter()
+                        .filter(|bucket| bucket.cost.is_some())
+                        .count();
+                    assert_eq!(
+                        covered as i64,
+                        (time.0 - start + DAY_SECONDS - 1) / DAY_SECONDS
+                    );
                 }
                 for meter in &account.allowances {
                     if meter.id == "codex-primary" {
@@ -920,7 +986,12 @@ mod tests {
                         .filter_map(|bucket| bucket.cost.as_ref())
                         .map(|cost| cost.minor_units)
                         .sum();
-                    assert_eq!(state.spent.as_ref().unwrap().minor_units, cents);
+                    let empty = account.connection.as_deref() == Some("anthropic.platform")
+                        && DemoTime::parse(&start).unwrap().0 >= time.0;
+                    assert_eq!(
+                        state.spent.as_ref().map(|spent| spent.minor_units),
+                        (!empty).then_some(cents)
+                    );
                 }
             }
         }

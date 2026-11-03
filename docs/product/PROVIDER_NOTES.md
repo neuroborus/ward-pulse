@@ -354,15 +354,41 @@ Scope:
   in completed minute buckets (`bucket_width=1m`, limit 1440), through the actual snapshot
   end. Skip empty ranges and paginate both widths; never extend the end into the future.
 - Usage requests `group_by[]=model` for model breakdown; cost stays ungrouped.
-- Costs keep daily aggregation over the original requested interval. Amounts are decimal
-  strings in lowest currency units (cents); WardPulse rounds reported amounts to integer
+- Costs use daily aggregation. The documented `ending_at` selector filters bucket ends,
+  so collection sends one second after the captured end's UTC ceiling midnight; an exact
+  midnight uses that midnight plus one second. This selection fence admits the last required
+  daily bucket without moving the snapshot's as-of time or implying future activity.
+  `buildLiveProviderStack` in `apps/phone_flutter/lib/dashboard/live_provider_stack.dart`
+  carries the captured `generatedAt` and private integer `capturedEndMicros` together.
+  `anthropic_provider_snapshot_from_report_json` in
+  `core/ward-pulse-providers/src/claude/platform.rs` uses the precise bound instead of the
+  shared whole-second timestamp when selecting cost days and deciding empty periods.
+  Amounts are decimal strings in lowest currency units (cents); WardPulse rounds them to integer
   USD cents without estimating prices from tokens.
 - Rust coalesces minute usage into one UTC-day history bucket ending at the latest reported
-  bucket end, preserving model/cache totals and historical daily cost alignment. Reported
-  zero remains known zero; absent cost stays unknown in history and affected period totals.
+  usage or cost bucket end, preserving model/cache totals and daily cost alignment. A
+  current-day cost bucket retains its nominal next-midnight end, not an inferred publication
+  cutoff. Cost days outside the requested interval, including days starting at the precise
+  captured end, do not contribute.
+- Today, Monday-start Week and calendar Month are UTC periods for the authorized organization.
+  Each total requires cost coverage for every intersecting UTC day, even a day absent from
+  usage. An empty period is unavailable. A returned empty cost bucket or explicit zero is
+  known zero; an absent day or missing result amount leaves the affected total unavailable.
   API token history can appear before reported costs; no reporting deadline is promised.
+- Budget percentages compare reported-to-date spend with locally saved advisory ceilings;
+  they do not promise that every incurred charge has been published or enforce provider-side
+  limits. Supported Anthropic period IDs remain disabled in the selection catalogue when
+  spend is unavailable, separately from an unset or unusable ceiling. Saved selections and
+  ceiling values are retained; plan connections gain no monetary budget rows.
 - Documented poll floor is one minute; the global slider lower bound remains five minutes.
 - Never log the key, authorization header, or raw response bodies.
+
+The cost bucket-end selection contract was supplied from the
+[legacy cost reference](https://platform.claude.com/docs/en/api/beta/organization/cost_report/retrieve) on
+2026-11-02. That current reference presents API version `2026-10-21`; this integration
+retains `anthropic-version: 2023-06-01`. Acceptance of the corrected fence under the deployed
+header still requires bounded actual-response verification. Source and synthetic regressions,
+and the historical verification below, do not establish fresh live cost availability.
 
 Verified 2026-10-20: host Rust, fixture, Flutter and documentation checks passed, followed by
 both Android Rust builds, a debug phone APK build and a preserving installation. Live phone

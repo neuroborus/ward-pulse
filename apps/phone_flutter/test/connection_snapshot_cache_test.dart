@@ -110,6 +110,8 @@ void main() {
         };
         String empty(String _) =>
             DashboardSnapshot.empty(generatedAt: firstAt).toJsonString();
+        Map<String, dynamic>? anthropicInput;
+        final capturedAt = firstAt.add(const Duration(microseconds: 1));
         final repository = buildLiveProviderStack(
           credentialStore: credentials,
           claudeAccountService: const EmptyClaudeAccountService(),
@@ -122,19 +124,31 @@ void main() {
             logger: const _SilentLogger(),
           ),
           caches: caches,
-          clock: () => firstAt,
+          clock: () => capturedAt,
           anthropicReportingClient: AnthropicReportingClient(http: http),
           cursorReportingClient: CursorPlatformClient(
             http: http,
             clock: () => firstAt,
           ),
-          normalizeAnthropicReport: empty,
+          normalizeAnthropicReport: (report) {
+            anthropicInput = jsonDecode(report) as Map<String, dynamic>;
+            return empty(report);
+          },
           normalizeCursorPlatformReport: empty,
           mergeSnapshots: _merge,
           logger: const _SilentLogger(),
         );
         final observations = <ConnectionReportingUpdate>[];
         final snapshot = await repository.loadObserved(observations.add);
+        expect(anthropicInput!['generatedAt'], capturedAt.toIso8601String());
+        expect(
+          anthropicInput!['capturedEndMicros'],
+          capturedAt.microsecondsSinceEpoch,
+        );
+        expect(
+          anthropicInput!['todayStart'],
+          DateTime.utc(2026, 10, 13).toIso8601String(),
+        );
         expect(snapshot.accounts, isEmpty);
         expect(
           snapshot.reportingOutcomes.map((outcome) => outcome.connection),

@@ -98,7 +98,7 @@ void main() {
         );
         expect(
           request.uri.queryParameters['ending_at'],
-          '2026-07-19T12:00:00.000Z',
+          '2026-07-20T00:00:01.000Z',
         );
       }
       expect(costRequests[1].uri.queryParameters['page'], 'cost-2');
@@ -151,6 +151,7 @@ void main() {
         end: DateTime.utc(2026, 7, 19),
         width: '1d',
         limit: '31',
+        costEnd: '2026-07-19T00:00:01.000Z',
       ),
       (
         name: 'current-day-only range retains its supplied start and end',
@@ -158,6 +159,7 @@ void main() {
         end: DateTime.utc(2026, 7, 19, 12, 34, 56),
         width: '1m',
         limit: '1440',
+        costEnd: '2026-07-20T00:00:01.000Z',
       ),
     ]) {
       test(scenario.name, () async {
@@ -184,17 +186,61 @@ void main() {
           scenario.width,
         );
         expect(usageRequest.uri.queryParameters['limit'], scenario.limit);
-        for (final request in transport.requests) {
-          expect(
-            request.uri.queryParameters['starting_at'],
-            scenario.start.toIso8601String(),
-          );
-          expect(
-            request.uri.queryParameters['ending_at'],
-            scenario.end.toIso8601String(),
-          );
-        }
+        expect(
+          usageRequest.uri.queryParameters['starting_at'],
+          scenario.start.toIso8601String(),
+        );
+        expect(
+          usageRequest.uri.queryParameters['ending_at'],
+          scenario.end.toIso8601String(),
+        );
         expect(transport.requests.last.uri.path, endsWith('/cost_report'));
+        expect(
+          transport.requests.last.uri.queryParameters['starting_at'],
+          scenario.start.toIso8601String(),
+        );
+        expect(
+          transport.requests.last.uri.queryParameters['ending_at'],
+          scenario.costEnd,
+        );
+      });
+    }
+
+    for (final (end, lastDay, fence) in [
+      ('2026-07-20T00:00:00Z', '2026-07-19', '2026-07-20T00:00:01Z'),
+      ('2026-07-20T00:00:00.000001Z', '2026-07-20', '2026-07-21T00:00:01Z'),
+      ('2026-08-01T00:00:00Z', '2026-07-31', '2026-08-01T00:00:01Z'),
+      (
+        '2026-08-01T03:00:00.000001+03:00',
+        '2026-08-01',
+        '2026-08-02T00:00:01Z',
+      ),
+    ]) {
+      test('cost fence admits the last required day at $end', () async {
+        final transport = _FakeTransport({
+          '/v1/organizations/usage_report/messages': [
+            _response(_page()),
+            _response(_page()),
+          ],
+          '/v1/organizations/cost_report': [_response(_page())],
+        });
+        await AnthropicReportingClient(
+          http: ProviderReportingHttp(transport: transport),
+        ).fetchDailyReports(
+          adminApiKey: 'synthetic-key',
+          start: DateTime.utc(2026, 7),
+          end: DateTime.parse(end),
+        );
+        final request = transport.requests.last;
+        final actual = DateTime.parse(
+          request.uri.queryParameters['ending_at']!,
+        );
+        expect(actual, DateTime.parse(fence));
+        // Model the documented strict bucket-end selector, not publication timing.
+        final bucketStart = DateTime.parse('${lastDay}T00:00:00Z');
+        final bucketEnd = bucketStart.add(const Duration(days: 1));
+        expect(bucketEnd.isBefore(actual), isTrue);
+        expect(request.headers['anthropic-version'], '2023-06-01');
       });
     }
 

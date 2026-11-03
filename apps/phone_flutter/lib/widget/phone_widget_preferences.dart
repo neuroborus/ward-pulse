@@ -66,9 +66,13 @@ List<String> migratePhoneWidgetSelectedIds(List<String> ids) {
 }
 
 /// Phone home-widget catalog: budgets, every Claude plan window, purchased meters.
-List<WatchRingMetric> phoneWidgetCatalog(DashboardSnapshot? snapshot) {
+List<WatchRingMetric> phoneWidgetCatalog(
+  DashboardSnapshot? snapshot, {
+  Iterable<ConnectionReportingOutcome> reportingOutcomes = const [],
+}) {
   return watchRingCatalog(
     snapshot,
+    reportingOutcomes: reportingOutcomes,
     includePurchased: true,
     collapseClaudePlan: false,
     collapseCodexPlan: false,

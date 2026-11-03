@@ -357,18 +357,17 @@ int _comparePlanWindows(
 ///
 /// [collapseClaudePlan] and [collapseCodexPlan] collapse plan windows for Watch/WFF.
 /// The phone widget disables both so each window remains selectable.
+/// [reportingOutcomes] also describes cold failures without a dashboard snapshot.
 List<WatchRingMetric> watchRingCatalog(
   DashboardSnapshot? snapshot, {
+  Iterable<ConnectionReportingOutcome> reportingOutcomes = const [],
   bool includePurchased = false,
   bool collapseClaudePlan = true,
   bool collapseCodexPlan = true,
 }) {
-  if (snapshot == null) {
-    return const [];
-  }
-
+  final accounts = snapshot?.accounts ?? const <ProviderSnapshot>[];
   final metrics = <WatchRingMetric>[];
-  for (final account in snapshot.accounts) {
+  for (final account in accounts) {
     if (account.provider == 'mock') {
       continue;
     }
@@ -413,11 +412,25 @@ List<WatchRingMetric> watchRingCatalog(
 
   // Budgets last: a plan window always carries a percentage, while a budget
   // ring waits for a limit, and unset Watchface defaults take the first slots.
-  for (final account in snapshot.accounts) {
+  for (final account in accounts) {
     if (account.provider == 'mock') {
       continue;
     }
     metrics.addAll(_connectionBudgetMetrics(account));
+  }
+  // A cold reporting failure can have neither an account nor a dashboard snapshot.
+  final hasAnthropicAccount = accounts.any(
+    (account) => account.connection == 'anthropic.platform',
+  );
+  final outcomes = [...?snapshot?.reportingOutcomes, ...reportingOutcomes];
+  final hasAnthropicOutcome = outcomes.any(
+    (outcome) => outcome.connection == ProviderConnections.anthropicPlatform,
+  );
+  if (!hasAnthropicAccount && hasAnthropicOutcome) {
+    for (final period in ['today', 'week', 'month']) {
+      final budget = BudgetState.unknownPeriod(period);
+      metrics.add(_budgetMetric('anthropic.platform', budget));
+    }
   }
 
   return metrics;
@@ -663,7 +676,7 @@ WatchRingMetric _allowanceMetric(String provider, AllowanceState allowance) {
   );
 }
 
-/// Local budget rings of one connection: one per period it reports spend for.
+/// Local budget rings; Anthropic keeps supported but unavailable periods visible.
 ///
 /// Reported spend is what makes a ceiling meaningful — subscription plans
 /// report none, and a connection may report only some periods.
@@ -674,12 +687,29 @@ List<WatchRingMetric> _connectionBudgetMetrics(ProviderSnapshot account) {
   }
   return [
     for (final budget in [account.today, account.week, account.month])
-      if (budget.spent != null) _budgetMetric(connection, budget),
+      if (budget.spent != null || connection == 'anthropic.platform')
+        _budgetMetric(connection, budget),
   ];
 }
 
 WatchRingMetric _budgetMetric(String connection, BudgetState budget) {
-  final percent = budget.usedPercent;
+  final spent = budget.spent;
+  final limit = budget.limit;
+  final String? unavailableReason;
+  if (spent == null) {
+    unavailableReason = 'Reported spend is unavailable for this period.';
+  } else if (limit == null) {
+    unavailableReason =
+        'Set this period’s limit under Providers · Budget limits.';
+  } else if (limit.minorUnits <= 0 || limit.currency != spent.currency) {
+    unavailableReason =
+        'Set a positive limit in ${spent.currency} under Providers · Budget limits.';
+  } else if (budget.usedPercent == null) {
+    unavailableReason = 'This budget has no percentage to show.';
+  } else {
+    unavailableReason = null;
+  }
+  final percent = unavailableReason == null ? budget.usedPercent : null;
   return WatchRingMetric(
     id: 'budget.$connection.${budget.period}',
     label: budget.periodLabel,
@@ -687,10 +717,7 @@ WatchRingMetric _budgetMetric(String connection, BudgetState budget) {
     status: budget.status,
     spent: budget.spent,
     limit: budget.limit,
-    unavailableReason:
-        percent == null
-            ? 'Set this period’s limit under Providers · Budget limits.'
-            : null,
+    unavailableReason: unavailableReason,
   );
 }
 

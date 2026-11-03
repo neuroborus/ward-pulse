@@ -98,6 +98,7 @@ DashboardRepository buildLiveProviderStack({
       return jsonEncode({
         'accountId': 'anthropic-local',
         'generatedAt': period.generatedAt.toIso8601String(),
+        'capturedEndMicros': period.generatedAt.microsecondsSinceEpoch,
         'todayStart': period.todayStart.toIso8601String(),
         'weekStart': period.weekStart.toIso8601String(),
         'monthStart': period.monthStart.toIso8601String(),

@@ -14,9 +14,11 @@ class WidgetScreen extends StatefulWidget {
     required this.preferences,
     required this.onPreferencesChanged,
     required this.onRefresh,
+    this.reportingOutcomes = const [],
   });
 
   final DashboardSnapshot? snapshot;
+  final Iterable<ConnectionReportingOutcome> reportingOutcomes;
   final PhoneWidgetPreferences preferences;
   final Future<void> Function(PhoneWidgetPreferences value)
   onPreferencesChanged;
@@ -31,7 +33,7 @@ class WidgetScreen extends StatefulWidget {
 class _WidgetScreenState extends State<WidgetScreen> {
   List<String> get _effectiveIds {
     final snapshot = widget.snapshot;
-    if (snapshot == null) {
+    if (!widget.preferences.usesDefaults || snapshot == null) {
       return widget.preferences.migratedIds;
     }
     return [
@@ -44,7 +46,7 @@ class _WidgetScreenState extends State<WidgetScreen> {
   }
 
   Future<void> _toggleMetric(WatchRingMetric metric, bool selected) async {
-    if (!metric.isAvailable) {
+    if (selected && !metric.isAvailable) {
       return;
     }
     final ids = [..._effectiveIds];
@@ -73,7 +75,24 @@ class _WidgetScreenState extends State<WidgetScreen> {
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
     final selectedIds = _effectiveIds;
-    final catalog = phoneWidgetCatalog(snapshot);
+    final reported = phoneWidgetCatalog(
+      snapshot,
+      reportingOutcomes: widget.reportingOutcomes,
+    );
+    final reportedIds = reported.map((metric) => metric.id).toSet();
+    final catalog = [
+      ...reported,
+      for (final id in selectedIds)
+        if (!reportedIds.contains(id))
+          WatchRingMetric(
+            id: id,
+            label: 'Saved metric: $id',
+            usedPercent: null,
+            status: ProviderStatus.unknown,
+            unavailableReason:
+                'This saved metric is not currently reported. Deselect it to remove the choice.',
+          ),
+    ];
     // Ticked rows, not stored ids — same reason as Watchface.
     final usedSlots =
         catalog.where((metric) => selectedIds.contains(metric.id)).length;
@@ -170,7 +189,7 @@ class _MetricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canToggle = metric.isAvailable && (selected || !atCapacity);
+    final canToggle = selected || (metric.isAvailable && !atCapacity);
     final reason = metric.unavailableReason;
     return CheckboxListTile(
       secondary:
