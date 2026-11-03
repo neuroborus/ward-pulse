@@ -398,34 +398,74 @@ after the install, not before.
 **Controlled summary cases — debug Wear AVD only.** Verify the explicit ADB serial's canonical
 AVD identity with `emu avd name` and use reviewed mock XML matching the actual summary schema.
 Before replacement, preserve live bytes opaquely in a collision-free app-private device file
-at mode 600; keep only hashes, original mode/UID and size on the host. Preserve the original
+at mode 600; keep only hashes, original mode/UID/GID and size on the host. Preserve the original
 file's metadata (660 in the measured cases), not the backup's mode. Leave SharedPreferences
 `.bak`/pending files untouched; do not erase them to force a quiet writer.
 
-Record the actual peer and owned reverse mapping first. Airplane/Wi-Fi/Bluetooth switches did
-not isolate the paired Round's ADB bridge: removing only its observed Wear `tcp:5601` reverse
-and using [the existing connection refresh](#restarting-a-paired-emulator-set) proved that
-peer disconnected. Restore that exact mapping and refresh to recover its original connection.
-An unpaired Square with no reverse and no active peer must stay unpaired; do not create a
-mapping or require a connected peer on cleanup. Leave phone forwarding, jobs, settings and
-pairing alone. This route does not apply to physical devices.
+Record the actual peer and exact owned mappings first. In the historical paired Round pilot,
+radio switches did not isolate its ADB bridge; removing its observed Wear `tcp:5601` reverse
+and using [the existing connection refresh](#restarting-a-paired-emulator-set) proved disconnection.
+That is not a current guarantee: this route requires a fresh disconnected-peer observation.
+Restore the exact mapping and refresh on cleanup. An unpaired Square with no reverse and no
+active peer must stay unpaired; do not create a mapping or require a connected peer on cleanup.
+Leave phone forwarding, jobs, settings and pairing alone. Neither route applies to physical devices.
 
-Require a quiet writer and guards immediately before mutation; the pilot used three stable
-summary hashes plus the intended disconnected peer. Late delivery, pending writes or changed
-snapshot guards invalidate the case, not permission to overwrite newer live data. External
-preference writes need a genuine cold load: prove the old PID retired, use `am start -W`, then
-observe a nonempty new PID within a bound. An empty immediate `pidof` can be asynchronous
-startup, not proof of cold load. An invisible previous app can remain in LAST/OOM adjustment
-700 after ordinary `am kill`; in that observed state, opening existing Settings without
-changes, returning Back and retrying `am kill` allowed retirement. Verify it; do not escalate
-to force-stop, process signals, reset or data clear when that conditional route fails.
+**2026-11-03 paired Round alternative — exclude the single listener.** A qualified own-UID
+PackageManager round trip on normal DEBUG Main can support this manual XML route while the
+actual peer remains connected. Requalify installed Source: the sole normal summary writer is
+[`WatchSummaryListenerService`](../apps/wear_android/app/src/main/java/app/wardpulse/wear/sync/WatchSummaryListenerService.kt)
+calling `WatchSummaryStore.saveEncoded`; Main startup and complication providers only read.
+If another writer exists, HOLD. Preserve OS/bridge state and record the exact raw component
+override separately from application state. DEFAULT inferred from a complete per-user override
+block must be labelled inferred; it is not a typed pre-getter. Do not normalize it to ENABLED.
 
-Use an outer `try/finally`-equivalent cleanup: a failed byte/PID reload must not bypass
-restoration of recorded transport and touched OS/time state. Restore guarded original
-bytes/metadata through a fresh process. Reconcile newer live delivery rather than clobbering it with the old
-backup. Verify the original peer state and fresh whole Glance/Face after reload and settlement;
-a copied file alone does not prove restoration. Remove only the operation's temporary file
-after verified recovery; otherwise retain private recovery material and the unresolved result.
+Before toggling, arm failure-safe exact-state undo and qualify the current app UID/caller with
+`adb -s "$WEAR_SERIAL" shell run-as app.wardpulse --user 0 id`. Use only the qualified own-UID
+route; the ordinary Shell component setter was denied. The existing disable command is:
+
+```sh
+adb -s "$WEAR_SERIAL" shell run-as app.wardpulse --user 0 /system/bin/cmd package disable \
+  --user 0 app.wardpulse/app.wardpulse.wear.sync.WatchSummaryListenerService
+```
+
+Require leaf exit0 with the expected getter-after, disabled override and effective service exclusion.
+Before backup or publication, prove all prior app-UID processes/in-flight callbacks retired,
+no summary `.bak`/pending work and three stable XML hashes. Setter success or absent service
+alone proves none of those. Hold on an unexpected process, writer or hash/state change; do not
+delete recovery files or escalate to force-stop/signals/reset. Keep the listener disabled for
+guarded backup, every controlled cold load and original-byte restoration. Peer1 remains peer1.
+This does not satisfy [Guarded datasource observations](#guarded-datasource-observations):
+never supply false `confirmed-unpaired` or weaken `NativeDatasourceTransitionTest` admission.
+
+Require a quiet writer and guards immediately before mutation; the historical disconnected
+pilot used three stable summary hashes plus its disconnected peer. Late delivery, pending
+writes or changed snapshot guards invalidate the case, not permission to overwrite newer live
+data. External preference writes need a genuine cold load: prove the old PID retired, use
+`am start -W`, then observe a nonempty new PID within a bound. An empty immediate `pidof` can
+be asynchronous startup, not proof of cold load. An invisible previous app can remain in LAST/
+OOM adjustment 700 after ordinary `am kill`; in that observed state, opening existing Settings
+without changes, returning Back and retrying `am kill` allowed retirement. Verify it; do not
+escalate to force-stop, process signals, reset or data clear when that conditional route fails.
+
+Use outer `try/finally`-equivalent cleanup: a failed byte/PID reload must not bypass restoration
+of touched component, recorded transport and touched OS/time state. Restore guarded original
+bytes/metadata through a fresh process. Reconcile newer live delivery rather than clobbering
+it with the old backup. On the listener-exclusion route ONLY, restore permitted original bytes
+while exclusion still holds, then undo the exact component state. For an original DEFAULT:
+
+```sh
+adb -s "$WEAR_SERIAL" shell run-as app.wardpulse --user 0 /system/bin/cmd package default-state \
+  --user 0 app.wardpulse/app.wardpulse.wear.sync.WatchSummaryListenerService
+```
+
+On that route, an original explicit ENABLED requires its qualified `enable` instead. Verify
+actual getter-after, restored override/effective resolution and application state. Then use
+normal phone Settings → Diagnostics → Send to watch / Sync with accepted current Live; require
+actual listener delivery/store readback, not queue success or assumed replay. Both routes verify
+the original peer/mappings, OS state and settled whole Glance/Face; keep Square unpaired.
+A copied file alone proves no recovery.
+Remove only the operation's temporary file after verified recovery; otherwise retain private
+recovery material and the unresolved result.
 
 Ambient is `KEYCODE_SLEEP`, not the power button — `keyevent 26` leaves this image
 interactive:
