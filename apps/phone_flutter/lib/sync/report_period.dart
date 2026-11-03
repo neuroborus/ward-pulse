@@ -31,6 +31,17 @@ final class ReportPeriodBounds {
   final DateTime weekStart;
   final DateTime monthStart;
 
+  /// Monetary coverage ends at the captured instant floored to epoch milliseconds.
+  int get endExclusiveMs {
+    final micros = generatedAt.microsecondsSinceEpoch;
+    return micros ~/ 1000 - (micros < 0 && micros.remainder(1000) != 0 ? 1 : 0);
+  }
+
+  int get todayStartMs => todayStart.millisecondsSinceEpoch;
+  int get weekStartMs => weekStart.millisecondsSinceEpoch;
+  int get monthStartMs => monthStart.millisecondsSinceEpoch;
+  int get requestStartMs => reportStart.millisecondsSinceEpoch;
+
   /// Earliest bound needed so week and month cards both have source data.
   DateTime get reportStart =>
       weekStart.isBefore(monthStart) ? weekStart : monthStart;

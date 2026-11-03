@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../providers/cursor_session_token.dart';
 import 'provider_reporting.dart';
+import 'report_period.dart';
 
 final class AnthropicReportingClient {
   AnthropicReportingClient({ProviderReportingHttp? http, Uri? baseUri})
@@ -141,32 +142,27 @@ final class CursorPlanClient {
 }
 
 final class CursorPlatformClient {
-  CursorPlatformClient({
-    ProviderReportingHttp? http,
-    Uri? baseUri,
-    DateTime Function()? clock,
-  }) : _http = http ?? ProviderReportingHttp(),
-       _baseUri = baseUri ?? Uri.parse('https://api.cursor.com'),
-       _clock = clock ?? DateTime.now;
+  CursorPlatformClient({ProviderReportingHttp? http, Uri? baseUri})
+    : _http = http ?? ProviderReportingHttp(),
+      _baseUri = baseUri ?? Uri.parse('https://api.cursor.com');
 
   /// Daily usage window kept in step with the dashboard usage history.
   static const _usageWindow = Duration(days: 14);
 
-  static const _spendPageSize = 100;
+  static const _eventPageSize = 1000;
 
   /// Stops runaway paging when a team reports an implausible page count.
-  static const _maxSpendPages = 100;
+  static const _maxEventPages = 100;
 
   final ProviderReportingHttp _http;
   final Uri _baseUri;
-  final DateTime Function() _clock;
 
-  Future<({List<String> dailyUsage, List<String> spend})> fetchReports({
+  Future<({List<String> dailyUsage, List<String> usageEvents})> fetchReports({
     required String adminApiKey,
+    required ReportPeriodBounds period,
   }) async {
-    final now = _clock().toUtc();
-    final end = now.millisecondsSinceEpoch;
-    final start = now.subtract(_usageWindow).millisecondsSinceEpoch;
+    final end = period.endExclusiveMs;
+    final start = end - _usageWindow.inMilliseconds;
     final auth = encodeBasicAuth(adminApiKey);
 
     final daily = await _http.post(
@@ -175,35 +171,148 @@ final class CursorPlatformClient {
       body: jsonEncode({'startDate': start, 'endDate': end}),
       label: 'Cursor daily usage',
     );
-    final spend = await _fetchSpendPages(auth: auth);
-    return (dailyUsage: [daily.body], spend: spend);
+    final events =
+        period.requestStartMs < end
+            ? await _fetchUsageEventPages(auth: auth, period: period)
+            : const <String>[];
+    return (dailyUsage: [daily.body], usageEvents: events);
   }
 
-  Future<List<String>> _fetchSpendPages({required String auth}) async {
+  Future<List<String>> _fetchUsageEventPages({
+    required String auth,
+    required ReportPeriodBounds period,
+  }) async {
     final pages = <String>[];
-    var page = 1;
+    int? advertisedPages;
+    int? advertisedRows;
+    var rows = 0;
 
-    while (true) {
+    for (var page = 1; page <= _maxEventPages; page++) {
       final response = await _http.post(
-        _baseUri.replace(path: '/teams/spend'),
+        _baseUri.replace(path: '/teams/filtered-usage-events'),
         headers: {'Authorization': auth, 'Content-Type': 'application/json'},
-        body: jsonEncode({'page': page, 'pageSize': _spendPageSize}),
-        label: 'Cursor spend',
+        body: jsonEncode({
+          'startDate': period.requestStartMs,
+          'endDate': period.endExclusiveMs - 1,
+          'page': page,
+          'pageSize': _eventPageSize,
+        }),
+        label: 'Cursor usage events',
       );
-      pages.add(response.body);
-
       final body = decodeReportObject(response.body);
-      final totalPages = switch (body['totalPages']) {
-        final num value => value.toInt(),
-        // Treat a missing or unreadable count as the last page.
-        _ => page,
-      };
-      if (page >= totalPages || page >= _maxSpendPages) {
-        break;
+      // Inspect exact numeric lexemes too: a fractional echo can round to an
+      // integer during jsonDecode. Quoted JSON strings are consumed unchanged.
+      final lexemes = decodeReportObject(
+        response.body.replaceAllMapped(
+          _jsonStringOrNumber,
+          (match) => match[0]!.startsWith('"') ? match[0]! : '"${match[0]}"',
+        ),
+      );
+      final events = body['usageEvents'];
+      final pagination = body['pagination'];
+      final echo = body['period'];
+      if (events is! List || pagination is! Map || echo is! Map) {
+        throw _invalidEventPagination;
       }
-      page += 1;
+      final pageLexemes = lexemes['pagination'] as Map;
+      final periodLexemes = lexemes['period'] as Map;
+      final total = _eventInteger(
+        body['totalUsageEventsCount'],
+        lexemes['totalUsageEventsCount'],
+      );
+      final count = _eventInteger(
+        pagination['numPages'],
+        pageLexemes['numPages'],
+      );
+      final current = _eventInteger(
+        pagination['currentPage'],
+        pageLexemes['currentPage'],
+      );
+      final size = _eventInteger(
+        pagination['pageSize'],
+        pageLexemes['pageSize'],
+      );
+      final next = pagination['hasNextPage'];
+      final previous = pagination['hasPreviousPage'];
+      if (total == null ||
+          total < 0 ||
+          count == null ||
+          current == null ||
+          size != _eventPageSize ||
+          events.length > _eventPageSize ||
+          next is! bool ||
+          previous is! bool ||
+          _eventInteger(echo['startDate'], periodLexemes['startDate']) !=
+              period.requestStartMs ||
+          _eventInteger(echo['endDate'], periodLexemes['endDate']) !=
+              period.endExclusiveMs - 1) {
+        throw _invalidEventPagination;
+      }
+      final terminalEmpty =
+          page == 1 &&
+          total == 0 &&
+          events.isEmpty &&
+          !next &&
+          !previous &&
+          (count == 0 || count == 1) &&
+          (current == 0 || current == 1);
+      if (!terminalEmpty &&
+          (count < 1 ||
+              current != page ||
+              current > count ||
+              previous != (current > 1) ||
+              next != (current < count))) {
+        throw _invalidEventPagination;
+      }
+      if ((advertisedPages != null && advertisedPages != count) ||
+          (advertisedRows != null && advertisedRows != total)) {
+        throw _invalidEventPagination;
+      }
+      advertisedPages = count;
+      advertisedRows = total;
+      rows += events.length;
+      if (rows > total || (!next && rows != total)) {
+        throw _invalidEventPagination;
+      }
+      // Preserve decimal lexemes; metadata inspection must never rewrite pages.
+      pages.add(response.body);
+      if (!next) return List.unmodifiable(pages);
     }
-
-    return List.unmodifiable(pages);
+    throw _invalidEventPagination;
   }
+
+  static int? _eventInteger(Object? value, Object? lexeme) {
+    if (value is! num || lexeme is! String) return null;
+    final match = _decimalNumber.firstMatch(lexeme);
+    if (match == null) return null;
+    final fraction = match[3] ?? '';
+    var digits = '${match[2]}$fraction'.replaceFirst(RegExp(r'^0+'), '');
+    if (digits.isEmpty) return 0;
+    final exponent = int.tryParse(match[4] ?? '0');
+    if (exponent == null ||
+        exponent < -digits.length ||
+        exponent > fraction.length + 19)
+      return null;
+    final scale = fraction.length - exponent;
+    if (scale > 0) {
+      if (scale > digits.length || !digits.endsWith('0' * scale)) return null;
+      digits = digits.substring(0, digits.length - scale);
+    } else if (scale < 0) {
+      if (digits.length - scale > 19) return null;
+      digits += '0' * -scale;
+    }
+    return int.tryParse('${match[1]}$digits');
+  }
+
+  static final _jsonStringOrNumber = RegExp(
+    r'"(?:[^"\\]|\\.)*"|-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?',
+  );
+  static final _decimalNumber = RegExp(
+    r'^(-?)([0-9]+)(?:\.([0-9]+))?(?:[eE]([+-]?[0-9]+))?$',
+  );
+
+  static const _invalidEventPagination = ProviderReportingException(
+    ProviderReportingFailure.invalidResponse,
+    details: 'Invalid Cursor usage-event pagination',
+  );
 }

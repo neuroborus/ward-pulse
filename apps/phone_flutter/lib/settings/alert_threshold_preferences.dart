@@ -65,11 +65,15 @@ final class ConnectionBudget {
     if (month != null) 'month': month,
   };
 
-  static ConnectionBudget fromJson(Object? json) {
+  static ConnectionBudget fromJson(
+    Object? json, {
+    bool preserveIntegers = false,
+  }) {
     if (json is! Map) {
       return const ConnectionBudget();
     }
-    int? read(Object? value) => value is int && value > 0 ? value : null;
+    int? read(Object? value) =>
+        value is int && (preserveIntegers || value > 0) ? value : null;
     return ConnectionBudget(
       today: read(json['today']),
       week: read(json['week']),
@@ -152,7 +156,10 @@ final class ConnectionAlertThresholds {
     'budget': budget.toJson(),
   };
 
-  static ConnectionAlertThresholds fromJson(Object? json) {
+  static ConnectionAlertThresholds fromJson(
+    Object? json, {
+    bool preserveBudgetIntegers = false,
+  }) {
     if (json is! Map) {
       return const ConnectionAlertThresholds();
     }
@@ -168,7 +175,10 @@ final class ConnectionAlertThresholds {
       today: AlertPercentThreshold.fromJson(json['today']),
       week: AlertPercentThreshold.fromJson(json['week']),
       month: AlertPercentThreshold.fromJson(json['month']),
-      budget: ConnectionBudget.fromJson(json['budget']),
+      budget: ConnectionBudget.fromJson(
+        json['budget'],
+        preserveIntegers: preserveBudgetIntegers,
+      ),
     );
   }
 }
@@ -229,7 +239,11 @@ final class AlertThresholdPreferences {
         if (key is! String) {
           continue;
         }
-        final value = ConnectionAlertThresholds.fromJson(entry.value);
+        final value = ConnectionAlertThresholds.fromJson(
+          entry.value,
+          preserveBudgetIntegers:
+              key == ProviderConnections.cursorPlatform.storageKey,
+        );
         if (value.hasStoredSettings) {
           connections[key] = value;
         }

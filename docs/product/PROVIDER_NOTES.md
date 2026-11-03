@@ -603,25 +603,43 @@ identifies the explicit missing-scope response for error mapping;
 Scope:
 
 - Basic auth with a team Admin API key against `POST /teams/daily-usage-data` and
-  `POST /teams/spend`.
-- Spend responses use `teamMemberSpend` (also accepted as `teamMembers`) with
-  `page` / `pageSize` pagination. For each member, `overallSpendCents` takes precedence,
-  including zero; otherwise both `includedSpendCents` and `spendCents` must be reported
-  and their sum is the total. Round the selected member total once to integer cents,
-  reject non-finite or out-of-range totals, then checked-add across members and pages.
-  Missing/null collections, no spend pages or incomplete member amounts leave the month
-  spend unknown. Explicit empty collections and complete zero amounts remain known zero;
-  malformed collections are rejected.
-- Spend is billing-cycle scoped and maps only to the month budget; today and week stay
-  unknown until a day-scoped spend source exists.
+  `POST /teams/filtered-usage-events`. Money covers the authorized team's extra-paid usage,
+  not an inferred personal account. Only explicit `isChargeable: true` events contribute
+  numeric `chargedCents`, including Cursor fees. Included/nonchargeable usage is excluded
+  even when its reported amount is positive; request units and model costs are not money.
+- One captured UTC instant defines Today, Monday Week and calendar Month. The event query
+  starts at the earlier Week/Month start and ends inclusively one millisecond before the
+  captured instant floored to epoch milliseconds. STRING epoch-ms event timestamps and
+  numeric inclusive period echoes keep their exact time meaning. Each period independently
+  requires positive integer-ms duration; an empty shorter period stays Unknown even when
+  a wider query is valid. The independent 14-day daily history window is unchanged.
+- Validate event page identities, explicit flags, echoed bounds, stable counts and page size
+  (1000), and terminal aggregate row count in both Dart and Rust. Partial and empty pages
+  are allowed; there is no fill formula or event deduplication. A single terminal-empty
+  response may use 0 or 1 for either page count or page identity, with zero rows and both
+  flags false. This compatibility policy is not a provider promise about empty responses.
+  Missing evidence is unavailable; incomplete pagination or overflow is an invalid report,
+  not partial money. A complete positive-duration empty report is known zero.
+- Raw event-page strings preserve decimal number lexemes. Rust checked-adds decimal cents
+  per calendar period, including exponent notation, and rounds each total once, half away
+  from zero, into checked integer USD cents. It never falls back to billing-cycle money.
+- Ceilings are local advisory limits. Existing Cursor Month ceilings retain their exact
+  stored value, now compared with extra-paid UTC calendar Month instead of the old
+  cycle/included comparison basis. A missing limit differs from a present unusable zero;
+  a percentage needs complete spend and a positive same-currency limit. Supported unavailable
+  periods and saved selections remain visible/removable. Only Cursor-platform persistence
+  uses the private `cursor-extra-paid-calendar-v1` basis wrapper: old unmarked/incompatible
+  snapshots are misses without clearing, restamping or retiring credentials. New-basis
+  stale fallback retains original timestamps; public JSON and other caches stay unchanged.
 - Daily request counts are raw usage events, not billed request units. Count only the complete
   funding family `subscriptionIncludedReqs + usageBasedReqs + apiKeyReqs`; the overlapping
   `composerRequests`, `chatRequests` and `agentRequests` breakdown is ignored. Explicit
   canonical zeros stay known zero. An incomplete funding family makes that day's count
   unknown across all rows and pages; complete counts retain saturating addition and UTC dates.
-- Hard ceiling is 20 requests per minute; WardPulse polls at the global slider cadence (minimum
-  five minutes). Usage aggregates hourly on the provider side; Providers shows that freshness
-  note on this Admin API row only.
+- Official team rate limit is 60 requests per minute. Cursor documents hourly aggregation
+  and recommends polling at most hourly; choose an hourly refresh interval and avoid repeated
+  manual refreshes. This correction changes no scheduler or retry policy and promises no
+  publication deadline. Providers shows the hourly freshness note on this Admin API row only.
 - Never log the key, authorization header, or raw response bodies.
 
 Official references:
@@ -630,6 +648,12 @@ Official references:
 - [Team Admin API](https://cursor.com/docs/account/teams/admin-api)
 - [Staff clarification of per-member and pooled spend](https://forum.cursor.com/t/admin-api-docs-missing-includedspendcents-and-new-teams-usage-metrics/162742/9)
 - [Team roles, seats and invitations](https://docs.x.ai/x-subscription/team-plans)
+
+The extra-paid calendar correction's native/API acceptance remains **Pending** until the
+executed candidate is bound to its FFI/APK/install, actual paid-only pagination and period
+values, retained selections/ceilings and restoration. Source, sanitized fixtures, Mock output
+and stale-cache recovery are not live-provider proof. The checks below are historical evidence
+for the earlier reporting implementation, not acceptance of the event-based correction.
 
 Verified 2026-10-20: the normalization corrections passed host checks and a preserving phone
 update; the selected plan allowances were checked on the phone widget, Wear Glance and watch

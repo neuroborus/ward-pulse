@@ -419,17 +419,23 @@ List<WatchRingMetric> watchRingCatalog(
     metrics.addAll(_connectionBudgetMetrics(account));
   }
   // A cold reporting failure can have neither an account nor a dashboard snapshot.
-  final hasAnthropicAccount = accounts.any(
-    (account) => account.connection == 'anthropic.platform',
-  );
   final outcomes = [...?snapshot?.reportingOutcomes, ...reportingOutcomes];
-  final hasAnthropicOutcome = outcomes.any(
-    (outcome) => outcome.connection == ProviderConnections.anthropicPlatform,
-  );
-  if (!hasAnthropicAccount && hasAnthropicOutcome) {
-    for (final period in ['today', 'week', 'month']) {
-      final budget = BudgetState.unknownPeriod(period);
-      metrics.add(_budgetMetric('anthropic.platform', budget));
+  for (final connection in [
+    ProviderConnections.anthropicPlatform,
+    ProviderConnections.cursorPlatform,
+  ]) {
+    if (!accounts.any(
+          (account) => account.connection == connection.storageKey,
+        ) &&
+        outcomes.any((outcome) => outcome.connection == connection)) {
+      for (final period in ['today', 'week', 'month']) {
+        metrics.add(
+          _budgetMetric(
+            connection.storageKey,
+            BudgetState.unknownPeriod(period),
+          ),
+        );
+      }
     }
   }
 
@@ -676,7 +682,7 @@ WatchRingMetric _allowanceMetric(String provider, AllowanceState allowance) {
   );
 }
 
-/// Local budget rings; Anthropic keeps supported but unavailable periods visible.
+/// Supported reporting periods stay visible even when their spend is unavailable.
 ///
 /// Reported spend is what makes a ceiling meaningful — subscription plans
 /// report none, and a connection may report only some periods.
@@ -687,7 +693,9 @@ List<WatchRingMetric> _connectionBudgetMetrics(ProviderSnapshot account) {
   }
   return [
     for (final budget in [account.today, account.week, account.month])
-      if (budget.spent != null || connection == 'anthropic.platform')
+      if (budget.spent != null ||
+          connection == 'anthropic.platform' ||
+          connection == 'cursor.platform')
         _budgetMetric(connection, budget),
   ];
 }
