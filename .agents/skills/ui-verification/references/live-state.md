@@ -12,15 +12,25 @@ Compare matching domains; missing bindings stay Unknown. Hashes of different rep
 Keep applicable byte guards exact: decoded-value equality cannot replace a required container-byte guard; never canonicalize or add tolerance to obtain equality.
 Retain bounded expected AND actual presence/hashes, state source and relevant target identity, operation/phase, snapshot/read times and available
 generation/write times with their origins/timezones. Record whether writer custody covered
-the interval, authorized writes if any, and known attribution or Unknown. Capture these
-facts before the accept/reject decision; a failure message may reference the retained trace.
+the interval, authorized writes if any, and known attribution or Unknown. Capture these facts and the exact phase-applicable predicate BEFORE evaluating its guard;
+retain actual rows/readbacks in failure evidence. Asynchronous request completion is not process
+retirement: use the owning bounded observation before its final guard; expected in-flight samples
+are Waiting, not terminal failure. Missing failure-point rows or predicate remain Unknown.
 If collection fails, retain the facts obtained and that failure; missing actual data is Unknown.
 Keep secrets/raw normal payloads out of diagnostics; extract ONLY the exact intended fields from their owning record BEFORE any output, following [diagnostic output privacy](../../../../docs/ANDROID_TOOLCHAIN.md#diagnostic-output-privacy).
 A substring match inside a payload/container is not projection; never emit aggregate complication-data or timeline bodies. Missing/ambiguous fields stay Unknown; do not widen output.
 Do not move or mutate state to collect them.
 
-A later observation is its own timed sample. Never reconstruct an unretained failing actual
-hash/state from that sample. Content/timing that differs from private fixtures can qualify
+Before a pending-state guard classifies a store’s files, bind its footprint to the exact owner/path
+and platform sidecar contract; retain bounded actual names and their classification before deciding.
+A shared stem is not shared ownership: a Source-proven `watch_summary_test_123.xml` store is not
+a sidecar of `watch_summary.xml`. Exclude only positively established independent stores from
+that object's pending predicate; genuine backup/pending evidence and unexplained potentially
+related files remain HOLD. Do not delete files or discard ambiguous matches to obtain a clean
+guard. Absence of sidecars or stable hashes alone proves neither drained work nor quiet writers.
+
+A later observation is its own timed sample. Never reconstruct unretained failure-point facts
+or which guard failed from that sample. Content/timing that differs from private fixtures can qualify
 the evidence, but cannot identify a writer. Test-only intent or JUnit success alone proves
 neither private backing identity nor absence of a normal-store write.
 
