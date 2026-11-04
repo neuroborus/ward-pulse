@@ -4,16 +4,14 @@ See your AI plan capacity, purchased balances and API spend on Android. WardPuls
 reporting from OpenAI, Anthropic and Cursor into one phone dashboard, with an optional
 Wear OS summary, watch face and home-screen widget.
 
-The October 2026 gallery below is historical. Console organization API expenses and Claude
-Plan monthly Extra usage are separate sources; the gallery does not show the new monthly
-used/cap presentation or establish current reporting availability.
+Gallery screenshots show demo usage data.
 
 <table width="100%">
   <tr>
     <td width="50%" rowspan="2" align="center">
-      <a href="docs/assets/phone-dashboard-overview-light.png#gh-light-mode-only"><img src="docs/assets/phone-dashboard-overview-light.png#gh-light-mode-only" width="216" alt="Historical October 2026 phone Dashboard showing plan capacity and Console history in the light theme."></a>
-      <a href="docs/assets/phone-dashboard-overview-dark.png#gh-dark-mode-only"><img src="docs/assets/phone-dashboard-overview-dark.png#gh-dark-mode-only" width="216" alt="Historical October 2026 phone Dashboard showing plan capacity and Console history in the dark theme."></a><br>
-      <strong>Historical phone Dashboard · October 2026</strong>
+      <a href="docs/assets/phone-dashboard-overview-light.png#gh-light-mode-only"><img src="docs/assets/phone-dashboard-overview-light.png#gh-light-mode-only" width="216" alt="WardPulse phone Dashboard showing demo usage data in the light theme."></a>
+      <a href="docs/assets/phone-dashboard-overview-dark.png#gh-dark-mode-only"><img src="docs/assets/phone-dashboard-overview-dark.png#gh-dark-mode-only" width="216" alt="WardPulse phone Dashboard showing demo usage data in the dark theme."></a><br>
+      <strong>Phone Dashboard · Usage overview</strong>
     </td>
     <td width="50%" align="center">
       <a href="docs/assets/wear-glance-overview.png"><img src="docs/assets/wear-glance-overview.png" width="200" alt="WardPulse Watch Glance showing selected plan capacity and purchased credits."></a><br>

@@ -1896,8 +1896,9 @@ called this band the "upper aperture"; it is the same band.
    put a second arc language on a face whose arcs already mean one thing, layer rule 1's *one
    ring = one metric of one connection*, and it would say it a few units from the real ones —
    rule 1 records the clearances of every cell's far edge from the innermost band.
-   The ramp colour goes unused for the same reason family colouring does. Native null-TEXT
-   branch selection and monochrome paint for the repaired bytes remain Pending, as below.
+   The ramp colour goes unused for the same reason family colouring does. Representative
+   native null-TEXT selection and monochrome paint passed the bounded 2026-11-04 checks
+   recorded in the correction below.
 
    `SMALL_IMAGE` and `LONG_TEXT` are left out of `supportedTypes` on purpose, which is what
    keeps the system editor from offering a provider that supplies only one of them.
@@ -1924,13 +1925,21 @@ called this band the "upper aperture"; it is the same band.
    empty TEXT, numeric zero/fraction/sign, verbatim provider text and the isolated icon tree.
    They do not emulate WFF null coercion, Float spelling, localization or native paint.
 
-   Acceptance of the repaired bytes remains **Pending**: matched built, installed and active
-   Legacy/Push artifacts must exercise actual null-TEXT ranged data and a present-TEXT control,
-   plus the legal magenta icon's face-coloured ink, antialiased silhouette, fit and transparent
-   exterior in interactive, true ambient and settled return. Exact original choices and normal
-   state must be restored. The old probe's Day/default overrides, all eight slots, favourite,
-   instance, package, OS and bridge state were restored; that recovery is not acceptance of
-   this repair. Physical devices remain outside this bounded emulator evidence. The dated
+   **Bounded native acceptance, 2026-11-04.** Source `975e533` passed the mandatory HOST
+   checks and matched LegacyRuntime0/`wfId-15` and PushRuntime1/`wfId-16` observations.
+   Actual null-TEXT ranged input visibly produced `4`, the present-TEXT control showed `64`,
+   and the legal magenta icon rendered a face-white Pulse in INTERACTIVE, true AMBIENT and
+   settled return. Root and independent review covered the originals; matched pixel checks
+   retained silhouette, antialiasing and background with no magenta. Numeric VALUE stayed
+   redacted: the fixed QA input and wire test do not establish a runtime scalar readback or
+   universal Float spelling/localization. All eight choices on both renderers and the Legacy
+   favourite/instance were restored before both QA overrides returned to DEFAULT; all four
+   input holders retired with touches released, font/bridge retained and newer Live preserved.
+   Push materialized absent style as explicit Auto with the same effective setting; raw style
+   byte equality is not claimed. This is representative emulator acceptance, not every
+   provider, extreme reading, physical/OHealth or public-capture verification. The old probe's
+   Day/default overrides, all eight slots, favourite, instance, package, OS and bridge state
+   were restored; that recovery alone is not acceptance of this repair. Physical devices remain outside this bounded emulator evidence. The dated
    audits below retain what was and was not observed at those earlier revisions.
 
    **Scoped compatibility audit, 2026-11-01.** Current `cellSlot` in

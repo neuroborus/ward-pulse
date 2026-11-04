@@ -1,5 +1,8 @@
+import { execFile } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
+import { promisify } from 'node:util'
+import type { Program } from 'estree'
 import { defineConfig } from 'vocs/config'
 
 type MarkdownNode = {
@@ -31,8 +34,8 @@ type HtmlNode = {
 const screenshots = [
   {
     url: '/screenshots/phone-dashboard-overview-light.png',
-    alt: 'WardPulse phone Dashboard showing plan capacity and usage history in the light theme.',
-    caption: 'Phone Dashboard · Plan capacity and usage history',
+    alt: 'WardPulse phone Dashboard showing demo usage data in the light theme.',
+    caption: 'Phone Dashboard · Usage overview',
     darkOriginalUrl: '/screenshots/phone-dashboard-overview-dark.png',
   },
   {
@@ -196,6 +199,80 @@ function inlineGuideMarkdown(this: MarkdownProcessor) {
   }
 }
 
+const runFile = promisify(execFile)
+
+async function committedDate(filePath: string) {
+  try {
+    const { stdout } = await runFile(
+      'git',
+      ['log', '-1', '--format=%cI', '--', filePath],
+      {
+        cwd: import.meta.dirname,
+        encoding: 'utf8',
+      },
+    )
+    return stdout.trim() || undefined
+  } catch {
+    return undefined
+  }
+}
+
+function guideCommittedDates() {
+  return async (tree: Program, file: { path?: string }) => {
+    if (!file.path) return
+
+    const sourcePath = resolve(file.path)
+    const guideDirectory = resolve(import.meta.dirname, '../product/user-guide')
+    const guides = tree.body.flatMap((node) => {
+      if (
+        node.type !== 'ImportDeclaration' ||
+        typeof node.source.value !== 'string' ||
+        !node.source.value.endsWith('.md')
+      )
+        return []
+
+      const guide = resolve(dirname(sourcePath), node.source.value)
+      return dirname(guide) === guideDirectory ? [guide] : []
+    })
+    if (!guides.length) return
+
+    // Vocs runs this hook after generating Page's _frontmatter metadata.
+    const page = tree.body.find(
+      (node) =>
+        node.type === 'ExportNamedDeclaration' &&
+        node.declaration?.type === 'FunctionDeclaration' &&
+        node.declaration.id?.name === 'Page',
+    )
+    if (
+      page?.type !== 'ExportNamedDeclaration' ||
+      page.declaration?.type !== 'FunctionDeclaration'
+    )
+      return
+
+    const frontmatter = page.declaration.body.body
+      .flatMap((node) => (node.type === 'VariableDeclaration' ? node.declarations : []))
+      .find((node) => node.id.type === 'Identifier' && node.id.name === '_frontmatter')
+      ?.init
+    if (frontmatter?.type !== 'ObjectExpression') return
+
+    const lastModified = frontmatter.properties.find(
+      (node) =>
+        node.type === 'Property' &&
+        node.key.type === 'Identifier' &&
+        node.key.name === 'lastModified',
+    )
+    if (lastModified?.type !== 'Property') return
+
+    const dates = await Promise.all([sourcePath, ...guides].map(committedDate))
+    const latest = dates
+      .filter((date): date is string => Boolean(date))
+      .sort((left, right) => Date.parse(right) - Date.parse(left))[0]
+    lastModified.value = latest
+      ? { type: 'Literal', value: latest }
+      : { type: 'Identifier', name: 'undefined' }
+  }
+}
+
 function guideScreenshotMarkdown() {
   return (tree: { children: MarkdownNode[] }) => {
     for (let index = 0; index < tree.children.length; index += 1) {
@@ -256,6 +333,16 @@ function renderCompatibilityAliases() {
       resolve(import.meta.dirname, '../product/user-guide/PROVIDERS_CURSOR.md'),
       new Set(['create-team', 'team-key-permissions']),
     ],
+    [
+      resolve(import.meta.dirname, '../product/user-guide/WIDGET.md'),
+      new Set([
+        'earlier-launcher-appearance',
+        'earlier-wide-widget',
+        'earlier-labeled-widget',
+        'earlier-percentage-only-widget',
+        'earlier-short-widget',
+      ]),
+    ],
   ])
 
   return (tree: HtmlNode, file: { path?: string }) => {
@@ -274,21 +361,23 @@ function renderCompatibilityAliases() {
           opening.type === 'raw'
             ? opening.value?.match(/^<span id="([a-z0-9-]+)">$/)?.[1]
             : undefined
+        const empty = content?.type === 'raw' && content.value === '</span>'
 
         // MDX discards raw HTML in .md imports; preserve only these existing aliases.
         if (
           id &&
           aliases.has(id) &&
-          content?.type === 'element' &&
-          (content.tagName === 'a' || content.tagName === 'strong') &&
-          closing?.type === 'raw' &&
-          closing.value === '</span>'
+          (empty ||
+            (content?.type === 'element' &&
+              (content.tagName === 'a' || content.tagName === 'strong') &&
+              closing?.type === 'raw' &&
+              closing.value === '</span>'))
         )
-          children.splice(index, 3, {
+          children.splice(index, empty ? 2 : 3, {
             type: 'element',
             tagName: 'span',
             properties: { id },
-            children: [content],
+            children: empty ? [] : [content],
           })
 
         visit(children[index])
@@ -307,6 +396,7 @@ export default defineConfig({
   markdown: {
     remarkPlugins: [inlineGuideMarkdown],
     rehypePlugins: [renderCompatibilityAliases],
+    recmaPlugins: [guideCommittedDates],
     outputRemarkPlugins: [
       homepageMarkdown,
       guideScreenshotMarkdown,

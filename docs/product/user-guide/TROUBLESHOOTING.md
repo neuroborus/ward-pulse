@@ -67,8 +67,9 @@ and a positive same-currency cap; read known spend without a cap on Dashboard. S
 choices remain removable. An unset cap is not a provider outage. Retained Stale amounts keep
 the source's previous successful time, even when a sibling source updates.
 
-For a plan/session error, use the named plan row's **Reconnect** or Cursor's
-**Sign in again**. Claude callback paste expects **CODE#STATE**, not a reporting key.
+For a plan/session error, open the named plan row under **Providers** and sign in again.
+If it still says **Connected**, use **Reconnect**, or **Sign in again** for Cursor.
+Claude callback paste expects **CODE#STATE**, not a reporting key.
 Do not paste a secret into an unrelated row or a help request.
 
 Cursor plan sign-in offers **Retry**, **Cancel** and **Help** after a startup, page or session

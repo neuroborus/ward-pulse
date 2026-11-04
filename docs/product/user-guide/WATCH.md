@@ -28,11 +28,11 @@ summary, this opens **Sync from phone**. Returning through the watch's app launc
 your current page. Swipe right or press Back from **Alerts** or **Watch face** to return to
 the previous page; from either home page, one dismissal leaves the app.
 
-![Clock-free Wear Glance showing Claude, Codex and Cursor plan capacity with purchased credits in a circular screen.](/screenshots/wear-glance-overview.png)
+![Clock-free Wear Glance showing selected plan capacity and available purchased credits.](/screenshots/wear-glance-overview.png)
 
 The selected metric with the lowest remaining percentage appears first.
-This example shows plan capacity and Codex purchased credits. Its green **OK** control can
-request a phone refresh; see the [refresh status legend](#refresh-status).
+This general Glance example uses demo usage data. The **Mock data** line identifies the
+demonstration; see the [refresh status legend](#refresh-status) for the control's colours and actions.
 
 ### Plan windows
 
@@ -43,9 +43,9 @@ first; missing or overdue reset times follow. Reset times may be unavailable.
 With larger text, the Glance legend may scroll. Swipe within the legend to reach its remaining
 rows; start outside the legend to change pages. Refresh and Alerts stay in place.
 
-![Plan windows showing Claude's 5-hour session and its reported reset time.](/screenshots/wear-plan-windows.png)
+![Plan windows showing a reported usage window and its reset time.](/screenshots/wear-plan-windows.png)
 
-The first window here is **Claude · 5-hour session**, with **21% left · back at 17:20**.
+Reset times belong to their reported windows and may differ between windows.
 
 ### Alerts and refresh
 
@@ -99,11 +99,11 @@ See [Sync and notifications](/guide/sync#refresh-now) for request delivery and r
    needed before adding it. An unavailable metric separately explains its missing percentage.
 5. Check **Next watch payload**, then allow the updated summary to reach Wear.
 
-![Watchface selection showing three bands used by checked metrics in the light theme.](/screenshots/phone-watch-settings-light.png)
+![Watchface metric selection showing shared ring choices in the light theme.](/screenshots/phone-watch-settings-light.png)
 
-![Watchface selection showing three bands used by checked metrics in the dark theme.](/screenshots/phone-watch-settings-dark.png)
+![Watchface metric selection showing shared ring choices in the dark theme.](/screenshots/phone-watch-settings-dark.png)
 
-These October 2026 examples predate the Fable choice and correction messages.
+This selection uses demo usage data; supported paired metrics share a band.
 
 Console organization and Cursor Team **Today**, **Week** and **Month** budget choices use
 remaining percentages. Each needs known spend, a positive cap in the same currency and a
@@ -130,17 +130,15 @@ band. Temporarily unavailable data can change the width when it disappears or re
 a known exhausted **0%** still occupies its band. An older app or face keeps narrow bands
 until both are updated.
 
-These two examples use the same usage readings with different selections. They are
-separate from the three-band selection shown above.
+These examples use the same demo readings with different ring selections.
 
-![One widened band showing Cursor Models with 100% left.](/screenshots/wear-watch-face-one-band.png)
+![One widened band with a single selected usage metric.](/screenshots/wear-watch-face-one-band.png)
 
-**One band:** Cursor Models has **100% left**.
+**One band:** one selected metric uses a wider band.
 
-![Two widened bands: Claude with 34% left inside a paired Cursor band showing 100% and 64% left.](/screenshots/wear-watch-face-two-bands.png)
+![Two widened bands including paired usage readings.](/screenshots/wear-watch-face-two-bands.png)
 
-**Two bands:** Claude has **34% left**. Cursor Models **100%** and Other Models **64% left**
-share the outer band.
+**Two bands:** the bands widen, while paired readings keep their inner/outer identities.
 
 ### Display order
 
@@ -217,12 +215,11 @@ Installation alone does not confirm the face is in use or that an update
 is available. The existing face, settings and data are preserved. The historical
 permission-decline image above does not illustrate this separate-installation check.
 
-![WardPulse circular watch face with the selected Claude, Codex and Cursor usage bands and filled upper cells.](/screenshots/wear-watch-face.png)
+![WardPulse circular watch face with the selected usage bands and populated default upper cells.](/screenshots/wear-watch-face.png)
 
-The same selected metrics appear on Glance and the face. Here, Claude has **21% left**,
-Codex has **23% left** and **59.5K purchased credits**, and Cursor has **100% / 64% left**.
-Claude occupies the innermost band, Codex the middle band, and Cursor's paired pools share
-the outer band. The upper cells show the day, temperature and UV index.
+This face and the general Glance example use the same demo data and ring selection. Shared
+bands show separate remaining percentages; purchased credits appear where applicable. The
+upper cells show the day, temperature and UV index.
 
 The three upper complication cells are customized in the **system watch-face editor**. Open
 the watch's edit/customize action for WardPulse and select an upper cell to choose an available

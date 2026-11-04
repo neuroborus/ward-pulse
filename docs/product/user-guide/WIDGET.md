@@ -13,12 +13,11 @@ own metric choices.
 4. Under **Widget metrics → Home screen widget**, select the available metrics you want.
 5. Check **Next widget payload**. Connect a provider under **Providers** if there are no metrics yet.
 
-![Widget selection showing checked metrics and five of six slots used in the light theme.](/screenshots/phone-widget-settings-light.png)
+![Widget metric selection showing provider and window labels in the light theme.](/screenshots/phone-widget-settings-light.png)
 
-![Widget selection showing checked metrics and five of six slots used in the dark theme.](/screenshots/phone-widget-settings-dark.png)
+![Widget metric selection showing provider and window labels in the dark theme.](/screenshots/phone-widget-settings-dark.png)
 
-This October 2026 selection example has five metrics selected under **Home screen widget**;
-choices save as you tap.
+The examples below use demo usage data and the same selected metrics. Choices save as you tap.
 
 You can select up to **six** metrics. Widget selection is independent of Watchface; changing
 one does not change the other. Claude and Codex windows remain separate widget choices,
@@ -124,32 +123,31 @@ Dashboard. Save an edit first if you want to keep it. Use **Refresh** in the app
 For an old widget, missing rows or delayed updates, use
 [Troubleshooting](/guide/troubleshooting#widget-is-empty-clipped-or-old).
 
-## Earlier launcher appearance
+## <span id="earlier-launcher-appearance"></span>Widget size examples
 
-The following October 2026 images show the former widget renderer. They preserve earlier
-examples of width and height changes; they do not show the current typography, reset line
-or intrinsic card with transparent unused exterior.
+These views use the same selection. Width changes the visible columns; height changes how
+many complete rows fit.
 
-### Earlier wide widget
+### <span id="earlier-wide-widget"></span>Wide widget
 
-![October 2026 former widget with percentages, labels and purchased balances in the light theme.](/screenshots/phone-home-widget-light.png)
+![Wide WardPulse widget with primary values, metric labels and available balance/reset details in the light theme.](/screenshots/phone-home-widget-light.png)
 
-![October 2026 former widget with percentages, labels and purchased balances in the dark theme.](/screenshots/phone-home-widget-dark.png)
+![Wide WardPulse widget with primary values, metric labels and available balance/reset details in the dark theme.](/screenshots/phone-home-widget-dark.png)
 
-### Earlier labeled widget
+### <span id="earlier-labeled-widget"></span>Widget with labels
 
-![October 2026 former widget with percentages and provider/metric labels in the light theme.](/screenshots/phone-home-widget-with-label-light.png)
+![Medium-width WardPulse widget with primary values and full metric labels in the light theme.](/screenshots/phone-home-widget-with-label-light.png)
 
-![October 2026 former widget with percentages and provider/metric labels in the dark theme.](/screenshots/phone-home-widget-with-label-dark.png)
+![Medium-width WardPulse widget with primary values and full metric labels in the dark theme.](/screenshots/phone-home-widget-with-label-dark.png)
 
-### Earlier percentage-only widget
+### <span id="earlier-percentage-only-widget"></span>Primary values only
 
-![October 2026 former widget with percentage-only rows in the light theme.](/screenshots/phone-home-widget-percent-only-light.png)
+![Narrow WardPulse widget showing complete primary values without labels or right-hand details in the light theme.](/screenshots/phone-home-widget-percent-only-light.png)
 
-![October 2026 former widget with percentage-only rows in the dark theme.](/screenshots/phone-home-widget-percent-only-dark.png)
+![Narrow WardPulse widget showing complete primary values without labels or right-hand details in the dark theme.](/screenshots/phone-home-widget-percent-only-dark.png)
 
-### Earlier short widget
+### <span id="earlier-short-widget"></span>Short widget
 
-![October 2026 former widget showing its first complete row in the light theme.](/screenshots/phone-home-widget-short-light.png)
+![Reduced-height WardPulse widget showing complete rows from the same selection in the light theme.](/screenshots/phone-home-widget-short-light.png)
 
-![October 2026 former widget showing its first complete row in the dark theme.](/screenshots/phone-home-widget-short-dark.png)
+![Reduced-height WardPulse widget showing complete rows from the same selection in the dark theme.](/screenshots/phone-home-widget-short-dark.png)
