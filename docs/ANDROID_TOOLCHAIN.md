@@ -1091,6 +1091,25 @@ Its attribution regressions use private stand-ins for equal and newer normal-sto
 byte equality is not evidence that a test published to normal storage. Actual backing-store
 identity, constructor routing and recording-sink dispatch remain the isolation evidence.
 
+The DEBUG-only `DebugRangedComplicationDataSourceService` (RANGED without TEXT) and
+`DebugMonoComplicationDataSourceService` (pure MONO) are disabled by default. After qualifying
+Main/test and protected embedded/retained Push/Legacy identities, record each component's exact
+PackageManager override and the original upper choice; explicitly opt in through the qualified
+own-UID PackageManager route, then select each source through the ordinary SystemChooser.
+Restore the original upper choice before restoring the exact component overrides, including
+DEFAULT versus explicitly DISABLED, and requalify all eight bindings and normal state while
+retaining newer live summary. Select only
+`-e class app.wardpulse.wear.complication.AdaptiveRangedComplicationTest#debugRangedWithoutTextSurvivesWireParcel`
+and, separately,
+`-e class app.wardpulse.wear.complication.AdaptiveRangedComplicationTest#debugMonoImageAndTintSurviveWireParcel`
+on `app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner`; never use unrestricted stock
+discovery. These cases prove constructed fixture validation and wire/Parcel transport only;
+installed dispatch, actual missing-TEXT rendering, MONO shape/tint/fit and true AMBIENT/return
+need separate native observations and exact recovery. Conventional debug source ownership
+intends release exclusion; claim absence only after an actual release build and inspection of
+its merged manifest, classes and APK. Full Wear/docs and native acceptance remain Root HOST
+work after the entire Runner lifecycle releases; they are not Native commit prerequisites.
+
 #### Same-metric foreground publication (2026-11-01)
 
 `WardPulseNavigationStateTest.productionForegroundPublicationRepaintsSameClaudeWindowWithoutRestartingOwner`

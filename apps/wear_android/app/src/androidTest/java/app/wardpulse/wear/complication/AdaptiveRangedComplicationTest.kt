@@ -2,13 +2,20 @@ package app.wardpulse.wear.complication
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.drawable.Icon
 import android.os.Parcel
 import android.support.wearable.complications.ComplicationData as WireComplicationData
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.wear.watchface.complications.data.ComplicationType
+import androidx.wear.watchface.complications.data.MonochromaticImageComplicationData
 import androidx.wear.watchface.complications.data.NoDataComplicationData
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import androidx.wear.watchface.complications.data.toApiComplicationData
+import app.wardpulse.wear.R
 import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.CreditsGlance
 import app.wardpulse.wear.model.PreviewWatchDashboardSummary
@@ -18,7 +25,11 @@ import app.wardpulse.wear.model.RingHalf
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.ui.RingFamily
 import java.time.Instant
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -27,6 +38,100 @@ import org.junit.runner.RunWith
 @SuppressLint("RestrictedApi")
 @RunWith(AndroidJUnit4::class)
 class AdaptiveRangedComplicationTest {
+    @Test
+    fun debugRangedWithoutTextSurvivesWireParcel() {
+        val resources = ApplicationProvider.getApplicationContext<Context>().resources
+        val original = debugRangedComplicationData()
+        original.validate()
+        val wire = original.asWireComplicationData()
+        val parcel = Parcel.obtain()
+        val restoredWire = try {
+            wire.writeToParcel(parcel, 0)
+            parcel.setDataPosition(0)
+            WireComplicationData.CREATOR.createFromParcel(parcel)
+        } finally {
+            parcel.recycle()
+        }
+        val restored = restoredWire.toApiComplicationData() as RangedValueComplicationData
+        restored.validate()
+        for (data in listOf(original, restored)) {
+            assertEquals(ComplicationType.RANGED_VALUE, data.type)
+            assertTrue(data.value.isFinite() && data.min.isFinite() && data.max.isFinite())
+            assertEquals(4f, data.value, 0f)
+            assertEquals(0f, data.min, 0f)
+            assertEquals(10f, data.max, 0f)
+            assertTrue(data.value > data.min && data.value < data.max)
+            assertEquals(RangedValueComplicationData.TYPE_UNDEFINED, data.valueType)
+            assertEquals("Probe", data.title!!.getTextAt(resources, Instant.EPOCH).toString())
+            assertEquals("QA ranged fixture", data.contentDescription!!.getTextAt(resources, Instant.EPOCH).toString())
+            assertNull(data.text)
+        }
+        for (data in listOf(wire, restoredWire)) {
+            assertEquals(WireComplicationData.TYPE_RANGED_VALUE, data.type)
+            assertFalse(data.hasShortText())
+            assertNull(data.shortText)
+        }
+    }
+
+    /** Constructed image transport only; installed dispatch and WFF paint need separate evidence. */
+    @Test
+    fun debugMonoImageAndTintSurviveWireParcel() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val original = debugMonoComplicationData(context)
+        original.validate()
+        val wire = original.asWireComplicationData()
+        val parcel = Parcel.obtain()
+        val restoredWire = try {
+            wire.writeToParcel(parcel, 0)
+            parcel.setDataPosition(0)
+            WireComplicationData.CREATOR.createFromParcel(parcel)
+        } finally {
+            parcel.recycle()
+        }
+        val restored = restoredWire.toApiComplicationData() as MonochromaticImageComplicationData
+        restored.validate()
+        for (data in listOf(wire, restoredWire)) {
+            assertEquals(WireComplicationData.TYPE_ICON, data.type)
+            assertNotNull(data.icon)
+            assertFalse(data.hasShortText())
+            assertFalse(data.hasShortTitle())
+            assertFalse(data.hasLongText())
+            assertFalse(data.hasLongTitle())
+            assertFalse(data.hasRangedValue())
+        }
+        fun pixels(icon: Icon): IntArray {
+            val bitmap = Bitmap.createBitmap(24, 24, Bitmap.Config.ARGB_8888)
+            return try {
+                val drawable = checkNotNull(icon.loadDrawable(context))
+                drawable.setBounds(0, 0, 24, 24)
+                drawable.draw(Canvas(bitmap))
+                IntArray(24 * 24).also { bitmap.getPixels(it, 0, 24, 0, 0, 24, 24) }
+            } finally {
+                bitmap.recycle()
+            }
+        }
+        val silhouette = pixels(Icon.createWithResource(context, R.drawable.ic_complication))
+            .map { Color.alpha(it) }.toIntArray()
+        assertTrue(silhouette.any { it == 0 })
+        assertTrue(silhouette.any { it == 255 })
+        val rendered = listOf(original, restored).map { data ->
+            assertEquals(ComplicationType.MONOCHROMATIC_IMAGE, data.type)
+            assertEquals("QA monochromatic fixture", data.contentDescription!!.getTextAt(context.resources, Instant.EPOCH).toString())
+            val icon = data.monochromaticImage.image
+            assertEquals(Icon.TYPE_RESOURCE, icon.type)
+            assertEquals("app.wardpulse", icon.resPackage)
+            assertEquals(R.drawable.ic_complication, icon.resId)
+            pixels(icon).also { image ->
+                assertArrayEquals(silhouette, image.map { Color.alpha(it) }.toIntArray())
+                assertTrue(image.any { it == 0xFFFF00FF.toInt() })
+                for (pixel in image.filter { Color.alpha(it) > 0 }) {
+                    assertEquals(0x00FF00FF, pixel and 0x00FFFFFF)
+                }
+            }
+        }
+        assertArrayEquals(rendered[0], rendered[1])
+    }
+
     @Test
     fun genericEnvelopesRoundTripWithUnscaledHumanSemantics() {
         val resources = ApplicationProvider.getApplicationContext<Context>().resources
