@@ -365,14 +365,27 @@ both `4` and `3` open the launcher, and `4` from the launcher lands back on the 
 keys leave you stranded in the launcher, `am force-stop com.google.android.wearable.sysui`
 restarts the system UI on the watch face.
 
-**Measured AVD-only editor workaround, 2026-11-01.** On the canonical Round 384/API36 AVD,
-picker/editor pages repeatedly returned to the face between roughly 15-second round trips;
-the exact timer/cause was not measured. With periodic `adb -s "$WEAR_SERIAL" shell input keyevent 0`
-(`KEYCODE_UNKNOWN`), the existing editor remained open across a 20-second delay without OS
-preference/time/charging/radio/font/locale changes. Verify the canonical serial/current foreground,
-own and bound any repetition, and retain fresh page/target/original-image guards. Stop owned input
-and await actual termination before Sleep/AMBIENT and before ending work; leave no background input.
-This is an observed AVD workaround, not a physical-device procedure; never target a physical phone.
+**Measured AVD-only editor workarounds, 2026-11-01/04.** These are bounded observations on
+canonical Round emulator-5556, 384×384/API36, not guarantees for another device or version.
+Periodic `adb -s "$WEAR_SERIAL" shell input keyevent 0` (`KEYCODE_UNKNOWN`) kept an editor open
+across 20 seconds on Nov 1, but a later 120-second holder sent 59 keys without preventing picker
+expiry; a fresh Edit guard found no target after an 18.639-second handoff. `screen_off_timeout`
+was already 2147483647 and power Awake; no OS setting changed, and the picker timer/cause is unproved.
+Prepare bounded control and its owned stop before transient entry; qualify the current canonical
+serial, viewport, actual SysUI host/page and fresh visible target rather than trusting the holder.
+Keep holder observations to foreground metadata and serialize UIAutomator transactions with each
+other. A prior concurrent-dump holder coincided with capture exit 137; that is a retained failure,
+not a proved cause. Retain actual command support, leaf result and failed predicate before diagnosis.
+After the selected device's `input` help confirms `motionevent DOWN x y` and `motionevent CANCEL x y`,
+a temporary DOWN→CANCEL pair at the current viewport centre, with no UP, is an observed alternative.
+Serialize each complete pair with semantic navigation through the same scoped host input lock;
+own the exact holder, its deadline and failure-safe cancellation. On Nov 4, a holder with a
+180-second deadline sent 51 pairs; an 18.319-second picker→Edit handoff succeeded, then editor/chooser
+navigation and Day restoration. This neither guarantees retention nor replaces fresh page/image guards.
+Stop owned input, await actual termination and retire its identity before Sleep/AMBIENT and before
+ending work; leave no background input or held touch. Never extend either workaround to a physical
+phone or watch, change persistent OS settings for it, or treat an unsupported command/unknown guard
+as permission to continue.
 
 To put a chosen summary on the face, write the app's prefs and then **start the app once**:
 
