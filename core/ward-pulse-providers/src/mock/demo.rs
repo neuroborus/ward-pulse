@@ -126,10 +126,20 @@ pub fn debug_multi_provider_dashboard_at(
         .map(|(account, mode)| scramble_account(&mut rng, account, mode, anchor.is_some()))
         .collect();
 
-    // Docs preset revision 1 keeps all random draws and unrelated data intact.
+    // Docs preset revision 2 keeps all random draws and unrelated data intact.
     if let (280, Some(anchor)) = (seed, anchor) {
         for account in &mut accounts {
             match account.connection.as_deref() {
+                Some("openai.plan") => {
+                    if let Some(window) = account
+                        .allowances
+                        .iter_mut()
+                        .find(|window| window.id == "codex-primary")
+                    {
+                        window.used_percent = Some(46.0);
+                        window.status = percent_status(window.used_percent);
+                    }
+                }
                 Some("anthropic.plan") => {
                     if let Some(window) = account
                         .allowances
@@ -146,6 +156,14 @@ pub fn debug_multi_provider_dashboard_at(
                     account
                         .allowances
                         .retain(|meter| meter.id != "cursor-on-demand");
+                    for meter in &mut account.allowances {
+                        meter.used_percent = match meter.id.as_str() {
+                            "cursor-plan-models" => Some(2.0),
+                            "cursor-plan-other" => Some(20.0),
+                            _ => continue,
+                        };
+                        meter.status = percent_status(meter.used_percent);
+                    }
                 }
                 _ => continue,
             }
@@ -1017,12 +1035,12 @@ mod tests {
                 .unwrap()
         };
         for (id, used) in [
-            ("codex-primary", 9.6),
+            ("codex-primary", 46.0),
             ("claude-five-hour", 20.0),
             ("claude-seven-day", 30.6),
             ("claude-seven-day-fable", 36.9),
-            ("cursor-plan-models", 45.95531337916742),
-            ("cursor-plan-other", 2.3),
+            ("cursor-plan-models", 2.0),
+            ("cursor-plan-other", 20.0),
         ] {
             let meter = allowance(id);
             assert_eq!(meter.source, AllowanceSource::Plan);

@@ -67,7 +67,7 @@ with its unknown day/week budgets.
 Rust rebases calendar/reporting/history/billing dates before normalization and preserves
 rolling reset offsets, missing resets and unknown consumption. It reads no clock.
 
-**Docs preset revision 1** is seed **280** with an explicit anchor. Set
+**Docs preset revision 2** is seed **280** with an explicit anchor. Set
 `WARD_PULSE_MOCK_SEED=280` and `WARD_PULSE_MOCK_ANCHOR` to the actual current whole-second
 UTC anchor **A** for the capture cohort. `2026-11-02T12:00:00Z` is the semantic regression
 anchor, not a permanent capture date. This preset maintains these normalized values:
@@ -77,16 +77,17 @@ anchor, not a permanent capture date. This preset maintains these normalized val
 | Claude 5h | 20 / 80 | A+5h |
 | Claude Weekly | 30.6 / 69.4 | A+7d8h |
 | Fable Weekly | 36.9 / 63.1 | Same Weekly boundary |
-| Codex Weekly | 9.6 / 90.4 | A+597337s |
-| Cursor Models | 45.95531337916742 / 54.04468662083258 | Next UTC month |
-| Cursor Other | 2.3 / 97.7 | Same billing boundary |
+| Codex Weekly | 46 / 54 | A+597337s |
+| Cursor Models | 2 / 98 | Next UTC month |
+| Cursor Other | 20 / 80 | Same billing boundary |
 
-Only anchored seed 280 receives the 5h adjustment and omission of optional Cursor on-demand
-Purchased data. Both Cursor pools remain percentage-first, with absent quantities and no
-purchased-credit suffix. Codex retains **1200** finite purchased credits. Unanchored 280
-and every other seed retain their existing behavior. Claude Extra and other missing optional
-amounts remain absent; do not infer Money or quantities from percentages. Calendar Today,
-UTC-Monday Week, Month and history remain date-aware rather than fixed across boundaries.
+Only anchored seed 280 receives these percentage adjustments, the 5h reset adjustment and
+omission of optional Cursor on-demand Purchased data. Both Cursor pools remain
+percentage-first, with absent quantities and no purchased-credit suffix. Codex retains
+**1200** finite purchased credits. Unanchored 280 and every other seed retain their existing
+behavior. Claude Extra and other missing optional amounts remain absent; do not infer Money
+or quantities from percentages. Calendar Today, UTC-Monday Week, Month and history remain
+date-aware rather than fixed across boundaries.
 
 Representative OpenAI Today spend at the regression anchor is **USD 50 minor units ($0.50)**.
 The existing phone-local `ConnectionBudget.today` input for capture is **USD 10000 major
@@ -109,7 +110,7 @@ Save these Watch IDs in order:
 
 The ordinary Claude ring collapses to Weekly because 30.6% used exceeds 5h's 20%; Fable
 stays independently selectable. There is no separate Watch Weekly checkbox. Existing
-tighter-half ordering places Cursor inner/top, Claude/Fable middle and Codex outer/bottom:
+tighter-half ordering places Codex inner/top, Claude/Fable middle and Cursor outer/bottom:
 three bands with two completed pairs, retaining the Claude/Fable half identities.
 One/two-band views use recorded subsets of this same cohort; restore the master selection
 between cases.
@@ -123,8 +124,8 @@ Save these widget IDs in order:
 5. `allowance.cursor.cursor-plan-other`
 6. `budget.openai.platform.today`
 
-The existing depleted-first display order is Models 54 / Fable 63 / Weekly 69 / Codex 90 /
-Other 98 / Money 100. All five selected allowance resets are known; the budget has none.
+The existing depleted-first display order is Codex 54 / Fable 63 / Weekly 69 / Other 80 /
+Models 98 / Money 100. All five selected allowance resets are known; the budget has none.
 Codex alone shows **1.2K** purchased credits. The 5h window remains available on the phone
 but is not a seventh widget row or a separate Watch ring.
 
