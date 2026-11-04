@@ -1039,8 +1039,10 @@ just build-android-rust
 ANDROID_SERIAL="$PHONE_SERIAL" just install-phone
 ```
 
-The default debug build includes every configured ABI. On a storage-constrained target, build
-only the matching architecture before running the same installation recipe:
+The default debug build includes every configured ABI. On a storage-constrained target, select
+the matching Flutter engine architecture before running the same installation recipe. The
+`--target-platform` selector alone does not exclude independently packaged JNI ABIs; qualify
+each native library against its owning build configuration and actual APK inventory:
 
 ```sh
 # x86_64 emulator
