@@ -72,6 +72,11 @@ Immediately before input, revalidate the current page AND a unique enabled visib
 enabled clickable ancestor from a fresh hierarchy and original frame; its current bounds and actual operation
 must support the intended action, established from current semantic labels/resource identity or a primary contract. Icon shape alone is insufficient: arrows can reorder instead of navigating/activating. Inspect both `text` and `content-desc` for page and section heading guards as well as action targets: either may identify the element while the other is empty. Match guards to observed merged/multiline semantics, keeping unqueried or missing focus fields Unknown rather than false.
 Do not reuse a picker/modal observation across model/tool round trips; prefer one prepared existing observation/action batch. A navigation/HOME return, including earlier in the same batch, does not prove the destination is settled; freshly qualify its page/target before a long-press, drag or other next input.
+For launcher widget resizing, requalify the resize frame and current handle after each drag;
+an earlier overlay or a later original does not fill a missing current hierarchy observation.
+Treat launcher page identity and widget host bounds as separate restoration requirements;
+follow [Phone launcher widget resizing](../../../../docs/ANDROID_TOOLCHAIN.md#phone-launcher-widget-resizing)
+before recovering controls or accepting placement after a page change.
 Stop absence-driven scrolling once the target is visible; reveal a clipped target only for usable bounds.
 One empty label field or a selector ignoring the populated field does not prove absence. Ambiguous matches,
 disabled controls, stale nodes or the wrong window stay unresolved; reobserve or disambiguate within the existing bounded procedure.

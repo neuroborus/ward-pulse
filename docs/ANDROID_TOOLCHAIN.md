@@ -547,6 +547,20 @@ adb -s "$PHONE_SERIAL" shell cat /sdcard/ui.xml | tr '<' '\n' | grep -i "don.t a
 The app compiles against Android SDK 37.1 but targets API 36 and runs on the Wear OS 6.1 /
 API 36.1 image. Compile SDK and runtime system image versions are intentionally independent.
 
+### Phone launcher widget resizing
+
+Before resizing, retain the settled launcher page's visible landmarks and widget host bounds.
+Long-press a freshly observed interior widget point away from screen edges, release, and
+confirm the current resize frame and handle before dragging. After every drag, capture a
+fresh native original and hierarchy; do not assume the resize overlay persists or reuse old handle
+bounds. Missing hierarchy nodes or disagreement with the original leaves the next drag
+unqualified: retain both observations without inferring a cause, then dismiss/reopen through
+the ordinary launcher UI from a verified interior point. Avoid an edge long-press as a way to
+recover resize controls. If the widget moves to another page, restore its original page and
+host bounds through ordinary launcher navigation/movement, then inspect the settled page and
+widget again. Matching width/height alone does not establish placement restoration; keep
+captures pending until both the original page and allocation are verified.
+
 ### Isolated Android Studio display
 
 For work that exists only in Android Studio's desktop UI, run Studio on a separate nested
