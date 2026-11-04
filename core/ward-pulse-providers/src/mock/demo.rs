@@ -121,10 +121,37 @@ pub fn debug_multi_provider_dashboard_at(
     if anchor.is_none() {
         accounts.push((cursor_platform_account(anchor)?, ScrambleMode::Budgets));
     }
-    let accounts: Vec<_> = accounts
+    let mut accounts: Vec<_> = accounts
         .into_iter()
         .map(|(account, mode)| scramble_account(&mut rng, account, mode, anchor.is_some()))
         .collect();
+
+    // Docs preset revision 1 keeps all random draws and unrelated data intact.
+    if let (280, Some(anchor)) = (seed, anchor) {
+        for account in &mut accounts {
+            match account.connection.as_deref() {
+                Some("anthropic.plan") => {
+                    if let Some(window) = account
+                        .allowances
+                        .iter_mut()
+                        .find(|window| window.id == "claude-five-hour")
+                    {
+                        window.used_percent = Some(20.0);
+                        window.resets_at =
+                            Some(DateTimeUtc::from(DemoTime::new(anchor.0 + 18_000)?.stamp()));
+                        window.status = percent_status(window.used_percent);
+                    }
+                }
+                Some("cursor.plan") => {
+                    account
+                        .allowances
+                        .retain(|meter| meter.id != "cursor-on-demand");
+                }
+                _ => continue,
+            }
+            account.status = worst_status(&account.allowances);
+        }
+    }
 
     // Newest fixture stamp keeps relative ordering; seed is what varies content.
     let generated_at = accounts
@@ -807,6 +834,65 @@ mod tests {
             assert!(budget.spent.is_some());
             assert!(budget.used_percent.is_some());
         }
+
+        let unanchored = debug_multi_provider_dashboard(280).unwrap();
+        assert_eq!(
+            unanchored,
+            debug_multi_provider_dashboard_at(280, None).unwrap()
+        );
+        assert_eq!(
+            unanchored
+                .accounts
+                .iter()
+                .map(|account| account.connection.as_deref().unwrap())
+                .collect::<Vec<_>>(),
+            vec![
+                "openai.platform",
+                "openai.plan",
+                "anthropic.plan",
+                "anthropic.platform",
+                "cursor.plan",
+                "cursor.platform",
+            ]
+        );
+        for (snapshot, five_hour_reset) in [
+            (unanchored, Some("2026-07-19T17:00:00Z")),
+            (
+                debug_multi_provider_dashboard_at(281, Some("2026-11-02T12:00:00Z")).unwrap(),
+                None,
+            ),
+        ] {
+            let claude = snapshot
+                .accounts
+                .iter()
+                .find(|account| account.connection.as_deref() == Some("anthropic.plan"))
+                .unwrap();
+            assert_eq!(
+                claude
+                    .allowances
+                    .iter()
+                    .find(|window| window.id == "claude-five-hour")
+                    .unwrap()
+                    .resets_at
+                    .as_ref()
+                    .map(|reset| reset.as_str()),
+                five_hour_reset
+            );
+            let cursor = snapshot
+                .accounts
+                .iter()
+                .find(|account| account.connection.as_deref() == Some("cursor.plan"))
+                .unwrap();
+            assert_eq!(
+                cursor
+                    .allowances
+                    .iter()
+                    .find(|meter| meter.id == "cursor-on-demand")
+                    .unwrap()
+                    .source,
+                AllowanceSource::Purchased
+            );
+        }
     }
 
     #[test]
@@ -877,13 +963,51 @@ mod tests {
                 ("cursor-local", Some("cursor.plan")),
             ]
         );
+        assert_eq!(
+            snapshot
+                .accounts
+                .iter()
+                .map(|account| account
+                    .allowances
+                    .iter()
+                    .map(|meter| meter.id.as_str())
+                    .collect::<Vec<_>>())
+                .collect::<Vec<_>>(),
+            vec![
+                vec![],
+                vec!["codex-primary", "codex-purchased-credits"],
+                vec![
+                    "claude-five-hour",
+                    "claude-seven-day",
+                    "claude-seven-day-fable"
+                ],
+                vec![],
+                vec!["cursor-plan-models", "cursor-plan-other"],
+            ]
+        );
         assert_eq!(snapshot.overall_status, ProviderStatus::Ok);
         for account in &snapshot.accounts {
             assert_eq!(account.status, ProviderStatus::Ok, "{}", account.account_id);
             for allowance in &account.allowances {
                 assert_eq!(allowance.status, ProviderStatus::Ok, "{}", allowance.id);
             }
+            for budget in [&account.today, &account.week, &account.month] {
+                assert!(budget.projected_total.is_none());
+                for amount in [&budget.spent, &budget.limit, &budget.remaining] {
+                    if account.allowances.is_empty() {
+                        let money = amount.as_ref().expect("known reporting Money");
+                        assert_eq!(money.currency.as_str(), "USD");
+                        assert!(money.minor_units >= 0);
+                    } else {
+                        assert!(amount.is_none(), "{}", account.account_id);
+                    }
+                }
+            }
         }
+        assert_eq!(
+            snapshot.accounts[0].today.spent,
+            Some(Money::minor_units(50, "USD"))
+        );
         let allowance = |id: &str| {
             snapshot
                 .accounts
@@ -894,7 +1018,7 @@ mod tests {
         };
         for (id, used) in [
             ("codex-primary", 9.6),
-            ("claude-five-hour", 48.4),
+            ("claude-five-hour", 20.0),
             ("claude-seven-day", 30.6),
             ("claude-seven-day-fable", 36.9),
             ("cursor-plan-models", 45.95531337916742),
@@ -904,10 +1028,52 @@ mod tests {
             assert_eq!(meter.source, AllowanceSource::Plan);
             assert_eq!(meter.status, ProviderStatus::Ok);
             assert!((meter.used_percent.unwrap() - used).abs() < 1e-9);
+            assert!(!meter.unlimited);
+            assert_eq!(
+                (&meter.used, &meter.limit, &meter.remaining),
+                (&None, &None, &None)
+            );
+        }
+        // Ordinary Claude collapse excludes Fable and picks the most-used window.
+        let weekly = allowance("claude-seven-day");
+        for window in snapshot.accounts[2].allowances.iter().filter(|window| {
+            window.source == AllowanceSource::Plan
+                && window.id != weekly.id
+                && window.id != "claude-seven-day-fable"
+        }) {
+            assert!(weekly.used_percent.unwrap() > window.used_percent.unwrap());
+        }
+        assert!(
+            allowance("claude-seven-day-fable").used_percent.unwrap()
+                > weekly.used_percent.unwrap()
+        );
+
+        let time = DemoTime::parse(anchor).unwrap();
+        for (id, minutes, offset) in [
+            ("claude-five-hour", 300, 18_000),
+            ("claude-seven-day", 10_080, 633_600),
+            ("claude-seven-day-fable", 10_080, 633_600),
+            ("codex-primary", 10_080, 597_337),
+        ] {
+            let meter = allowance(id);
+            assert_eq!(meter.window_minutes, Some(minutes));
+            let reset = DemoTime::parse(meter.resets_at.as_ref().unwrap().as_str()).unwrap();
+            assert_eq!(reset.0 - time.0, offset, "{id}");
+        }
+        for id in ["cursor-plan-models", "cursor-plan-other"] {
+            let meter = allowance(id);
+            assert!(meter.window_minutes.is_none());
+            assert_eq!(
+                meter.resets_at.as_ref().unwrap().as_str(),
+                "2026-12-01T00:00:00Z"
+            );
         }
         let purchased = allowance("codex-purchased-credits");
+        assert_eq!(purchased.source, AllowanceSource::Purchased);
         assert!(!purchased.unlimited);
         assert_eq!(purchased.remaining, Some(credits(1_200)));
+        assert!(purchased.used.is_none());
+        assert!(purchased.window_minutes.is_none());
         assert_eq!(
             (
                 purchased.used_percent,
@@ -915,11 +1081,6 @@ mod tests {
                 &purchased.resets_at
             ),
             (None, &None, &None)
-        );
-        assert!(allowance("claude-five-hour").resets_at.is_none());
-        assert_eq!(
-            allowance("claude-seven-day-fable").resets_at,
-            allowance("claude-seven-day").resets_at
         );
     }
 
@@ -1017,7 +1178,12 @@ mod tests {
                     );
                 }
                 for meter in &account.allowances {
-                    if meter.id == "codex-primary" {
+                    if meter.id == "claude-five-hour" {
+                        assert_eq!(meter.window_minutes, Some(300));
+                        let reset =
+                            DemoTime::parse(meter.resets_at.as_ref().unwrap().as_str()).unwrap();
+                        assert_eq!(reset.0 - time.0, 18_000);
+                    } else if meter.id == "codex-primary" {
                         assert_eq!(meter.window_minutes, Some(10_080));
                         let reset =
                             DemoTime::parse(meter.resets_at.as_ref().unwrap().as_str()).unwrap();

@@ -66,32 +66,87 @@ The unanchored seed-only composition retains all six accounts, including Cursor 
 with its unknown day/week budgets.
 Rust rebases calendar/reporting/history/billing dates before normalization and preserves
 rolling reset offsets, missing resets and unknown consumption. It reads no clock.
-The actually generated seed **280**, anchor **2026-11-02T12:00:00Z**, provides:
 
-| Widget metric | Used % |
-| --- | ---: |
-| Codex Weekly | 9.6 |
-| Claude 5-hour | 48.4 |
-| Claude Weekly | 30.6 |
-| Claude Fable weekly | 36.9 |
-| Cursor Models | 45.95531337916742 |
-| Cursor Other Models | 2.3 |
+**Docs preset revision 1** is seed **280** with an explicit anchor. Set
+`WARD_PULSE_MOCK_SEED=280` and `WARD_PULSE_MOCK_ANCHOR` to the actual current whole-second
+UTC anchor **A** for the capture cohort. `2026-11-02T12:00:00Z` is the semantic regression
+anchor, not a permanent capture date. This preset maintains these normalized values:
 
-These six plan metrics are healthy; Codex has **1200** finite purchased credits.
+| Metric | Used % / left % | Reset |
+| --- | --- | --- |
+| Claude 5h | 20 / 80 | A+5h |
+| Claude Weekly | 30.6 / 69.4 | A+7d8h |
+| Fable Weekly | 36.9 / 63.1 | Same Weekly boundary |
+| Codex Weekly | 9.6 / 90.4 | A+597337s |
+| Cursor Models | 45.95531337916742 / 54.04468662083258 | Next UTC month |
+| Cursor Other | 2.3 / 97.7 | Same billing boundary |
+
+Only anchored seed 280 receives the 5h adjustment and omission of optional Cursor on-demand
+Purchased data. Both Cursor pools remain percentage-first, with absent quantities and no
+purchased-credit suffix. Codex retains **1200** finite purchased credits. Unanchored 280
+and every other seed retain their existing behavior. Claude Extra and other missing optional
+amounts remain absent; do not infer Money or quantities from percentages. Calendar Today,
+UTC-Monday Week, Month and history remain date-aware rather than fixed across boundaries.
+
+Representative OpenAI Today spend at the regression anchor is **USD 50 minor units ($0.50)**.
+The existing phone-local `ConnectionBudget.today` input for capture is **USD 10000 major
+($10K, 1000000 minor)**, set through the ordinary admitted UI and restored afterward.
+It is not a Rust preset limit or application default. The resulting **0.005% used / 99.995%
+left** may display **100%**; the spend is still $0.50.
+
 For a healthy capture, the overall snapshot, every included account and every rendered
 allowance must be OK. Verify the complete native screen has zero app-bar/family problem
 counters, including grey Unknown badges; healthy selected metrics alone are insufficient.
 Other seeds can still produce unhealthy states, and missing optional values remain missing.
-For the watch, select Codex plan, Claude plan + Fable, and both Cursor pools: three bands
-with two completed pairs.
-Use one cached accepted snapshot and normal guarded sync for related views; refresh or
-Mock-toggle invalidation advances the seed, while process restart restores the configured seed.
-This dated example is Mock data, not evidence of current device or public readiness.
 
-Before enabling Mock for capture, qualify custody/restoration of live credentials,
-preferences, notification bookkeeping and wake, or HOLD. Mock clears the recovery watchlist
-and cancels its wake; toggling back cannot restore that history. Native/public capture,
-real default weather availability and Pending headless-publication proof remain separate gates.
+Save these Watch IDs in order:
+
+1. `allowance.codex.plan`
+2. `allowance.claude.plan`
+3. `allowance.claude.claude-seven-day-fable`
+4. `allowance.cursor.cursor-plan-models`
+5. `allowance.cursor.cursor-plan-other`
+
+The ordinary Claude ring collapses to Weekly because 30.6% used exceeds 5h's 20%; Fable
+stays independently selectable. There is no separate Watch Weekly checkbox. Existing
+tighter-half ordering places Cursor inner/top, Claude/Fable middle and Codex outer/bottom:
+three bands with two completed pairs, retaining the Claude/Fable half identities.
+One/two-band views use recorded subsets of this same cohort; restore the master selection
+between cases.
+
+Save these widget IDs in order:
+
+1. `allowance.codex.codex-primary`
+2. `allowance.claude.claude-seven-day`
+3. `allowance.claude.claude-seven-day-fable`
+4. `allowance.cursor.cursor-plan-models`
+5. `allowance.cursor.cursor-plan-other`
+6. `budget.openai.platform.today`
+
+The existing depleted-first display order is Models 54 / Fable 63 / Weekly 69 / Codex 90 /
+Other 98 / Money 100. All five selected allowance resets are known; the budget has none.
+Codex alone shows **1.2K** purchased credits. The 5h window remains available on the phone
+but is not a seventh widget row or a separate Watch ring.
+
+Use one accepted cached cohort and ordinary guarded phone-to-watch publication across
+phone/widget/Glance/face and related themes or selection subsets. Do not refresh, reseed or
+restart between related views: refresh or Mock-toggle invalidation advances the seed,
+while process restart restores the configured seed. Every new view and its caption/alt/index
+provenance from this preset must identify **Mock/demo**.
+
+Before enabling Mock, freshly qualify the established ordinary-Mock custody/restoration
+route: actual normal package/preferences, secure/core recovery watchlist and future wake,
+notification bookkeeping, no eligible or in-flight background work, temporary polling cadence
+**15→60 minutes**, a hard Mock cutoff and a restoration reserve. HOLD if custody is unproved.
+Mock clears recovery history and cancels its wake; Mock-off alone cannot restore them.
+Restore the actual normal package/preferences, cadence **15 minutes**, selections, OS/bridge
+state and genuine newer Live data, including derived widget/watch frames. Preserve newer
+data and real errors; never restore old secrets or snapshots to manufacture equality.
+
+Source tests do not establish native projection, rendering or public capture acceptance.
+Root separately owns both Android Rust ABI rebuilds and dated/normal APK provenance,
+native/common-data proof and safe restoration. Public captures/index updates remain separately
+admitted, with real default Day/weather and headless-publication proof still separate gates.
 
 ## Persistent Connection Recovery
 
