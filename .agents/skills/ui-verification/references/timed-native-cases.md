@@ -10,7 +10,7 @@ mandatory whole-run retirement before HOST work through [finalization](../../fin
 Have the existing phase commands, privacy-safe projections, expected identities/report
 contract and qualified restoration inputs ready before launching the timed case. Resolve
 essential Source/tool questions and preservation prerequisites beforehand; an active case
-is not preparation time. Use the owning device procedure, without a new harness or script. Plan witness windows around the expected event using realistic operator/model/tool round trips, then join their actual start/end to the real post/event time; a window missing that event is not a witness. Every process/communicate/network deadline that bounds that capture must exceed its budget plus an explicit completion margin.
+is not preparation time. Use the owning device procedure, without a new harness or script. Before VM-service URL-selection guards, bind the candidate URL to the current SDK-target PID/process start and live VM metadata through the owning API, retaining the actual clock samples and expected/observed identity/start fields; Activity-launch/case-start time is not VM-birth proof, and unretained failure-point values remain Unknown. Plan witness windows around the expected event using realistic operator/model/tool round trips, then join their actual start/end to the real post/event time; a window missing that event is not a witness. Every process/communicate/network deadline that bounds that capture must exceed its budget plus an explicit completion margin.
 
 Before launch, record a phase-specific action/capture plan and realistic operator time budget,
 using measured comparable timings or explicit conservative estimates. Include model/tool
