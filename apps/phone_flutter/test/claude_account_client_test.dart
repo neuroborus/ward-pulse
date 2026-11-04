@@ -144,6 +144,240 @@ void main() {
       ),
     );
   });
+
+  test('rejects an expired refresh grant before loading usage', () async {
+    const privateDescription = 'private-description-sentinel';
+    const privateToken = 'private-token-sentinel';
+    final transport = _QueueTransport([
+      ClaudeHttpResponse(
+        statusCode: 400,
+        body: jsonEncode({
+          'error': 'invalid_grant',
+          'error_description': privateDescription,
+          'refresh_token': privateToken,
+        }),
+      ),
+    ]);
+    final client = ClaudeAccountClient(transport: transport, clock: () => now);
+    final sessions = <ClaudeAccountSession>[];
+
+    await expectLater(
+      client.fetchReport(
+        ClaudeAccountSession(
+          accessToken: 'old-access',
+          refreshToken: privateToken,
+          expiresAt: now.add(const Duration(minutes: 1)),
+          accountId: 'acct-1',
+        ),
+        onSessionChanged: (session) async {
+          sessions.add(session);
+        },
+      ),
+      throwsA(
+        isA<ClaudeAccountException>()
+            .having(
+              (error) => error.failure,
+              'failure',
+              ClaudeAccountFailure.authentication,
+            )
+            .having(
+              (error) => error.details,
+              'details',
+              allOf(
+                equals('Claude token refresh · HTTP 400 · invalid_grant'),
+                isNot(contains(privateDescription)),
+                isNot(contains(privateToken)),
+              ),
+            ),
+      ),
+    );
+
+    expect(transport.methods, ['POST']);
+    expect(
+      Uri.splitQueryString(transport.bodies.single!)['grant_type'],
+      'refresh_token',
+    );
+    expect(sessions, isEmpty);
+  });
+
+  test('stops after usage 401 and an expired refresh grant', () async {
+    final transport = _QueueTransport([
+      const ClaudeHttpResponse(statusCode: 401, body: '{}'),
+      const ClaudeHttpResponse(
+        statusCode: 400,
+        body: '{"error":"invalid_grant"}',
+      ),
+    ]);
+    final client = ClaudeAccountClient(transport: transport, clock: () => now);
+    final sessions = <ClaudeAccountSession>[];
+
+    await expectLater(
+      client.fetchReport(
+        ClaudeAccountSession(
+          accessToken: 'access',
+          refreshToken: 'refresh',
+          expiresAt: now.add(const Duration(hours: 1)),
+          accountId: 'acct-1',
+        ),
+        onSessionChanged: (session) async {
+          sessions.add(session);
+        },
+      ),
+      throwsA(
+        isA<ClaudeAccountException>()
+            .having(
+              (error) => error.failure,
+              'failure',
+              ClaudeAccountFailure.authentication,
+            )
+            .having(
+              (error) => error.details,
+              'details',
+              'Claude token refresh · HTTP 400 · invalid_grant',
+            ),
+      ),
+    );
+
+    expect(transport.methods, ['GET', 'POST']);
+    expect(
+      Uri.splitQueryString(transport.bodies[1]!)['grant_type'],
+      'refresh_token',
+    );
+    expect(sessions, isEmpty);
+  });
+
+  final rejectedRefreshBodies = <String, String>{
+    'unknown code': '{"error":"invalid_request"}',
+    'malformed JSON': '{"error":"invalid_grant"',
+    'array body': '[{"error":"invalid_grant"}]',
+    'string body': '"invalid_grant"',
+    'null body': 'null',
+    'missing error': '{}',
+    'null error': '{"error":null}',
+    'numeric error': '{"error":400}',
+    'boolean error': '{"error":true}',
+    'array error': '{"error":["invalid_grant"]}',
+    'object error': '{"error":{"error":"invalid_grant"}}',
+    'description only': '{"error_description":"invalid_grant"}',
+    'nested error': '{"nested":{"error":"invalid_grant"}}',
+    'leading whitespace': '{"error":" invalid_grant"}',
+    'trailing whitespace': '{"error":"invalid_grant "}',
+    'case change': '{"error":"INVALID_GRANT"}',
+  };
+  for (final rejection in rejectedRefreshBodies.entries) {
+    test('keeps refresh 400 ${rejection.key} as invalid response', () async {
+      final transport = _QueueTransport([
+        ClaudeHttpResponse(statusCode: 400, body: rejection.value),
+      ]);
+      final client = ClaudeAccountClient(transport: transport, clock: () => now);
+
+      await expectLater(
+        client.refresh(
+          ClaudeAccountSession(
+            accessToken: 'access',
+            refreshToken: 'refresh',
+            expiresAt: now.add(const Duration(minutes: 1)),
+            accountId: 'acct-1',
+          ),
+        ),
+        throwsA(
+          isA<ClaudeAccountException>()
+              .having(
+                (error) => error.failure,
+                'failure',
+                ClaudeAccountFailure.invalidResponse,
+              )
+              .having(
+                (error) => error.details,
+                'details',
+                'Claude token refresh · HTTP 400',
+              ),
+        ),
+      );
+
+      expect(transport.methods, ['POST']);
+    });
+  }
+
+  test('keeps usage 400 invalid_grant as invalid response', () async {
+    final transport = _QueueTransport([
+      const ClaudeHttpResponse(
+        statusCode: 400,
+        body: '{"error":"invalid_grant"}',
+      ),
+    ]);
+    final client = ClaudeAccountClient(transport: transport, clock: () => now);
+
+    await expectLater(
+      client.fetchReport(
+        ClaudeAccountSession(
+          accessToken: 'access',
+          refreshToken: 'refresh',
+          expiresAt: now.add(const Duration(hours: 1)),
+          accountId: 'acct-1',
+        ),
+        onSessionChanged: (_) async {
+          fail('Unexpected session change');
+        },
+      ),
+      throwsA(
+        isA<ClaudeAccountException>()
+            .having(
+              (error) => error.failure,
+              'failure',
+              ClaudeAccountFailure.invalidResponse,
+            )
+            .having(
+              (error) => error.details,
+              'details',
+              'Claude usage · HTTP 400',
+            ),
+      ),
+    );
+
+    expect(transport.methods, ['GET']);
+  });
+
+  test('keeps sign-in 400 invalid_grant as invalid response', () async {
+    final transport = _QueueTransport([
+      const ClaudeHttpResponse(
+        statusCode: 400,
+        body: '{"error":"invalid_grant"}',
+      ),
+    ]);
+    final client = ClaudeAccountClient(
+      transport: transport,
+      clock: () => now,
+      random: _FixedRandom(),
+    );
+    final request = client.beginAuthorization();
+
+    await expectLater(
+      client.exchangeAuthorizationCode(
+        request: request,
+        pastedCode: 'AUTHCODE#${request.state}',
+      ),
+      throwsA(
+        isA<ClaudeAccountException>()
+            .having(
+              (error) => error.failure,
+              'failure',
+              ClaudeAccountFailure.invalidResponse,
+            )
+            .having(
+              (error) => error.details,
+              'details',
+              'Claude sign-in · HTTP 400',
+            ),
+      ),
+    );
+
+    expect(transport.methods, ['POST']);
+    expect(
+      Uri.splitQueryString(transport.bodies.single!)['grant_type'],
+      'authorization_code',
+    );
+  });
 }
 
 class _FixedRandom implements Random {

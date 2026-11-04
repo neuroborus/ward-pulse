@@ -111,6 +111,9 @@ Credits, distinct from purchased credits left. See [Dashboard](/guide/dashboard#
 
 ## Reconnect, change or remove a connection
 
+If your Claude plan sign-in expires, use **Reconnect** to sign in again. An Organization
+reporting key cannot renew a Claude plan sign-in.
+
 Use **Reconnect** or **Disconnect** for Claude plan. For Organization reporting, replace
 **Value** and tap **Save**, change only **Label** with Value blank, or **Remove** the saved
 key. **Cancel** discards the unsaved edit. Blank Value preserves the saved key; the field

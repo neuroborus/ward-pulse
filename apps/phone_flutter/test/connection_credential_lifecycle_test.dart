@@ -562,6 +562,76 @@ void main() {
     },
   );
 
+  test(
+    'Claude expired refresh failure cannot delete a newer explicit login',
+    () async {
+      final entered = Completer<void>();
+      final release = Completer<_Response>();
+      var tokenRequests = 0;
+      var usageRequests = 0;
+      String? tokenBody;
+      final a = _runtime(
+        'claude',
+        secure,
+        bridge.platform('A'),
+        now,
+        (uri, headers, body) async {
+          if (!entered.isCompleted) entered.complete();
+          if (uri.path.endsWith('/token')) {
+            tokenRequests++;
+            tokenBody = body;
+            return release.future;
+          }
+          usageRequests++;
+          return _usageResponse(uri);
+        },
+      );
+      await a.write('fake-old-account', 'old', expired: true);
+      final loading = a.fetch();
+      final failed = expectLater(
+        loading,
+        throwsA(
+          isA<ClaudeAccountException>()
+              .having(
+                (error) => error.failure,
+                'failure',
+                ClaudeAccountFailure.authentication,
+              )
+              .having(
+                (error) => error.details,
+                'details',
+                'Claude token refresh · HTTP 400 · invalid_grant',
+              ),
+        ),
+      );
+      await entered.future;
+      final b = _runtime(
+        'claude',
+        secure,
+        bridge.platform('B'),
+        now,
+        (uri, headers, body) async {
+          fail('Unexpected request from the newer login');
+        },
+      );
+      late final CredentialVersion newerVersion;
+      try {
+        await b.write('fake-new-account', 'new');
+        newerVersion = (await b.read())!.version;
+      } finally {
+        release.complete((status: 400, body: '{"error":"invalid_grant"}'));
+        await failed;
+      }
+
+      expect(tokenRequests, 1);
+      expect(usageRequests, 0);
+      expect(Uri.splitQueryString(tokenBody!)['grant_type'], 'refresh_token');
+      final retained = (await b.read())!;
+      expect(retained.value, 'new');
+      expect(retained.version.values, newerVersion.values);
+    },
+  );
+
   for (final family in ['claude', 'codex']) {
     _Runtime runtime(String owner, _ResponseHandler handler) =>
         _runtime(family, secure, bridge.platform(owner), now, handler);

@@ -261,6 +261,19 @@ final class ClaudeAccountClient {
         'Claude sign-in · Session expired',
       );
     }
+    if (response.statusCode == 400) {
+      try {
+        final json = jsonDecode(response.body);
+        if (json is Map<String, dynamic> && json['error'] == 'invalid_grant') {
+          throw const ClaudeAccountException(
+            ClaudeAccountFailure.authentication,
+            'Claude token refresh · HTTP 400 · invalid_grant',
+          );
+        }
+      } on FormatException {
+        // Preserve the HTTP status fallback for malformed error bodies.
+      }
+    }
     _requireSuccess(response, 'Claude token refresh');
     // Anthropic rotates refresh tokens; never keep the previous one.
     return _sessionFromTokenResponse(
