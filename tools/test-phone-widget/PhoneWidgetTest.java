@@ -195,18 +195,100 @@ public final class PhoneWidgetTest {
     }
 
     private static void dataAndMoneyCases() {
-        check(PhoneWidgetLayout.moneyText("-9007199254740993", "EUR")
-                        .equals("-EUR 90071992547409.93"),
-                "Money preserves signs, codes and cents beyond double precision.");
-        check(PhoneWidgetLayout.moneyText("-9223372036854775808", "USD")
-                        .equals("-USD 92233720368547758.08"),
-                "The minimum signed integer is formatted without abs overflow.");
+        String[][] moneyCases = {
+                {"50", "USD", "$0.50"}, {"50", "EUR", "€0.50"},
+                {"50", "CAD", "CAD 0.50"}, {"50", "AUD", "AUD 0.50"},
+                {"123450", "CAD", "CAD 1.2K"},
+                {"50", "usd", "usd 0.50"}, {"0", "USD", "$0.00"},
+                {"000", "EUR", "€0.00"}, {"99999", "USD", "$999.99"},
+                {"100000", "USD", "$1K"}, {"104999", "USD", "$1K"},
+                {"105000", "USD", "$1.1K"}, {"100000000", "USD", "$1M"},
+                {"100000000000", "EUR", "€1B"}, {"100000000000000", "USD", "$1T"},
+                {"99994999", "USD", "$999.9K"}, {"99995000", "USD", "$1M"},
+                {"99995000000", "USD", "$1B"}, {"99995000000000", "USD", "$1T"},
+                {"99994999999999999", "USD", "$999.9T"},
+                {"99995000000000000", "USD", "$1000T"},
+                {"100000000000000000", "USD", "$1000T"},
+        };
+        for (String[] value : moneyCases) {
+            check(PhoneWidgetLayout.moneyText(value[0], value[1]).equals(value[2]),
+                    "Money keeps its value-based symbol, cents and compact boundary: " + value[0]);
+            check(PhoneWidgetLayout.moneyText("-" + value[0], value[1])
+                            .equals(value[0].matches("0+") ? value[2] : "-" + value[2]),
+                    "Negative Money rounds symmetrically and zero stays unsigned: " + value[0]);
+        }
+        for (String invalid : new String[] {"", "+50", "1.0", "1" + "0".repeat(64)}) {
+            check(PhoneWidgetLayout.moneyText(invalid, "USD").isEmpty(),
+                    "Money retains its integer syntax and 64-character input limit.");
+        }
+        check(PhoneWidgetLayout.moneyText("50", "US").isEmpty()
+                        && PhoneWidgetLayout.moneyText("50", "US1").isEmpty(),
+                "Money retains its three-letter reported-code validation.");
+        PhoneWidgetLayout.Row precise = PhoneWidgetLayout.Row.fromCache("EUR expense", "OpenAI",
+                "Today", "", "", "", ZoneId.of("UTC"), 0, "budget",
+                "-9007199254740993", "EUR", "", "", "", "", "", "");
+        check(precise.spent.equals("-€90.1T")
+                        && PhoneWidgetLayout.rowDescription(fitRow(precise, 500).rows.get(0))
+                                .equals("EUR expense, -EUR 90071992547409.93 spent, No cap"),
+                "Money preserves exact signed ISO/cents beyond double precision in speech.");
+        PhoneWidgetLayout.Row signed = budget("", "-9223372036854775808", "", "");
+        check(signed.spent.equals("-$92233.7T")
+                        && PhoneWidgetLayout.rowDescription(fitRow(signed, 500).rows.get(0)).equals(
+                                "OpenAI platform · Today, -USD 92233720368547758.08 spent, No cap"),
+                "The minimum signed integer retains full speech without abs overflow.");
+        PhoneWidgetLayout.Row huge = budget("", "1" + "0".repeat(63), "", "");
+        check(huge.spent.equals("$1" + "0".repeat(49) + "T")
+                        && PhoneWidgetLayout.rowDescription(fitRow(huge, 500).rows.get(0)).equals(
+                                "OpenAI platform · Today, USD 1" + "0".repeat(61) + ".00 spent, No cap"),
+                "A valid 64-character cache retains its full T coefficient and exact description.");
+        PhoneWidgetLayout.Row negativeHuge = budget("", "-1" + "0".repeat(62), "", "");
+        check(negativeHuge.spent.equals("-$1" + "0".repeat(48) + "T")
+                        && PhoneWidgetLayout.rowDescription(fitRow(negativeHuge, 500).rows.get(0))
+                                .equals("OpenAI platform · Today, -USD 1" + "0".repeat(60)
+                                        + ".00 spent, No cap"),
+                "The sign counts toward the accepted 64-character cache limit without truncation.");
         PhoneWidgetLayout.Row capped = budget("50% left", "1234", "10000", "USD");
         PhoneWidgetLayout.VisibleRow full = fitRow(capped, 500).rows.get(0);
+        check(capped.spent.equals("$12.34") && capped.lower.equals("Cap $100.00")
+                        && full.primary.equals("50%"),
+                "Visible symbols do not alter the independently reported percentage.");
         check(PhoneWidgetLayout.rowDescription(full).equals(
                         "OpenAI platform · Today, 50% remaining, USD 12.34 spent, Cap USD 100.00"),
                 "Capped budgets describe actual spending and cap, never purchased credits.");
         check(!full.reset && capped.reset.isEmpty(), "Budget cache resets are never inferred or reused.");
+        PhoneWidgetLayout.Row euro = PhoneWidgetLayout.Row.fromCache("EUR expense", "OpenAI",
+                "Today", "37.5% left", "", "", ZoneId.of("UTC"), 0, "budget",
+                "123450", "EUR", "200050", "EUR", "", "", "", "");
+        PhoneWidgetLayout.Plan euroPlan = fitRow(euro, 500);
+        PhoneWidgetLayout.VisibleRow euroFull = euroPlan.rows.get(0);
+        check(euroFull.primary.equals("37.5%") && euroFull.credits && euroFull.lower
+                        && euro.detail.equals("€1.2K") && euro.lower.equals("Cap €2K")
+                        && PhoneWidgetLayout.rowDescription(euroFull).equals(
+                                "EUR expense, 37.5% remaining, EUR 1234.50 spent, Cap EUR 2000.50"),
+                "EUR spent/cap compact visibly while reported percentage and exact speech survive.");
+        check(euroPlan.text.stream().anyMatch(run -> run.text.equals("€1.2K")
+                        && run.glyphs.supported)
+                        && euroPlan.text.stream().anyMatch(run -> run.text.equals("Cap €2K")
+                                && run.glyphs.supported),
+                "An actual EUR row reaches measured runs through the production glyph guard.");
+        checkBounds(euroPlan);
+        PhoneWidgetLayout.VisibleRow euroNarrow = fitRow(euro, 150).rows.get(0);
+        check(euroNarrow.primary.equals("€1.2K") && !euroNarrow.credits && !euroNarrow.lower
+                        && PhoneWidgetLayout.rowDescription(euroNarrow)
+                                .equals("EUR expense, EUR 1234.50 spent"),
+                "Narrow Money speech retains exact spending and omits hidden cap details.");
+        check(PhoneWidgetLayout.supportedText("$€")
+                        && !PhoneWidgetLayout.supportedText("£")
+                        && !PhoneWidgetLayout.supportedText("€\n"),
+                "Only qualified Euro support is added; unsupported currency glyphs and controls stay rejected.");
+        for (String code : new String[] {"USD", "EUR", "CAD", "AUD"}) {
+            PhoneWidgetLayout.Row small = PhoneWidgetLayout.Row.fromCache("Expense", "OpenAI",
+                    "Today", "", "", "", ZoneId.of("UTC"), 0, "budget",
+                    "50", code, "", "", "", "", "", "");
+            check(PhoneWidgetLayout.rowDescription(fitRow(small, 500).rows.get(0))
+                            .equals("Expense, " + code + " 0.50 spent, No cap"),
+                    "Small expenses retain their exact reported ISO identity in speech.");
+        }
         PhoneWidgetLayout.Row uncapped = budget("", "0", "", "");
         check(PhoneWidgetLayout.rowDescription(fitRow(uncapped, 500).rows.get(0))
                         .equals("OpenAI platform · Today, USD 0.00 spent, No cap"),
@@ -219,7 +301,7 @@ public final class PhoneWidgetTest {
                         && budget("50%", "1234", "10000", "EUR").percent.isEmpty(),
                 "Unusable and mismatched caps do not invent a percentage.");
         check(budget("", "1234", "10000", "USD").lower
-                        .equals("Cap USD 100.00 · Percentage unavailable"),
+                        .equals("Cap $100.00 · Percentage unavailable"),
                 "A usable cap without a reported percentage has a distinct state.");
         PhoneWidgetLayout.Row legacy = PhoneWidgetLayout.Row.fromCache("Legacy", "", "", "50% left",
                 "", "", ZoneId.of("UTC"), 0, "", "1234", "USD", "", "", "", "", "", "");
@@ -248,11 +330,11 @@ public final class PhoneWidgetTest {
 
         PhoneWidgetLayout.Measurer moneyMetrics = (text, style) -> {
             PhoneWidgetLayout.Glyphs base = metrics(1).measure(text, style);
-            if (!text.startsWith("USD ")) return base;
+            if (!text.equals(capped.spent)) return base;
             int width = style == PhoneWidgetLayout.Style.PERCENT ? 180
                     : style == PhoneWidgetLayout.Style.CREDIT ? 150 : 110;
             return new PhoneWidgetLayout.Glyphs(0, base.top, width, base.bottom,
-                    base.lineTop, base.lineBottom, true);
+                    base.lineTop, base.lineBottom, base.supported);
         };
         for (int width : new int[] {260, 224, 223, 194, 193}) {
             PhoneWidgetLayout.Plan plan = PhoneWidgetLayout.fit(width, 184, 1,
@@ -263,7 +345,7 @@ public final class PhoneWidgetTest {
                         "A complete Money token that cannot fit at 26 retains honest NoFit.");
             } else {
                 PhoneWidgetLayout.TextRun value = plan.text.stream()
-                        .filter(run -> run.text.equals("USD 12.34")).findFirst().orElseThrow();
+                        .filter(run -> run.text.equals(capped.spent)).findFirst().orElseThrow();
                 check(value.style == (width >= 224 ? PhoneWidgetLayout.Style.PERCENT
                                 : PhoneWidgetLayout.Style.CREDIT),
                         "Release whole omitted columns before using only the approved 30/26 sizes.");
@@ -273,7 +355,7 @@ public final class PhoneWidgetTest {
         PhoneWidgetLayout.Plan fractional = PhoneWidgetLayout.fit(229, 184, 1.1f,
                 Collections.singletonList(capped), false, false, moneyMetrics,
                 PhoneWidgetLayout.MAX_BITMAP_BYTES, 0);
-        check(fractional.text.stream().anyMatch(run -> run.text.equals("USD 12.34")
+        check(fractional.text.stream().anyMatch(run -> run.text.equals(capped.spent)
                         && run.style == PhoneWidgetLayout.Style.CREDIT),
                 "Fractional-density padding uses the same rounded components as actual layout.");
         checkBounds(fractional);

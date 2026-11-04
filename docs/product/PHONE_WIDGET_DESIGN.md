@@ -48,7 +48,7 @@ and sign. Release omitted detail and label widths; never retain an invisible col
 refuse at 84. Omit a genuinely crowded allowance reset before its balance, then whole
 right details and label columns. Drop trailing rows only for actual height or bitmap-budget
 pressure; never hide a width-unfit Money row that way. No 18 primary, ellipsis, clipping,
-unqualified currency symbol, forced rounding or system-font substitution is allowed.
+inferred currency, width-dependent rounding or system-font substitution is allowed.
 
 ## Metric rules and optional reset
 
@@ -69,12 +69,31 @@ unchanged. Claude/Codex windows stay expanded and widget slots have no watch ban
 | Usable cap but no usable reported percentage | Known Money, actual cap and Percentage unavailable |
 | Missing spend, even with a cap | Dash / Unavailable; no invented percent |
 
-Money uses integer minor units, reported currency code and cents, including negative values
-and the signed integer boundary. Introduce no new compaction policy. Quantity fields keep
-reported value/unit strings. Claude Extra usage retains independent used and applicable-cap
-amounts in one right-hand line; either known amount survives the other's absence. Its
-reported valid percentage remains eligible with no amount cap. Missing/invalid allowance
-percentages remain unavailable and omitted; zero and exhausted percentages remain visible.
+**Money tokens — 2026-11-04 revision.** Visible spent, cap and self-contained primary/fallback
+amounts map exact `USD` to `$` and `EUR` to `€`. Every other reported code retains its
+separating space, including `CAD` and `AUD`; a negative sign precedes the currency prefix.
+Zero is unsigned. Absolute amounts below 1,000 major units keep exactly two decimal places,
+such as `$0.50` and `$999.99`. Larger amounts use the largest suffix eligible from the original
+absolute amount: `K`/`M`/`B`/`T` mean thousand/million/billion/trillion at
+10³/10⁶/10⁹/10¹² major units. Round the coefficient to one decimal, nearest with ties away
+from zero, using integer quotient/remainder; omit `.0`. Rounded `1000` below `T` promotes
+once to `1` of the next suffix: `$999.9K` immediately below 999,950 major units becomes `$1M`
+at that boundary. At `T`, retain the full rounded coefficient, including `1000T` and larger;
+there is no further suffix or truncation. Apply the same magnitude rules to negatives.
+Tokens depend only on value, never available width. This narrowly supersedes the former
+no-compaction rule; all existing validation and exact integer minor-unit inputs remain.
+
+Dashboard values and accessible spent, cap and Money-primary descriptions retain the full
+reported ISO code and exact cents, including signed-boundary and larger cached integers.
+Compact strings never determine cap compatibility, percentages or alerts. Only U+20AC is
+added to the existing glyph gate, consuming the existing both-font `$`/`€` qualification;
+other unsupported glyphs and controls remain rejected without system-font fallback.
+
+Quantity fields keep reported value/unit strings. Claude Extra usage retains independent
+used and applicable-cap amounts in one right-hand line; either known amount survives the
+other's absence. Its reported valid percentage remains eligible with no amount cap.
+Missing/invalid allowance percentages remain unavailable and omitted; zero and exhausted
+percentages remain visible.
 
 On plan rows, preserve existing finite purchased-credit balance eligibility and compact
 formatting. These are credits left, distinct from Extra Credits used/cap and budget spend.
@@ -109,8 +128,9 @@ unknown budget rows retain Unavailable meaning, never a percent suffix.
 
 The root accessibility summary describes only visible values, details and real resets,
 preserves full metric identity when labels disappear, and distinguishes spent, remaining,
-Extra used and cap quantities. Exact Money stays behind any already-qualified compact
-representation. Decorative children stay excluded. The full root opens Dashboard through
+Extra used and cap quantities. Money descriptions retain full ISO/cents for the visible
+primary and spent/cap details, omitting hidden details even when their values are known.
+Decorative children stay excluded. The full root opens Dashboard through
 the existing cold/warm readiness path; snapshot publication and coalescing are unchanged.
 
 ## Review art, documentation and historical evidence

@@ -61,7 +61,7 @@ public final class PhoneWidgetLayout {
 
     public static final class Row {
         public final String identity, family, pool, percent, credits, reset;
-        public final String spent, detail, lower, detailDescription, lowerDescription;
+        public final String spent, spentDescription, detail, lower, detailDescription, lowerDescription;
         public final boolean budget;
         public final Style detailStyle;
         public final int color;
@@ -81,6 +81,7 @@ public final class PhoneWidgetLayout {
             this.pool = pool;
             this.budget = kind.equals("budget");
             this.spent = moneyText(spentMinor, spentCurrency);
+            this.spentDescription = formatMoney(spentMinor, spentCurrency, false);
             String cap = moneyText(capMinor, capCurrency);
             boolean capPresent = !capMinor.isEmpty() || !capCurrency.isEmpty();
             boolean usableCap = !cap.isEmpty() && spentCurrency.equals(capCurrency)
@@ -96,11 +97,14 @@ public final class PhoneWidgetLayout {
             detailStyle = budget || extra ? Style.FAMILY : Style.CREDIT;
             if (budget) {
                 detail = this.percent.isEmpty() ? "" : spent;
-                detailDescription = detail.isEmpty() ? "" : detail + " spent";
+                detailDescription = detail.isEmpty() ? "" : spentDescription + " spent";
                 lower = spent.isEmpty() ? "Unavailable"
                         : !capPresent ? "No cap" : !usableCap ? "Cap unavailable"
                         : "Cap " + cap + (this.percent.isEmpty() ? " · Percentage unavailable" : "");
-                lowerDescription = lower;
+                lowerDescription = usableCap && !spent.isEmpty()
+                        ? "Cap " + formatMoney(capMinor, capCurrency, false)
+                                + (this.percent.isEmpty() ? " · Percentage unavailable" : "")
+                        : lower;
             } else {
                 if (extra) {
                     detail = usedUnit.equals(capUnit) && !used.isEmpty() && !extraCap.isEmpty()
@@ -160,13 +164,43 @@ public final class PhoneWidgetLayout {
 
     /** Integer minor units are never routed through floating point. */
     public static String moneyText(String minor, String currency) {
+        return formatMoney(minor, currency, true);
+    }
+
+    private static String formatMoney(String minor, String currency, boolean compact) {
         if (minor.length() > 64 || !minor.matches("-?[0-9]+")
                 || !currency.matches("[A-Za-z]{3}")) return "";
         BigInteger amount = new BigInteger(minor);
-        BigInteger[] parts = amount.abs().divideAndRemainder(BigInteger.valueOf(100));
-        String cents = parts[1].toString();
-        return (amount.signum() < 0 ? "-" : "") + currency + " " + parts[0]
-                + "." + (cents.length() == 1 ? "0" : "") + cents;
+        BigInteger magnitude = amount.abs();
+        String prefix = (amount.signum() < 0 ? "-" : "")
+                + (compact && currency.equals("USD") ? "$"
+                        : compact && currency.equals("EUR") ? "€" : currency + " ");
+        BigInteger unit = BigInteger.valueOf(100_000);
+        if (!compact || magnitude.compareTo(unit) < 0) {
+            BigInteger[] parts = magnitude.divideAndRemainder(BigInteger.valueOf(100));
+            String cents = parts[1].toString();
+            return prefix + parts[0] + "." + (cents.length() == 1 ? "0" : "") + cents;
+        }
+        String suffixes = "KMBT";
+        BigInteger thousand = BigInteger.valueOf(1000);
+        int suffix = 0;
+        while (suffix < suffixes.length() - 1
+                && magnitude.compareTo(unit.multiply(thousand)) >= 0) {
+            unit = unit.multiply(thousand);
+            suffix++;
+        }
+        BigInteger[] parts = magnitude.multiply(BigInteger.TEN).divideAndRemainder(unit);
+        BigInteger tenths = parts[0];
+        if (parts[1].multiply(BigInteger.valueOf(2)).compareTo(unit) >= 0) {
+            tenths = tenths.add(BigInteger.ONE);
+        }
+        if (suffix < suffixes.length() - 1 && tenths.equals(BigInteger.valueOf(10_000))) {
+            return prefix + "1" + suffixes.charAt(suffix + 1);
+        }
+        BigInteger[] coefficient = tenths.divideAndRemainder(BigInteger.TEN);
+        return prefix + coefficient[0]
+                + (coefficient[1].signum() == 0 ? "" : "." + coefficient[1])
+                + suffixes.charAt(suffix);
     }
 
     private static String quantityText(String value, String unit) {
@@ -334,7 +368,8 @@ public final class PhoneWidgetLayout {
         for (int i = 0; i < text.length(); i++) {
             char value = text.charAt(i);
             if ((value < 0x20 || value > 0x7e) && value != '\u00b7'
-                    && value != '\u2013' && value != '\u2014' && value != '\u2019') return false;
+                    && value != '\u2013' && value != '\u2014' && value != '\u2019'
+                    && value != '\u20ac') return false;
         }
         return true;
     }
@@ -351,7 +386,7 @@ public final class PhoneWidgetLayout {
     public static String rowDescription(VisibleRow visible) {
         Row row = visible.row;
         String value = row.budget && !visible.primary.equals(row.percent)
-                ? row.spent.isEmpty() ? "Unavailable" : row.spent + " spent"
+                ? row.spent.isEmpty() ? "Unavailable" : row.spentDescription + " spent"
                 : visible.primary + " remaining";
         String result = rowDescription(row.identity, value, row.detailDescription, visible.credits);
         return visible.lower ? result + ", " + row.lowerDescription : result;

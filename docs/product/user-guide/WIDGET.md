@@ -39,8 +39,19 @@ cap. Known zero is valid; missing spend is unavailable. Saved unavailable choice
 be removed. With a usable same-currency cap and reported percentage, the row shows percent
 left and actual spent/cap details. Without a cap it shows the amount and **No cap**. A present
 unusable cap shows **Cap unavailable**; a usable cap without a percentage shows
-**Percentage unavailable**. Amounts keep their reported currency and cents. Missing spend
-shows a dash and **Unavailable**, rather than an invented number.
+**Percentage unavailable**. Missing spend shows a dash and **Unavailable**, rather than an
+invented number.
+
+Expense amounts use `$` for USD and `€` for EUR; other currencies keep their reported code,
+such as `CAD 0.50` or `AUD 0.50`. Negative signs come before the currency, as in `-$0.50`.
+Amounts below 1,000 in absolute value keep exactly two decimal places. Larger amounts use
+the largest applicable `K`, `M`, `B` or `T` suffix for thousands, millions, billions or
+trillions. They round to one decimal, with halfway values rounded away from zero, and omit
+`.0`: for example, `$1K` and `$1.2M`. A rounded `1000` moves once to `1` of the next suffix,
+so `$999.9K` immediately below 999,950 becomes `$1M` at that boundary. `T` is the largest
+suffix and keeps its full rounded number, including `1000T` and larger. Negative amounts
+follow the same rules; zero has no minus sign. Formatting stays the same at every widget
+width. Dashboard and accessibility descriptions retain the full currency code and exact cents.
 
 **Next widget payload** distinguishes an empty choice, no available default metrics and
 saved choices without current results. It describes the configured/current payload; your
