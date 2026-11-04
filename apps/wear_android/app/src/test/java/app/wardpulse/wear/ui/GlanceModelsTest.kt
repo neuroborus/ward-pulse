@@ -145,7 +145,7 @@ class GlanceModelsTest {
         assertEquals(3, rows.size)
         assertEquals("Codex plan · Weekly", rows[0].title)
         assertEquals("8% left · 320 credits", rows[0].subtitle)
-        assertEquals("Cursor plan", rows[1].title)
+        assertEquals("Cursor / Others", rows[1].title)
         assertEquals("24% · 0% left", rows[1].subtitle)
         assertEquals(0f, requireNotNull(rows[1].secondaryArc).remainingFraction)
         assertEquals(listOf(6 until 8), rows[1].exhaustedPercentRanges)
@@ -161,13 +161,39 @@ class GlanceModelsTest {
                 allowances = listOf(cursorCredits()),
             ),
         ).single()
-        assertEquals("Cursor plan", row.title)
+        assertEquals("Cursor / Others", row.title)
         assertEquals("82% · 41% left · 320 credits", row.subtitle)
         assertEquals(0.82f, row.remainingFraction, 0.0001f)
         assertEquals(RingFamily.CURSOR_OWN, row.colorArgb)
         val outer = requireNotNull(row.secondaryArc)
         assertEquals(0.41f, outer.remainingFraction, 0.0001f)
         assertEquals(RingFamily.CURSOR, outer.colorArgb)
+    }
+
+    @Test
+    fun legendRows_cursorPairTitleUsesExactIdsRegardlessOfLabels() {
+        val pair = cursorPair()
+        val renamed = pair.copy(
+            label = "Renamed inner pool",
+            split = requireNotNull(pair.split).copy(label = "Renamed outer pool"),
+        )
+        assertEquals("Cursor / Others", glanceLegendRows(baseSummary(rings = listOf(renamed))).single().title)
+    }
+
+    @Test
+    fun legendRows_cursorNonmatchesKeepLiteralFallbackTitles() {
+        val pair = cursorPair()
+        val outer = requireNotNull(pair.split)
+        for (other in listOf(
+            pair.copy(id = "allowance.cursor.cursor-plan-models-lookalike"),
+            pair.copy(split = outer.copy(id = "allowance.cursor.cursor-plan-other-lookalike")),
+            pair.copy(id = outer.id, label = outer.label, split = outer.copy(id = pair.id, label = pair.label)),
+            pair.copy(id = "allowance.cursor.plan"),
+        )) {
+            assertEquals("Cursor plan", glanceLegendRows(baseSummary(rings = listOf(other))).single().title)
+        }
+        val unrelated = pair.copy(id = "unrelated.models", split = outer.copy(id = "unrelated.other"))
+        assertEquals("Cursor Models plan", glanceLegendRows(baseSummary(rings = listOf(unrelated))).single().title)
     }
 
     @Test
@@ -182,7 +208,7 @@ class GlanceModelsTest {
             rings = listOf(cursorPair(), codex, single),
             allowances = listOf(credits),
         ))
-        assertEquals(listOf("Cursor plan", "Codex plan", "Claude plan · Sonnet weekly"), rows.map { it.title })
+        assertEquals(listOf("Cursor / Others", "Codex plan", "Claude plan · Sonnet weekly"), rows.map { it.title })
         assertEquals("82% · 41% left", rows[0].subtitle)
         assertEquals("82% · 41% left · 320 credits", rows[1].subtitle)
         assertEquals(RingFamily.CODEX, rows[1].colorArgb)
@@ -222,7 +248,7 @@ class GlanceModelsTest {
             val row = glanceLegendRows(
                 baseSummary(rings = listOf(cursorPair(innerUsed, outerUsed))),
             ).single()
-            assertEquals("Cursor plan", row.title)
+            assertEquals("Cursor / Others", row.title)
             assertEquals(subtitle, row.subtitle)
             assertEquals(RingFamily.CURSOR_OWN, row.colorArgb)
             assertEquals(RingFamily.CURSOR, requireNotNull(row.secondaryArc).colorArgb)
@@ -235,7 +261,7 @@ class GlanceModelsTest {
             val pair = cursorPair(innerUsed, outerUsed)
             val allowances = listOf(cursorCredits())
             val actual = glanceLegendRows(baseSummary(rings = listOf(pair), allowances = allowances))
-            assertEquals("Cursor plan", actual.single().title)
+            assertEquals("Cursor / Others", actual.single().title)
             assertEquals(RingFamily.CURSOR_OWN, actual.single().colorArgb)
             assertEquals(RingFamily.CURSOR, requireNotNull(actual.single().secondaryArc).colorArgb)
             assertEquals(
@@ -405,7 +431,7 @@ class GlanceModelsTest {
         assertEquals(
             listOf(
                 "Codex plan · Weekly",
-                "Cursor plan",
+                "Cursor / Others",
                 "Budget · Today",
             ),
             rows.map { it.title },

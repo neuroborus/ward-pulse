@@ -58,9 +58,9 @@
       stroke-width="5" />
     <circle cx="115.5" cy="363.5" r="17" fill="none" stroke="#67E8D4"
       stroke-width="5" />
-    <text x="147" y="329.8"
-      font-family="Noto Sans, sans-serif" font-size="40.5"
-      font-weight="700" fill="#F4FBF8">Cursor plan</text>
+    <text x="147" y="326.0"
+      font-family="Noto Sans, sans-serif" font-size="31.5"
+      font-weight="700" fill="#F4FBF8">Cursor / Others</text>
     <text x="147" y="381.0"
       font-family="Noto Sans, sans-serif" font-size="31.5"
       font-weight="700" fill="#8A968F">100% · 100% left</text>

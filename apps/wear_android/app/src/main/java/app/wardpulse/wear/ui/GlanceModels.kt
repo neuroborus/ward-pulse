@@ -87,6 +87,8 @@ fun glanceLegendRows(summary: WatchDashboardSummary): List<GlanceLegendRowModel>
                     title = when {
                         ring.id == "allowance.claude.plan" &&
                             split.id == "allowance.claude.claude-seven-day-fable" -> "Claude / Fable"
+                        ring.id == "allowance.cursor.cursor-plan-models" &&
+                            split.id == "allowance.cursor.cursor-plan-other" -> "Cursor / Others"
                         else -> "${glanceFamilyName(ring.id) ?: ring.label} plan"
                     },
                     subtitle = glanceSubtitle(

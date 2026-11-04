@@ -53,6 +53,8 @@ const FAMILY = {
 function rowTitle(row) {
   if (row.id === 'allowance.claude.plan' &&
       row.split?.id === 'allowance.claude.claude-seven-day-fable') return 'Claude / Fable'
+  if (row.id === 'allowance.cursor.cursor-plan-models' &&
+      row.split?.id === 'allowance.cursor.cursor-plan-other') return 'Cursor / Others'
   if (row.split) return `${row.family.name} plan`
   const family = row.family.name
   // Wear compares the first word, not a prefix, so `Cursorish` would still be named.
@@ -549,8 +551,8 @@ const fablePair = {
 }
 const liveCodex = { family: FAMILY.codex, metric: 'Weekly plan', used: 0.04, credits: '62.5K' }
 const liveCursor = {
-  family: FAMILY.cursorOwn, metric: 'Cursor Models', used: 0,
-  split: { family: FAMILY.cursor, metric: 'Other Models', used: 0.32 },
+  id: 'allowance.cursor.cursor-plan-models', family: FAMILY.cursorOwn, metric: 'Cursor Models', used: 0,
+  split: { id: 'allowance.cursor.cursor-plan-other', family: FAMILY.cursor, metric: 'Other Models', used: 0.32 },
 }
 const cursorInnerZero = { ...liveCursor, used: 1 }
 const cursorOuterZero = { ...liveCursor, split: { ...liveCursor.split, used: 1 } }
@@ -620,12 +622,13 @@ const variants = [
     refreshEnabled: true,
     rows: [
       {
+        id: 'allowance.cursor.cursor-plan-models',
         family: FAMILY.cursorOwn,
         metric: 'Cursor Models',
         used: 0.18,
         credits: '320',
         // Synthetic active pools exercise the paired row and its credits suffix.
-        split: { family: FAMILY.cursor, metric: 'Other Models', used: 0.59 },
+        split: { id: 'allowance.cursor.cursor-plan-other', family: FAMILY.cursor, metric: 'Other Models', used: 0.59 },
       },
     ],
     alerts: 0,
@@ -643,11 +646,13 @@ const variants = [
         // compact form the app renders it in, so the longest subtitle the rules
         // allow is on a board rather than only on a watch
         // (`WEAR_GLANCE_DESIGN.md`, revision 2026-10-11).
+        id: 'allowance.cursor.cursor-plan-models',
         family: FAMILY.cursorOwn,
         metric: 'Cursor Models',
         used: 0.0,
         credits: '62.5K',
         split: {
+          id: 'allowance.cursor.cursor-plan-other',
           family: FAMILY.cursor,
           metric: 'Other Models',
           used: 0.25,
@@ -682,8 +687,7 @@ const variants = [
         used: 0.4,
         credits: '80',
       },
-      // Cursor platform reports billing-cycle spend only, so a monthly budget
-      // is the one it can actually carry.
+      // Month is an illustrative Cursor platform budget period.
       { family: FAMILY.cursorPlatform, metric: 'Month', used: 0.55 },
     ],
     alerts: 0,

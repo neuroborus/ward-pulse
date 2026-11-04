@@ -45,7 +45,7 @@
       transform="rotate(-90 135.5 191.5)" />
     <text x="167" y="185.0"
       font-family="Noto Sans, sans-serif" font-size="27"
-      font-weight="700" fill="#F4FBF8">Cursor plan</text>
+      font-weight="700" fill="#F4FBF8">Cursor / Others</text>
     <text x="167" y="220.0"
       font-family="Noto Sans, sans-serif" font-size="23"
       font-weight="700" fill="#8A968F"><tspan fill="#FFB4AB">0%</tspan> · 68% left</text>

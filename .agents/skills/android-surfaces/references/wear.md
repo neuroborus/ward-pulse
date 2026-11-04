@@ -8,7 +8,9 @@ services and build work.
   text legend (not a face clone) — mini remaining arcs, tightest-first, per-provider credits.
   **2026-09-16 revision:** one row per band, at most three rows. A known pair has two
   mini-tracks with coloured arcs for positive values and inner-first percentages,
-  title = family + ` plan` (`Cursor plan`),
+  title = `Cursor / Others` only for exact inner `allowance.cursor.cursor-plan-models`
+  plus outer `allowance.cursor.cursor-plan-other`; other pairs keep family + ` plan`
+  (`Codex plan`), except the exact Claude/Fable pair below,
   subtitle = `82% · 41% left · 320 credits` (credits once, omitted when unavailable).
   **2026-11-01 Fable rendering:** exact inner `allowance.claude.plan` plus outer
   `allowance.claude.claude-seven-day-fable` titles the row `Claude / Fable`.

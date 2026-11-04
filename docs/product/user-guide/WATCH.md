@@ -18,7 +18,7 @@ sign in to providers on the watch. If the phone has data but the watch does not,
 
 **Glance** shows remaining capacity with provider labels, compact tracks, optional purchased
 credits and refresh status. A title such as **Claude plan · Weekly** names the plan and its
-selected window. Paired **Cursor plan**, **Codex plan** or **Claude / Fable** rows show two
+selected window. Paired **Cursor / Others**, **Codex plan** or **Claude / Fable** rows show two
 percentages, with the inner half first.
 Glance hides the clock to make room for larger labels. The clock remains on **Plan windows**,
 **Alerts**, the **Watch face** setup screen and the prompt shown before the first summary.

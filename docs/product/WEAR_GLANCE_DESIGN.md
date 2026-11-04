@@ -5,6 +5,17 @@
 watch-face baseline in [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md): this screen is a
 **text legend** for face ring colors, not a face clone.
 
+## Revision 2026-11-04 — exact Cursor pair title
+
+The selected pair title is **Cursor / Others** only for renderable inner
+`allowance.cursor.cursor-plan-models` and outer `allowance.cursor.cursor-plan-other`.
+Known exhausted halves still form the pair. An unavailable half keeps the actual known
+survivor's ordinary pool title; two unavailable halves produce no row. Labels, lookalike,
+reversed, retired or unrelated IDs do not confer this title. Other pair titles, arithmetic,
+credits, colors and measured fitting remain unchanged. The affected SVG/PNG boards are
+illustrative review art; updated-app title fit and normal selected-pair proof remain
+**Pending** for post-execution HOST verification. Earlier records retain their dated scope.
+
 ## Revision 2026-11-03 — exact-full mini-circle closure
 
 Only validated original `usedPercent == 0` gets a uniform closed family contour at 12,
@@ -682,10 +693,12 @@ Rules:
   At known exhaustion, keep only the existing grey track `#2E3632`, with no coloured arc.
   Positive fractions that round to `0%` keep their positive paint input and ordinary label
   colour, without a universal subpixel-visibility guarantee.
-- Primary line for a pair: **family name + ` plan`**, exactly `Cursor plan` for Cursor and
+- Primary line for the exact renderable Cursor Models/Other Models pair: **`Cursor / Others`**,
+  using the inner/outer IDs in the November 4 revision above. The exact Claude/Fable pair
+  keeps **`Claude / Fable`**. Other pairs keep **family name + ` plan`**, exactly
   `Codex plan` for Codex/Spark.
-  The phone uses the same rule for its band label; the payload carries pool labels, not a
-  separate band name. Ordinary recognized Claude windows use `Claude plan · 5h`,
+  The payload carries pool labels, not a separate band name.
+  Ordinary recognized Claude windows use `Claude plan · 5h`,
   `Claude plan · Weekly`, `Claude plan · Opus weekly` or `Claude plan · Sonnet weekly`;
   Codex main uses `Codex plan · 5h` / `Codex plan · Weekly`. Recognize the known legacy raw
   Codex `Weekly plan` as `Weekly` only in presentation. Other ordinary labels keep the existing
@@ -853,7 +866,9 @@ Wear only: `apps/wear_android/design/`. OpenPencil `.fig` inventory optional.
 text legend + mini remaining arcs (not a face clone)
 one row per band, at most three rows; band order matches the phone/face
 paired arcs and percentages: inner first, outer second; each retains its own colour
-paired title = family + " plan"; Cursor plan and Codex plan exactly
+exact renderable Cursor Models/Other Models pair, inner first: Cursor / Others
+exact renderable Claude/Fable pair, inner first: Claude / Fable
+other paired title = family + " plan"; Codex plan exactly
 paired subtitle = "82% · 41% left · 320 credits" (omit credits suffix when unavailable)
 legend target 27/23, bounded title 18–27 / subtitle 16–23 fitting; maximum centered width 360
 scaled 75-unit pitch; independently rounded 37/32 line reservations and complete rows; 39-unit arc floor

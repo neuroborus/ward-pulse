@@ -37,39 +37,42 @@
     <text x="225" y="104.0" text-anchor="middle"
       font-family="Noto Sans, sans-serif" font-size="11"
       font-weight="700" fill="#5C655E">Stale</text><defs><clipPath id="legendClip"><rect x="45" y="114" width="354" height="232"/></clipPath></defs><g clip-path="url(#legendClip)">
-    <circle cx="64.5" cy="-428" r="17" fill="none" stroke="#2E3632"
+    <circle cx="64.5" cy="-502" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
-    <circle cx="64.5" cy="-428" r="17" fill="none" stroke="#E8915A"
+    <circle cx="64.5" cy="-502" r="17" fill="none" stroke="#E8915A"
       stroke-width="5" />
-    <text x="96" y="-584.0"
+    <text x="96" y="-658.0"
       font-family="Noto Sans, sans-serif" font-size="54"
       font-weight="700" fill="#F4FBF8">Claude</text>
-    <text x="96" y="-510.0"
+    <text x="96" y="-584.0"
       font-family="Noto Sans, sans-serif" font-size="54"
       font-weight="700" fill="#F4FBF8">plan ·</text>
-    <text x="96" y="-436.0"
+    <text x="96" y="-510.0"
       font-family="Noto Sans, sans-serif" font-size="54"
       font-weight="700" fill="#F4FBF8">Sonnet</text>
-    <text x="96" y="-362.0"
+    <text x="96" y="-436.0"
       font-family="Noto Sans, sans-serif" font-size="54"
       font-weight="700" fill="#F4FBF8">weekly</text>
-    <text x="96" y="-293.0"
+    <text x="96" y="-367.0"
       font-family="Noto Sans, sans-serif" font-size="44"
       font-weight="700" fill="#8A968F">100% left</text>
-    <text x="96" y="-229.0"
+    <text x="96" y="-303.0"
       font-family="Noto Sans, sans-serif" font-size="44"
       font-weight="700" fill="#8A968F">999.9T credits</text>
-    <circle cx="64.5" cy="-71" r="17" fill="none" stroke="#2E3632"
+    <circle cx="64.5" cy="-108" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
-    <circle cx="64.5" cy="-71" r="17" fill="none" stroke="#7E93B8"
+    <circle cx="64.5" cy="-108" r="17" fill="none" stroke="#7E93B8"
       stroke-width="5" />
-    <circle cx="115.5" cy="-71" r="17" fill="none" stroke="#2E3632"
+    <circle cx="115.5" cy="-108" r="17" fill="none" stroke="#2E3632"
       stroke-width="5" />
-    <circle cx="115.5" cy="-71" r="17" fill="none" stroke="#67E8D4"
+    <circle cx="115.5" cy="-108" r="17" fill="none" stroke="#67E8D4"
       stroke-width="5" />
-    <text x="147" y="-153.0"
-      font-family="Noto Sans, sans-serif" font-size="42"
-      font-weight="700" fill="#F4FBF8">Cursor plan</text>
+    <text x="147" y="-222.0"
+      font-family="Noto Sans, sans-serif" font-size="54"
+      font-weight="700" fill="#F4FBF8">Cursor /</text>
+    <text x="147" y="-148.0"
+      font-family="Noto Sans, sans-serif" font-size="54"
+      font-weight="700" fill="#F4FBF8">Others</text>
     <text x="147" y="-82.0"
       font-family="Noto Sans, sans-serif" font-size="36"
       font-weight="700" fill="#8A968F">100%</text>
@@ -98,7 +101,7 @@
       font-weight="700" fill="#8A968F">100% left</text>
     <text x="147" y="324.0"
       font-family="Noto Sans, sans-serif" font-size="36"
-      font-weight="700" fill="#8A968F">999.9T credits</text></g><path d="M 402 291.741935483871 v 54.25806451612903" stroke="#8A968F" stroke-width="2"/>
+      font-weight="700" fill="#8A968F">999.9T credits</text></g><path d="M 402 295.5084427767355 v 50.49155722326454" stroke="#8A968F" stroke-width="2"/>
     <rect x="161.0" y="372" width="128.0"
       height="36" rx="18" fill="#171B18" stroke="#2A302C"
       stroke-width="1"
