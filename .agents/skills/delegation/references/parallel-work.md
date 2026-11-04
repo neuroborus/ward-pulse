@@ -53,7 +53,7 @@ actually exited where used, all known owned processes are retired and separate f
 state confirms idle ownership. Do not run new-candidate checks while its writer is active.
 This is the owning candidate's boundary, not a blanket prohibition on unrelated authorized
 read-only or device work with independent custody. Preserve the scoped retirement rules in
-Runner operation; do not turn an unrelated unreadable process into a global blocker.
+Runner operation; do not turn an unrelated unreadable process into a global blocker. For new sandboxed host tools within the guarded process-proof scope, start and qualify them before its baseline or defer launch until release. If an owned unreadable sandbox blocks custody, close only the owned tool normally and obtain fresh supported recovery; never bypass the guard or kill unrelated processes.
 
 ## Report the proof that actually exists
 
