@@ -131,7 +131,7 @@ Root verified that GitHub release `421214319` for `v0.1.0` was a draft with no p
 timestamp, deleted that exact draft and observed an empty release list. No `v0.1.0` tag
 existed. These observations do not establish Google Play upload or delivery history.
 
-To correct the incomplete initial notes, the verified unpublished ledger input was reset
+In that 2026-10-23 correction, the verified unpublished ledger input was reset
 to `0.0.0` and the incomplete changelog removed. A standard initial minor fragment supplied
 candidate coverage; the existing tooling patch retained its meaningful notes. Actual stock
 Changesets CLI 3.0.3 generated one complete `0.1.0` manifest/changelog and consumed both
@@ -148,6 +148,34 @@ allocated Push default code `3`; the
 advances only Push's default to `5`. These scoped changes do not perform a release cut/preparation.
 HOST read-only `just release-status` against final metadata remains Pending. Root/docs remain
 `0.0.0`; Cargo and Dart metadata are independent.
+
+On 2026-11-04, the Owner retained the unpublished initial `0.1.0` and selected complete
+coverage of `f7da9b3` through `24a682c`. The replacement restored the original Minor outcome
+text from `d525c89` and the exact tooling Patch from `46a2af2`, retained the five later Patch
+inputs with the reviewed Glance append, and added one consolidated Minor for the missing
+product outcomes and accepted Roadmap menu click. Final Docs/screenshots support those
+outcomes; workflow-only changes require no separate product note.
+
+With all eight standard product-only inputs ready, the ledger was temporarily reset to
+`0.0.0` and the incomplete generated changelog removed. Actual stock CLI 3.0.3 planning
+selected only `@wardpulse/app` at `0.1.0`; stock generation consumed all eight inputs and
+produced one complete entry. The existing workspace lock already matched, so no npm lock
+reconciliation was needed. All four native source files remained byte-identical, with
+versionNames `0.1.0` and phone/Wear/legacy/Push codes `3/4/2/5`. The native bridge was not
+used as the regeneration engine, and generated notes were not edited by hand.
+
+At this implementation checkpoint, required Native `git diff --check HEAD` and full
+`just check-docs` execution is reserved for dedicated FINALIZE; no result is claimed here.
+Mandatory post-DONE HOST acceptance, final readiness and same-target byte-identity evidence
+remain Pending under [HOST acceptance](#host-acceptance). Actual development-input status
+selected `0.2.0` before the ledger reset; that was not authority for a different release.
+After consumption, actual `just release-status` exited 1 with the stock changed-package/
+no-changeset error. That error is retained, not converted to an empty plan or a green status.
+Root's 2026-11-04 publication observation found draft `422333810`, no publication timestamp,
+no assets and no current tag ref; it does not establish never-published or Play history and
+does not authorize deleting the draft. Browser/audio evidence remains bounded to the
+accepted Roadmap menu cases, without new device, authentication or billing acceptance.
+
 Local preparation, generated notes, a tag alone or a draft do not prove publication. Verify
 actual publication records before correcting an initial candidate; preserve published
 notes, tags and delivered artifacts. Conflicting publication evidence requires stopping and

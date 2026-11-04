@@ -8,12 +8,17 @@ The [product release ledger](../../tools/release/README.md#product-ledger) is th
 `@wardpulse/app` workspace. Stock Changesets owns its version, generated changelog and
 consumed fragments. [Pending fragments](../../.changeset/README.md) must target only that
 product; root tooling and docs remain `0.0.0`, while Cargo and Dart metadata are independent.
-The complete stock-generated initial `0.1.0` entry covers the candidate and release tooling,
-with no pending normal fragment. The Owner explicitly selected this unpublished initial
-version; Root verified and removed the old unpublished GitHub draft. Local preparation,
-generated notes, tags alone and drafts do not prove publication or authorize a new release
-operation. Verify actual publication records before correcting unpublished notes, stop on
-conflicting evidence and preserve published history and delivered artifacts.
+The 2026-10-23 initial stock regeneration consumed the candidate and release-tooling inputs;
+Root's removal of the old unpublished GitHub draft belongs to that dated preparation.
+On 2026-11-04, replacement stock generation consumed all eight reconstructed product inputs
+into one complete initial `0.1.0` entry, with no pending normal fragment or native version
+transition. The [release owner](../../tools/release/README.md#initial-candidate) records the
+semantic range, generation and current publication limits. The Owner explicitly selected
+this unpublished initial version; no deletion of the currently observed draft is delegated.
+Local preparation, generated notes, tags alone and drafts do not prove publication or
+authorize a new release operation. Verify actual publication records before correcting
+unpublished notes, stop on conflicting evidence and preserve published history and delivered
+artifacts.
 
 Use the [prepare-release skill](../../.agents/skills/prepare-release/SKILL.md) to audit the
 actual repository-wide release range against pending fragments and generated notes. Inspect
@@ -24,9 +29,14 @@ mirrors a genuine transition with phone +2, next even Wear and independent legac
 A fully matching target changes nothing and preserves pending fragments. Partial generation
 or I/O requires reconciliation, not an automatic retry. The guarded integration allocation
 retains 0.1.0 with phone/Wear/legacy/Push 3/4/2/5; only Push's default advances 3→5.
-This scoped packaging change is not a release cut or release preparation. Native FINALIZE
-and later HOST qualification must verify final metadata with read-only `just release-status`;
-this allocation claims no check result.
+That scoped packaging change did not itself perform a release cut or release preparation.
+Its metadata/status qualification was recorded Pending; this reconstruction does not close
+the earlier artifact or integration acceptance records. For the 2026-11-04 notes-only
+reconstruction, Native FINALIZE requires exactly `git diff --check HEAD` and full
+`just check-docs`. These checks remain unexecuted at the implementation checkpoint.
+Mandatory post-DONE HOST qualification includes final readiness, same-target byte identity
+and actual `just release-status` output, retaining the stock error after fragment consumption;
+no HOST result is claimed here.
 
 The current 0.1.0 source versions are:
 
@@ -558,7 +568,7 @@ and guarded ordinary release APK builds produce these seven files for the curren
 | `WardPulse-0.1.0-WearOS.apk` | Direct Wear installer |
 | `wardpulse-legacy-0.1.0-code2.aab` | Legacy WFF Play upload bundle |
 | `WardPulse-0.1.0-WatchFace-WearOS5Plus.apk` | Separate Wear OS 5+ face installer |
-| `wardpulse-push-0.1.0-code2.apk` | Separate Push identity, embedded by the Wear producer |
+| `wardpulse-push-0.1.0-code5.apk` | Separate Push identity, embedded by the Wear producer |
 
 The three direct installers are signed with the **upload key**. This does not promise update
 compatibility with debug installs or Play-delivered installs, whose app-signing certificates
