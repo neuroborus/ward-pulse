@@ -10,7 +10,7 @@ permits one element tree per `Compare`/`Default`. A passing official validator o
 
 ## Map meaning before judging appearance
 
-Before invocation or measurement, build a compact expected/observed mapping for every selected metric or pair, accounting for missing items and unexpected rendered extras. Bind the exact selected fixture/input identity and recorded hash to the actual snapshot/summary, metric pairs/families and owning surface/palette. A filename, scenario or copied expected label is not an oracle; reconcile disagreement with recorded input metrics before choosing RGB/ROI or making claims. Include:
+Before invocation or measurement, build a compact expected/observed mapping for every selected metric or pair, accounting for missing items and unexpected rendered extras. Bind the exact selected fixture/input identity and recorded hash to the actual snapshot/summary, metric pairs/families and owning surface/palette. A filename, scenario or copied expected label is not an oracle; reconcile disagreement with recorded input metrics before choosing RGB/ROI or making claims. Before proposing a raw provider window for a documentation demo, verify actual catalog eligibility and the effective collapsed/pair projection; a snapshot value need not be selectable or displayed. Where collapse chooses the tightest window, make coherent preset data select the intended representative naturally, without relabeling or pixel/payload overrides. Include:
 
 - provider family and logical metric ID, selected window/pool and its paired mate;
 - family/half color, expected band/position and which side of a shared band it owns;
