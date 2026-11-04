@@ -229,10 +229,12 @@ the watch's edit/customize action for WardPulse and select an upper cell to choo
 complication provider. Exact controls and available providers vary with the watch's system.
 These cells are separate from the usage rings selected in the phone's Watchface tab.
 
-Choose compact text or a monochrome icon. Providers that offer only long text or photos are
-not offered. Extra titles and companion icons are not shown beside text, so units must be
-included in the provider's text. A range value without a short text label is not guaranteed
-to appear. If important meaning is missing, choose another provider.
+Choose compact text or a monochrome icon, shown in the face's text colour. Provider text takes
+priority; a range value without text falls back to its raw number, without guessed units or a
+percentage conversion. Extra titles and companion icons are not shown beside text, so units
+must be included in the provider's text. These small cells may shorten longer content to fit.
+Providers that offer only long text or photos are not offered. If important meaning is missing,
+choose another provider.
 
 In the same editor, **Temperature** offers **Auto**, **Celsius (°C)** and **Fahrenheit (°F)**.
 Auto is the default and keeps the watch's built-in weather unit. Celsius or Fahrenheit converts

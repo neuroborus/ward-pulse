@@ -420,20 +420,89 @@ def check_temperature(root):
                     or group.find("Variant") is not None or well.get("alpha", "255") != "255"
                     or well.find("Variant") is not None):
                 errors.append(f"slot {slot_id}/{kind}: provider well must remain opaque in every mode")
+            if kind == "MONOCHROMATIC_IMAGE":
+                label = f"cell{int(slot_id) - 200}"
+                icon = group.find(f"Group[@name='{label}Tint']") if group is not None else None
+                if icon is None:
+                    errors.append(f"slot {slot_id}: missing isolated monochrome composition")
+                    continue
+                children = element_children(group)
+                if (group.get("name") != f"{label}Icon" or len(children) != 3
+                        or children[0] is not well or children[-1] is not icon
+                        or not list(children[1].iter("Arc"))):
+                    errors.append(f"slot {slot_id}: monochrome well and border must stay outside the icon group")
+                for ancestor in (root, scene, slot, complication, group):
+                    if (any(attribute in ancestor.attrib for attribute in ("tintColor", "renderMode", "blendMode"))
+                            or ancestor.get("alpha", "255") != "255"
+                            or any(child.tag in ("Variant", "Transform") and child.get("target") in
+                                   ("alpha", "tintColor", "renderMode", "blendMode") for child in ancestor)):
+                        errors.append(f"slot {slot_id}: icon ancestors must not tint, mask or attenuate its composition")
+                bounds = {"x": "0", "y": "0", "width": "24", "height": "24"}
+                source = icon.find("PartDraw")
+                mask = icon.find("PartImage")
+                rectangle = source.find("Rectangle") if source is not None else None
+                color = rectangle.find("Fill") if rectangle is not None else None
+                image = mask.find("Image") if mask is not None else None
+                if any(node is None for node in (source, mask, rectangle, color, image)):
+                    errors.append(f"slot {slot_id}: monochrome source rectangle and live image mask are required")
+                    continue
+                if (icon.attrib != {"x": "14", "y": "14", "width": "24", "height": "24",
+                                    "name": f"{label}Tint", "alpha": "255"}
+                        or [child.tag for child in icon] != ["Variant", "PartDraw", "PartImage"]
+                        or [variant.attrib for variant in icon.iter("Variant")] !=
+                        [{"mode": "AMBIENT", "target": "alpha", "value": "140"}]
+                        or source.attrib != {**bounds, "alpha": "255", "renderMode": "SOURCE"}
+                        or [child.tag for child in source] != ["Rectangle"]
+                        or rectangle.attrib != bounds or [child.tag for child in rectangle] != ["Fill"]
+                        or color.attrib != {"color": "#fff4fbf8"} or len(color) != 0
+                        or mask.attrib != {**bounds, "alpha": "255", "renderMode": "MASK"}
+                        or [child.tag for child in mask] != ["Image"]
+                        or image.attrib != {"resource": "[COMPLICATION.MONOCHROMATIC_IMAGE]"}
+                        or len(image) != 0):
+                    errors.append(f"slot {slot_id}: preserve face-colored SOURCE before live MASK, bounds and one ambient alpha")
+                continue
             if kind not in ("SHORT_TEXT", "RANGED_VALUE"):
                 continue
             templates = complication.findall(".//Template")
-            if len(templates) != 3 or any(
+            expected_parameters = ["[COMPLICATION.TEXT]"] * 3
+            if kind == "RANGED_VALUE":
+                expected_parameters.append("[COMPLICATION.RANGED_VALUE_VALUE]")
+                condition = group.find("Condition") if group is not None else None
+                text = condition.find("Compare/Condition") if condition is not None else None
+                if (condition is None or [child.tag for child in condition] != ["Expressions", "Compare", "Default"]
+                        or [child.tag for child in condition.find("Expressions")] != ["Expression"]
+                        or condition.find("Expressions/Expression").attrib != {"name": "hasText"}
+                        or condition.findtext("Expressions/Expression") != "textLength([COMPLICATION.TEXT]) > 0"
+                        or condition.find("Compare").attrib != {"expression": "hasText"}
+                        or text is None or text.findall(".//Template") != templates[:3]
+                        or len(templates) != 4
+                        or condition.find("Default/PartText/Text/Font/Template") is not templates[-1]
+                        or len(element_children(group)) != 3):
+                    errors.append(f"slot {slot_id}: ranged cells must prefer nonempty TEXT over a direct numeric Default")
+            if len(templates) != len(expected_parameters) or any(
                 template.text.strip() != "%s" or len(template.findall("Parameter")) != 1
-                or template.find("Parameter").attrib != {"expression": "[COMPLICATION.TEXT]"}
-                for template in templates
+                or template.find("Parameter").attrib != {"expression": parameter}
+                for template, parameter in zip(templates, expected_parameters)
             ):
-                errors.append(f"slot {slot_id}/{kind}: provider text must remain verbatim")
+                errors.append(f"slot {slot_id}/{kind}: templates must retain verbatim TEXT and the ranged-only raw number")
             try:
                 for selection in ("auto", "celsius", "fahrenheit"):
                     if cell_readouts(complication, {"[COMPLICATION.TEXT]": "7°",
+                                                   "[COMPLICATION.RANGED_VALUE_VALUE]": 7,
                                                    "[CONFIGURATION.temperatureUnit]": selection}) != [("%s", "7°", 18)]:
                         errors.append(f"slot {slot_id}/{kind}: selected-provider degrees must remain untouched")
+                for text, size in (("0", 18), (" 7° ", 18), ("1234", 18),
+                                   ("12345", 14), ("123456", 14), ("1234567", 12)):
+                    if cell_readouts(complication, {"[COMPLICATION.TEXT]": text,
+                                                   "[COMPLICATION.RANGED_VALUE_VALUE]": 7}) != [("%s", text, size)]:
+                        errors.append(f"slot {slot_id}/{kind}: preserve provider TEXT {text!r} at size {size}")
+                if kind == "RANGED_VALUE":
+                    # Empty synthetic TEXT proves branch choice, not native null or Float formatting.
+                    for value in (0, 1.25, -0.5):
+                        actual = cell_readouts(complication, {"[COMPLICATION.TEXT]": "",
+                                                             "[COMPLICATION.RANGED_VALUE_VALUE]": value})
+                        if actual != [("%s", value, 18)] or any(type(item[1]) is not type(value) for item in actual):
+                            errors.append(f"slot {slot_id}: preserve raw numeric {value} at size 18")
             except (ValueError, SyntaxError, KeyError, TypeError, AttributeError) as error:
                 errors.append(f"slot {slot_id}/{kind}: could not evaluate emitted provider text: {error}")
     return errors

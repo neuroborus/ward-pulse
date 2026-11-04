@@ -740,21 +740,37 @@ function cellSlot({ slotId, x, y, label, provider: systemProvider, type }) {
   const pad = ' '.repeat(20)
   const well = (name) => `${cellWellFlat(COLOR.cellWell, pad)}
 ${cellRing({ x, y, name }, pad)}`
-  const body = (parameter, name) => `            <Group x="${x}" y="${y}" width="${CELL.size}" height="${CELL.size}" name="${label}">
+  const parameter = '[COMPLICATION.TEXT]'
+  const providerText = (pad) => cellSizedText('%s', parameter, pad,
+    `textLength(${parameter}) >= 5`, `textLength(${parameter}) >= 7`)
+  const ranged = `${pad}<Condition>
+${pad}    <Expressions>
+${pad}        <Expression name="hasText"><![CDATA[textLength(${parameter}) > 0]]></Expression>
+${pad}    </Expressions>
+${pad}    <Compare expression="hasText">
+${providerText(`${pad}        `)}
+${pad}    </Compare>
+${pad}    <Default>
+${cellText('%s', '[COMPLICATION.RANGED_VALUE_VALUE]', `${pad}        `)}
+${pad}    </Default>
+${pad}</Condition>`
+  const body = (reading, name) => `            <Group x="${x}" y="${y}" width="${CELL.size}" height="${CELL.size}" name="${label}">
 ${well(name)}
-${cellSizedText('%s', parameter, pad, `textLength(${parameter}) >= 5`, `textLength(${parameter}) >= 7`)}
+${reading}
             </Group>`
   const inset = (CELL.size - CELL.iconSize) / 2
-  // The tint goes on a group of its own, not on the slot: tinting the slot
-  // would take the well with it. It is the text colour rather than a family
-  // colour — on this face a family colour means *this ring's provider*, and a
-  // cell is not a ring — so an icon reads as face text rather than as a
-  // foreign mark.
+  // The live icon's alpha masks a face-coloured source inside its own group.
+  // Keep the well and border outside, and dim the composed icon only once.
   const icon = `            <Group x="${x}" y="${y}" width="${CELL.size}" height="${CELL.size}" name="${label}Icon">
 ${well(`${label}IconBorder`)}
-                <Group x="${inset}" y="${inset}" width="${CELL.iconSize}" height="${CELL.iconSize}" name="${label}Tint" tintColor="${COLOR.text}">
-                    <PartImage x="0" y="0" width="${CELL.iconSize}" height="${CELL.iconSize}" alpha="255">
-                        <Variant mode="AMBIENT" target="alpha" value="140" />
+                <Group x="${inset}" y="${inset}" width="${CELL.iconSize}" height="${CELL.iconSize}" name="${label}Tint" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="140" />
+                    <PartDraw x="0" y="0" width="${CELL.iconSize}" height="${CELL.iconSize}" alpha="255" renderMode="SOURCE">
+                        <Rectangle x="0" y="0" width="${CELL.iconSize}" height="${CELL.iconSize}">
+                            <Fill color="${COLOR.text}" />
+                        </Rectangle>
+                    </PartDraw>
+                    <PartImage x="0" y="0" width="${CELL.iconSize}" height="${CELL.iconSize}" alpha="255" renderMode="MASK">
                         <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
                     </PartImage>
                 </Group>
@@ -774,10 +790,10 @@ ${well(`${label}IconBorder`)}
                 defaultSystemProviderType="${type}" />
             <BoundingBox x="${x}" y="${y}" width="${CELL.size}" height="${CELL.size}" />
             <Complication type="SHORT_TEXT">
-${body('[COMPLICATION.TEXT]', `${label}TextBorder`)}
+${body(providerText(pad), `${label}TextBorder`)}
             </Complication>
             <Complication type="RANGED_VALUE">
-${body('[COMPLICATION.TEXT]', `${label}RangedBorder`)}
+${body(ranged, `${label}RangedBorder`)}
             </Complication>
             <Complication type="MONOCHROMATIC_IMAGE">
 ${icon}

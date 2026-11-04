@@ -1876,19 +1876,28 @@ called this band the "upper aperture"; it is the same band.
 
 8. **The other accepted types, and the two that are refused.** `MONOCHROMATIC_IMAGE` is the one
    type whose whole content is an icon. It is drawn at **24 units in the 52-unit cell** and
-   tinted `#fff4fbf8`, the same colour as the text, so an icon reads as face text rather than as
+   rendered in `#fff4fbf8`, the same colour as the text, so an icon reads as face text rather than as
    a foreign mark; half the diameter leaves the well's rim clear on a round recess. The
-   integer inset **14** centres both axes exactly. The tint goes on a group of its own
-   rather than on the slot, since tinting the slot would take the well with it. It is
-   deliberately not tinted a family colour: on this face a family colour means *this ring's
+   integer inset **14** centres both axes exactly. Inside the existing icon-only Group, a
+   full local face-coloured Rectangle is drawn as `SOURCE` before the live icon is drawn as
+   `MASK`. This WFF2 composition selects face RGB through the image's alpha; the well and
+   border stay outside it. The Group alone dims the composed icon from alpha 255 to **140**
+   in ambient; its source and mask have no tint or extra attenuation. The icon deliberately
+   does not use a family colour: on this face a family colour means *this ring's
    provider*, and a cell is not a ring. `RANGED_VALUE` is drawn as **text, never as an arc** —
-   `TEXT` when the provider sends it; the intended fallback is the value itself otherwise.
-   A small arc in a cell would
+   nonempty provider `TEXT` wins verbatim, including `0` and whitespace, at the existing
+   **18/14/12 Bold** sizes selected by lengths **5/7**. Otherwise an explicit Default sends
+   the raw `RANGED_VALUE_VALUE` directly to a `%s` Template at **18**, without measuring the
+   number's length, rounding, normalizing against min/max or inventing units or percentages.
+   Zero, fractions and signs retain their meaning; `4` versus `4.0` is not a cosmetic rule.
+   Both paths retain the centred **46×24** ellipsis box and ambient alpha **140**, inside one
+   occupied Group with its existing opaque well and border. Neither path adds `TITLE` or a
+   companion icon. A small arc in a cell would
    put a second arc language on a face whose arcs already mean one thing, layer rule 1's *one
    ring = one metric of one connection*, and it would say it a few units from the real ones —
    rule 1 records the clearances of every cell's far edge from the innermost band.
-   The ramp colour goes unused for the same reason the icon tint does. What a provider that
-   sends no `TEXT` renders is declared here, not measured.
+   The ramp colour goes unused for the same reason family colouring does. Native null-TEXT
+   branch selection and monochrome paint for the repaired bytes remain Pending, as below.
 
    `SMALL_IMAGE` and `LONG_TEXT` are left out of `supportedTypes` on purpose, which is what
    keeps the system editor from offering a provider that supplies only one of them.
@@ -1896,6 +1905,33 @@ called this band the "upper aperture"; it is the same band.
    tint for it — a foreign colour image in a 52-unit circle, on a face whose whole palette is
    family colours over near-black, reads as a sticker on the glass. `LONG_TEXT` is sized for a
    slot several times this one and has no reading at four glyphs (rule 6).
+
+   **Correction 2026-11-04 — explicit ranged fallback and monochrome composition.** On the
+   canonical 384×384 round API36 emulator, the old Legacy 688 renderer at instance `wfId-15`
+   showed a blank reading for valid `RANGED_VALUE` data with `TEXT=null`, min 0 and max 10
+   in canonical slot 201 (native slot 16, controller 98; original `25c60e…`). The runtime
+   numeric value was **REDACTED**: the fixed `4` in the QA source and successful stock
+   wire/Parcel test are separate provenance, not a runtime numeric readback. A valid
+   single-hue magenta `MONOCHROMATIC_IMAGE` remained magenta despite the old Group tint
+   (original `d80c95…`), including the recorded true-AMBIENT/settled-return observation
+   `6cc6…`. Correct shape and fit did not establish recolouring. These were renderer
+   failures with valid inputs, not `EMPTY` data or a reason to recolour the producer.
+
+   The Source repair in `cellSlot` of `tools/render-watchface.mjs` now chooses nonempty
+   provider TEXT explicitly, with a direct raw-number Default, and replaces icon tint with
+   the local WFF2 `SOURCE`/`MASK` composition described above. The existing `cell_readouts`
+   and `check_temperature` assertions in `tools/check-watchface-structure.py` cover synthetic
+   empty TEXT, numeric zero/fraction/sign, verbatim provider text and the isolated icon tree.
+   They do not emulate WFF null coercion, Float spelling, localization or native paint.
+
+   Acceptance of the repaired bytes remains **Pending**: matched built, installed and active
+   Legacy/Push artifacts must exercise actual null-TEXT ranged data and a present-TEXT control,
+   plus the legal magenta icon's face-coloured ink, antialiased silhouette, fit and transparent
+   exterior in interactive, true ambient and settled return. Exact original choices and normal
+   state must be restored. The old probe's Day/default overrides, all eight slots, favourite,
+   instance, package, OS and bridge state were restored; that recovery is not acceptance of
+   this repair. Physical devices remain outside this bounded emulator evidence. The dated
+   audits below retain what was and was not observed at those earlier revisions.
 
    **Scoped compatibility audit, 2026-11-01.** Current `cellSlot` in
    `tools/render-watchface.mjs` reads only `[COMPLICATION.TEXT]` for `SHORT_TEXT` and
