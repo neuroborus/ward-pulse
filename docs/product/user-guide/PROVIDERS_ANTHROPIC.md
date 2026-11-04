@@ -111,7 +111,8 @@ Credits, distinct from purchased credits left. See [Dashboard](/guide/dashboard#
 
 ## Reconnect, change or remove a connection
 
-If your Claude plan sign-in expires, use **Reconnect** to sign in again. An Organization
+If your Claude plan sign-in expires, open **Providers → Anthropic → Claude plan** and
+sign in again. If it is still shown as connected, use **Reconnect**. An Organization
 reporting key cannot renew a Claude plan sign-in.
 
 Use **Reconnect** or **Disconnect** for Claude plan. For Organization reporting, replace

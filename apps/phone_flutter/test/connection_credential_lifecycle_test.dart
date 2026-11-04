@@ -570,22 +570,20 @@ void main() {
       var tokenRequests = 0;
       var usageRequests = 0;
       String? tokenBody;
-      final a = _runtime(
-        'claude',
-        secure,
-        bridge.platform('A'),
-        now,
-        (uri, headers, body) async {
-          if (!entered.isCompleted) entered.complete();
-          if (uri.path.endsWith('/token')) {
-            tokenRequests++;
-            tokenBody = body;
-            return release.future;
-          }
-          usageRequests++;
-          return _usageResponse(uri);
-        },
-      );
+      final a = _runtime('claude', secure, bridge.platform('A'), now, (
+        uri,
+        headers,
+        body,
+      ) async {
+        if (!entered.isCompleted) entered.complete();
+        if (uri.path.endsWith('/token')) {
+          tokenRequests++;
+          tokenBody = body;
+          return release.future;
+        }
+        usageRequests++;
+        return _usageResponse(uri);
+      });
       await a.write('fake-old-account', 'old', expired: true);
       final loading = a.fetch();
       final failed = expectLater(
@@ -605,15 +603,13 @@ void main() {
         ),
       );
       await entered.future;
-      final b = _runtime(
-        'claude',
-        secure,
-        bridge.platform('B'),
-        now,
-        (uri, headers, body) async {
-          fail('Unexpected request from the newer login');
-        },
-      );
+      final b = _runtime('claude', secure, bridge.platform('B'), now, (
+        uri,
+        headers,
+        body,
+      ) async {
+        fail('Unexpected request from the newer login');
+      });
       late final CredentialVersion newerVersion;
       try {
         await b.write('fake-new-account', 'new');

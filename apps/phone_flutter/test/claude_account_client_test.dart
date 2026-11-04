@@ -269,7 +269,10 @@ void main() {
       final transport = _QueueTransport([
         ClaudeHttpResponse(statusCode: 400, body: rejection.value),
       ]);
-      final client = ClaudeAccountClient(transport: transport, clock: () => now);
+      final client = ClaudeAccountClient(
+        transport: transport,
+        clock: () => now,
+      );
 
       await expectLater(
         client.refresh(
