@@ -431,7 +431,7 @@ not cancellation of delivery Futures or proof that teardown ran.
 | Case elapsed time | Required checkpoint |
 | --- | --- |
 | 0–60 seconds | Launch/attach and clear20 baseline; arm alert capture before GRANTED READY Continue publishes 90. |
-| By 210 seconds | First 150-second witness allocation finished; ALERT POSTED Continue publishes nonposting100 and recovery preparation is complete. |
+| By 210 seconds | First 150-second witness allocation finished; ALERT POSTED Continue validates and retires the alert before nonposting100, and recovery preparation is complete. |
 | By 360 seconds | Second 150-second witness allocation finished; RECOVERY READY Continue publishes 20 and final-phase entry is complete. |
 | By 420 seconds | RECOVERY POSTED observations, Continue and final assertions complete. |
 | By 480 seconds | Protected final 120-second phase ends after awaited cleanup and report; its last 60 seconds are reserved for cleanup/report. |
@@ -447,14 +447,21 @@ witness is missed, stop progression; never publish a later post to repair its ev
 The four manual barriers are GRANTED READY, ALERT POSTED, RECOVERY READY and RECOVERY POSTED.
 At the first, retain the settled clear20 and unused alert/recovery identities, then arm the
 alert capture. At ALERT POSTED, retain the real alert UID/channel/tag/ID/time and original
-shade frame plus sound evidence before Continue publishes 100. The consumed crossing must
-prevent a second alert while Rust remembers the exhausted window. The already-owned alert
-remains visible: vacancy applies to the **next intended post**, not that retained alert.
-At RECOVERY READY, arm the separate recovery capture before Continue publishes 20. At
-RECOVERY POSTED, retain the recovery witness and both distinct real identities/original shade
-frames before Continue permits final assertions and teardown. Join both sound observations
+shade frame plus completed independent sound witness before Continue validates the matching
+owned alert, awaits its cancellation and proves absence, then publishes nonposting100.
+Retirement preserves the consumed crossing and empty window memory; Rust 100 then remembers
+the exhausted window without a second alert. Preserve unrelated, changed/replaced and summary
+posts; unknown ownership or unproved removal fails the case.
+At RECOVERY READY, require the earlier alert absent and recovery identity unused, then arm
+the separate recovery capture before Continue publishes 20. Publication and recovery dispatch
+recheck both identities. At RECOVERY POSTED, retain the recovery witness and its real
+identity/time/original shade frame alongside the earlier historical alert evidence before
+Continue permits recovery-only final assertions and teardown. Join both sound observations
 to the original WAV SHA-256 `c056547acf175ddc7e46c0e35fdb586f8737dc83e533e5391de6e366885f9306`.
 Packaging, sound URIs, route readiness, plugin Futures and reports alone never establish sound.
+Other preserved posts or platform policy may still suppress playback: retain actual per-key
+reasons and each separate audio witness. This SDK isolation neither changes nor certifies
+ordinary production coexistence behavior.
 
 The case inspects grant and both channel policies before readiness, preserves real readiness,
 uses handled case-memory permission attempts and a forwarding real Android observer, and

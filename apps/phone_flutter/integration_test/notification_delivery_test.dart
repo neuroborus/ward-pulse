@@ -532,7 +532,7 @@ void _grantedSound(IntegrationTestWidgetsFlutterBinding binding) {
           expect(
             active.where(isAlert),
             isEmpty,
-            reason: 'The next alert identity must be unused.',
+            reason: 'The case alert identity must be absent.',
           );
         }
         if (recovery) {
@@ -546,14 +546,11 @@ void _grantedSound(IntegrationTestWidgetsFlutterBinding binding) {
 
       Future<void> visible({required bool recovery}) async {
         final active = await plugin.getActiveNotifications();
+        expect(active.where((n) => isAlert(n) || isRecovery(n)), hasLength(1));
         expect(
-          active.where((n) => isAlert(n) || isRecovery(n)),
-          hasLength(recovery ? 2 : 1),
+          hasOwnedCopy(active.singleWhere(recovery ? isRecovery : isAlert)),
+          isTrue,
         );
-        expect(hasOwnedCopy(active.singleWhere(isAlert)), isTrue);
-        if (recovery) {
-          expect(hasOwnedCopy(active.singleWhere(isRecovery)), isTrue);
-        }
         await unchangedPolicy();
       }
 
@@ -607,10 +604,8 @@ void _grantedSound(IntegrationTestWidgetsFlutterBinding binding) {
       Future<void> publish(double used, Duration cutoff) async {
         before(cutoff, 'Prepare $used');
         await unchangedPolicy();
-        // 100 consumes no new crossing: the case-owned alert remains visible.
-        // Vacancy belongs only to the next intended post.
-        if (used == 90) await vacant(alert: true);
-        if (used == 20) await vacant(recovery: true);
+        // The retired alert must stay absent through 100 and recovery.
+        await vacant(alert: true, recovery: used != 90);
         final refresh =
             tester
                 .widget<SettingsScreen>(find.byType(SettingsScreen))
@@ -681,7 +676,7 @@ void _grantedSound(IntegrationTestWidgetsFlutterBinding binding) {
           throw StateError('No intended publication deadline.');
         before(cutoff, 'Adapter publication');
         await unchangedPolicy();
-        await vacant(alert: alert, recovery: !alert);
+        await vacant(alert: true, recovery: !alert);
         before(cutoff, 'Adapter publication');
         // A guard failure must not claim an identity it never dispatched.
         // A subsequent lost plugin reply still requires OS reconciliation.
@@ -809,23 +804,29 @@ void _grantedSound(IntegrationTestWidgetsFlutterBinding binding) {
         await barrier(
           'ALERT POSTED',
           'Retain the alert sound, actual OS post/time and original shade evidence. '
-              'Continue publishes 100 without a second alert.',
+              'Continue validates and retires the alert before publishing 100 '
+              'without a second alert.',
           recoveryReadyBy,
         );
         await visible(recovery: false);
         counts(1, 0);
+        await removeOwned();
+        counts(1, 0);
+        expect(markers.values[key], isTrue);
+        expect(memory.keys, isEmpty);
+        await unchangedPolicy();
         await publish(100, recoveryReadyBy);
         counts(1, 0);
         expect(markers.values[key], isTrue);
         expect(memory.keys, exhaustedWindows(_source(100)));
         expect(memory.keys, isNotEmpty);
-        await visible(recovery: false);
-        await vacant(recovery: true);
+        await vacant(alert: true, recovery: true);
+        await unchangedPolicy();
         before(recoveryReadyBy, 'Recovery preparation');
         stages.add('ALERT POSTED');
         await barrier(
           'RECOVERY READY',
-          'Exhausted 100 is remembered; the first alert remains owned. '
+          'Exhausted 100 is remembered; the earlier alert is absent. '
               'Arm the separate isolated recovery capture before Continue publishes 20; '
               'retain the capture start time.',
           finalEntryBy,
@@ -842,8 +843,9 @@ void _grantedSound(IntegrationTestWidgetsFlutterBinding binding) {
         stages.add('RECOVERY READY');
         await barrier(
           'RECOVERY POSTED',
-          'Retain recovery sound, both distinct OS identities/times and original '
-              'shade evidence. Continue finishes observations and starts owned teardown.',
+          'Retain recovery sound, actual OS identity/time and original shade evidence '
+              'alongside the earlier alert evidence. Continue finishes observations '
+              'and starts owned teardown.',
           observationsBy,
         );
         counts(1, 1);
