@@ -92,7 +92,8 @@ const REVIEW_ROWS = [
   { family: 'Cursor', pool: 'Models', percent: '100%', color: FAMILY.cursorOwn,
     reset: 'Reset 18 Nov 18:52' },
   { family: 'OpenAI', pool: 'Today', percent: '100%', color: FAMILY.codex,
-    spent: 'USD 12.34', cap: 'Cap USD 10000.00' },
+    spent: 'USD 12.34', cap: 'Cap USD 10000.00',
+    spentDisplay: '$12.34', capDisplay: 'Cap $10K' },
 ]
 
 const light = await loadTheme('values')
@@ -172,12 +173,12 @@ for frame in config['variants']:
     rows = config['rows'][:frame['rows']]
     measured = []
     for row in rows:
-        detail, lower = row.get('spent', row.get('credits')), row.get('cap', row.get('reset'))
+        detail, lower = row.get('spentDisplay', row.get('credits')), row.get('capDisplay', row.get('reset'))
         measured.append({
             'percent': glyph(row['percent'], 30, 'bold', theme['onSurface']),
             'family': glyph(row['family'], 18, 'bold', theme['onSurface']),
             'pool': glyph(row['pool'], 16, 'regular', theme['muted']),
-            'detail': glyph(detail, 18 if row.get('spent') else 26, 'bold', theme['onSurface']) if detail else None,
+            'detail': glyph(detail, 26, 'bold', theme['onSurface']) if detail else None,
             'lower': glyph(lower, 11, 'regular', theme['muted']) if lower else None})
     columns = frame['columns']
     row_height, row_gap, header, bottom = 44, 8, 19, 16

@@ -30,10 +30,19 @@ The mark stays anchored to the card with nominal 36×15 ink, top 2 and end margi
 | Money fallback only after released-width 30 cannot fit | 26 Bold 700 |
 | Purchased remaining balance | 26 Bold 700 |
 | Family / full pool | 18 Bold 700 / 16 Regular 400 |
-| Budget spent / cap | 18 Bold 700 / 11 Regular 400 |
+| Budget spent / cap | 26 Bold 700 / 11 Regular 400 |
 | Extra used/cap Quantity line / optional reset | 18 Bold 700 / 11 Regular 400 |
 | STALE / complete empty or no-fit copy | 11 Bold / 12 Regular |
 | Row / row gap / side and bottom padding | 44 / 8 / 16 |
+
+**Budget detail typography — 2026-11-04 revision.** Native budget spent details and current
+default review/picker exports share the purchased-balance 26 Bold 700 style. Budget
+classification takes precedence over incidental Quantity fields. Cap stays 11 Regular 400;
+Extra used/cap stays 18 Bold 700 with its optional reset at 11 Regular 400. Default art shows
+`$12.34` / `Cap $10K` for the unchanged USD illustration, retaining full ISO amounts in
+preview accessibility. The historical Nov1/Nov3 boards and both optional preview routes
+remain unchanged, including the responsive route's budget-18 typography. Their dated
+approval does not establish native acceptance of this correction.
 
 Nominal full-grid allowances are accent 12, primary 84, label 108 and details 112 with two
 6-unit gaps. They are not native refusal thresholds. Measure complete actual glyph ink,

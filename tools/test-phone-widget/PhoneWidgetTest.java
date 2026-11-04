@@ -247,8 +247,20 @@ public final class PhoneWidgetTest {
                                 .equals("OpenAI platform · Today, -USD 1" + "0".repeat(60)
                                         + ".00 spent, No cap"),
                 "The sign counts toward the accepted 64-character cache limit without truncation.");
-        PhoneWidgetLayout.Row capped = budget("50% left", "1234", "10000", "USD");
-        PhoneWidgetLayout.VisibleRow full = fitRow(capped, 500).rows.get(0);
+        PhoneWidgetLayout.Row capped = PhoneWidgetLayout.Row.fromCache("OpenAI platform · Today",
+                "OpenAI", "Today", "50% left", "", "2028-02-10T09:15:00Z", ZoneId.of("UTC"),
+                0xff65d78a, "budget", "1234", "USD", "10000", "USD",
+                "12.50", "Credits", "50", "Credits");
+        PhoneWidgetLayout.Plan cappedPlan = fitRow(capped, 500);
+        PhoneWidgetLayout.VisibleRow full = cappedPlan.rows.get(0);
+        PhoneWidgetLayout.TextRun purchasedBalance = fit(360, 344, false).text.stream()
+                .filter(run -> run.text.equals("42K")).findFirst().orElseThrow();
+        check(purchasedBalance.style == PhoneWidgetLayout.Style.CREDIT
+                        && cappedPlan.text.stream().anyMatch(run -> run.text.equals(capped.spent)
+                                && run.style == purchasedBalance.style)
+                        && cappedPlan.text.stream().anyMatch(run -> run.text.equals(capped.lower)
+                                && run.style == PhoneWidgetLayout.Style.RESET),
+                "Budget spent shares purchased 26 Bold and cap stays 11 despite incidental Quantity fields.");
         check(capped.spent.equals("$12.34") && capped.lower.equals("Cap $100.00")
                         && full.primary.equals("50%"),
                 "Visible symbols do not alter the independently reported percentage.");
@@ -267,10 +279,10 @@ public final class PhoneWidgetTest {
                                 "EUR expense, 37.5% remaining, EUR 1234.50 spent, Cap EUR 2000.50"),
                 "EUR spent/cap compact visibly while reported percentage and exact speech survive.");
         check(euroPlan.text.stream().anyMatch(run -> run.text.equals("€1.2K")
-                        && run.glyphs.supported)
+                        && run.style == purchasedBalance.style && run.glyphs.supported)
                         && euroPlan.text.stream().anyMatch(run -> run.text.equals("Cap €2K")
-                                && run.glyphs.supported),
-                "An actual EUR row reaches measured runs through the production glyph guard.");
+                                && run.style == PhoneWidgetLayout.Style.RESET && run.glyphs.supported),
+                "An actual EUR row retains shared spent typography, cap style and the production glyph guard.");
         checkBounds(euroPlan);
         PhoneWidgetLayout.VisibleRow euroNarrow = fitRow(euro, 150).rows.get(0);
         check(euroNarrow.primary.equals("€1.2K") && !euroNarrow.credits && !euroNarrow.lower

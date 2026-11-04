@@ -94,7 +94,7 @@ public final class PhoneWidgetLayout {
             String used = quantityText(usedValue, usedUnit);
             String extraCap = quantityText(capValue, capUnit);
             boolean extra = !used.isEmpty() || !extraCap.isEmpty();
-            detailStyle = budget || extra ? Style.FAMILY : Style.CREDIT;
+            detailStyle = !budget && extra ? Style.FAMILY : Style.CREDIT;
             if (budget) {
                 detail = this.percent.isEmpty() ? "" : spent;
                 detailDescription = detail.isEmpty() ? "" : spentDescription + " spent";
