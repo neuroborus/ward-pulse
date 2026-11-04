@@ -92,8 +92,14 @@ Retain the actual timestamp source and timezone; distinguish capture-time observ
 For indexed or discovered capture views/exports, build the dispatch list only from actual completed manifest/index members or the returned discovered path set and verify each requested file's existence and applicable case/identity binding before queuing; failed/missing expected captures stay Unknown, and intended filenames, planned maxima or printed counts do not add members. Keep diagnostics separate. Reconcile actual output names, counts and identities
 with that cohort before publication. A wildcard match or valid image alone does not prove membership; resolve unexpected outputs.
 
-Before each web capture, measure the current browser session's actual viewport and match it to the intended capture target; after reconnect/emulation reset when applicable, reapply required emulation and remeasure. A mismatch is diagnostic, never evidence for the intended viewport. Scroll each intended current-theme image into view and boundedly confirm viewport intersection, complete=true and positive naturalWidth/naturalHeight before decoding or capturing.
+After navigation, first use a cheap readiness read to qualify the current document/context, expected route and settled body before evaluating styles, fonts or geometry. If evaluation throws, retain bounded actual exception diagnostics and target/phase before aborting; generic errors and later reads do not establish the original cause.
+
+Before each web capture, measure the current browser session's actual viewport and match it to the intended capture target; after reconnect/emulation reset when applicable, reapply required emulation and remeasure through the same live CDP connection/browser session used for case input/capture, without relying on a closed connection's override. A mismatch is diagnostic, never evidence for the intended viewport. Scroll each intended current-theme image into view and boundedly confirm viewport intersection, complete=true and positive naturalWidth/naturalHeight before decoding or capturing.
 Do not await hidden/offscreen lazy variants or infer breakage from their unrequested/incomplete state; decode only the individually observed loaded image, then inspect its capture at the measured viewport before acceptance.
+
+After native-window or emulation geometry changes, inspect a fresh before frame and requalify the current target in that session; retain its actual pre-input rectangle and expected/actual guard facts before assertion or input, without reconstructing a held guard's observation or cause from later reads.
+
+For web heading or legacy-alias acceptance, follow the [user-docs permalink preflight](../../user-docs/references/public-writing.md#public-audience-and-owners) before freezing edit scope or accepting rendered targets.
 
 Record healthy demonstrations separately without erasing the incident; verify shared public capture state through user-docs.
 A valid fixture cannot compensate for an unproved live binding or establish that a reported incident was fixed.
