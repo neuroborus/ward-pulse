@@ -45,7 +45,7 @@ background sync, transport, storage, diagnostics and build work.
   Distinguish no cap, unusable cap, missing spend, percentage unavailable and missing Quantity.
   Render complete Money with reported currency/sign/cents at 30 Bold; exhaust released
   whole-column width before 26 Bold, never 18, clipping, ellipsis or an 84-unit refusal.
-  Keep budget spent/cap at 18 Bold/11 Regular; Extra uses one 18 Bold used/cap line, with
+  Keep budget spent/cap at 26 Bold/11 Regular; Extra uses one 18 Bold used/cap line, with
   independent missing amounts and actual units; purchased balances remain 26 Bold.
   Use exact bundled Noto through the existing bounded native painter, glyph checks,
   4096-side/platform-or-8MiB limits and at most two variants. Preserve whole-column fallback,
