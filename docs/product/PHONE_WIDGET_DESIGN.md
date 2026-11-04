@@ -83,8 +83,9 @@ there is no further suffix or truncation. Apply the same magnitude rules to nega
 Tokens depend only on value, never available width. This narrowly supersedes the former
 no-compaction rule; all existing validation and exact integer minor-unit inputs remain.
 
-Dashboard values and accessible spent, cap and Money-primary descriptions retain the full
-reported ISO code and exact cents, including signed-boundary and larger cached integers.
+Dashboard snapshot amounts keep their existing ISO code and cents formatting. Native widget
+accessible spent, cap and Money-primary descriptions retain the full reported ISO code and
+exact cents, including the signed integer boundary and larger valid private-cache integers.
 Compact strings never determine cap compatibility, percentages or alerts. Only U+20AC is
 added to the existing glyph gate, consuming the existing both-font `$`/`€` qualification;
 other unsupported glyphs and controls remain rejected without system-font fallback.
