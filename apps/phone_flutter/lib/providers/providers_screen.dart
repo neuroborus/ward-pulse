@@ -198,8 +198,9 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
       if (!settled()) return;
       final row = target.findRenderObject();
       if (row is! RenderBox || !row.attached) return;
-      final viewport = RenderAbstractViewport.of(row);
-      if (viewport is! RenderBox) return;
+      final abstractViewport = RenderAbstractViewport.of(row);
+      if (abstractViewport is! RenderBox) return;
+      final viewport = abstractViewport as RenderBox;
       final position = Scrollable.of(target).position;
       Rect bounds() =>
           row.localToGlobal(Offset.zero, ancestor: viewport) & row.size;
