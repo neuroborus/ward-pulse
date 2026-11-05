@@ -108,5 +108,10 @@ After native-window or emulation geometry changes, inspect a fresh before frame 
 
 For web heading or legacy-alias acceptance, follow the [user-docs permalink preflight](../../user-docs/references/public-writing.md#public-audience-and-owners) before freezing edit scope or accepting rendered targets.
 
+Before declaring required public screenshot replacements or approving a capture list, follow
+the [user-docs freshness scope](../../user-docs/references/screenshots.md#files-frames-and-freshness).
+Viewing a PNG establishes its visible content; establish its current use before freezing
+replacement scope or marking capture preparation ZERO. Unresolved use classification stays Pending.
+
 Record healthy demonstrations separately without erasing the incident; verify shared public capture state through user-docs.
 A valid fixture cannot compensate for an unproved live binding or establish that a reported incident was fixed.

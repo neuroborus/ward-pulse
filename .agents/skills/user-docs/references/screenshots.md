@@ -58,7 +58,15 @@ Index a derivative with its source only if an actual separate annotated PNG is p
   Record capture/verification dates, dimensions, known app/context, data treatment and
   locations where it is used; include a build version only if actually recorded. Do not add rows
   for planned/nonexistent screenshots as though they were captured.
-- When pictured UI changes, update the affected PNGs and index in the same change set;
-  review the whole set for consistency. If captures cannot run yet, record the pending work
-  accurately and do not claim screenshot freshness or final acceptance. Preserve the
-  existing host/device check division and Runner commit boundary.
+- Before declaring required replacements or approving a public capture list, determine the
+  affected current-use set for this skill's freshness and theme-refresh rules. Join each
+  personally viewed PNG to its owning index's current/historical use classification and
+  the actual current source page/embed/gallery placement and purpose, following imported
+  content. A filename or index row alone does not establish active use. If these disagree,
+  keep that replacement requirement Pending until reconciled.
+- When pictured UI changes, update affected current-use PNGs and their index in the same
+  change set; review the whole affected set for consistency. Preserve dated historical/error
+  images and their dates; a product correction can leave a retired illustration unchanged.
+  Do not add an embed merely to justify recapturing an archived image. If captures cannot
+  run yet, record the pending work accurately and do not claim screenshot freshness or final
+  acceptance. Preserve the existing host/device check division and Runner commit boundary.
