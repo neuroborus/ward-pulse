@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:ui' show SemanticsAction;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -73,6 +72,37 @@ void main() {
     );
   }
 
+  testWidgets(
+    'nonempty Dashboard preserves unmatched safe diagnostic details',
+    (tester) async {
+      const issue = DashboardSyncIssue.providerUnavailable;
+      const details = 'Usage · HTTP 503 · service_unavailable';
+      final snapshot = DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      ).withSyncIssue(issue, details: details);
+      expect(snapshot.accounts, isNotEmpty);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DashboardScreen(snapshot: snapshot, onRefresh: () async {}),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final message = '${issue.message}\n$details';
+      final diagnostic = find.byTooltip(message);
+      expect(find.text(issue.message), findsOneWidget);
+      expect(diagnostic, findsOneWidget);
+      expect(find.byTooltip(issue.message), findsNothing);
+      await tester.longPress(diagnostic);
+      await tester.pumpAndSettle();
+      expect(find.text(message), findsOneWidget);
+      expect(find.byType(AlertDialog), findsNothing);
+    },
+  );
+
   for (final brightness in Brightness.values) {
     testWidgets(
       'historical feedback preserves status and independent actions at large text in $brightness',
@@ -131,37 +161,65 @@ void main() {
           ),
         );
         await tester.pumpAndSettle();
-        final body = find.byTooltip(
-          'Review Anthropic · Claude plan connection',
-        );
-        final close = find.byTooltip(
-          'Dismiss Anthropic · Claude plan rejection warning',
-        );
+        const bodyLabel =
+            'Anthropic · Claude plan: a saved connection was rejected. '
+            'Open Providers to review this connection.';
+        const closeLabel = 'Dismiss Anthropic · Claude plan rejection warning';
+        final body = find.widgetWithText(TextButton, bodyLabel);
+        final close = find.byTooltip(closeLabel);
         await tester.ensureVisible(body);
+        await tester.pumpAndSettle();
+        final bodySemantics = find.semantics.byLabel(bodyLabel);
+        // IconButton exposes its accessible name through its internal Tooltip.
+        final closeSemantics = find.semantics.byPredicate(
+          (node) => node.getSemanticsData().tooltip == closeLabel,
+        );
+        expect(bodySemantics, findsOneWidget);
+        expect(closeSemantics, findsOneWidget);
+        final bodyNode = bodySemantics.evaluate().single;
+        final closeNode = closeSemantics.evaluate().single;
         expect(
-          tester
-              .getSemantics(body)
-              .getSemanticsData()
-              .hasAction(SemanticsAction.tap),
-          isTrue,
+          bodyNode,
+          isSemantics(
+            label: bodyLabel,
+            isButton: true,
+            hasEnabledState: true,
+            isEnabled: true,
+            hasTapAction: true,
+          ),
         );
         expect(
-          tester
-              .getSemantics(close)
-              .getSemanticsData()
-              .hasAction(SemanticsAction.tap),
-          isTrue,
+          closeNode,
+          isSemantics(
+            tooltip: closeLabel,
+            isButton: true,
+            hasEnabledState: true,
+            isEnabled: true,
+            hasTapAction: true,
+          ),
         );
-        expect(
-          tester.getSemantics(body).id,
-          isNot(tester.getSemantics(close).id),
-        );
+        expect(bodyNode.id, isNot(closeNode.id));
+        tester.semantics.tap(bodySemantics);
+        await tester.pump();
+        expect(revealed, ProviderConnections.claudePlan);
+        expect(dismissed, isNull);
+        revealed = null;
+        dismissed = null;
+        tester.semantics.tap(closeSemantics);
+        await tester.pump();
+        expect(dismissed, same(notice));
+        expect(revealed, isNull);
+        revealed = null;
+        dismissed = null;
         await tester.tap(body);
         expect(revealed, ProviderConnections.claudePlan);
         expect(dismissed, isNull);
+        revealed = null;
+        dismissed = null;
         await tester.ensureVisible(close);
         await tester.tap(close);
         expect(dismissed, same(notice));
+        expect(revealed, isNull);
         expect(
           find.text(DashboardSyncIssue.claudeAuthentication.message),
           findsNothing,

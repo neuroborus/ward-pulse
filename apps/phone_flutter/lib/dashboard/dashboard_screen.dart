@@ -553,6 +553,7 @@ class ConnectionFeedback extends StatelessWidget {
     this.outcomes = const [],
     this.issue,
     this.details,
+    this.showIssueTooltip = true,
     this.rejection,
     this.notices = const [],
     this.onEditKey,
@@ -562,6 +563,7 @@ class ConnectionFeedback extends StatelessWidget {
   final Iterable<ConnectionReportingOutcome> outcomes;
   final DashboardSyncIssue? issue;
   final String? details;
+  final bool showIssueTooltip;
   final ConnectionRejection? rejection;
   final List<ConnectionRejectionNotice> notices;
   final void Function(ProviderConnectionId)? onEditKey;
@@ -629,10 +631,13 @@ class ConnectionFeedback extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Tooltip(
-                  message: details ?? issue!.message,
-                  child: Icon(Icons.error_outline, color: color, size: 18),
-                ),
+                if (showIssueTooltip)
+                  Tooltip(
+                    message: details ?? issue!.message,
+                    child: Icon(Icons.error_outline, color: color, size: 18),
+                  )
+                else
+                  Icon(Icons.error_outline, color: color, size: 18),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(issue!.message, style: TextStyle(color: color)),

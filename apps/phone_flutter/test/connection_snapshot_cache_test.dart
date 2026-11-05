@@ -320,6 +320,7 @@ void main() {
         expect(tester.widget<TextButton>(editKey).onPressed, isNotNull);
         const message =
             'The credential was not accepted. Check that you pasted the full key or token.';
+        expect(find.byTooltip(message), findsOneWidget);
         await tester.longPress(find.byTooltip(message));
         await tester.pumpAndSettle();
         expect(find.text(message), findsOneWidget);

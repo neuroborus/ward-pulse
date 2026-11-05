@@ -1617,6 +1617,10 @@ class _ErrorView extends StatelessWidget {
     }
 
     final colors = Theme.of(context).colorScheme;
+    final issueIcon = Icon(Icons.error_outline, color: colors.error, size: 36);
+    final matchedRejection = rejectionNotices.any(
+      (notice) => notice.matches(failure.syncRejection),
+    );
 
     return Center(
       child: SingleChildScrollView(
@@ -1625,7 +1629,10 @@ class _ErrorView extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.error_outline, color: colors.error, size: 36),
+              if (!matchedRejection)
+                Tooltip(message: failure.issue.message, child: issueIcon)
+              else
+                issueIcon,
               const SizedBox(height: 12),
               Text(
                 'Dashboard unavailable',
@@ -1636,6 +1643,7 @@ class _ErrorView extends StatelessWidget {
                 outcomes: failure.reportingOutcomes,
                 issue: failure.issue,
                 details: failure.details,
+                showIssueTooltip: false,
                 rejection: failure.syncRejection,
                 notices: rejectionNotices,
                 onEditKey: onEditReportingKey,

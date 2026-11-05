@@ -188,8 +188,115 @@ void main() {
         find.byTooltip(DashboardSyncIssue.claudeAuthentication.message),
         findsNothing,
       );
+      notices.failDismiss = false;
+      await tester.tap(dismiss);
+      await tester.pumpAndSettle();
+      expect(dismiss, findsNothing);
+      expect(find.byType(ProvidersScreen), findsNothing);
+      expect(
+        find.text(DashboardSyncIssue.claudeAuthentication.message),
+        findsNothing,
+      );
+      expect(
+        find.byTooltip(DashboardSyncIssue.claudeAuthentication.message),
+        findsNothing,
+      );
     },
   );
+
+  for (final independent in [false, true]) {
+    testWidgets(
+      'failed Dashboard with a dismissed key rejection ${independent ? 'retains independent disclosure' : 'suppresses matching disclosure'}',
+      (tester) async {
+        const notice = ConnectionRejectionNotice(
+          connection: ProviderConnections.openAiPlatform,
+          eventId: 'synthetic-event',
+          dismissed: true,
+        );
+        final issue =
+            independent
+                ? DashboardSyncIssue.providerUnavailable
+                : DashboardSyncIssue.authentication;
+        final details =
+            independent
+                ? 'Usage · HTTP 503 · service_unavailable'
+                : 'Usage · HTTP 401 · invalid_api_key';
+        final repository = _CountingDashboardRepository(() {
+          throw DashboardLoadException.withOutcomes(
+            issue: issue,
+            details: details,
+            syncRejection:
+                independent
+                    ? null
+                    : (
+                      connection: notice.connection.storageKey,
+                      eventId: notice.eventId,
+                    ),
+            reportingOutcomes: [
+              ConnectionReportingOutcome(
+                connection: notice.connection,
+                category: ReportingOutcomeCategory.authenticationRejected,
+                source: ReportingOutcomeSource.live,
+                credentialVersion: CredentialVersion({
+                  'committedConnection': notice.eventId,
+                }),
+              ),
+              if (independent)
+                const ConnectionReportingOutcome(
+                  connection: ProviderConnections.cursorPlatform,
+                  category: ReportingOutcomeCategory.accessDenied,
+                  source: ReportingOutcomeSource.live,
+                ),
+            ],
+          );
+        });
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            rejectionNotices: _RejectionNotices(notice),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Dashboard unavailable'), findsOneWidget);
+        expect(find.text(issue.message), findsNothing);
+        expect(
+          find.textContaining('OpenAI · Platform reporting: Key rejected'),
+          findsNothing,
+        );
+        final generic = find.byTooltip(issue.message);
+        expect(generic, independent ? findsOneWidget : findsNothing);
+        if (independent) {
+          expect(
+            find.textContaining('Cursor · Team Admin API: Access denied'),
+            findsOneWidget,
+          );
+          await tester.longPress(generic);
+          await tester.pumpAndSettle();
+          expect(find.text(issue.message), findsOneWidget);
+        }
+        await tester.tap(find.text('Details'));
+        await tester.pumpAndSettle();
+        expect(find.text('Error details'), findsOneWidget);
+        expect(find.text(details), findsOneWidget);
+        await tester.tap(find.text('Close'));
+        await tester.pumpAndSettle();
+        expect(find.text('Error details'), findsNothing);
+        if (independent) {
+          await tester.tap(find.widgetWithText(TextButton, 'Edit key'));
+          await tester.pumpAndSettle();
+          expect(
+            find.descendant(
+              of: find.byType(AlertDialog),
+              matching: find.text('Cursor · Team Admin API'),
+            ),
+            findsOneWidget,
+          );
+        } else {
+          expect(find.text('Edit key'), findsNothing);
+        }
+      },
+    );
+  }
 
   testWidgets('saved warning remains actionable before any snapshot resolves', (
     tester,
@@ -3588,6 +3695,14 @@ void main() {
     expect(
       find.byTooltip(DashboardSyncIssue.authentication.message),
       findsOneWidget,
+    );
+    await tester.longPress(
+      find.byTooltip(DashboardSyncIssue.authentication.message),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text(DashboardSyncIssue.authentication.message),
+      findsNWidgets(2),
     );
     expect(find.text('Details'), findsOneWidget);
     await tester.tap(find.text('Details'));
