@@ -249,7 +249,8 @@ X actions cannot change a newer event. Failed notice writes retain the confirmed
 Historical warnings never determine current Connected/reporting verification, problem counts,
 allowance status, alerts or freshness. Suppress only matching transient authentication feedback,
 including for a dismissed event; independent access, service and data failures remain visible.
-Native rendering, persistence and recovery-action acceptance remain Pending HOST.
+Controlled phone-emulator checks verify saved-warning persistence and dismissal for OpenAI
+Platform reporting, including exact-row recovery at system font scales 1.0 and 1.6.
 
 ## Balances
 
