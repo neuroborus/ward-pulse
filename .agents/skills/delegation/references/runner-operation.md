@@ -57,6 +57,26 @@ every alias the pipeline needs. Trusted commands execute in the project director
 the runner's environment. `local.properties` in each Android module removes the `ANDROID_HOME`
 dependency for Gradle.
 
+Before an audit launch, verify its actual workspace kind and snapshot footprint; use supported
+scope/placement controls and keep custody/receipt writers outside the target. A plain source
+export is warranted only when the actual directory snapshot includes unsuitable ignored/generated
+content and no supported bounded selection is available. Then verify all tracked blobs/modes and
+use supported external infrastructure, without clone/worktree/ref writes or ad hoc snapshot exclusions.
+
+On `workspace_changed`, distinguish the actual failing snapshot from a later comparison. Identify
+native bookkeeping through its actual producer and path/type/mode; explicitly admit already-existing
+state only before a fresh freeze, never by repairing a frozen baseline or relaxing its guard.
+A later sample cannot reconstruct an unretained failed capture.
+
+Compare configured profile aliases and effective canonical directories in their own semantic
+domains; alias-to-directory resolution is not a mismatch and does not authorize private-store access.
+
+After `invalid_discovery`, inspect supported diagnostics and the owning schema/semantic contract;
+unretained fields/body leave the exact cause Unknown. Retry only with a concrete supported correction:
+targeted same-run feedback when available, or fresh reviewed requirements when an evidenced contract
+gap supplies a new corrective change. Otherwise preserve the blocker without blind retry, new run or
+manual report repair. Keep the same authorized scope, roles and guards.
+
 Until the owner changes the [2026-10-31 direction](owner-selected-mode.md), explicitly select `lazy` for every fresh `plan-authoring`, `plan-execution` and `polishing` run.
 Verify the resolved mode; defaults are insufficient. Lazy self-review/Worker confirmation is not independent Reviewer evidence.
 Use a supported stop on mismatch; preserve required checks and the coordinator's full independent ZERO.
