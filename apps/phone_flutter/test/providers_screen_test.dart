@@ -1761,10 +1761,12 @@ void main() {
           beforeBudget.forConnection(id).budget.toJson(),
         );
         final field =
-            find.descendant(
-              of: find.byType(ConnectionBudgetDialog),
-              matching: find.byType(TextFormField),
-            ).first;
+            find
+                .descendant(
+                  of: find.byType(ConnectionBudgetDialog),
+                  matching: find.byType(TextFormField),
+                )
+                .first;
         expect(
           tester.widget<TextFormField>(field).controller!.text,
           '${limit ~/ 100}.00',

@@ -1163,9 +1163,7 @@ class _ProviderDashboardSourceView extends StatelessWidget {
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Text(
-              '$sourceTitle · Extra usage: monthly data unavailable.',
-            ),
+            child: Text('$sourceTitle · Extra usage: monthly data unavailable.'),
           ),
         ),
     ];
