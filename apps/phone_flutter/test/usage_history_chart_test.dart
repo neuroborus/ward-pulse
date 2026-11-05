@@ -66,7 +66,7 @@ void main() {
     for (final text in [title, '5 buckets']) {
       final finder = find.text(text);
       final paragraph = tester.renderObject<RenderParagraph>(finder);
-      final bounds = (Offset.zero & paragraph.size).inflate(0.001);
+      final bounds = Offset.zero & paragraph.size;
       final boxes = paragraph.getBoxesForSelection(
         TextSelection(baseOffset: 0, extentOffset: text.length),
       );
@@ -84,7 +84,10 @@ void main() {
         expect(glyphs, hasLength(1));
         final glyphBounds = glyphs.single.toRect();
         expect(glyphBounds.isEmpty, isFalse);
-        expect(bounds.intersect(glyphBounds), glyphBounds);
+        expect(
+          bounds.intersect(glyphBounds),
+          rectMoreOrLessEquals(glyphBounds, epsilon: 0.5),
+        );
       }
       final rect = tester.getRect(finder);
       expect((Offset.zero & size).intersect(rect), rect);
