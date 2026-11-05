@@ -12,6 +12,8 @@ Runner, supply requirements, measurements, findings and acceptance criteria, not
 implementation patch for Runner merely to apply. Subagents may coordinate, operate, read and
 review Runner work, but may not implement it independently.
 
+Before launching direct declarative `plan-execution`, qualify the exact submitted plan bytes with the installed stock parser and its serializer/round-trip; retain the accepted step/check scope bound to those bytes. Do not guess the grammar or prepend explanatory Markdown the parser has not accepted. A parsing failure holds launch; preserve the failed packet and prepare a fresh supported correction without changing frozen inputs.
+
 Choose supported pipelines and worker steps by their current capabilities, not just their
 names. `polishing` finalizes and stages an existing change set without committing; do not
 assume it replaces implementation from scratch. Commit authorization is defined in

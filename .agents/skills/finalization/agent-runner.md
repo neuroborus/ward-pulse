@@ -139,6 +139,8 @@ required nonmutating format checks. Code and formatting corrections remain actua
 authorship in its writable step under existing capabilities; this adds no required Native
 formatter command and does not authorize the owner to run formatter-write or edit Source.
 
+When a HOST formatter finding cannot be measured by Native's qualified toolchain, retain the exact HOST tool/version, arguments, working directory, input hashes and measured differing regions/hunks before requesting correction; file names alone do not identify the repair. Send Source-bound requirements/measurements and expected results, not formatted replacement Source or an implementation patch. Actual Runner authors the writable correction; existing Native/HOST gates and authorship stay unchanged.
+
 A gate that cannot start for an environment reason is reported through the runner's
 environment-blocker path. Never weaken a test, an assertion, a gate, a skill or validation
 infrastructure to make a check pass, and never report a check that did not run.
