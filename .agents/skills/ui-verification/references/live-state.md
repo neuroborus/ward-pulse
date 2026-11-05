@@ -13,9 +13,11 @@ Keep applicable byte guards exact: decoded-value equality cannot replace a requi
 Retain bounded expected AND actual presence/hashes, state source and relevant target identity, operation/phase, snapshot/read times and available
 generation/write times with their origins/timezones. Record whether writer custody covered
 the interval, authorized writes if any, and known attribution or Unknown. Capture these facts and the exact phase-applicable predicate BEFORE evaluating its guard;
-retain actual rows/readbacks in failure evidence. Asynchronous request completion is not process
-retirement: use the owning bounded observation before its final guard; expected in-flight samples
-are Waiting, not terminal failure. Missing failure-point rows or predicate remain Unknown.
+retain actual rows/readbacks in failure evidence.
+
+Before issuing an asynchronous retirement request, qualify the owning bounded observation, terminal predicate and observation deadline. Request acknowledgement alone is not retirement: expected in-flight samples are Waiting, not terminal failure. Apply the final retirement guard only after conclusive owner-qualified evidence or at that deadline; do not extend it merely to obtain absence.
+
+Missing failure-point rows or predicate remain Unknown.
 If collection fails, retain the facts obtained and that failure; missing actual data is Unknown.
 Keep secrets/raw normal payloads out of diagnostics; extract ONLY the exact intended fields from their owning record BEFORE any output, following [diagnostic output privacy](../../../../docs/ANDROID_TOOLCHAIN.md#diagnostic-output-privacy).
 A substring match inside a payload/container is not projection; never emit aggregate complication-data or timeline bodies. Missing/ambiguous fields stay Unknown; do not widen output.

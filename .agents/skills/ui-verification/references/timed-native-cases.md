@@ -2,6 +2,9 @@
 
 Use for native SDK/manual-barrier cases whose framework deadline includes operator
 observations or input. Ordinary screenshots do not acquire a timed-case/report requirement.
+
+Before applying this reference's timed-case progression restrictions, establish whether an owning framework deadline applies; unresolved applicability stays Unknown. A finite gesture/display window or local checkpoint alone creates no such deadline. For ordinary capture, retain checkpoint misses, actual input/capture/release timing and resulting limits; assess captured observations and remaining identity/restoration obligations separately. Do not infer expired-framework failure solely from a local miss. Genuine framework deadlines and their phase restrictions remain strict.
+
 Keep existing [authorship and ownership boundaries](../../delegation/SKILL.md), including
 mandatory whole-run retirement before HOST work through [finalization](../../finalization/SKILL.md).
 
