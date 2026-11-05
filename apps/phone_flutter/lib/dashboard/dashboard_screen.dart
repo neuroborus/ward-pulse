@@ -1071,9 +1071,7 @@ class _SourceExpenseBlock extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Expanded(
-                      child: Text(title, style: textTheme.titleSmall),
-                    ),
+                    Expanded(child: Text(title, style: textTheme.titleSmall)),
                     if (account.status != ProviderStatus.ok)
                       StatusPill(status: account.status),
                   ],
@@ -1163,7 +1161,9 @@ class _ProviderDashboardSourceView extends StatelessWidget {
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Text('$sourceTitle · Extra usage: monthly data unavailable.'),
+            child: Text(
+              '$sourceTitle · Extra usage: monthly data unavailable.',
+            ),
           ),
         ),
     ];

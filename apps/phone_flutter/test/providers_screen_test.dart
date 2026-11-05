@@ -1779,9 +1779,9 @@ void main() {
                 ? beforeBudget
                 : beforeBudget.withConnection(
                   id,
-                  beforeBudget.forConnection(id).copyWith(
-                    budget: const ConnectionBudget(today: 9900),
-                  ),
+                  beforeBudget
+                      .forConnection(id)
+                      .copyWith(budget: const ConnectionBudget(today: 9900)),
                 );
         expect(preferences.toJson(), expected.toJson());
         expect(saves, beforeSaves + (action == 'Save' ? 1 : 0));
@@ -1815,9 +1815,9 @@ void main() {
                 ? beforeAlerts
                 : beforeAlerts.withConnection(
                   id,
-                  beforeAlerts.forConnection(id).copyWith(
-                    today: const AlertPercentThreshold(),
-                  ),
+                  beforeAlerts
+                      .forConnection(id)
+                      .copyWith(today: const AlertPercentThreshold()),
                 );
         expect(preferences.toJson(), expected.toJson());
         expect(saves, beforeSaves + (action == 'Save' ? 2 : 1));
