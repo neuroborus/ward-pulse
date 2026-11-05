@@ -444,7 +444,7 @@ void main() {
     );
 
     expect(find.text('Codex'), findsOneWidget);
-    expect(find.text('Purchased credits'), findsOneWidget);
+    expect(find.text('Codex · Purchased credits'), findsOneWidget);
     expect(find.text('Unlimited'), findsOneWidget);
     expect(find.text('Unknown'), findsNothing);
     // Healthy families say nothing at all.
@@ -452,17 +452,17 @@ void main() {
 
     expect(find.text('OpenAI'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('Usage history'),
+      find.text('OpenAI · Source 2 · Usage history'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Usage history'), findsOneWidget);
+    expect(find.text('OpenAI · Source 2 · Usage history'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('Model usage'),
+      find.text('OpenAI · Source 2 · Model usage'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Model usage'), findsOneWidget);
+    expect(find.text('OpenAI · Source 2 · Model usage'), findsOneWidget);
 
     await tester.scrollUntilVisible(
       find.text('Today'),
@@ -526,8 +526,8 @@ void main() {
       ),
     );
 
-    expect(find.text('Cursor Models'), findsOneWidget);
-    expect(find.text('Other Models'), findsOneWidget);
+    expect(find.text('Cursor · Cursor Models'), findsOneWidget);
+    expect(find.text('Cursor · Other Models'), findsOneWidget);
     expect(find.text('53% left'), findsOneWidget);
     expect(find.text('0% left'), findsOneWidget);
     for (final (label, color, value) in const [
@@ -536,7 +536,11 @@ void main() {
     ]) {
       final progress = tester.widget<LinearProgressIndicator>(
         find.descendant(
-          of: find.widgetWithText(AllowanceSummaryCard, label),
+          of: find.byWidgetPredicate(
+            (widget) =>
+                widget is AllowanceSummaryCard &&
+                widget.allowance.label == label,
+          ),
           matching: find.byType(LinearProgressIndicator),
         ),
       );
@@ -546,8 +550,8 @@ void main() {
     expect(find.byIcon(Icons.speed), findsOneWidget);
     // A card marks a deviation, never health, and the header says how many
     // deviate below it (PHONE_DASHBOARD_DESIGN.md).
-    expect(_pillsInCardOf(find.text('Cursor Models')), findsNothing);
-    expect(_pillsInCardOf(find.text('Other Models')), findsOneWidget);
+    expect(_pillsInCardOf(find.text('Cursor · Cursor Models')), findsNothing);
+    expect(_pillsInCardOf(find.text('Cursor · Other Models')), findsOneWidget);
     expect(find.widgetWithText(Badge, '1'), findsOneWidget);
   });
 
@@ -611,7 +615,11 @@ void main() {
     ]) {
       final progress = tester.widget<LinearProgressIndicator>(
         find.descendant(
-          of: find.widgetWithText(AllowanceSummaryCard, label),
+          of: find.byWidgetPredicate(
+            (widget) =>
+                widget is AllowanceSummaryCard &&
+                widget.allowance.label == label,
+          ),
           matching: find.byType(LinearProgressIndicator),
         ),
       );
@@ -686,7 +694,7 @@ void main() {
           ),
         ),
       );
-      final card = find.widgetWithText(AllowanceSummaryCard, 'Fable weekly');
+      final card = find.byType(AllowanceSummaryCard);
       final progress = find.descendant(
         of: card,
         matching: find.byType(LinearProgressIndicator),
@@ -694,7 +702,10 @@ void main() {
       if (used == null) {
         expect(progress, findsNothing);
         expect(find.text('Unknown left'), findsOneWidget);
-        expect(_pillsInCardOf(find.text('Fable weekly')), findsOneWidget);
+        expect(
+          find.descendant(of: card, matching: find.byType(StatusPill)),
+          findsOneWidget,
+        );
       } else {
         final bar = tester.widget<LinearProgressIndicator>(progress);
         expect(bar.color, color, reason: '$provider/$allowanceSource/$id');
@@ -762,7 +773,10 @@ void main() {
             ),
           ),
         );
-        final card = find.widgetWithText(AllowanceSummaryCard, 'Extra usage');
+        final card = find.widgetWithText(
+          AllowanceSummaryCard,
+          'Claude plan · Extra usage',
+        );
         Finder text(String value) =>
             find.descendant(of: card, matching: find.text(value));
         expect(
@@ -858,7 +872,7 @@ void main() {
           ),
         );
         expect(
-          find.text('Claude Extra usage: monthly data unavailable.'),
+          find.text('Claude plan · Extra usage: monthly data unavailable.'),
           findsOneWidget,
         );
         expect(
@@ -908,6 +922,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Platform spend'), findsNothing);
+    expect(find.text('OpenAI · Expenses'), findsOneWidget);
     expect(find.text('Today'), findsOneWidget);
   });
 
@@ -1013,9 +1028,9 @@ void main() {
     );
 
     expect(find.text('Codex'), findsOneWidget);
-    expect(find.text('Weekly plan'), findsOneWidget);
+    expect(find.text('Codex · Weekly plan'), findsOneWidget);
     expect(find.text('60% left'), findsOneWidget);
-    expect(find.text('Model usage'), findsNothing);
+    expect(find.textContaining('Model usage'), findsNothing);
     expect(find.text('Unknown'), findsNothing);
 
     await tester.scrollUntilVisible(
@@ -1076,9 +1091,20 @@ void main() {
 
     expect(find.text('Codex'), findsOneWidget);
     expect(find.text('Claude'), findsOneWidget);
-    expect(find.text('Weekly plan'), findsNWidgets(2));
-    expect(find.text('60% left'), findsOneWidget);
-    expect(find.text('30% left'), findsOneWidget);
+    expect(find.text('Codex · Weekly plan'), findsOneWidget);
+    expect(find.text('Claude · Weekly plan'), findsOneWidget);
+    for (final (title, balance) in const [
+      ('Codex · Weekly plan', '60% left'),
+      ('Claude · Weekly plan', '30% left'),
+    ]) {
+      expect(
+        find.descendant(
+          of: find.widgetWithText(AllowanceSummaryCard, title),
+          matching: find.text(balance),
+        ),
+        findsOneWidget,
+      );
+    }
   });
 
   testWidgets('nests usage history under the owning provider plaque', (
@@ -1131,13 +1157,13 @@ void main() {
 
     expect(find.text('Claude'), findsOneWidget);
     expect(find.text('Codex'), findsOneWidget);
-    expect(find.text('Usage history'), findsOneWidget);
-    expect(find.text('Codex usage history'), findsNothing);
-    expect(find.text('Claude usage history'), findsNothing);
+    expect(find.text('Codex · Usage history'), findsOneWidget);
+    expect(find.text('Usage history'), findsNothing);
+    expect(find.text('Claude · Usage history'), findsNothing);
 
     final claudeHeader = tester.getTopLeft(find.text('Claude'));
     final codexHeader = tester.getTopLeft(find.text('Codex'));
-    final historyTitle = tester.getTopLeft(find.text('Usage history'));
+    final historyTitle = tester.getTopLeft(find.text('Codex · Usage history'));
     expect(claudeHeader.dy, lessThan(codexHeader.dy));
     expect(codexHeader.dy, lessThan(historyTitle.dy));
   });
@@ -1194,8 +1220,11 @@ void main() {
     );
 
     expect(find.text('Cursor'), findsOneWidget);
-    expect(find.text('Cursor Models'), findsOneWidget);
-    expect(find.text('Usage history'), findsOneWidget);
+    expect(find.text('Cursor plan · Cursor Models'), findsOneWidget);
+    expect(
+      find.text('Cursor · Team Admin API · Usage history'),
+      findsOneWidget,
+    );
     expect(find.widgetWithText(Badge, '1'), findsOneWidget);
     expect(
       find.descendant(
@@ -1206,7 +1235,9 @@ void main() {
     );
 
     final cursorHeader = tester.getTopLeft(find.text('Cursor'));
-    final historyTitle = tester.getTopLeft(find.text('Usage history'));
+    final historyTitle = tester.getTopLeft(
+      find.text('Cursor · Team Admin API · Usage history'),
+    );
     expect(cursorHeader.dy, lessThan(historyTitle.dy));
   });
 
@@ -1247,7 +1278,7 @@ void main() {
     );
 
     expect(find.text('Codex'), findsOneWidget);
-    expect(find.text('Weekly plan'), findsOneWidget);
+    expect(find.text('Codex · Weekly plan'), findsOneWidget);
     expect(
       find.text(
         'Purchased usage: none reported. This account has no purchased credits right now.',
@@ -1366,16 +1397,28 @@ void main() {
     testWidgets('families retain separate connection histories and models', (
       tester,
     ) async {
-      const cases = <(ProviderConnectionId, String)>[
-        (ProviderConnections.codexPlan, 'codex'),
-        (ProviderConnections.openAiPlatform, 'openai'),
-        (ProviderConnections.claudePlan, 'claude'),
-        (ProviderConnections.anthropicPlatform, 'claude'),
-        (ProviderConnections.cursorPlan, 'cursor'),
-        (ProviderConnections.cursorPlatform, 'cursor'),
+      const cases = <(ProviderConnectionId, String, String)>[
+        (ProviderConnections.codexPlan, 'codex', 'Codex plan'),
+        (
+          ProviderConnections.openAiPlatform,
+          'openai',
+          'OpenAI · Platform reporting',
+        ),
+        (ProviderConnections.claudePlan, 'claude', 'Claude plan'),
+        (
+          ProviderConnections.anthropicPlatform,
+          'claude',
+          'Anthropic · Organization reporting',
+        ),
+        (ProviderConnections.cursorPlan, 'cursor', 'Cursor plan'),
+        (
+          ProviderConnections.cursorPlatform,
+          'cursor',
+          'Cursor · Team Admin API',
+        ),
       ];
       final accounts = [
-        for (final (index, (connection, provider)) in cases.indexed)
+        for (final (index, (connection, provider, _)) in cases.indexed)
           account(provider)
             ..['accountId'] = 'source-$index'
             ..['connection'] = connection.storageKey
@@ -1410,16 +1453,18 @@ void main() {
         11,
         12,
       ]);
-      for (final (index, (connection, _)) in cases.indexed) {
-        final caption = find.text(
-          providerConnectionCatalog()
-              .singleWhere((metadata) => metadata.id == connection)
-              .title,
+      for (final (index, (_, _, title)) in cases.indexed) {
+        final caption = find.text(title);
+        final chart = tester.widget<UsageHistoryChart>(
+          find.widgetWithText(UsageHistoryChart, '$title · Usage history'),
         );
+        expect(chart.buckets.single.requests, 11 + index);
+        final modelTitle = find.text('$title · Model usage');
         final model = find.text('model-$index');
         final history = find.text('${11 + index} requests');
         expect(caption, findsOneWidget);
         expect(model, findsOneWidget);
+        expect(modelTitle, findsOneWidget);
         expect(history, findsOneWidget);
         final panel = find.ancestor(of: model, matching: find.byType(Card));
         expect(
@@ -1432,6 +1477,10 @@ void main() {
         );
         expect(
           tester.getTopLeft(history).dy,
+          lessThan(tester.getTopLeft(modelTitle).dy),
+        );
+        expect(
+          tester.getTopLeft(modelTitle).dy,
           lessThan(tester.getTopLeft(model).dy),
         );
         expect(find.text('source-$index'), findsNothing);
@@ -1656,7 +1705,7 @@ void main() {
               reporting[period] = BudgetState.unknownPeriod(period).toJson();
             }
             await show(tester, snapshotOf([reporting]));
-            expect(find.text('Team Admin API'), findsOneWidget);
+            expect(find.text('Cursor · Team Admin API'), findsOneWidget);
             expect(find.text('No spend reported'), findsNWidgets(3));
             expect(
               find.text('Last successful report unavailable'),
@@ -1692,13 +1741,39 @@ void main() {
             'requests': 21 + index,
           },
         ];
+        data['modelBreakdown'] = [
+          {'model': 'shared-model', 'requests': 31 + index},
+        ];
       }
       await show(tester, snapshotOf(accounts.reversed.toList()));
 
       expect(find.text('Anthropic'), findsOneWidget);
       final balances = ['1,234.6 credits', '50 tokens'];
       for (final (index, balance) in balances.indexed) {
-        final caption = find.text('Claude plan · Source ${index + 1}');
+        final title = 'Claude plan · Source ${index + 1}';
+        final caption = find.text(title);
+        final chart = tester.widget<UsageHistoryChart>(
+          find.widgetWithText(UsageHistoryChart, '$title · Usage history'),
+        );
+        expect(chart.buckets.single.requests, 21 + index);
+        expect(find.text('$title · Model usage'), findsOneWidget);
+        final source =
+            find.ancestor(of: caption, matching: find.byType(Column)).first;
+        expect(
+          find.descendant(of: source, matching: find.text('shared-model')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: source,
+            matching: find.text('${31 + index} requests'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.widgetWithText(AllowanceSummaryCard, '$title · claude plan'),
+          findsOneWidget,
+        );
         final history = find.text('${21 + index} requests');
         expect(caption, findsOneWidget);
         expect(find.text(balance), findsOneWidget);
@@ -1736,11 +1811,71 @@ void main() {
 
       expect(find.text('Mock'), findsOneWidget);
       expect(find.text('other'), findsOneWidget);
-      expect(find.text('mock plan'), findsOneWidget);
+      expect(find.text('Mock · mock plan'), findsOneWidget);
+      expect(find.text('other · Model usage'), findsOneWidget);
+      expect(
+        tester.widget<UsageHistoryChart>(find.byType(UsageHistoryChart)).title,
+        'other · Usage history',
+      );
       expect(find.text('fallback-model'), findsOneWidget);
       expect(find.text('Cursor'), findsOneWidget);
       expect(find.byType(UsageHistoryChart), findsOneWidget);
       expect(dashboardProblems(snapshotOf([mock, other])).first, 'mock');
+    });
+
+    testWidgets('invalid source metadata never borrows a sibling identity', (
+      tester,
+    ) async {
+      for (final connection in [null, 'unknown.platform', 'openai.platform']) {
+        final fallback =
+            account('claude')
+              ..['accountId'] = 'private-source'
+              ..['connection'] = connection
+              ..['buckets'] = [
+                {
+                  'startAt': '2026-10-10T00:00:00Z',
+                  'endAt': '2026-10-11T00:00:00Z',
+                  'requests': 17,
+                },
+              ]
+              ..['modelBreakdown'] = [
+                {'model': 'fallback-model', 'requests': 101},
+              ];
+        final sibling =
+            account('claude')
+              ..['accountId'] = 'reporting-sibling'
+              ..['connection'] =
+                  ProviderConnections.anthropicPlatform.storageKey
+              ..['allowances'] = <Object>[]
+              ..['buckets'] = [
+                {
+                  'startAt': '2026-10-11T00:00:00Z',
+                  'endAt': '2026-10-12T00:00:00Z',
+                  'requests': 23,
+                },
+              ];
+        await show(tester, snapshotOf([sibling, fallback]));
+
+        final chart = tester.widget<UsageHistoryChart>(
+          find.widgetWithText(UsageHistoryChart, 'Claude · Usage history'),
+        );
+        expect(chart.buckets.single.requests, 17);
+        final siblingChart = tester.widget<UsageHistoryChart>(
+          find.widgetWithText(
+            UsageHistoryChart,
+            'Anthropic · Organization reporting · Usage history',
+          ),
+        );
+        expect(siblingChart.buckets.single.requests, 23);
+        expect(find.text('Claude · claude plan'), findsOneWidget);
+        expect(find.text('Claude · Model usage'), findsOneWidget);
+        expect(find.text('fallback-model'), findsOneWidget);
+        expect(find.text('private-source'), findsNothing);
+        expect(find.text('reporting-sibling'), findsNothing);
+        expect(find.textContaining('openai.platform'), findsNothing);
+        expect(find.textContaining('unknown.platform'), findsNothing);
+        expect(find.textContaining('OpenAI ·'), findsNothing);
+      }
     });
 
     testWidgets(

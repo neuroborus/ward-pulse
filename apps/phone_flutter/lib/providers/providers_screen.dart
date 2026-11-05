@@ -505,7 +505,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
               valueListenable: windows,
               builder:
                   (_, catalogue, _) => ConnectionAlertsDialog(
-                    connectionTitle: connection.listTitle,
+                    connectionTitle: connection.sourceTitle,
                     connection: connection.id,
                     thresholds: thresholds,
                     planWindows: catalogue,
@@ -567,7 +567,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
       context: context,
       builder:
           (context) => ConnectionBudgetDialog(
-            connectionTitle: connection.listTitle,
+            connectionTitle: connection.sourceTitle,
             budget: widget.alertThresholds.forConnection(connection.id).budget,
           ),
     );

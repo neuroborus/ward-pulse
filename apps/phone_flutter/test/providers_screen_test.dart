@@ -1638,8 +1638,8 @@ void main() {
         findsOneWidget,
       );
       for (final (tooltip, dialog) in const [
-        ('Budget limits', 'Budget · Team Admin API'),
-        ('Alert thresholds', 'Alerts · Team Admin API'),
+        ('Budget limits', 'Budget · Cursor · Team Admin API'),
+        ('Alert thresholds', 'Alerts · Cursor · Team Admin API'),
       ]) {
         final action = _inRow('Team Admin API', find.byTooltip(tooltip));
         await tester.ensureVisible(action);
@@ -1661,6 +1661,169 @@ void main() {
       );
     },
   );
+
+  testWidgets('colliding aliases keep canonical editors and save targets', (
+    tester,
+  ) async {
+    const alias = 'Shared reporting key';
+    const sources = [
+      (
+        ProviderConnections.openAiPlatform,
+        'OpenAI · Platform reporting',
+        1000,
+        80,
+      ),
+      (
+        ProviderConnections.anthropicPlatform,
+        'Anthropic · Organization reporting',
+        2000,
+        70,
+      ),
+    ];
+    final store = _MemoryCredentialStore();
+    for (final (id, _, _, _) in sources) {
+      await store.writeSecret(id, 'synthetic-key');
+      await store.writeLabel(id, alias);
+    }
+    var preferences = AlertThresholdPreferences(
+      connections: {
+        for (final (id, _, limit, at) in sources)
+          id.storageKey: ConnectionAlertThresholds(
+            today: AlertPercentThreshold(at: at),
+            budget: ConnectionBudget(today: limit),
+          ),
+      },
+    );
+    var saves = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder:
+                (context, setState) => ProvidersScreen(
+                  onRefresh: _noRefresh,
+                  credentialStore: store,
+                  codexAccountService: const EmptyCodexAccountService(),
+                  claudeAccountService: const EmptyClaudeAccountService(),
+                  onCredentialsChanged:
+                      () => fail('Unexpected credential mutation'),
+                  alertThresholds: preferences,
+                  onAlertThresholdsChanged: (edit) async {
+                    setState(() => preferences = edit(preferences));
+                    saves++;
+                  },
+                  cursorPlanSignIn: (_) async => null,
+                ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (final (id, title, limit, at) in sources) {
+      Future<void> open(String tooltip, String heading) async {
+        tester
+            .state<ScrollableState>(find.byType(Scrollable).first)
+            .position
+            .jumpTo(0);
+        await tester.pumpAndSettle();
+        final row = find.byWidgetPredicate(
+          (widget) =>
+              widget is ProviderConnectionRow &&
+              widget.title == alias &&
+              widget.subtitle.startsWith('$title\n'),
+        );
+        final action = find.descendant(
+          of: row,
+          matching: find.byTooltip(tooltip),
+        );
+        await tester.scrollUntilVisible(
+          action,
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(action);
+        await tester.pumpAndSettle();
+        expect(find.text('$heading · $title'), findsOneWidget);
+        expect(find.text('$heading · $alias'), findsNothing);
+      }
+
+      final beforeBudget = preferences;
+      final beforeSaves = saves;
+      for (final action in ['Cancel', 'Save']) {
+        await open('Budget limits', 'Budget');
+        final dialog = tester.widget<ConnectionBudgetDialog>(
+          find.byType(ConnectionBudgetDialog),
+        );
+        expect(
+          dialog.budget.toJson(),
+          beforeBudget.forConnection(id).budget.toJson(),
+        );
+        final field =
+            find.descendant(
+              of: find.byType(ConnectionBudgetDialog),
+              matching: find.byType(TextFormField),
+            ).first;
+        expect(
+          tester.widget<TextFormField>(field).controller!.text,
+          '${limit ~/ 100}.00',
+        );
+        await tester.enterText(field, '99.00');
+        await tester.tap(find.text(action));
+        await tester.pumpAndSettle();
+        final expected =
+            action == 'Cancel'
+                ? beforeBudget
+                : beforeBudget.withConnection(
+                  id,
+                  beforeBudget.forConnection(id).copyWith(
+                    budget: const ConnectionBudget(today: 9900),
+                  ),
+                );
+        expect(preferences.toJson(), expected.toJson());
+        expect(saves, beforeSaves + (action == 'Save' ? 1 : 0));
+      }
+
+      final beforeAlerts = preferences;
+      for (final action in ['Cancel', 'Save']) {
+        await open('Alert thresholds', 'Alerts');
+        final dialog = tester.widget<ConnectionAlertsDialog>(
+          find.byType(ConnectionAlertsDialog),
+        );
+        expect(dialog.connection, id);
+        expect(
+          dialog.thresholds.toJson(),
+          beforeAlerts.forConnection(id).toJson(),
+        );
+        expect(
+          tester
+              .widget<AlertPercentThresholdEditor>(
+                find.widgetWithText(AlertPercentThresholdEditor, 'Today'),
+              )
+              .value
+              .at,
+          at,
+        );
+        await _chooseAlert(tester, 'Today', 'Off');
+        await tester.tap(find.text(action));
+        await tester.pumpAndSettle();
+        final expected =
+            action == 'Cancel'
+                ? beforeAlerts
+                : beforeAlerts.withConnection(
+                  id,
+                  beforeAlerts.forConnection(id).copyWith(
+                    today: const AlertPercentThreshold(),
+                  ),
+                );
+        expect(preferences.toJson(), expected.toJson());
+        expect(saves, beforeSaves + (action == 'Save' ? 2 : 1));
+      }
+      expect(await store.readSecret(id), 'synthetic-key');
+      expect(await store.readLabel(id), alias);
+    }
+  });
 
   testWidgets('missing budget limits disable alerts with readable guidance', (
     tester,
@@ -1738,7 +1901,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(action);
       await tester.pumpAndSettle();
-      expect(find.text('Alerts · Team Admin API'), findsOneWidget);
+      expect(find.text('Alerts · Cursor · Team Admin API'), findsOneWidget);
     }
 
     final dialog = find.byType(AlertDialog);

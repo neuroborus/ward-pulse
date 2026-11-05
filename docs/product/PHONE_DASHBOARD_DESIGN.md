@@ -144,10 +144,17 @@ same provider kind. Periods, units and unknown values remain source-owned.
 Nonempty requests-only histories render; empty histories do not. A source without
 allowance or activity detail remains represented, including its unhealthy state
 when applicable.
-Source captions use existing provider or connection catalog metadata, with an
-ordinal when captions would otherwise be ambiguous. They expose no raw account
-or connection IDs or personal account data. Existing labels remain available;
-this change adds no saved-Label loading or display.
+**Local-source heading revision 2026-11-05.** Source captions and independently readable
+history, Model usage and allowance headings use existing provider or connection catalog
+metadata. Canonical plan titles remain Codex plan, Claude plan and Cursor plan; reporting
+titles include their family, such as OpenAI · Platform reporting. Resolve each account's
+context once, retaining the existing Source N disambiguation in its local headings and
+missing Extra usage notice. Missing or mismatched connection metadata retains the account's
+safe provider-label fallback; neither siblings, model names nor colors supply identity.
+No raw account/connection IDs or personal account data are exposed. Dashboard does not
+load saved Labels. Budget and Alerts dialogs also use canonical source titles independently
+of Labels, preserving exact editor targets and Save/Cancel behavior, including Alerts · Cursor
+plan. Native fit and public capture acceptance for this revision remain pending.
 
 Family identity and source placement depend on stable keys, independently of
 display copy. `_providerDashboardSections` orders families by the existing
@@ -163,8 +170,9 @@ inside their owning account, using aligned Today/Week/Month rows or equal-width 
 at the existing 760px source-width breakpoint. Known Plan connections are excluded;
 legacy/OpenAI/Mock accounts retain their existing per-account budget-capability fallback.
 The source caption, account status and original successful As of time appear once inside
-the block. A legacy source without a distinct caption uses Expenses beneath its existing
-family header. Narrow allowance content stretches consistently. There are no duplicate global
+the block. **Legacy heading clarification 2026-11-05:** a source without a distinct caption
+uses its resolved safe source title followed by · Expenses inside the block. Today/Week/Month
+remain fields. Narrow allowance content stretches consistently. There are no duplicate global
 Platform spend cards; domain totals, caps, Alerts, navigation, ranking and rollups remain.
 
 Known positive and zero Money remain visible without a cap. Missing cost says No spend

@@ -106,6 +106,12 @@ final class ProviderConnection {
   /// Non-clamping provider freshness guidance shown on the Settings row.
   final String? freshnessNote;
 
+  /// Canonical source identity, independent of a saved display name.
+  String get sourceTitle =>
+      id.kind == ConnectionKind.plan
+          ? title
+          : '${providerFamilyLabel(id.provider)} · $title';
+
   String get listTitle {
     final label = displayName?.trim();
     if (label != null && label.isNotEmpty) {

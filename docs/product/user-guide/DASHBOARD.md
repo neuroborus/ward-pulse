@@ -16,7 +16,10 @@ Remaining ties use **Anthropic → Cursor → OpenAI**. Ordinary changes to perc
 keep the current order; a status change or an added or removed provider family recalculates it.
 
 Within each family, the plan appears before API reporting, and each history stays beside
-its source. Remaining percentages do not set the Dashboard order. The
+its source. Allowance cards, **Usage history** and **Model usage** name their source in their
+own headings, such as **Codex plan** or **OpenAI · Platform reporting**. Repeated sources
+also carry **Source N** labels to keep their data distinct while scrolling.
+Remaining percentages do not set the Dashboard order. The
 [watch orders selected metrics by remaining capacity](/guide/watch#display-order).
 
 ## Read balances and bars
@@ -56,7 +59,7 @@ and time, independently of the Dashboard's latest update. Today starts at midnig
 Week on Monday UTC, and Month on the first calendar day UTC.
 
 Each source has aligned Today/Week/Month rows, or equal-width columns on a wide screen,
-with one source status and **As of** time. Read the card beside its source label.
+with one source status and **As of** time. Read the source named inside each expense card.
 Known Money rounds to whole cents, so a tiny positive amount may display as **USD 0.00**.
 Partial history bars do not establish a complete total: a missing daily cost bucket can leave a period unavailable.
 History and **Model usage** appear when the provider
@@ -84,6 +87,9 @@ reporting connections also have a **piggy-bank icon** for **Budget limits**. A f
 piggy-bank or ringing bell indicates configured limits or rules, not successful provider sync.
 
 **Piggy-bank icon:** Budget limits. **Bell icon:** Alert thresholds.
+
+Budget and Alerts titles identify the provider and connection, even when
+reporting rows have the same saved **Label**. Check that title before editing.
 
 ### Budget limits
 

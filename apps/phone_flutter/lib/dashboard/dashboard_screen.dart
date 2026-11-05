@@ -405,11 +405,13 @@ class AllowanceSummaryCard extends StatelessWidget {
   const AllowanceSummaryCard({
     super.key,
     required this.allowance,
+    this.title,
     this.accent,
     this.monthlyExtraUsage = false,
   });
 
   final AllowanceState allowance;
+  final String? title;
   final bool monthlyExtraUsage;
 
   /// Metric identity tint for the progress fill; defaults to theme primary.
@@ -456,7 +458,10 @@ class AllowanceSummaryCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(allowance.label, style: textTheme.titleMedium),
+                  child: Text(
+                    title ?? allowance.label,
+                    style: textTheme.titleMedium,
+                  ),
                 ),
                 // A mark is an exception, never the norm: a column of healthy
                 // checkmarks outweighs the one warning the screen was opened
@@ -910,6 +915,15 @@ class _ProviderDashboardSectionView extends StatelessWidget {
           : section.provider,
     );
     final labels = section.accounts.map(_dashboardSourceLabel).toList();
+    final sourceTitles = [
+      for (final (index, label) in labels.indexed)
+        label != section.providerLabel &&
+                labels.where((candidate) => candidate == label).length == 1
+            ? label
+            : labels.length > 1
+            ? '$label · Source ${index + 1}'
+            : label,
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -948,15 +962,10 @@ class _ProviderDashboardSectionView extends StatelessWidget {
           _ProviderDashboardSourceView(
             account: account,
             accent: accent,
+            sourceTitle: sourceTitles[index],
             caption:
-                labels[index] != section.providerLabel &&
-                        labels
-                                .where((label) => label == labels[index])
-                                .length ==
-                            1
-                    ? labels[index]
-                    : labels.length > 1
-                    ? '${labels[index]} · Source ${index + 1}'
+                sourceTitles[index] != section.providerLabel
+                    ? sourceTitles[index]
                     : null,
           ),
         ],
@@ -975,7 +984,7 @@ String _dashboardSourceLabel(ProviderSnapshot account) {
       connection.provider == providerFamilyOf(account.provider)) {
     for (final metadata in providerConnectionCatalog()) {
       if (metadata.id == connection) {
-        return metadata.title;
+        return metadata.sourceTitle;
       }
     }
   }
@@ -1001,10 +1010,10 @@ bool _showsSourceExpenses(ProviderSnapshot account) {
 
 /// One account's reported Money and optional advisory caps, never Plan balances.
 class _SourceExpenseBlock extends StatelessWidget {
-  const _SourceExpenseBlock({required this.account, required this.caption});
+  const _SourceExpenseBlock({required this.account, required this.title});
 
   final ProviderSnapshot account;
-  final String? caption;
+  final String title;
 
   @override
   Widget build(BuildContext context) {
@@ -1063,10 +1072,7 @@ class _SourceExpenseBlock extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        caption ?? 'Expenses',
-                        style: textTheme.titleSmall,
-                      ),
+                      child: Text(title, style: textTheme.titleSmall),
                     ),
                     if (account.status != ProviderStatus.ok)
                       StatusPill(status: account.status),
@@ -1119,11 +1125,13 @@ class _ProviderDashboardSourceView extends StatelessWidget {
   const _ProviderDashboardSourceView({
     required this.account,
     required this.accent,
+    required this.sourceTitle,
     required this.caption,
   });
 
   final ProviderSnapshot account;
   final Color accent;
+  final String sourceTitle;
   final String? caption;
 
   @override
@@ -1133,6 +1141,7 @@ class _ProviderDashboardSourceView extends StatelessWidget {
       for (final allowance in account.allowances)
         AllowanceSummaryCard(
           allowance: allowance,
+          title: '$sourceTitle · ${allowance.label}',
           monthlyExtraUsage:
               _isClaudePlan(account) &&
               allowance.source == AllowanceSource.purchased &&
@@ -1151,10 +1160,12 @@ class _ProviderDashboardSourceView extends StatelessWidget {
                 allowance.source == AllowanceSource.purchased &&
                 allowance.id == 'claude-extra-usage',
           ))
-        const Card(
+        Card(
           child: Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('Claude Extra usage: monthly data unavailable.'),
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              '$sourceTitle · Extra usage: monthly data unavailable.',
+            ),
           ),
         ),
     ];
@@ -1169,7 +1180,10 @@ class _ProviderDashboardSourceView extends StatelessWidget {
             const SizedBox(height: 8),
         ],
         if (showExpenses) ...[
-          _SourceExpenseBlock(account: account, caption: caption),
+          _SourceExpenseBlock(
+            account: account,
+            title: caption ?? '$sourceTitle · Expenses',
+          ),
           if (cards.isNotEmpty) const SizedBox(height: 12),
         ],
         if (cards.isNotEmpty)
@@ -1200,12 +1214,16 @@ class _ProviderDashboardSourceView extends StatelessWidget {
           ),
         if (account.buckets.isNotEmpty) ...[
           if (showExpenses || cards.isNotEmpty) const SizedBox(height: 12),
-          UsageHistoryChart(buckets: account.buckets, accent: accent),
+          UsageHistoryChart(
+            buckets: account.buckets,
+            title: '$sourceTitle · Usage history',
+            accent: accent,
+          ),
         ],
         if (account.modelBreakdown.isNotEmpty) ...[
           if (showExpenses || cards.isNotEmpty || account.buckets.isNotEmpty)
             const SizedBox(height: 12),
-          _SectionHeader(title: 'Model usage'),
+          _SectionHeader(title: '$sourceTitle · Model usage'),
           const SizedBox(height: 8),
           _ModelUsagePanel(models: account.modelBreakdown, accent: accent),
         ],

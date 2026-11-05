@@ -1260,11 +1260,11 @@ void main() {
 
     final dashboard = find.byType(Scrollable).first;
     await tester.scrollUntilVisible(
-      find.text('Usage history'),
+      find.text('Mock · Usage history'),
       300,
       scrollable: dashboard,
     );
-    expect(find.text('Usage history'), findsOneWidget);
+    expect(find.text('Mock · Usage history'), findsOneWidget);
     expect(find.text('4 buckets'), findsOneWidget);
 
     await tester.scrollUntilVisible(
@@ -2786,7 +2786,7 @@ void main() {
     await tester.tap(platformButton('Budget limits'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Budget · Platform reporting'), findsOneWidget);
+    expect(find.text('Budget · OpenAI · Platform reporting'), findsOneWidget);
     await tester.enterText(find.byType(TextField).first, '25');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
@@ -2794,7 +2794,7 @@ void main() {
     await tester.tap(platformButton('Alert thresholds'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Alerts · Platform reporting'), findsOneWidget);
+    expect(find.text('Alerts · OpenAI · Platform reporting'), findsOneWidget);
     expect(find.text('Today'), findsOneWidget);
     expect(find.text('Week'), findsOneWidget);
     expect(find.text('Month'), findsOneWidget);
@@ -3906,8 +3906,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Weekly plan'), findsOneWidget);
-      expect(find.text('Purchased credits'), findsOneWidget);
+      expect(find.text('Codex · Weekly plan'), findsOneWidget);
+      expect(find.text('Codex · Purchased credits'), findsOneWidget);
 
       await tester.tap(find.text('Settings'));
       await tester.pumpAndSettle();
