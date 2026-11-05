@@ -122,9 +122,21 @@ void main() {
           of: find.byType(ProvidersScreen),
           matching: find.byType(Scrollable),
         );
-        await tester.drag(list, const Offset(0, 1200));
-        await tester.pumpAndSettle();
         final position = tester.state<ScrollableState>(list).position;
+        final startingPixels = position.pixels;
+        final minScrollExtent = position.minScrollExtent;
+        final viewportDimension = position.viewportDimension;
+        expect(startingPixels.isFinite, isTrue);
+        expect(minScrollExtent.isFinite, isTrue);
+        expect(viewportDimension.isFinite, isTrue);
+        expect(startingPixels, greaterThan(minScrollExtent));
+        expect(viewportDimension, greaterThan(kDragSlopDefault));
+        await tester.drag(
+          list,
+          Offset(0, startingPixels - minScrollExtent + viewportDimension),
+        );
+        await tester.pumpAndSettle();
+        expect(position.pixels, lessThan(startingPixels));
         expect(position.pixels, position.minScrollExtent);
         await tester.pumpWidget(
           screen(
@@ -302,9 +314,21 @@ void main() {
           of: find.byType(ProvidersScreen),
           matching: find.byType(Scrollable),
         );
-        await tester.drag(list, const Offset(0, 1200));
-        await tester.pumpAndSettle();
         final position = tester.state<ScrollableState>(list).position;
+        final startingPixels = position.pixels;
+        final minScrollExtent = position.minScrollExtent;
+        final viewportDimension = position.viewportDimension;
+        expect(startingPixels.isFinite, isTrue);
+        expect(minScrollExtent.isFinite, isTrue);
+        expect(viewportDimension.isFinite, isTrue);
+        expect(startingPixels, greaterThan(minScrollExtent));
+        expect(viewportDimension, greaterThan(kDragSlopDefault));
+        await tester.drag(
+          list,
+          Offset(0, startingPixels - minScrollExtent + viewportDimension),
+        );
+        await tester.pumpAndSettle();
+        expect(position.pixels, lessThan(startingPixels));
         expect(position.pixels, position.minScrollExtent);
         release.complete();
         await tester.pumpAndSettle();
