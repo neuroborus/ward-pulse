@@ -56,6 +56,7 @@ class UsageHistoryChart extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
+                const SizedBox(width: 8),
                 Text(_bucketCountLabel(buckets.length)),
               ],
             ),

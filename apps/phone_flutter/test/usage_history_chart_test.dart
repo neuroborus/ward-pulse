@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/charts/usage_history_chart.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
@@ -19,6 +20,75 @@ void main() {
     expect(find.text('USD 3.50'), findsOneWidget);
     expect(find.text('2026-07-12'), findsOneWidget);
     expect(find.text('2026-07-14'), findsOneWidget);
+  });
+
+  testWidgets('separates a wrapped history title from its bucket count', (
+    tester,
+  ) async {
+    const size = Size(411, 900);
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = size;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    const title = 'Anthropic · Organization reporting · Usage history';
+    final buckets = List.generate(
+      5,
+      (index) => _bucket(DateTime.utc(2026, 7, 12 + index), 1),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: const TextScaler.linear(1.6),
+          ),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: Padding(
+            padding: const EdgeInsets.all(16),
+            child: UsageHistoryChart(buckets: buckets, title: title),
+          ),
+        ),
+      ),
+    );
+
+    final titleFinder = find.text(title);
+    final countFinder = find.text('5 buckets');
+    expect(titleFinder, findsOneWidget);
+    expect(countFinder, findsOneWidget);
+    expect(
+      tester.getRect(countFinder).left - tester.getRect(titleFinder).right,
+      greaterThanOrEqualTo(8),
+    );
+
+    for (final text in [title, '5 buckets']) {
+      final finder = find.text(text);
+      final paragraph = tester.renderObject<RenderParagraph>(finder);
+      final bounds = (Offset.zero & paragraph.size).inflate(0.001);
+      final boxes = paragraph.getBoxesForSelection(
+        TextSelection(baseOffset: 0, extentOffset: text.length),
+      );
+      expect(paragraph.didExceedMaxLines, isFalse);
+      expect(paragraph.textScaler.scale(10), closeTo(16, 0.001));
+      expect(boxes, isNotEmpty);
+      if (text == title) {
+        expect(boxes.last.bottom, greaterThan(boxes.first.bottom));
+      }
+      for (var offset = 0; offset < text.length; offset++) {
+        if (text[offset] == ' ') continue;
+        final glyphs = paragraph.getBoxesForSelection(
+          TextSelection(baseOffset: offset, extentOffset: offset + 1),
+        );
+        expect(glyphs, hasLength(1));
+        final glyphBounds = glyphs.single.toRect();
+        expect(glyphBounds.isEmpty, isFalse);
+        expect(bounds.intersect(glyphBounds), glyphBounds);
+      }
+      final rect = tester.getRect(finder);
+      expect((Offset.zero & size).intersect(rect), rect);
+    }
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('plots Cursor-style request buckets without inventing cost', (
