@@ -46,7 +46,12 @@ selection changes or missing-pair data. Use the owning WFF/provider rules for sl
 Where possible, distinguish producer output, effective binding and active scene through
 supported diagnostics and normal app/renderer operations. A corrected image after scene
 recreation supports a stale-layer hypothesis; it does not identify that layer or prove a
-durable product fix by itself. Keep unavailable causal evidence Pending.
+durable product fix by itself. For an owner-requested causal diagnosis, reversible lock/unlock
+symptoms or an API default do not finish the investigation. Continue available bounded
+comparisons from receiver through selected data to consumer; inspect the exact installed
+implementation when a boundary obscures the consumed data. Pending or Unknown does not
+justify stopping while a supported next diagnostic is available. Keep unavailable causal
+evidence Pending and name the concrete prerequisite that prevents further investigation.
 
 Before an installer/device recipe touches a protected artifact cohort, inspect expanded commands, aggregate task/module installs AND bundled assets, manifest metadata and possible platform-receiver updates; reconcile EVERY affected package with the authorized phase, not only the main APK. For protected Wear Push retention, compare the candidate embedded APK with the retained installed APK by exact bytes, validated signer and variant-owned resources BEFORE installing the host; equal versionCode or an explicit app-controller/callback guard does not establish platform preservation. Follow [Watch Face Push builds](../../../../docs/ANDROID_TOOLCHAIN.md#watch-face-push-builds).
 Hold a protected retained/bundled identity mismatch unless the owning accepted migration explicitly covers that exact new cohort. Hold other unreconciled module/package or implicit-update effects; use a supported scoped owner route or return the recipe/provisioning finding to actual Runner. Do not assume a narrower task prevents platform reactions.
