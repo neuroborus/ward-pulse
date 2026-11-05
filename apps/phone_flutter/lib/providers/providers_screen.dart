@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../app/pull_to_refresh_list.dart';
 import '../app/surface_order.dart';
@@ -88,10 +89,20 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
   final Map<String, bool> _hasSecret = {};
   final _rowKeys = <ProviderConnectionId, GlobalKey>{};
   final _rowFocus = <ProviderConnectionId, FocusNode>{};
+  final _initialRowReads = <Object>{};
+  ({ProviderConnectionId connection, int token})? _pendingReveal;
   var _revealGeneration = 0;
+  var _layoutRevision = 0;
+  var _credentialsReady = false;
+  var _revealQueued = false;
+  int? _runningReveal;
+  var _discoveryFromStart = true;
 
   @override
   void dispose() {
+    ++_revealGeneration;
+    _pendingReveal = null;
+    _initialRowReads.clear();
     for (final node in _rowFocus.values) {
       node.dispose();
     }
@@ -99,40 +110,131 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
   }
 
   void _scheduleReveal() {
-    final request = widget.revealConnection;
-    if (request == null) return;
-    final generation = ++_revealGeneration;
-    var fromStart = true;
-    void reveal(Duration _) {
-      if (!mounted || generation != _revealGeneration) return;
-      final target = _rowKeys[request.connection]?.currentContext;
-      if (target != null) {
-        Scrollable.ensureVisible(
-          target,
-          alignment: 0,
-          duration: const Duration(milliseconds: 250),
+    ++_revealGeneration;
+    _pendingReveal = widget.revealConnection;
+    _discoveryFromStart = true;
+    _queueReveal();
+  }
+
+  // Rows register only their existing initial local read. Disposal retires the
+  // same owner as completion, so a late result cannot wake a newer row instance.
+  VoidCallback _registerInitialRowRead() {
+    final owner = Object();
+    _initialRowReads.add(owner);
+    ++_layoutRevision;
+    _queueReveal();
+    return () {
+      if (!mounted || !_initialRowReads.remove(owner)) return;
+      ++_layoutRevision;
+      _queueReveal();
+    };
+  }
+
+  void _queueReveal() {
+    if (!mounted || _pendingReveal == null || _revealQueued) return;
+    _revealQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _revealQueued = false;
+      if (mounted) _settleReveal();
+    });
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  Future<void> _revealLayout() {
+    WidgetsBinding.instance.scheduleFrame();
+    return WidgetsBinding.instance.endOfFrame;
+  }
+
+  Future<void> _settleReveal() async {
+    final request = _pendingReveal;
+    final generation = _revealGeneration;
+    if (request == null || _runningReveal == generation) return;
+    bool owned() =>
+        mounted &&
+        generation == _revealGeneration &&
+        _pendingReveal == request &&
+        widget.revealConnection == request;
+    _runningReveal = generation;
+    final startedRevision = _layoutRevision;
+    try {
+      // Screen publication can reorder families. Discover in that published
+      // order before waiting for row-local reads, never for unbuilt rows.
+      if (!_credentialsReady) return;
+      var target = _rowKeys[request.connection]?.currentContext;
+      while (owned() && target == null) {
+        final controller = PrimaryScrollController.maybeOf(context);
+        if (controller == null || controller.positions.length != 1) return;
+        final position = controller.position;
+        final offset =
+            _discoveryFromStart
+                ? position.minScrollExtent
+                : (position.pixels + position.viewportDimension)
+                    .clamp(position.minScrollExtent, position.maxScrollExtent)
+                    .toDouble();
+        if (!_discoveryFromStart && offset <= position.pixels) return;
+        _discoveryFromStart = false;
+        position.jumpTo(offset);
+        await _revealLayout();
+        if (!owned() ||
+            !_credentialsReady ||
+            startedRevision != _layoutRevision)
+          return;
+        target = _rowKeys[request.connection]?.currentContext;
+      }
+      if (!owned() || target == null || _initialRowReads.isNotEmpty) return;
+      final revision = _layoutRevision;
+      bool settled() =>
+          owned() &&
+          _credentialsReady &&
+          revision == _layoutRevision &&
+          _initialRowReads.isEmpty &&
+          identical(target, _rowKeys[request.connection]?.currentContext);
+      await Scrollable.ensureVisible(
+        target,
+        alignment: 0,
+        duration: const Duration(milliseconds: 250),
+      );
+      await _revealLayout();
+      if (!settled()) return;
+      final row = target.findRenderObject();
+      if (row is! RenderBox || !row.attached) return;
+      final viewport = RenderAbstractViewport.of(row);
+      if (viewport is! RenderBox) return;
+      final position = Scrollable.of(target).position;
+      Rect bounds() =>
+          row.localToGlobal(Offset.zero, ancestor: viewport) & row.size;
+      final before = bounds();
+      final height = viewport.size.height;
+      final oversized = before.height > height;
+      final delta =
+          oversized || before.top < 0
+              ? before.top
+              : before.bottom > height
+              ? before.bottom - height
+              : 0.0;
+      if (delta.abs() > 0.5) {
+        position.jumpTo(
+          (position.pixels + delta)
+              .clamp(position.minScrollExtent, position.maxScrollExtent)
+              .toDouble(),
         );
-        _rowFocus[request.connection]?.requestFocus();
-        widget.onConnectionRevealed?.call(request.token);
+      }
+      await _revealLayout();
+      if (!settled() || !row.attached || !viewport.attached) return;
+      final after = bounds();
+      if (oversized
+          ? after.top.abs() > 0.5
+          : after.top < -0.5 || after.bottom > viewport.size.height + 0.5) {
         return;
       }
-      final controller = PrimaryScrollController.maybeOf(context);
-      if (controller == null || controller.positions.length != 1) return;
-      final position = controller.position;
-      final offset =
-          fromStart
-              ? position.minScrollExtent
-              : (position.pixels + position.viewportDimension)
-                  .clamp(position.minScrollExtent, position.maxScrollExtent)
-                  .toDouble();
-      if (!fromStart && offset <= position.pixels) return;
-      fromStart = false;
-      position.jumpTo(offset);
-      WidgetsBinding.instance.addPostFrameCallback(reveal);
-      WidgetsBinding.instance.scheduleFrame();
+      _pendingReveal = null;
+      _rowFocus[request.connection]?.requestFocus();
+      widget.onConnectionRevealed?.call(request.token);
+    } finally {
+      if (_runningReveal == generation) _runningReveal = null;
+      // Only a real read/layout publication resumes unfinished work.
+      if (owned() && startedRevision != _layoutRevision) _queueReveal();
     }
-
-    WidgetsBinding.instance.addPostFrameCallback(reveal);
   }
 
   final Map<String, String?> _labels = {};
@@ -177,9 +279,13 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
       );
       _loadCredentialState();
     }
-    if (oldWidget.revealConnection != widget.revealConnection &&
-        widget.revealConnection != null)
+    if (oldWidget.revealConnection != widget.revealConnection) {
       _scheduleReveal();
+    } else if (_pendingReveal != null) {
+      _discoveryFromStart = true;
+      ++_layoutRevision;
+      _queueReveal();
+    }
     if (oldWidget.editConnection != widget.editConnection) {
       _openingConnection = null;
       _scheduleEditor();
@@ -188,6 +294,8 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
 
   Future<void> _loadCredentialState() async {
     final revision = ++_readRevision;
+    _credentialsReady = false;
+    ++_layoutRevision;
     final secrets = <String, bool>{};
     final labels = <String, String?>{};
     final failures = <String>{};
@@ -256,6 +364,12 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     }
     if (!mounted || revision != _readRevision) return;
     setState(() {
+      _credentialsReady = true;
+      // A newer catalogue publication replaces an unfinished traversal: its
+      // target may now be behind the previous offset. Row-local completion
+      // alone never restarts the bounded start-to-end search.
+      _discoveryFromStart = true;
+      ++_layoutRevision;
       _hasSecret
         ..clear()
         ..addAll(secrets);
@@ -269,6 +383,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
         ..clear()
         ..addAll(updates);
     });
+    _queueReveal();
     _scheduleEditor();
   }
 
@@ -523,6 +638,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
   Widget _connectionRow(ProviderConnection connection) {
     if (connection.id == ProviderConnections.codexPlan) {
       return CodexAccountRow(
+        onInitialRead: _registerInitialRowRead,
         connection: connection,
         accountService: widget.codexAccountService,
         onCredentialsChanged: widget.onCredentialsChanged,
@@ -531,6 +647,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     }
     if (connection.id == ProviderConnections.claudePlan) {
       return ClaudeAccountRow(
+        onInitialRead: _registerInitialRowRead,
         connection: connection,
         accountService: widget.claudeAccountService,
         credentialStore: widget.credentialStore,
@@ -544,6 +661,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     }
     if (connection.id == ProviderConnections.cursorPlan) {
       return CursorPlanRow(
+        onInitialRead: _registerInitialRowRead,
         connection: connection,
         credentialStore: widget.credentialStore,
         onCredentialsChanged: widget.onCredentialsChanged,

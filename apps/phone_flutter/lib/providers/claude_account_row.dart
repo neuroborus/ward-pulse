@@ -20,6 +20,7 @@ class ClaudeAccountRow extends StatefulWidget {
     required this.onCredentialsChanged,
     required this.onPastedSecretCleared,
     required this.buildControls,
+    this.onInitialRead,
   });
 
   final ProviderConnection connection;
@@ -31,17 +32,22 @@ class ClaudeAccountRow extends StatefulWidget {
   final VoidCallback onPastedSecretCleared;
   final ConnectionRowControlsBuilder buildControls;
 
+  /// Registers the initial local read with the containing reveal layout.
+  final VoidCallback Function()? onInitialRead;
+
   @override
   State<ClaudeAccountRow> createState() => _ClaudeAccountRowState();
 }
 
 class _ClaudeAccountRowState extends State<ClaudeAccountRow> {
   bool? _hasAccount;
+  VoidCallback? _finishInitialRead;
   bool _isConnecting = false;
 
   @override
   void initState() {
     super.initState();
+    _finishInitialRead = widget.onInitialRead?.call();
     _loadState();
   }
 
@@ -59,7 +65,17 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow> {
           _hasAccount = false;
         });
       }
+    } finally {
+      _finishInitialRead?.call();
+      _finishInitialRead = null;
     }
+  }
+
+  @override
+  void dispose() {
+    _finishInitialRead?.call();
+    _finishInitialRead = null;
+    super.dispose();
   }
 
   Future<void> _editAccount() async {

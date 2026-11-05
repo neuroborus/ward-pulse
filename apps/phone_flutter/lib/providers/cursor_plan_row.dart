@@ -23,6 +23,7 @@ class CursorPlanRow extends StatefulWidget {
     required this.credentialStore,
     required this.onCredentialsChanged,
     required this.buildControls,
+    this.onInitialRead,
     this.signIn,
   });
 
@@ -30,6 +31,9 @@ class CursorPlanRow extends StatefulWidget {
   final ProviderCredentialStore credentialStore;
   final VoidCallback onCredentialsChanged;
   final ConnectionRowControlsBuilder buildControls;
+
+  /// Registers the initial local read with the containing reveal layout.
+  final VoidCallback Function()? onInitialRead;
 
   /// Test seam; defaults to [CursorPlanSignInScreen.open].
   final CursorPlanSignIn? signIn;
@@ -40,11 +44,13 @@ class CursorPlanRow extends StatefulWidget {
 
 class _CursorPlanRowState extends State<CursorPlanRow> {
   bool? _hasAccount;
+  VoidCallback? _finishInitialRead;
   bool _isConnecting = false;
 
   @override
   void initState() {
     super.initState();
+    _finishInitialRead = widget.onInitialRead?.call();
     _loadState();
   }
 
@@ -66,7 +72,17 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
           _hasAccount = false;
         });
       }
+    } finally {
+      _finishInitialRead?.call();
+      _finishInitialRead = null;
     }
+  }
+
+  @override
+  void dispose() {
+    _finishInitialRead?.call();
+    _finishInitialRead = null;
+    super.dispose();
   }
 
   Future<void> _editAccount() async {

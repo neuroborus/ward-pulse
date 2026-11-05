@@ -18,6 +18,7 @@ class CodexAccountRow extends StatefulWidget {
     required this.accountService,
     required this.onCredentialsChanged,
     required this.buildControls,
+    this.onInitialRead,
   });
 
   final ProviderConnection connection;
@@ -25,17 +26,22 @@ class CodexAccountRow extends StatefulWidget {
   final VoidCallback onCredentialsChanged;
   final ConnectionRowControlsBuilder buildControls;
 
+  /// Registers the initial local read with the containing reveal layout.
+  final VoidCallback Function()? onInitialRead;
+
   @override
   State<CodexAccountRow> createState() => _CodexAccountRowState();
 }
 
 class _CodexAccountRowState extends State<CodexAccountRow> {
   bool? _hasAccount;
+  VoidCallback? _finishInitialRead;
   bool _isConnecting = false;
 
   @override
   void initState() {
     super.initState();
+    _finishInitialRead = widget.onInitialRead?.call();
     _loadState();
   }
 
@@ -53,7 +59,17 @@ class _CodexAccountRowState extends State<CodexAccountRow> {
           _hasAccount = false;
         });
       }
+    } finally {
+      _finishInitialRead?.call();
+      _finishInitialRead = null;
     }
+  }
+
+  @override
+  void dispose() {
+    _finishInitialRead?.call();
+    _finishInitialRead = null;
+    super.dispose();
   }
 
   Future<void> _editAccount() async {

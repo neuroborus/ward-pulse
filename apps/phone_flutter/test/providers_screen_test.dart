@@ -20,6 +20,464 @@ import 'package:ward_pulse_phone/settings/alert_percent_threshold_editor.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 
 void main() {
+  group('owned connection reveal', () {
+    const id = ProviderConnections.openAiPlatform;
+    const request = (connection: id, token: 1);
+    const statuses = {
+      ProviderFamily.openai: ProviderStatus.ok,
+      ProviderFamily.anthropic: ProviderStatus.ok,
+      ProviderFamily.cursor: ProviderStatus.ok,
+    };
+
+    Widget screen({
+      required _MemoryCredentialStore store,
+      required void Function(int) revealed,
+      ({ProviderConnectionId connection, int token})? reveal = request,
+      Map<ProviderConnectionId, ConnectionReportingUpdate> updates = const {},
+      Map<ProviderFamily, ProviderStatus> order = statuses,
+      CodexAccountService codex = const EmptyCodexAccountService(),
+      Key? key,
+    }) => MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(title: const Text('Providers')),
+        bottomNavigationBar: NavigationBar(
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.home), label: 'Dashboard'),
+            NavigationDestination(icon: Icon(Icons.hub), label: 'Providers'),
+          ],
+        ),
+        body: ProvidersScreen(
+          key: key,
+          credentialStore: store,
+          codexAccountService: codex,
+          claudeAccountService: const EmptyClaudeAccountService(),
+          onCredentialsChanged: () => fail('Unexpected credential change'),
+          alertThresholds: const AlertThresholdPreferences(),
+          onAlertThresholdsChanged: (_) async => fail('Unexpected save'),
+          onRefresh: _noRefresh,
+          statuses: order,
+          reportingUpdates: updates,
+          isSnapshotCurrent:
+              (snapshot) async => snapshot.connectionVersions.entries.every(
+                (entry) => CredentialVersion(entry.value).sameCache(
+                  store.version(
+                    ProviderConnectionId.fromStorageKey(entry.key)!,
+                  ),
+                ),
+              ),
+          revealConnection: reveal,
+          onConnectionRevealed: revealed,
+        ),
+      ),
+    );
+
+    ConnectionReportingUpdate failure(_MemoryCredentialStore store) =>
+        ConnectionReportingUpdate(
+          connection: id,
+          credentialVersion: store.version(id),
+          outcome: ConnectionReportingOutcome(
+            connection: id,
+            credentialVersion: store.version(id),
+            category: ReportingOutcomeCategory.transientFailure,
+            source: ReportingOutcomeSource.live,
+            freshness: ReportingOutcomeFreshness.current,
+          ),
+        );
+
+    for (final scale in [1.0, 1.6]) {
+      testWidgets('late reporting layout settles the complete row at $scale', (
+        tester,
+      ) async {
+        _setTestSurface(tester, const Size(390, 844));
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final store = _MemoryCredentialStore();
+        await store.writeSecret(id, 'synthetic-key');
+        final release = Completer<void>();
+        addTearDown(() {
+          if (!release.isCompleted) release.complete();
+        });
+        store.beforeReadLabel = (connection) async {
+          if (connection == id) await release.future;
+        };
+        final acknowledgements = <int>[];
+        final update = failure(store);
+        await tester.pumpWidget(
+          screen(
+            store: store,
+            revealed: acknowledgements.add,
+            updates: {id: update},
+          ),
+        );
+        await _pumpPendingReveal(tester);
+        expect(acknowledgements, isEmpty);
+        release.complete();
+        await tester.pumpAndSettle();
+        expect(acknowledgements, [1]);
+        _expectCompleteReveal(tester, 'Platform reporting', update.outcome!);
+
+        // A finished token must not turn an ordinary later publication into
+        // another navigation request after the reader scrolls elsewhere.
+        final list = find.descendant(
+          of: find.byType(ProvidersScreen),
+          matching: find.byType(Scrollable),
+        );
+        await tester.drag(list, const Offset(0, 1200));
+        await tester.pumpAndSettle();
+        final position = tester.state<ScrollableState>(list).position;
+        expect(position.pixels, position.minScrollExtent);
+        await tester.pumpWidget(
+          screen(
+            store: store,
+            revealed: acknowledgements.add,
+            updates: {
+              id: ConnectionReportingUpdate(
+                connection: id,
+                credentialVersion: store.version(id),
+                outcome: ConnectionReportingOutcome(
+                  connection: id,
+                  credentialVersion: store.version(id),
+                  category: ReportingOutcomeCategory.success,
+                  source: ReportingOutcomeSource.live,
+                  freshness: ReportingOutcomeFreshness.current,
+                ),
+              ),
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(position.pixels, position.minScrollExtent);
+        expect(acknowledgements, [1]);
+      });
+    }
+
+    testWidgets('only the latest request owns delayed publication', (
+      tester,
+    ) async {
+      _setTestSurface(tester, const Size(390, 844));
+      final store = _MemoryCredentialStore();
+      final release = Completer<void>();
+      addTearDown(() {
+        if (!release.isCompleted) release.complete();
+      });
+      store.beforeReadLabel = (connection) async {
+        if (connection == id) await release.future;
+      };
+      final acknowledgements = <int>[];
+      await tester.pumpWidget(
+        screen(store: store, revealed: acknowledgements.add),
+      );
+      await _pumpPendingReveal(tester);
+      await tester.pumpWidget(
+        screen(
+          store: store,
+          revealed: acknowledgements.add,
+          reveal: (connection: ProviderConnections.anthropicPlatform, token: 2),
+        ),
+      );
+      await _pumpPendingReveal(tester);
+      expect(acknowledgements, isEmpty);
+      release.complete();
+      await tester.pumpAndSettle();
+      expect(acknowledgements, [2]);
+      _expectCompleteReveal(tester, 'Organization reporting');
+    });
+
+    for (final dispose in [false, true]) {
+      testWidgets(
+        'delayed publication cannot complete ${dispose ? 'disposed' : 'canceled'} reveal',
+        (tester) async {
+          _setTestSurface(tester, const Size(390, 844));
+          final store = _MemoryCredentialStore();
+          final release = Completer<void>();
+          addTearDown(() {
+            if (!release.isCompleted) release.complete();
+          });
+          store.beforeReadLabel = (connection) async {
+            if (connection == id) await release.future;
+          };
+          final acknowledgements = <int>[];
+          await tester.pumpWidget(
+            screen(store: store, revealed: acknowledgements.add),
+          );
+          await _pumpPendingReveal(tester);
+          await tester.pumpWidget(
+            dispose
+                ? const SizedBox()
+                : screen(
+                  store: store,
+                  revealed: acknowledgements.add,
+                  reveal: null,
+                ),
+          );
+          release.complete();
+          await tester.pumpAndSettle();
+          expect(acknowledgements, isEmpty);
+          final focused = FocusManager.instance.primaryFocus?.context;
+          if (focused != null) {
+            expect(
+              find.descendant(
+                of: find.byElementPredicate(
+                  (element) => identical(element, focused),
+                ),
+                matching: find.widgetWithText(
+                  ProviderConnectionRow,
+                  'Platform reporting',
+                ),
+              ),
+              findsNothing,
+            );
+          }
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+
+    testWidgets('superseding an unfinished animation retires its completion', (
+      tester,
+    ) async {
+      _setTestSurface(tester, const Size(390, 844));
+      final store = _MemoryCredentialStore();
+      final acknowledgements = <int>[];
+      await tester.pumpWidget(
+        screen(store: store, revealed: acknowledgements.add, reveal: null),
+      );
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        screen(
+          store: store,
+          revealed: acknowledgements.add,
+          reveal: (connection: ProviderConnections.anthropicPlatform, token: 1),
+        ),
+      );
+      final list = find.descendant(
+        of: find.byType(ProvidersScreen),
+        matching: find.byType(Scrollable),
+      );
+      expect(
+        tester.state<ScrollableState>(list).position.isScrollingNotifier.value,
+        isTrue,
+      );
+      expect(acknowledgements, isEmpty);
+      await tester.pumpWidget(
+        screen(
+          store: store,
+          revealed: acknowledgements.add,
+          reveal: (connection: ProviderConnections.codexPlan, token: 2),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(acknowledgements, [2]);
+      _expectCompleteReveal(tester, 'Codex plan');
+    });
+
+    testWidgets(
+      'an older credential read cannot resume the completed revision',
+      (tester) async {
+        _setTestSurface(tester, const Size(390, 844));
+        final oldStore = _MemoryCredentialStore();
+        final release = Completer<void>();
+        addTearDown(() {
+          if (!release.isCompleted) release.complete();
+        });
+        oldStore.beforeReadLabel = (connection) async {
+          if (connection == id) await release.future;
+        };
+        final acknowledgements = <int>[];
+        await tester.pumpWidget(
+          screen(store: oldStore, revealed: acknowledgements.add),
+        );
+        await _pumpPendingReveal(tester);
+        expect(acknowledgements, isEmpty);
+        await tester.pumpWidget(
+          screen(
+            store: _MemoryCredentialStore(),
+            revealed: acknowledgements.add,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(acknowledgements, [1]);
+        _expectCompleteReveal(tester, 'Platform reporting');
+        final list = find.descendant(
+          of: find.byType(ProvidersScreen),
+          matching: find.byType(Scrollable),
+        );
+        await tester.drag(list, const Offset(0, 1200));
+        await tester.pumpAndSettle();
+        final position = tester.state<ScrollableState>(list).position;
+        expect(position.pixels, position.minScrollExtent);
+        release.complete();
+        await tester.pumpAndSettle();
+        expect(acknowledgements, [1]);
+        expect(position.pixels, position.minScrollExtent);
+      },
+    );
+
+    testWidgets('new credential publication retires the old family traversal', (
+      tester,
+    ) async {
+      _setTestSurface(tester, const Size(390, 844));
+      final store = _MemoryCredentialStore();
+      final local = _DelayedCodexAccountService();
+      addTearDown(() {
+        if (!local.read.isCompleted) local.read.complete(false);
+      });
+      final acknowledgements = <int>[];
+      await tester.pumpWidget(
+        screen(
+          store: store,
+          revealed: acknowledgements.add,
+          order: const {},
+          codex: local,
+        ),
+      );
+      await _pumpPendingReveal(tester);
+      expect(local.reads, greaterThan(0));
+      expect(
+        find.widgetWithText(ProviderConnectionRow, 'Platform reporting'),
+        findsOneWidget,
+      );
+      expect(acknowledgements, isEmpty);
+      // The target was discovered near the end while its sibling initial read
+      // remained pending. This publication moves OpenAI ahead of that offset.
+      await store.writeSecret(id, 'synthetic-key');
+      await tester.pumpWidget(
+        screen(
+          store: store,
+          revealed: acknowledgements.add,
+          order: const {},
+          codex: local,
+          updates: {id: failure(store)},
+        ),
+      );
+      await _pumpPendingReveal(tester);
+      local.read.complete(false);
+      await tester.pumpAndSettle();
+      expect(acknowledgements, [1]);
+      _expectCompleteReveal(tester, 'Platform reporting');
+      expect(
+        tester.getTopLeft(find.text('OpenAI')).dy,
+        lessThan(tester.getTopLeft(find.text('Anthropic')).dy),
+      );
+    });
+
+    testWidgets('lazy target waits for its row-local failure publication', (
+      tester,
+    ) async {
+      _setTestSurface(tester, const Size(390, 844));
+      final local = _DelayedCodexAccountService();
+      addTearDown(() {
+        if (!local.read.isCompleted) local.read.complete(false);
+      });
+      final acknowledgements = <int>[];
+      await tester.pumpWidget(
+        screen(
+          store: _MemoryCredentialStore(),
+          revealed: acknowledgements.add,
+          codex: local,
+          reveal: (connection: ProviderConnections.codexPlan, token: 1),
+        ),
+      );
+      await _pumpPendingReveal(tester);
+      expect(local.reads, 1);
+      expect(acknowledgements, isEmpty);
+      local.read.completeError(StateError('Synthetic local read failure'));
+      await tester.pumpAndSettle();
+      expect(acknowledgements, [1]);
+      _expectCompleteReveal(tester, 'Codex plan');
+      expect(local.reads, 1);
+    });
+
+    testWidgets('retired row read cannot block or focus a replacement', (
+      tester,
+    ) async {
+      _setTestSurface(tester, const Size(390, 844));
+      final store = _MemoryCredentialStore();
+      final local = _DelayedCodexAccountService();
+      addTearDown(() {
+        if (!local.read.isCompleted) local.read.complete(false);
+      });
+      final acknowledgements = <int>[];
+      await tester.pumpWidget(
+        screen(
+          key: const ValueKey('old'),
+          store: store,
+          revealed: acknowledgements.add,
+          codex: local,
+          reveal: (connection: ProviderConnections.codexPlan, token: 1),
+        ),
+      );
+      await _pumpPendingReveal(tester);
+      expect(local.reads, 1);
+      expect(acknowledgements, isEmpty);
+      await tester.pumpWidget(
+        screen(
+          key: const ValueKey('replacement'),
+          store: store,
+          revealed: acknowledgements.add,
+          reveal: (connection: ProviderConnections.anthropicPlatform, token: 2),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(acknowledgements, [2]);
+      local.read.complete(true);
+      await tester.pumpAndSettle();
+      expect(acknowledgements, [2]);
+      _expectCompleteReveal(tester, 'Organization reporting');
+    });
+
+    testWidgets(
+      'oversized row completes and its remaining recovery copy scrolls normally',
+      (tester) async {
+        _setTestSurface(tester, const Size(390, 844));
+        tester.platformDispatcher.textScaleFactorTestValue = 3;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final store = _MemoryCredentialStore();
+        await store.writeSecret(id, 'synthetic-key');
+        final update = failure(store);
+        final acknowledgements = <int>[];
+        await tester.pumpWidget(
+          screen(
+            store: store,
+            revealed: acknowledgements.add,
+            updates: {id: update},
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(acknowledgements, [1]);
+        final row = find.widgetWithText(
+          ProviderConnectionRow,
+          'Platform reporting',
+        );
+        final viewport = tester.getRect(
+          find.descendant(
+            of: find.byType(ProvidersScreen),
+            matching: find.byType(Viewport),
+          ),
+        );
+        expect(tester.getSize(row).height, greaterThan(viewport.height));
+        expect(tester.getTopLeft(row).dy, closeTo(viewport.top, 0.5));
+        _expectRevealFocus(row);
+        await tester.drag(
+          find.descendant(
+            of: find.byType(ProvidersScreen),
+            matching: find.byType(Scrollable),
+          ),
+          const Offset(0, -1400),
+        );
+        await tester.pumpAndSettle();
+        final copy = find.text(
+          '${update.outcome!.connectionLabel}\n${update.outcome!.supportingCopy}',
+        );
+        final remaining = tester.getRect(copy);
+        expect(remaining.bottom, lessThanOrEqualTo(viewport.bottom + 0.5));
+        expect(remaining.overlaps(viewport), isTrue);
+        expect(tester.getTopLeft(row).dy, lessThan(viewport.top));
+        expect(acknowledgements, [1]);
+      },
+    );
+  });
+
   testWidgets(
     'Plan catalogue uses owning connection and only absent-ID fallback',
     (tester) async {
@@ -1537,6 +1995,96 @@ void main() {
       );
     });
   });
+}
+
+// Drain the bounded catalogue discovery and the existing 250 ms animation.
+// Loading indicators intentionally remain active until the controlled read ends.
+Future<void> _pumpPendingReveal(WidgetTester tester) async {
+  for (var frame = 0; frame < 4; frame++) {
+    await tester.pump();
+  }
+  await tester.pump(const Duration(milliseconds: 250));
+  await tester.pump();
+}
+
+void _expectRevealFocus(Finder row) {
+  final focused = FocusManager.instance.primaryFocus!.context!;
+  expect(
+    find.descendant(
+      of: find.byElementPredicate((element) => identical(element, focused)),
+      matching: row,
+    ),
+    findsOneWidget,
+  );
+}
+
+void _expectCompleteReveal(
+  WidgetTester tester,
+  String title, [
+  ConnectionReportingOutcome? outcome,
+]) {
+  final row = find.widgetWithText(ProviderConnectionRow, title);
+  final viewport = tester.getRect(
+    find.descendant(
+      of: find.byType(ProvidersScreen),
+      matching: find.byType(Viewport),
+    ),
+  );
+  expect(
+    viewport.bottom,
+    lessThanOrEqualTo(tester.getTopLeft(find.byType(NavigationBar)).dy),
+  );
+  for (final element in [
+    ...row.evaluate(),
+    ...find.descendant(of: row, matching: find.byType(Text)).evaluate(),
+    ...find.descendant(of: row, matching: find.byType(IconButton)).evaluate(),
+  ]) {
+    final rect = tester.getRect(
+      find.byElementPredicate((candidate) => identical(candidate, element)),
+    );
+    expect(
+      viewport.inflate(0.5).contains(rect.topLeft),
+      isTrue,
+      reason: '$rect outside $viewport',
+    );
+    expect(
+      viewport.inflate(0.5).contains(rect.bottomRight),
+      isTrue,
+      reason: '$rect outside $viewport',
+    );
+  }
+  if (outcome != null) {
+    expect(_inRow(title, find.text(outcome.label)), findsOneWidget);
+    expect(
+      _inRow(
+        title,
+        find.text('${outcome.connectionLabel}\n${outcome.supportingCopy}'),
+      ),
+      findsOneWidget,
+    );
+    expect(_inRow(title, find.byTooltip('Budget limits')), findsOneWidget);
+    expect(_inRow(title, find.byTooltip('Alert thresholds')), findsOneWidget);
+  }
+  _expectRevealFocus(row);
+}
+
+class _DelayedCodexAccountService implements CodexAccountService {
+  final read = Completer<bool>();
+  var reads = 0;
+  @override
+  Future<bool> isConnected() {
+    reads++;
+    return read.future;
+  }
+
+  @override
+  Future<CodexLoginAttempt> startLogin() async =>
+      throw StateError('Unexpected login');
+  @override
+  Future<String?> fetchReport() async =>
+      throw StateError('Unexpected provider request');
+  @override
+  Future<void> disconnect() async => throw StateError('Unexpected disconnect');
 }
 
 /// Scopes a finder to the catalog row titled [title].

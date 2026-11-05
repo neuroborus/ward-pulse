@@ -104,6 +104,137 @@ void main() {
     );
   }
 
+  for (final scale in [1.0, 1.6]) {
+    testWidgets(
+      'warning body settles late reporting recovery above navigation at $scale',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(390, 844);
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+          tester.platformDispatcher.clearTextScaleFactorTestValue();
+        });
+        const id = ProviderConnections.openAiPlatform;
+        final store = _MemoryCredentialStore();
+        for (final connection in [
+          id,
+          ProviderConnections.anthropicPlatform,
+          ProviderConnections.cursorPlatform,
+        ]) {
+          await store.writeSecret(connection, 'synthetic-key');
+        }
+        final outcome = ConnectionReportingOutcome(
+          connection: id,
+          credentialVersion: store.version(id),
+          category: ReportingOutcomeCategory.transientFailure,
+          source: ReportingOutcomeSource.live,
+          freshness: ReportingOutcomeFreshness.current,
+        );
+        final repository = _PublicationRepository(
+          DashboardSnapshot.empty()
+              .withConnectionVersions({id.storageKey: store.version(id).values})
+              .withReportingOutcomes([outcome]),
+        );
+        final notices = _RejectionNotices(
+          const ConnectionRejectionNotice(
+            connection: id,
+            eventId: 'synthetic-event',
+            dismissed: false,
+          ),
+        );
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            credentialStore: store,
+            rejectionNotices: notices,
+          ),
+        );
+        await tester.pumpAndSettle();
+        final loads = repository.loads;
+        final release = Completer<void>();
+        addTearDown(() {
+          if (!release.isCompleted) release.complete();
+        });
+        store.beforeReadLabel = (connection) async {
+          if (connection == id) await release.future;
+        };
+        final warning = find.byTooltip(
+          'Review OpenAI · Platform reporting connection',
+        );
+        await tester.ensureVisible(warning);
+        await tester.tap(warning);
+        // Keep the initial read and its progress indicators active while the
+        // old bounded discovery/animation path would already acknowledge.
+        for (var frame = 0; frame < 4; frame++) {
+          await tester.pump();
+        }
+        await tester.pump(const Duration(milliseconds: 250));
+        await tester.pump();
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(notices.event.dismissed, isFalse);
+        expect(find.text('Could not check'), findsNothing);
+        release.complete();
+        await tester.pumpAndSettle();
+        final row = find.widgetWithText(
+          ProviderConnectionRow,
+          'Platform reporting',
+        );
+        final viewport = tester.getRect(
+          find.descendant(
+            of: find.byType(ProvidersScreen),
+            matching: find.byType(Viewport),
+          ),
+        );
+        expect(
+          viewport.bottom,
+          lessThanOrEqualTo(tester.getTopLeft(find.byType(NavigationBar)).dy),
+        );
+        for (final target in [
+          row,
+          find.descendant(of: row, matching: find.text('Could not check')),
+          find.descendant(
+            of: row,
+            matching: find.text(
+              '${outcome.connectionLabel}\n${outcome.supportingCopy}',
+            ),
+          ),
+          find.descendant(of: row, matching: find.byTooltip('Budget limits')),
+          find.descendant(
+            of: row,
+            matching: find.byTooltip('Alert thresholds'),
+          ),
+        ]) {
+          final rect = tester.getRect(target);
+          expect(
+            viewport.inflate(0.5).contains(rect.topLeft),
+            isTrue,
+            reason: '$rect outside $viewport',
+          );
+          expect(
+            viewport.inflate(0.5).contains(rect.bottomRight),
+            isTrue,
+            reason: '$rect outside $viewport',
+          );
+        }
+        final focused = FocusManager.instance.primaryFocus!.context!;
+        expect(
+          find.descendant(
+            of: find.byElementPredicate(
+              (element) => identical(element, focused),
+            ),
+            matching: row,
+          ),
+          findsOneWidget,
+        );
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(notices.event.dismissed, isFalse);
+        expect(repository.loads, loads);
+      },
+    );
+  }
+
   testWidgets(
     'unsaved invalid reporting input cannot create a saved rejection event',
     (tester) async {
@@ -5274,6 +5405,7 @@ class _MemoryCredentialStore
     implements ProviderCredentialStore, VersionedProviderCredentialStore {
   final _generations = <ProviderConnectionId, int>{};
   Future<void>? pendingWrite;
+  Future<void> Function(ProviderConnectionId)? beforeReadLabel;
   bool failLabelWrite = false;
   bool failKeyWrite = false;
   bool failDeleteAfterRetirement = false;
@@ -5320,7 +5452,10 @@ class _MemoryCredentialStore
   }
 
   @override
-  Future<String?> readLabel(ProviderConnectionId id) async => _labels[id];
+  Future<String?> readLabel(ProviderConnectionId id) async {
+    await beforeReadLabel?.call(id);
+    return _labels[id];
+  }
 
   @override
   Future<void> writeLabel(ProviderConnectionId id, String? value) async {
