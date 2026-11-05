@@ -6,6 +6,7 @@ import 'package:ward_pulse_phone/dashboard/dashboard_load.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
+import 'package:ward_pulse_phone/providers/connection_rejection_notice.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
 import 'package:ward_pulse_phone/providers/claude_account_store.dart';
 import 'package:ward_pulse_phone/providers/codex_account_service.dart';
@@ -46,6 +47,78 @@ void main() {
       );
 
   test(
+    'retained-session notices survive lifecycle changes and exact dismissal',
+    () async {
+      final access = store('session');
+      final notices = NativeConnectionRejectionNoticeStore(
+        platform: bridge.platform('notices'),
+      );
+      expect(await notices.read(), isEmpty);
+      await access.write('synthetic-session');
+      var captured = (await access.read())!;
+      expect(
+        await access.serializeFetch(
+          () => access.rejectAuthentication(captured.version),
+        ),
+        isTrue,
+      );
+      final first = (await notices.read()).single;
+      expect(await notices.dismiss(first), isTrue);
+      await bridge.invoke('test', 'restart', {});
+      captured = (await store('cold').read())!;
+      expect(
+        await access.serializeFetch(
+          () => access.rejectAuthentication(captured.version),
+        ),
+        isTrue,
+      );
+      expect((await notices.read()).single.dismissed, isTrue);
+      await access.write('synthetic-session');
+      expect((await notices.read()).single.eventId, first.eventId);
+      captured = (await access.read())!;
+      await access.serializeFetch(
+        () => access.rejectAuthentication(captured.version),
+      );
+      final second = (await notices.read()).single;
+      expect(second.eventId, isNot(first.eventId));
+      expect(await notices.dismiss(first), isFalse);
+      await access.delete();
+      expect(await store('cold2').read(), isNull);
+      expect((await notices.read()).single.dismissed, isFalse);
+      await bridge.invoke('test', 'restart', {});
+      expect((await notices.read()).single.eventId, second.eventId);
+      await notices.dismiss(second);
+      await bridge.invoke('test', 'restart', {});
+      expect(
+        (await notices.read()).where((notice) => !notice.dismissed),
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'notice-only storage failure preserves valid credentials and confirmed view',
+    () async {
+      final access = store('session');
+      final notices = NativeConnectionRejectionNoticeStore(
+        platform: bridge.platform('notices'),
+      );
+      await access.write('synthetic-session');
+      final captured = (await access.read())!;
+      await access.serializeFetch(
+        () => access.rejectAuthentication(captured.version),
+      );
+      final event = (await notices.read()).single;
+      await bridge.invoke('test', 'failCommit', {'value': true});
+      await expectLater(notices.dismiss(event), throwsStateError);
+      expect((await notices.read()).single.dismissed, isFalse);
+      expect(await access.isCurrent(captured.version), isTrue);
+      await bridge.invoke('test', 'failCommit', {'value': false});
+      expect((await store('cold').read())?.value, 'synthetic-session');
+    },
+  );
+
+  test(
     'optional reporting access retains only immutable read provenance',
     () async {
       const id = ProviderConnections.openAiPlatform;
@@ -67,7 +140,13 @@ void main() {
       final original = Map.of(read.version.values);
       expect(
         original.keys,
-        unorderedEquals(['generation', 'revision', 'identity', 'epoch']),
+        unorderedEquals([
+          'generation',
+          'revision',
+          'identity',
+          'epoch',
+          'committedConnection',
+        ]),
       );
       final outcome = ConnectionReportingOutcome(
         connection: id,
@@ -593,13 +672,9 @@ void main() {
               .having(
                 (error) => error.failure,
                 'failure',
-                ClaudeAccountFailure.authentication,
+                ClaudeAccountFailure.cancelled,
               )
-              .having(
-                (error) => error.details,
-                'details',
-                'Claude token refresh · HTTP 400 · invalid_grant',
-              ),
+              .having((error) => error.details, 'details', isNull),
         ),
       );
       await entered.future;
@@ -619,6 +694,12 @@ void main() {
         await failed;
       }
 
+      expect(
+        await NativeConnectionRejectionNoticeStore(
+          platform: bridge.platform('notices'),
+        ).read(),
+        isEmpty,
+      );
       expect(tokenRequests, 1);
       expect(usageRequests, 0);
       expect(Uri.splitQueryString(tokenBody!)['grant_type'], 'refresh_token');
@@ -631,6 +712,62 @@ void main() {
   for (final family in ['claude', 'codex']) {
     _Runtime runtime(String owner, _ResponseHandler handler) =>
         _runtime(family, secure, bridge.platform(owner), now, handler);
+    test(
+      '$family owned rejection persists after credential-null refresh and restart',
+      () async {
+        final a = runtime(
+          'auth',
+          (uri, headers, body) async => (status: 401, body: '{}'),
+        );
+        await a.write('synthetic-account', 'synthetic-token');
+        await expectLater(a.fetch(), throwsA(anything));
+        expect(await a.read(), isNull);
+        final notices = NativeConnectionRejectionNoticeStore(
+          platform: bridge.platform('notices'),
+        );
+        final event = (await notices.read()).single;
+        expect(
+          event.connection,
+          family == 'claude'
+              ? ProviderConnections.claudePlan
+              : ProviderConnections.codexPlan,
+        );
+        expect(event.dismissed, isFalse);
+        expect(await a.fetch(), isNull);
+        await bridge.invoke('test', 'restart', {});
+        final cold = runtime(
+          'cold',
+          (uri, headers, body) async => fail('No saved credential may fetch'),
+        );
+        expect(await cold.fetch(), isNull);
+        expect((await notices.read()).single.eventId, event.eventId);
+        await cold.write('synthetic-account', 'synthetic-token');
+        final disconnected = runtime(
+          'disconnect',
+          (uri, headers, body) async => _usageResponse(uri),
+        );
+        await disconnected.disconnect();
+        expect((await notices.read()).single.eventId, event.eventId);
+      },
+    );
+    test(
+      '$family permission failure retains credential without auth evidence',
+      () async {
+        final a = runtime(
+          'permission',
+          (uri, headers, body) async => (status: 403, body: '{}'),
+        );
+        await a.write('synthetic-account', 'synthetic-token');
+        await expectLater(a.fetch(), throwsA(anything));
+        expect(await a.read(), isNotNull);
+        expect(
+          await NativeConnectionRejectionNoticeStore(
+            platform: bridge.platform('notices'),
+          ).read(),
+          isEmpty,
+        );
+      },
+    );
     test(
       '$family cross-engine fetch exclusion rereads refreshed session',
       () async {

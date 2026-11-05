@@ -66,6 +66,17 @@ Disconnecting or removing a connection clears its local credential and prevents 
 data from being reused. It does not revoke a key at the provider. Revoke it in that
 provider's key settings if needed; other WardPulse connections remain independent.
 
+A saved rejection warning on Dashboard opens Providers at its exact connection. For an
+unconnected **Codex plan** or **Claude plan**, tap the row to start sign-in; for a connected
+plan, tap the row and choose **Reconnect** if needed. Tap an unconnected **Cursor plan** row
+to sign in to its dashboard, or choose **Sign in again** for a connected session. Reporting
+rows keep their key editor. Review the row's current status before
+changing it: the warning records a past rejection and can remain after recovery.
+
+Reconnecting, Disconnect and Remove do not dismiss that historical warning. Use its **X**
+on Dashboard when you want to dismiss it. Opening it and returning to Dashboard also
+leaves it visible.
+
 ## Budget limits and alert thresholds
 
 The **bell icon** opens **Alert thresholds**. For a plan connection, set a shared Plan

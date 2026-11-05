@@ -30,6 +30,7 @@ Future<void> main() async {
   runApp(
     WardPulseApp(
       credentialStore: live.credentialStore,
+      rejectionNotices: live.rejectionNotices,
       codexAccountService: live.codexAccountService,
       claudeAccountService: live.claudeAccountService,
       refreshIntervalStore: SecureRefreshIntervalPreferenceStore(),

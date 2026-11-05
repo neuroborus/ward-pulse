@@ -1,6 +1,7 @@
 import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 
 import '../sync/provider_sync_logger.dart';
+import '../sync/provider_reporting.dart';
 import '../providers/connection_lifecycle.dart';
 import '../providers/provider_connection.dart';
 import '../providers/provider_credential_store.dart';
@@ -137,14 +138,23 @@ final class MergingConnectionRepository extends DashboardRepository {
       forward(
         ConnectionReportingUpdate(connection: id, credentialVersion: version),
       );
-      return _loadOwned(
-        revision,
-        () async =>
-            await _current(revision, version, access)
-                ? loadCredentialReport!(secret!)
-                : null,
-        version,
-      );
+      return _loadOwned(revision, () async {
+        if (!await _current(revision, version, access)) return null;
+        try {
+          return await loadCredentialReport!(secret!);
+        } on ProviderReportingException catch (error) {
+          if (error.failure == ProviderReportingFailure.authentication &&
+              version != null) {
+            if (access case final ConnectionRejectionRecorder recorder) {
+              if (!await _current(revision, version, access) ||
+                  !await recorder.rejectAuthentication(version)) {
+                throw StateError('Connection changed during refresh.');
+              }
+            }
+          }
+          rethrow;
+        }
+      }, version);
     }
 
     try {
@@ -229,6 +239,11 @@ final class MergingConnectionRepository extends DashboardRepository {
     CredentialVersion? version,
   ) {
     if (connection == null || loadCredentialReport == null) return failure;
+    final event = version?.values['committedConnection'];
+    final rejection =
+        failure.issue == DashboardSyncIssue.authentication && event != null
+            ? (connection: connection!.storageKey, eventId: event)
+            : failure.syncRejection;
     final localRejection = failure.reportingOutcomes.any(
       (outcome) =>
           connection == ProviderConnections.anthropicPlatform &&
@@ -240,6 +255,7 @@ final class MergingConnectionRepository extends DashboardRepository {
       return DashboardLoadException.withOutcomes(
         issue: failure.issue,
         details: failure.details,
+        syncRejection: rejection,
         reportingOutcomes: [
           ConnectionReportingOutcome(
             connection: connection!,
@@ -266,6 +282,7 @@ final class MergingConnectionRepository extends DashboardRepository {
     return DashboardLoadException.withOutcomes(
       issue: failure.issue,
       details: failure.details,
+      syncRejection: rejection,
       reportingOutcomes: [_outcome(category, version)],
     );
   }
@@ -417,7 +434,11 @@ final class MergingConnectionRepository extends DashboardRepository {
         return _publish(connectionSnapshot);
       }
       return _publish(
-        connectionSnapshot.withSyncIssue(error.issue, details: error.details),
+        connectionSnapshot.withSyncIssue(
+          error.issue,
+          details: error.details,
+          rejection: error.syncRejection,
+        ),
       );
     } catch (error) {
       _logger.record(ProviderSyncEvent.succeeded);
@@ -456,7 +477,11 @@ final class MergingConnectionRepository extends DashboardRepository {
       return _publish(
         issue == null
             ? merged
-            : merged.withSyncIssue(issue, details: other.syncDetails),
+            : merged.withSyncIssue(
+              issue,
+              details: other.syncDetails,
+              rejection: other.syncRejection,
+            ),
       );
     } catch (error) {
       final details = loadFailureDetails(error);
@@ -586,13 +611,18 @@ final class MergingConnectionRepository extends DashboardRepository {
     if (cached == null) {
       if (hasFallback) {
         return _publish(
-          other.withSyncIssue(failure.issue, details: failure.details),
+          other.withSyncIssue(
+            failure.issue,
+            details: failure.details,
+            rejection: failure.syncRejection,
+          ),
         );
       }
       if (outcomes.isEmpty) throw failure;
       throw DashboardLoadException.withOutcomes(
         issue: failure.issue,
         details: failure.details,
+        syncRejection: failure.syncRejection,
         reportingOutcomes: outcomes,
       );
     }
@@ -602,6 +632,7 @@ final class MergingConnectionRepository extends DashboardRepository {
         .withStaleStatus(
           syncIssue: failure.issue,
           syncDetails: failure.details,
+          syncRejection: failure.syncRejection,
         );
     if (hasFallback) {
       try {
@@ -615,7 +646,11 @@ final class MergingConnectionRepository extends DashboardRepository {
             .withReportingOutcomes(outcomes);
         _logger.record(ProviderSyncEvent.usingCachedSnapshot);
         return _publish(
-          merged.withSyncIssue(failure.issue, details: failure.details),
+          merged.withSyncIssue(
+            failure.issue,
+            details: failure.details,
+            rejection: failure.syncRejection,
+          ),
         );
       } catch (error) {
         _logger.record(
@@ -623,7 +658,11 @@ final class MergingConnectionRepository extends DashboardRepository {
           details: loadFailureDetails(error),
         );
         return _publish(
-          other.withSyncIssue(failure.issue, details: failure.details),
+          other.withSyncIssue(
+            failure.issue,
+            details: failure.details,
+            rejection: failure.syncRejection,
+          ),
         );
       }
     }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../app/pull_to_refresh_list.dart';
 import '../app/surface_order.dart';
+import '../providers/connection_lifecycle.dart';
+import '../providers/connection_rejection_notice.dart';
 import '../providers/provider_connection.dart';
 import '../charts/usage_history_chart.dart';
 import 'connected_capabilities.dart';
@@ -40,6 +42,9 @@ class DashboardScreen extends StatefulWidget {
     required this.snapshot,
     this.onOpenProviders,
     this.onEditReportingKey,
+    this.rejectionNotices = const [],
+    this.onRevealConnection,
+    this.onDismissRejection,
     this.reveal,
     this.order,
     required this.onRefresh,
@@ -48,6 +53,9 @@ class DashboardScreen extends StatefulWidget {
   final DashboardSnapshot snapshot;
   final VoidCallback? onOpenProviders;
   final void Function(ProviderConnectionId)? onEditReportingKey;
+  final List<ConnectionRejectionNotice> rejectionNotices;
+  final void Function(ProviderConnectionId)? onRevealConnection;
+  final void Function(ConnectionRejectionNotice)? onDismissRejection;
 
   /// Keeps the cards where the reader last saw them. Owned by the shell, which
   /// shares it with the app-bar problem badge; `null` ranks afresh every build.
@@ -145,13 +153,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final snapshot = widget.snapshot;
     final onOpenProviders = widget.onOpenProviders;
     if (snapshot.accounts.isEmpty) {
-      if (snapshot.reportingOutcomes.isNotEmpty) {
+      if (snapshot.reportingOutcomes.isNotEmpty ||
+          widget.rejectionNotices.any((notice) => !notice.dismissed)) {
         return PullToRefreshList(
           onRefresh: widget.onRefresh,
           children: [
             _SyncHeader(
               snapshot: snapshot,
               onEditReportingKey: widget.onEditReportingKey,
+              rejectionNotices: widget.rejectionNotices,
+              onRevealConnection: widget.onRevealConnection,
+              onDismissRejection: widget.onDismissRejection,
             ),
             const SizedBox(height: 16),
             const Text('No reporting data yet.'),
@@ -190,6 +202,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _SyncHeader(
           snapshot: snapshot,
           onEditReportingKey: widget.onEditReportingKey,
+          rejectionNotices: widget.rejectionNotices,
+          onRevealConnection: widget.onRevealConnection,
+          onDismissRejection: widget.onDismissRejection,
         ),
         const SizedBox(height: 16),
         if (caps.showAllowances && !hasVisibleAllowances) ...[
@@ -482,14 +497,22 @@ class AllowanceSummaryCard extends StatelessWidget {
 }
 
 class _SyncHeader extends StatelessWidget {
-  const _SyncHeader({required this.snapshot, this.onEditReportingKey});
+  const _SyncHeader({
+    required this.snapshot,
+    this.onEditReportingKey,
+    this.rejectionNotices = const [],
+    this.onRevealConnection,
+    this.onDismissRejection,
+  });
 
   final DashboardSnapshot snapshot;
   final void Function(ProviderConnectionId)? onEditReportingKey;
+  final List<ConnectionRejectionNotice> rejectionNotices;
+  final void Function(ProviderConnectionId)? onRevealConnection;
+  final void Function(ConnectionRejectionNotice)? onDismissRejection;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final updatedAt = formatLocal(snapshot.generatedAt);
     final syncIssue = snapshot.syncIssue;
@@ -507,34 +530,125 @@ class _SyncHeader extends StatelessWidget {
                 : 'Updated $updatedAt',
           ),
         ),
-        ReportingFailures(
+        ConnectionFeedback(
           outcomes: snapshot.reportingOutcomes,
+          issue: syncIssue,
+          details: snapshot.syncTooltip,
+          rejection: snapshot.syncRejection,
+          notices: rejectionNotices,
           onEditKey: onEditReportingKey,
+          onRevealConnection: onRevealConnection,
+          onDismiss: onDismissRejection,
         ),
-        if (syncIssue != null &&
-            (snapshot.reportingOutcomes.every((outcome) => !outcome.failed) ||
-                syncIssue.name.startsWith('codex') ||
-                syncIssue.name.startsWith('claude'))) ...[
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Tooltip(
-                message: snapshot.syncTooltip ?? syncIssue.message,
-                child: Icon(Icons.error_outline, color: colors.error, size: 18),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  syncIssue.message,
-                  style: TextStyle(color: colors.error),
-                ),
-              ),
-            ],
-          ),
-        ],
       ],
     );
+  }
+}
+
+/// Shared by normal, empty and failed Dashboard loads. Tombstones suppress only
+/// the matching rejection, never current verification or independent failures.
+class ConnectionFeedback extends StatelessWidget {
+  const ConnectionFeedback({
+    super.key,
+    this.outcomes = const [],
+    this.issue,
+    this.details,
+    this.rejection,
+    this.notices = const [],
+    this.onEditKey,
+    this.onRevealConnection,
+    this.onDismiss,
+  });
+  final Iterable<ConnectionReportingOutcome> outcomes;
+  final DashboardSyncIssue? issue;
+  final String? details;
+  final ConnectionRejection? rejection;
+  final List<ConnectionRejectionNotice> notices;
+  final void Function(ProviderConnectionId)? onEditKey;
+  final void Function(ProviderConnectionId)? onRevealConnection;
+  final void Function(ConnectionRejectionNotice)? onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.error;
+    final visibleOutcomes = outcomes.where(
+      (outcome) =>
+          outcome.category != ReportingOutcomeCategory.authenticationRejected ||
+          !notices.any(
+            (notice) =>
+                notice.connection == outcome.connection &&
+                notice.eventId ==
+                    outcome.credentialVersion?.values['committedConnection'],
+          ),
+    );
+    final matched = notices.any((notice) => notice.matches(rejection));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final notice in notices.where((notice) => !notice.dismissed))
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Tooltip(
+                    message: 'Review ${_noticeLabel(notice)} connection',
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        foregroundColor: color,
+                        alignment: Alignment.centerLeft,
+                      ),
+                      onPressed:
+                          onRevealConnection == null
+                              ? null
+                              : () => onRevealConnection!(notice.connection),
+                      child: Text(
+                        '${_noticeLabel(notice)}: a saved connection was rejected. Open Providers to review this connection.',
+                      ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Dismiss ${_noticeLabel(notice)} rejection warning',
+                  onPressed:
+                      onDismiss == null ? null : () => onDismiss!(notice),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+          ),
+        ReportingFailures(outcomes: visibleOutcomes, onEditKey: onEditKey),
+        if (issue != null &&
+            !matched &&
+            (visibleOutcomes.every((outcome) => !outcome.failed) ||
+                issue!.name.startsWith('codex') ||
+                issue!.name.startsWith('claude')))
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Tooltip(
+                  message: details ?? issue!.message,
+                  child: Icon(Icons.error_outline, color: color, size: 18),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(issue!.message, style: TextStyle(color: color)),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _noticeLabel(ConnectionRejectionNotice notice) {
+    final row = providerConnectionCatalog().firstWhere(
+      (row) => row.id == notice.connection,
+    );
+    return '${providerFamilyLabel(row.id.provider)} · ${row.title}';
   }
 }
 

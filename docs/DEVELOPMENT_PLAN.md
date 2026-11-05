@@ -3364,6 +3364,12 @@ just check-docs passes, including the repository source-citation gate and Vocs b
 
 ### Flutter phone app
 
+- Persistent saved-connection rejection warnings cover shared foreground/headless collection,
+  durable dismissal and lifecycle races, plus exact Providers reveal and independent X actions.
+  Runtime regressions, baseline/candidate comparison where compatible, native phone rendering
+  and reversible-state restoration remain Pending HOST. No live-provider rejection or old
+  disconnection migration is established by synthetic acceptance.
+
 - widget tests for dashboard cards;
 - widget tests for provider states;
 - widget / App Widget payload tests for the Phase 14 home-screen surface;

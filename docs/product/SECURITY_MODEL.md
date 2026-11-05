@@ -36,6 +36,22 @@ headers, prompts or raw reports. It includes non-secret identity digests and exa
 storage key references; neither digests nor private account data are logged. Android app backup
 is disabled for both credential and snapshot data.
 
+Historical Dashboard rejection warnings add only a committed-connection UUID, one event UUID
+and a dismissal flag per catalogue connection to this private store. They contain no timestamps,
+credentials, token fragments, account details, response bodies or native error text. Only an
+explicitly classified rejection under current credential revision and live fetch ownership can
+record an event. OAuth rejection and its credential/cache retirement share the durable barrier;
+reporting keys and Cursor sessions keep their existing retention rules. No old disconnection
+reason is inferred or migrated.
+
+Explicit successful connection commitment rotates event eligibility; routine token refresh,
+cancelled reconnect, migration and ordinary removal preserve its historical identity. Exact-event
+dismissal persists a tombstone, so repeated or stale failures cannot revive a dismissed warning,
+and an old dismissal cannot hide a replacement event. Historical feedback survives recovery and
+removal until X; Android Clear storage removes it with the other local records. Metadata-only
+failures retain confirmed notices without fencing valid credentials or retiring cache. Failed
+in-memory preference commits must not leak notice fields into subsequent whole-map writes.
+
 Credential changes commit a generation barrier and discard the matching cache before awaiting
 secure-storage writes/deletes. Immutable key references keep abandoned older SDK operations
 from clobbering a newer login. Cancelled reconnect restores the prior immutable credential

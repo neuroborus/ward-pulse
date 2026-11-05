@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 
 import '../providers/claude_account_service.dart';
+import '../providers/connection_lifecycle.dart';
 import '../providers/provider_connection.dart';
 import '../providers/provider_credential_store.dart';
 import '../sync/provider_reporting.dart';
@@ -11,6 +12,7 @@ import '../sync/provider_sync_logger.dart';
 import '../sync/report_period.dart';
 import 'claude_dashboard_repository.dart';
 import 'dashboard_load.dart';
+import 'dashboard_models.dart';
 import 'dashboard_repository.dart';
 import 'merging_connection_repository.dart';
 import 'connection_snapshot_cache.dart';
@@ -28,6 +30,7 @@ DashboardRepository buildLiveProviderStack({
   DateTime Function()? clock,
   AnthropicReportingClient? anthropicReportingClient,
   CursorPlatformClient? cursorReportingClient,
+  CursorPlanClient? cursorSessionClient,
   ReportNormalizer normalizeAnthropicReport = normalizeAnthropicReportJson,
   ReportNormalizer normalizeCursorPlatformReport =
       normalizeCursorPlatformReportJson,
@@ -36,7 +39,7 @@ DashboardRepository buildLiveProviderStack({
   final now = clock ?? DateTime.now;
   final anthropicClient =
       anthropicReportingClient ?? AnthropicReportingClient();
-  final cursorPlanClient = CursorPlanClient();
+  final cursorPlanClient = cursorSessionClient ?? CursorPlanClient();
   final cursorPlatformClient = cursorReportingClient ?? CursorPlatformClient();
 
   DashboardRepository connect({
@@ -67,19 +70,59 @@ DashboardRepository buildLiveProviderStack({
     required Future<String> Function(String token) fetch,
   }) {
     return () async {
-      final token = await readConnectionSecret(
-        store: credentialStore,
-        id: connection,
-        logger: logger,
-      );
-      if (token == null) {
-        return null;
+      final store = credentialStore;
+      final access =
+          store is VersionedProviderCredentialStore
+              ? (store as VersionedProviderCredentialStore).credentialAccess(
+                connection,
+              )
+              : null;
+      Future<String?> load() async {
+        VersionedCredential<String>? credential;
+        final token = await readConnectionSecret(
+          store: store,
+          id: connection,
+          logger: logger,
+          readSecret:
+              access == null
+                  ? null
+                  : () async {
+                    credential = await access.read();
+                    return credential?.value;
+                  },
+        );
+        final captured = credential;
+        if (token == null) return null;
+        try {
+          final report = await fetch(token);
+          if (captured != null && !await access!.isCurrent(captured.version))
+            throw StateError('Connection changed during refresh.');
+          return jsonEncode({
+            ...decodeReportObject(report),
+            'accountId': accountId,
+            'generatedAt': now().toUtc().toIso8601String(),
+          });
+        } on ProviderReportingException catch (error) {
+          if (error.failure == ProviderReportingFailure.authentication &&
+              captured != null) {
+            if (access case final ConnectionRejectionRecorder recorder) {
+              if (!await recorder.rejectAuthentication(captured.version))
+                throw StateError('Connection changed during refresh.');
+              final event = captured.version.values['committedConnection'];
+              throw DashboardLoadException(
+                issue: DashboardSyncIssue.authentication,
+                syncRejection:
+                    event == null
+                        ? null
+                        : (connection: connection.storageKey, eventId: event),
+              );
+            }
+          }
+          rethrow;
+        }
       }
-      return jsonEncode({
-        ...decodeReportObject(await fetch(token)),
-        'accountId': accountId,
-        'generatedAt': now().toUtc().toIso8601String(),
-      });
+
+      return access == null ? load() : access.serializeFetch(load);
     };
   }
 

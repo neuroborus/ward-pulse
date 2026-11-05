@@ -44,6 +44,10 @@ DashboardLoadException _mapCodexError(Object error, ProviderSyncLogger logger) {
   return DashboardLoadException(
     issue: _issueFor(error.failure),
     details: details,
+    syncRejection:
+        error.rejectionEventId == null
+            ? null
+            : (connection: 'openai.plan', eventId: error.rejectionEventId!),
   );
 }
 

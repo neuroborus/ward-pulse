@@ -10,6 +10,7 @@ import 'package:ward_pulse_phone/dashboard/apply_alert_settings.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_load.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
+import 'package:ward_pulse_phone/providers/connection_rejection_notice.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting.dart';
 import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
 import 'package:ward_pulse_phone/dashboard/provider_status_color.dart';
@@ -48,6 +49,206 @@ import 'package:ward_pulse_phone/watchface/watchface_screen.dart';
 import 'connection_cache_test_support.dart';
 
 void main() {
+  for (final row in providerConnectionCatalog()) {
+    testWidgets(
+      'historical warning reveals ${row.id.storageKey} without editing or dismissal',
+      (tester) async {
+        final notices = _RejectionNotices(
+          ConnectionRejectionNotice(
+            connection: row.id,
+            eventId: 'synthetic-event',
+            dismissed: false,
+          ),
+        );
+        Widget app() => WardPulseApp(
+          repository: const NoProvidersDashboardRepository(),
+          rejectionNotices: notices,
+        );
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        final label = '${providerFamilyLabel(row.id.provider)} · ${row.title}';
+        final body = find.byTooltip('Review $label connection');
+        await tester.ensureVisible(body);
+        await tester.tap(body);
+        await tester.pumpAndSettle();
+        final target = find.text(row.title);
+        expect(target.hitTestable(), findsOneWidget);
+        final focused = FocusManager.instance.primaryFocus!.context!;
+        expect(
+          find.descendant(
+            of: find.byElementPredicate(
+              (element) => identical(element, focused),
+            ),
+            matching: target,
+          ),
+          findsOneWidget,
+        );
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(notices.event.dismissed, isFalse);
+        await tester.tap(find.text('Dashboard'));
+        await tester.pumpAndSettle();
+        expect(body, findsOneWidget);
+        await tester.ensureVisible(
+          find.byTooltip('Dismiss $label rejection warning'),
+        );
+        await tester.tap(find.byTooltip('Dismiss $label rejection warning'));
+        await tester.pumpAndSettle();
+        expect(find.byType(ProvidersScreen), findsNothing);
+        expect(notices.event.dismissed, isTrue);
+        expect(body, findsNothing);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        expect(body, findsNothing);
+      },
+    );
+  }
+
+  testWidgets(
+    'unsaved invalid reporting input cannot create a saved rejection event',
+    (tester) async {
+      final notices = _RejectionNotices.empty();
+      final store = _MemoryCredentialStore();
+      final repository = _PublicationRepository(DashboardSnapshot.empty());
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          credentialStore: store,
+          rejectionNotices: notices,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final loads = repository.loads;
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Organization reporting'));
+      await tester.tap(find.text('Organization reporting'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        _credentialValueField(),
+        'sk-ant-admin01-synthetic',
+      );
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(
+        await store.readSecret(ProviderConnections.anthropicPlatform),
+        isNull,
+      );
+      expect(repository.loads, loads);
+      expect(await notices.read(), isEmpty);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byTooltip('Review Anthropic · Organization reporting connection'),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'failed snapshot and failed dismissal retain independently actionable warning',
+    (tester) async {
+      final notices = _RejectionNotices(
+        const ConnectionRejectionNotice(
+          connection: ProviderConnections.claudePlan,
+          eventId: 'synthetic-event',
+          dismissed: false,
+        ),
+      )..failDismiss = true;
+      final repository = _FailingDashboardRepository(
+        DashboardSyncIssue.claudeAuthentication,
+        null,
+        (
+          connection: notices.event.connection.storageKey,
+          eventId: notices.event.eventId,
+        ),
+      );
+      await tester.pumpWidget(
+        WardPulseApp(repository: repository, rejectionNotices: notices),
+      );
+      await tester.pumpAndSettle();
+      final dismiss = find.byTooltip(
+        'Dismiss Anthropic · Claude plan rejection warning',
+      );
+      expect(
+        find.byTooltip('Review Anthropic · Claude plan connection'),
+        findsOneWidget,
+      );
+      await tester.tap(dismiss);
+      await tester.pumpAndSettle();
+      expect(dismiss, findsOneWidget);
+      expect(find.byType(ProvidersScreen), findsNothing);
+      expect(
+        find.text(DashboardSyncIssue.claudeAuthentication.message),
+        findsNothing,
+      );
+      expect(
+        find.byTooltip(DashboardSyncIssue.claudeAuthentication.message),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('saved warning remains actionable before any snapshot resolves', (
+    tester,
+  ) async {
+    final pending = Completer<DashboardSnapshot>();
+    final notices = _RejectionNotices(
+      const ConnectionRejectionNotice(
+        connection: ProviderConnections.cursorPlan,
+        eventId: 'synthetic-event',
+        dismissed: false,
+      ),
+    );
+    final repository = _PublicationRepository(DashboardSnapshot.empty())
+      ..response = pending.future;
+    await tester.pumpWidget(
+      WardPulseApp(repository: repository, rejectionNotices: notices),
+    );
+    await tester.pump();
+    expect(
+      find.byTooltip('Review Cursor · Cursor plan connection'),
+      findsOneWidget,
+    );
+    pending.complete(DashboardSnapshot.empty());
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('late notice read cannot revive a confirmed dismissal', (
+    tester,
+  ) async {
+    final notices = _RejectionNotices(
+      const ConnectionRejectionNotice(
+        connection: ProviderConnections.claudePlan,
+        eventId: 'synthetic-event',
+        dismissed: false,
+      ),
+    );
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: const NoProvidersDashboardRepository(),
+        rejectionNotices: notices,
+      ),
+    );
+    await tester.pumpAndSettle();
+    final old = notices.event;
+    final delayed = Completer<List<ConnectionRejectionNotice>>();
+    notices.nextRead = delayed.future;
+    await _notificationLifecycle(tester, AppLifecycleState.resumed);
+    await tester.tap(
+      find.byTooltip('Dismiss Anthropic · Claude plan rejection warning'),
+    );
+    await tester.pumpAndSettle();
+    delayed.complete([old]);
+    await tester.pumpAndSettle();
+    expect(
+      find.byTooltip('Review Anthropic · Claude plan connection'),
+      findsNothing,
+    );
+  });
+
   for (final failed in [false, true]) {
     testWidgets(
       'default-On bootstrap is independent of ${failed ? 'failed' : 'held'} provider loading',
@@ -4807,14 +5008,21 @@ class _FailingWatchSyncService implements WatchSyncService {
 }
 
 final class _FailingDashboardRepository extends DashboardRepository {
-  const _FailingDashboardRepository(this.issue, [this.details]);
+  const _FailingDashboardRepository(this.issue, [this.details, this.rejection]);
 
   final DashboardSyncIssue issue;
   final String? details;
+  final ConnectionRejection? rejection;
 
   @override
   Future<DashboardSnapshot> load() {
-    return Future.error(DashboardLoadException(issue: issue, details: details));
+    return Future.error(
+      DashboardLoadException(
+        issue: issue,
+        details: details,
+        syncRejection: rejection,
+      ),
+    );
   }
 }
 
@@ -5162,4 +5370,31 @@ final class _OutcomeFailureRepository extends DashboardRepository {
         issue: DashboardSyncIssue.authentication,
         reportingOutcomes: outcomes,
       );
+}
+
+final class _RejectionNotices implements ConnectionRejectionNoticeStore {
+  _RejectionNotices(ConnectionRejectionNotice event) : _event = event;
+  _RejectionNotices.empty();
+  ConnectionRejectionNotice? _event;
+  ConnectionRejectionNotice get event => _event!;
+  bool failDismiss = false;
+  Future<List<ConnectionRejectionNotice>>? nextRead;
+  @override
+  Future<List<ConnectionRejectionNotice>> read() {
+    final pending = nextRead;
+    nextRead = null;
+    return pending ?? Future.value([if (_event case final event?) event]);
+  }
+
+  @override
+  Future<bool> dismiss(ConnectionRejectionNotice notice) async {
+    if (failDismiss) throw StateError('Synthetic storage failure');
+    if (notice.eventId != event.eventId) return false;
+    _event = ConnectionRejectionNotice(
+      connection: event.connection,
+      eventId: event.eventId,
+      dismissed: true,
+    );
+    return true;
+  }
 }

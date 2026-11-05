@@ -22,7 +22,13 @@ final class MethodChannelConnectionCachePlatform
 final class CredentialVersion {
   CredentialVersion(Map<String, String> values)
     : values = Map.unmodifiable({
-        for (final key in ['generation', 'revision', 'epoch', 'identity'])
+        for (final key in [
+          'generation',
+          'revision',
+          'epoch',
+          'identity',
+          'committedConnection',
+        ])
           if (values[key] != null) key: values[key]!,
       });
 
@@ -33,13 +39,26 @@ final class CredentialVersion {
   String get epoch => values['epoch']!;
   factory CredentialVersion.fromMap(Map<String, Object?> map) =>
       CredentialVersion({
-        for (final key in ['generation', 'revision', 'epoch', 'identity'])
+        for (final key in [
+          'generation',
+          'revision',
+          'epoch',
+          'identity',
+          'committedConnection',
+        ])
           if (map[key] is String) key: map[key]! as String,
       });
   bool sameCache(CredentialVersion other) =>
       generation == other.generation &&
       epoch == other.epoch &&
       values['identity'] == other.values['identity'];
+}
+
+typedef ConnectionRejection = ({String connection, String eventId});
+
+/// Records only a classified failure of an owned saved credential/fetch.
+abstract interface class ConnectionRejectionRecorder {
+  Future<bool> rejectAuthentication(CredentialVersion expected);
 }
 
 final class VersionedCredential<T> {
@@ -67,7 +86,8 @@ abstract interface class VersionedAccountStore<T> {
 }
 
 /// Secret values stay in FlutterSecureStorage; native storage receives only a digest.
-final class ConnectionCredentialStorage implements ConnectionCredentialAccess {
+final class ConnectionCredentialStorage
+    implements ConnectionCredentialAccess, ConnectionRejectionRecorder {
   ConnectionCredentialStorage({
     required this.connection,
     required this.legacyKey,
@@ -139,7 +159,10 @@ final class ConnectionCredentialStorage implements ConnectionCredentialAccess {
       'connection': connection,
       'action': action,
       if (_fetchTicket != null &&
-          (action == 'refresh' || (action == 'delete' && expected != null)))
+          (action == 'refresh' ||
+              action == 'reject' ||
+              action == 'rejectDelete' ||
+              (action == 'delete' && expected != null)))
         'fetchTicket': _fetchTicket,
       if (expected != null) 'expected': expected.values,
     });
@@ -348,9 +371,30 @@ final class ConnectionCredentialStorage implements ConnectionCredentialAccess {
     }
   }
 
+  @override
+  Future<bool> rejectAuthentication(CredentialVersion expected) =>
+      recordRejection(expected);
+
+  Future<bool> recordRejection(
+    CredentialVersion expected, {
+    bool removeCredential = false,
+  }) async {
+    final lease = await _begin(
+      removeCredential ? 'rejectDelete' : 'reject',
+      expected,
+    );
+    if (lease['accepted'] != true) return false;
+    if (removeCredential) await _deleteRetired(lease);
+    return true;
+  }
+
   Future<void> delete([CredentialVersion? expected]) async {
     final lease = await _begin('delete', expected);
     if (lease['accepted'] != true) return;
+    await _deleteRetired(lease);
+  }
+
+  Future<void> _deleteRetired(Map<String, Object?> lease) async {
     try {
       final retired = lease['retired'] as String?;
       for (final key in {

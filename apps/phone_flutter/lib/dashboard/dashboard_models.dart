@@ -202,6 +202,7 @@ class DashboardSnapshot {
     this.alertConditions = const [],
     this.syncIssue,
     this.syncDetails,
+    this.syncRejection,
     Map<String, Map<String, String>> connectionVersions = const {},
     Iterable<ConnectionReportingOutcome> reportingOutcomes = const [],
   }) : connectionVersions = Map.unmodifiable({
@@ -221,6 +222,7 @@ class DashboardSnapshot {
   final WatchSummary watchSummary;
   final DashboardSyncIssue? syncIssue;
   final String? syncDetails;
+  final ConnectionRejection? syncRejection;
 
   /// Phone-only lifecycle provenance; never serialized into shared contracts.
   final Map<String, Map<String, String>> connectionVersions;
@@ -303,6 +305,7 @@ class DashboardSnapshot {
   DashboardSnapshot withStaleStatus({
     DashboardSyncIssue? syncIssue,
     String? syncDetails,
+    ConnectionRejection? syncRejection,
   }) {
     return DashboardSnapshot(
       generatedAt: generatedAt,
@@ -318,12 +321,17 @@ class DashboardSnapshot {
       watchSummary: watchSummary._withStatus(ProviderStatus.stale),
       syncIssue: syncIssue,
       syncDetails: syncDetails,
+      syncRejection: syncRejection,
       connectionVersions: connectionVersions,
       reportingOutcomes: reportingOutcomes,
     );
   }
 
-  DashboardSnapshot withSyncIssue(DashboardSyncIssue issue, {String? details}) {
+  DashboardSnapshot withSyncIssue(
+    DashboardSyncIssue issue, {
+    String? details,
+    ConnectionRejection? rejection,
+  }) {
     return DashboardSnapshot(
       generatedAt: generatedAt,
       overallStatus: overallStatus,
@@ -336,6 +344,7 @@ class DashboardSnapshot {
       watchSummary: watchSummary,
       syncIssue: issue,
       syncDetails: details,
+      syncRejection: rejection,
       connectionVersions: connectionVersions,
       reportingOutcomes: reportingOutcomes,
     );
@@ -355,6 +364,7 @@ class DashboardSnapshot {
     watchSummary: watchSummary,
     syncIssue: syncIssue,
     syncDetails: syncDetails,
+    syncRejection: syncRejection,
     connectionVersions: versions,
     reportingOutcomes: reportingOutcomes,
   );
@@ -373,6 +383,7 @@ class DashboardSnapshot {
     watchSummary: watchSummary,
     syncIssue: syncIssue,
     syncDetails: syncDetails,
+    syncRejection: syncRejection,
     connectionVersions: connectionVersions,
     reportingOutcomes: outcomes,
   );

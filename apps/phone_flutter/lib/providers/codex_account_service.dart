@@ -154,6 +154,14 @@ final class MobileCodexAccountService implements CodexAccountService {
       if (error.failure == CodexAccountFailure.authentication) {
         if (managed == null) {
           await _deleteSession();
+        } else if (managed case final ConnectionRejectionRecorder recorder) {
+          if (!await recorder.rejectAuthentication(expected!))
+            throw const CodexAccountException(CodexAccountFailure.cancelled);
+          throw CodexAccountException(
+            error.failure,
+            error.details,
+            expected!.values['committedConnection'],
+          );
         } else {
           await managed.deleteIfCurrent(expected!);
         }

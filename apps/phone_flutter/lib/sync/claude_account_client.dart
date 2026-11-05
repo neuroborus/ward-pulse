@@ -20,10 +20,15 @@ typedef ClaudeSessionChanged =
     Future<void> Function(ClaudeAccountSession value);
 
 final class ClaudeAccountException implements Exception {
-  const ClaudeAccountException(this.failure, [this.details]);
+  const ClaudeAccountException(
+    this.failure, [
+    this.details,
+    this.rejectionEventId,
+  ]);
 
   final ClaudeAccountFailure failure;
   final String? details;
+  final String? rejectionEventId;
 }
 
 /// Pending PKCE authorization for Claude Code-compatible OAuth.

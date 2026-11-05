@@ -226,6 +226,31 @@ a healthy sibling, cached report or saved label never verifies a reporting crede
 - These messages preserve the existing glyph vocabulary, severity scale and rollup
   rules. Reporting failures do not create automatic alerts; alerts remain user-configured.
 
+## Saved connection rejection warnings
+
+**Revision 2026-11-05.** Dashboard retains one historical rejection warning per saved
+connection after an explicitly classified authentication rejection. Claude and Fable share
+the Claude plan connection. Record only future proved rejections; missing credentials or
+an old Not connected state do not supply a historical reason.
+
+Warnings use the existing feedback area, including empty and failed loads. Their past-tense
+copy describes the rejection without claiming that a recovered connection is still broken.
+The body opens Providers and reveals/focuses that exact row with its existing plan, session
+or key controls. It does not open a key editor for an OAuth plan. The independent accessible
+X dismisses only that event and never navigates. Keep wrapping, compact spacing and readable
+light/dark and enlarged-text presentation.
+
+Refresh, navigation, restart, successful reconnect and ordinary Disconnect/Remove retain the
+warning until X; Android Clear storage removes all local records. Dismissal survives repeated
+failures of the same committed connection. A later explicitly committed connection can produce
+a new warning on rejection, even with the same credential or account. Stale failures and stale
+X actions cannot change a newer event. Failed notice writes retain the confirmed view.
+
+Historical warnings never determine current Connected/reporting verification, problem counts,
+allowance status, alerts or freshness. Suppress only matching transient authentication feedback,
+including for a dismissed event; independent access, service and data failures remain visible.
+Native rendering, persistence and recovery-action acceptance remain Pending HOST.
+
 ## Balances
 
 **Claude monthly Extra usage revision, 2026-11-03.** Only Claude Plan's purchased

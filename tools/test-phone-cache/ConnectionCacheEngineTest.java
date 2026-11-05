@@ -38,7 +38,7 @@ public final class ConnectionCacheEngineTest {
         return finish(engine, "ui", complete, "activate");
     }
     public static void main(String[] ignored) {
-        restartPartialAndMonotonic(); deletionAndOAuthRevision(); leaseQueueAndDetach(); cancellationAndMigration(); corruptionAndFailures(); identityAndAggregate(); fetchExclusion(); cleanupAcknowledgement(); supersededCancellation(); failedCommitMemoryCannotActivate(); activeBackupCleanupProtection(); timestampPrecisionAndLegacyUpgrade();
+        restartPartialAndMonotonic(); deletionAndOAuthRevision(); leaseQueueAndDetach(); cancellationAndMigration(); corruptionAndFailures(); identityAndAggregate(); fetchExclusion(); cleanupAcknowledgement(); supersededCancellation(); failedCommitMemoryCannotActivate(); activeBackupCleanupProtection(); timestampPrecisionAndLegacyUpgrade(); rejectionLifecycle(); rejectionOwnership(); noticeFailures(); noticeMetadataValidation();
         System.out.println("Connection cache engine: " + assertions + " assertions passed.");
     }
     static void restartPartialAndMonotonic() {
@@ -66,6 +66,7 @@ public final class ConnectionCacheEngineTest {
         check(Boolean.FALSE.equals(failedOldToken.get("accepted")), "Old auth failure cannot delete refreshed token.");
         check(engine.valid(C, old), "Cached metrics survive token refresh.");
         Map<String, Object> deletion = acquire(engine, "ui", "delete", null);
+        check(engine.readNotice(C).isEmpty(), "Ordinary deletion supplies no authentication-rejection reason.");
         check(!engine.valid(C, old), "Delete barrier precedes secure SDK cleanup.");
         check(!engine.writeSnapshot(C, old, "late-result", 99), "Deleted cache cannot resurrect.");
         finish(engine, "ui", deletion, "release");
@@ -257,6 +258,136 @@ public final class ConnectionCacheEngineTest {
         engine.writeSnapshot(C, version, "latest", 1002);
         check(!engine.upgradeSnapshotTimestamp(C, version, "newer", 1001), "Delayed metadata upgrade cannot replace newer payload.");
         check("latest".equals(engine.readSnapshot(C, version)), "Metadata upgrade race leaves newer payload intact.");
+    }
+
+    static boolean rejection(ConnectionCacheEngine engine, String owner, String connection, Map<String, String> expected, boolean remove) {
+        AtomicReference<Map<String, Object>> fetch = new AtomicReference<>(), result = new AtomicReference<>();
+        engine.acquireFetch(owner, connection, fetch::set);
+        String ticket = (String)fetch.get().get("fetchTicket");
+        try {
+            engine.acquire(owner, connection, remove ? "rejectDelete" : "reject", expected, ticket,
+                result::set, error -> { throw new RuntimeException(error); });
+            check(result.get() != null, "Rejection completed under owned fetch.");
+            if (result.get().get("lease") instanceof String)
+                engine.finish(owner, connection, (String)result.get().get("lease"), "release", null);
+            return Boolean.TRUE.equals(result.get().get("accepted"));
+        } finally { engine.releaseFetch(owner, connection, ticket); }
+    }
+    static void rejectionLifecycle() {
+        Disk disk = new Disk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+        check(engine.readNotice(C).isEmpty(), "Pristine storage has no inferred rejection.");
+        Map<String, Object> login = login(engine);
+        disk.data.remove(C + ".committedConnection");
+        Map<String, Object> read = acquire(engine, "installed", "read", null);
+        login = finish(engine, "installed", read, "confirm");
+        check(engine.readNotice(C).isEmpty(), "Initializing an installed identity creates no historical event.");
+        Map<String, String> v = version(login);
+        String committed = (String)login.get("committedConnection");
+        engine.writeSnapshot(C, v, "cached", 1);
+        check(rejection(engine, "worker", C, v, false), "Owned retained-credential rejection records.");
+        check(engine.valid(C, v) && "cached".equals(engine.readSnapshot(C, v)), "Notice does not retire credential or cache.");
+        check(committed.equals(engine.readNotice(C).get("eventId")), "Event belongs to committed connection.");
+        check(engine.dismissNotice(C, committed), "Exact event dismisses.");
+        check(rejection(engine, "poll", C, v, false), "Repeat failure remains owned.");
+        engine = new ConnectionCacheEngine(disk);
+        check(Boolean.TRUE.equals(engine.readNotice(C).get("dismissed")), "Dismissal survives repeat and restart.");
+        Map<String, Object> refresh = acquire(engine, "worker", "refresh", v);
+        Map<String, Object> refreshed = finish(engine, "worker", refresh, "activate");
+        check(committed.equals(refreshed.get("committedConnection")), "Ordinary token refresh preserves event eligibility.");
+        Map<String, Object> pending = acquire(engine, "ui", "reconnect", null); finish(engine, "ui", pending, "release");
+        Map<String, Object> cancel = acquire(engine, "ui", "cancel", version(pending));
+        Map<String, Object> restored = finish(engine, "ui", cancel, "cancel");
+        check(committed.equals(restored.get("committedConnection")), "Cancelled reconnect keeps committed identity despite new generation.");
+        rejection(engine, "poll", C, version(restored), false);
+        check(Boolean.TRUE.equals(engine.readNotice(C).get("dismissed")), "Cancellation cannot rearm dismissed rejection.");
+        Map<String, Object> next = login(engine);
+        check(!committed.equals(next.get("committedConnection")), "Same-principal committed reconnect is new eligibility.");
+        check(Boolean.TRUE.equals(engine.readNotice(C).get("dismissed")), "Reconnect alone retains historical tombstone.");
+        check(!rejection(engine, "old", C, v, false), "Old rejection cannot replace newer connection event.");
+        rejection(engine, "new", C, version(next), true);
+        String event = (String)engine.readNotice(C).get("eventId");
+        check(!event.equals(committed) && Boolean.FALSE.equals(engine.readNotice(C).get("dismissed")), "New connection failure replaces old dismissal.");
+        check(!engine.valid(C, version(next)) && !disk.data.containsKey(C + ".snapshot"), "OAuth rejection atomically retires credentials and cache.");
+        check(!engine.dismissNotice(C, committed), "Stale X cannot dismiss replacement.");
+        check(!rejection(engine, "old-repeat", C, v, false) && event.equals(engine.readNotice(C).get("eventId")), "Repeated old completion cannot clear or replace newer notice.");
+        Map<String, Object> reconnected = login(engine);
+        check(event.equals(engine.readNotice(C).get("eventId")), "Successful recovery preserves historical warning.");
+        Map<String, Object> deletion = acquire(engine, "ui", "delete", null); finish(engine, "ui", deletion, "release");
+        check(event.equals(new ConnectionCacheEngine(disk).readNotice(C).get("eventId")), "Ordinary disconnect and restart preserve warning.");
+        check(!rejection(engine, "late", C, version(reconnected), false), "Deleted connection cannot invent a fresh event.");
+        disk.data.clear();
+        check(new ConnectionCacheEngine(disk).readNotice(C).isEmpty(), "Cleared backing storage removes events and tombstones.");
+    }
+    static void rejectionOwnership() {
+        Disk disk = new Disk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+        Map<String, String> v = version(login(engine));
+        Map<String, Object> held = acquire(engine, "reader", "read", null);
+        AtomicReference<Map<String, Object>> fetch = new AtomicReference<>(), result = new AtomicReference<>();
+        engine.acquireFetch("gone", C, fetch::set);
+        engine.acquire("gone", C, "reject", v, (String)fetch.get().get("fetchTicket"), result::set,
+            error -> { throw new RuntimeException(error); });
+        check(result.get() == null, "Notice queues behind credential ownership.");
+        engine.detach("gone"); finish(engine, "reader", held, "release");
+        check(engine.readNotice(C).isEmpty() && engine.valid(C, v), "Detached queued notice neither creates evidence nor fences credentials.");
+        String sibling = "cursor.plan";
+        AtomicReference<Map<String, Object>> answer = new AtomicReference<>();
+        engine.acquire("ui", sibling, "reconnect", null, answer::set, error -> { throw new RuntimeException(error); });
+        Map<String, Object> pending = answer.get(); engine.finish("ui", sibling, (String)pending.get("lease"), "release", null);
+        engine.acquire("ui", sibling, "complete", version(pending), answer::set, error -> { throw new RuntimeException(error); });
+        Map<String, Object> active = engine.finish("ui", sibling, (String)answer.get().get("lease"), "activate", ID);
+        rejection(engine, "one", C, v, false); rejection(engine, "two", sibling, version(active), false);
+        engine.dismissNotice(C, (String)engine.readNotice(C).get("eventId"));
+        check(Boolean.FALSE.equals(engine.readNotice(sibling).get("dismissed")), "Independent connection event remains visible.");
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        engine.acquire("gone", C, "reject", v, (String)fetch.get().get("fetchTicket"), result::set, failure::set);
+        check(failure.get() != null && Boolean.TRUE.equals(engine.readNotice(C).get("dismissed")), "Retired fetch cannot revive dismissal.");
+    }
+    static void noticeFailures() {
+        class UncertainDisk extends Disk {
+            boolean throwsFailure;
+            @Override public boolean commit(Map<String, String> values) {
+                data = new HashMap<>(values);
+                if (fail && throwsFailure) throw new IllegalStateException("Synthetic storage failure.");
+                return !fail;
+            }
+        }
+        UncertainDisk disk = new UncertainDisk();
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+        Map<String, String> v = version(login(engine));
+        rejection(engine, "worker", C, v, false);
+        String event = (String)engine.readNotice(C).get("eventId");
+        disk.fail = true; boolean failed = false;
+        try { engine.dismissNotice(C, event); } catch (IllegalStateException expected) { failed = true; }
+        check(failed && Boolean.FALSE.equals(engine.readNotice(C).get("dismissed")), "Failed dismissal retains confirmed visible view.");
+        check(engine.valid(C, v), "Notice-only failure does not fence credentials.");
+        disk.fail = false; engine.writeSnapshot(C, v, "confirmed", 10);
+        check(Boolean.FALSE.equals(new ConnectionCacheEngine(disk).readNotice(C).get("dismissed")), "Later snapshot write cannot publish failed dismissal.");
+        Map<String, String> next = version(login(engine)); disk.fail = true; disk.throwsFailure = true; failed = false;
+        try { rejection(engine, "new", C, next, false); } catch (RuntimeException expected) { failed = true; }
+        check(failed && event.equals(engine.readNotice(C).get("eventId")) && engine.valid(C, next), "Failed replacement event preserves old notice and valid connection.");
+        disk.fail = false; engine.writeSnapshot(C, next, "new-cache", 11);
+        check(event.equals(new ConnectionCacheEngine(disk).readNotice(C).get("eventId")), "Whole-map write sanitizes failed event metadata.");
+        String knownSlot = disk.data.get(C + ".slot");
+        disk.fail = true; failed = false;
+        try { rejection(engine, "oauth", C, next, true); } catch (RuntimeException expected) { failed = true; }
+        check(failed && !engine.valid(C, next), "Failed OAuth deletion barrier remains fail closed.");
+        check(event.equals(engine.readNotice(C).get("eventId")), "Uncommitted OAuth event is never reported as durable.");
+        disk.fail = false;
+        check(engine.dismissNotice(C, event), "Confirmed older notice remains dismissible after a failed barrier.");
+        check(!engine.valid(C, next) && knownSlot.equals(disk.data.get(C + ".slot")), "Notice write preserves fencing and only the known credential reference.");
+        login(engine);
+        check(Boolean.TRUE.equals(engine.readNotice(C).get("dismissed")), "Explicit recovery cannot restore an older undismissed notice view.");
+    }
+
+    static void noticeMetadataValidation() {
+        Disk disk = new Disk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+        disk.data.put(C + ".rejectionEvent", "00000000-0000-4000-8000-000000000001");
+        for (String flag : new String[]{null, "invalid"}) {
+            if (flag != null) disk.data.put(C + ".rejectionDismissed", flag);
+            boolean refused = false;
+            try { engine.readNotice(C); } catch (IllegalStateException expected) { refused = true; }
+            check(refused, "Incomplete or malformed notice metadata cannot invent a visible rejection.");
+        }
     }
 
 }

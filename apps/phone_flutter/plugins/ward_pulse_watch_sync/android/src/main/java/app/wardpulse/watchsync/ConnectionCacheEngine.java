@@ -21,6 +21,7 @@ public final class ConnectionCacheEngine {
     }
     private static final Set<String> CONNECTIONS = new HashSet<>(Arrays.asList(
         "openai.plan", "openai.platform", "anthropic.plan", "anthropic.platform", "cursor.plan", "cursor.platform"));
+    private static final List<String> NOTICE_KEYS = Arrays.asList("committedConnection", "rejectionEvent", "rejectionDismissed");
     private final Backend backend;
     private final Map<String, Lease> leases = new HashMap<>();
     private final Map<String, ArrayDeque<Pending>> queues = new HashMap<>();
@@ -29,15 +30,85 @@ public final class ConnectionCacheEngine {
     private final Set<String> abandonedSlots = new HashSet<>();
     private final Map<String, FetchLease> fetches = new HashMap<>();
     private final Map<String, ArrayDeque<FetchPending>> fetchQueues = new HashMap<>();
+    // SharedPreferences can expose failed commits in memory. All later whole-map
+    // writes must use the last confirmed notice fields, including other connections.
+    private final Map<String, Map<String, String>> unconfirmedNotices = new HashMap<>();
 
     public ConnectionCacheEngine(Backend backend) { this.backend = backend; }
+    private Map<String, String> readAll() {
+        Map<String, String> all = new LinkedHashMap<>(backend.read());
+        unconfirmedNotices.forEach((connection, confirmed) -> {
+            for (String key : NOTICE_KEYS) all.remove(connection + "." + key);
+            confirmed.forEach((key, value) -> all.put(connection + "." + key, value));
+        });
+        return all;
+    }
+    private boolean commit(Map<String, String> values) {
+        Map<String, String> prior = readAll();
+        boolean committed;
+        try { committed = backend.commit(values); } catch (RuntimeException error) { committed = false; }
+        if (committed) { unconfirmedNotices.clear(); return true; }
+        for (String connection : CONNECTIONS) {
+            Map<String, String> confirmed = new LinkedHashMap<>();
+            for (String key : NOTICE_KEYS) {
+                String value = prior.get(connection + "." + key);
+                if (value != null) confirmed.put(key, value);
+            }
+            unconfirmedNotices.put(connection, confirmed);
+        }
+        return false;
+    }
+    private void persistNotice(String connection, Map<String, String> state) {
+        Map<String, String> all = readAll();
+        for (String key : NOTICE_KEYS) {
+            all.remove(connection + "." + key);
+            if (state.containsKey(key)) all.put(connection + "." + key, state.get(key));
+        }
+        // Notice writes cannot make an uncertain credential candidate durable.
+        failedCommitPriorState.forEach((fencedConnection, prior) -> {
+            if (!fenced.contains(fencedConnection)) return;
+            String prefix = fencedConnection + ".";
+            all.keySet().removeIf(key -> key.startsWith(prefix) && !NOTICE_KEYS.contains(key.substring(prefix.length())));
+            prior.forEach((key, value) -> { if (!NOTICE_KEYS.contains(key)) all.put(prefix + key, value); });
+        });
+        if (!commit(all)) throw new IllegalStateException("Connection notice storage failed.");
+    }
+    public synchronized Map<String, Object> readNotice(String connection) {
+        requireConnection(connection);
+        Map<String, String> all = readAll();
+        Map<String, Object> notice = new LinkedHashMap<>();
+        String event = all.get(connection + ".rejectionEvent");
+        if (event != null) {
+            UUID.fromString(event);
+            String dismissed = all.get(connection + ".rejectionDismissed");
+            if (!"true".equals(dismissed) && !"false".equals(dismissed))
+                throw new IllegalStateException("Connection notice unavailable.");
+            notice.put("eventId", event);
+            notice.put("dismissed", "true".equals(dismissed));
+        }
+        return notice;
+    }
+    public synchronized boolean dismissNotice(String connection, String event) {
+        Map<String, String> state = state(connection);
+        if (!event.equals(state.get("rejectionEvent"))) return false;
+        if ("true".equals(state.get("rejectionDismissed"))) return true;
+        state.put("rejectionDismissed", "true"); persistNotice(connection, state); return true;
+    }
+    private static void reject(Map<String, String> state) {
+        String identity = state.get("committedConnection");
+        if (identity == null) { identity = unique(); state.put("committedConnection", identity); }
+        if (!identity.equals(state.get("rejectionEvent"))) {
+            state.put("rejectionEvent", identity); state.put("rejectionDismissed", "false");
+        }
+    }
+
     private static String unique() { return UUID.randomUUID().toString(); }
     private static void requireConnection(String connection) {
         if (!CONNECTIONS.contains(connection)) throw new IllegalArgumentException("Invalid connection.");
     }
     private Map<String, String> state(String connection) {
         requireConnection(connection);
-        Map<String, String> all = backend.read();
+        Map<String, String> all = readAll();
         Map<String, String> state = new LinkedHashMap<>();
         String prefix = connection + ".";
         all.forEach((key, value) -> { if (key.startsWith(prefix)) state.put(key.substring(prefix.length()), value); });
@@ -53,12 +124,12 @@ public final class ConnectionCacheEngine {
         return state;
     }
     private void persist(String connection, Map<String, String> state) {
-        Map<String, String> prior = backend.read();
+        Map<String, String> prior = readAll();
         Map<String, String> all = new LinkedHashMap<>(prior);
         String prefix = connection + ".";
         all.keySet().removeIf(key -> key.startsWith(prefix));
         state.forEach((key, value) -> all.put(prefix + key, value));
-        if (!backend.commit(all)) {
+        if (!commit(all)) {
             fenced.add(connection);
             if (!failedCommitPriorState.containsKey(connection)) {
                 Map<String, String> safe = new LinkedHashMap<>();
@@ -143,7 +214,7 @@ public final class ConnectionCacheEngine {
         if (queue != null && !queue.isEmpty()) startFetch(queue.removeFirst()); else fetchQueues.remove(connection);
     }
 
-    /** Queue only secure-storage operations; the caller releases before network work. */
+    /** Serialize storage and rejection commits; never hold a storage lease during network work. */
     public synchronized void acquire(String owner, String connection, String action,
             Map<String, String> expected, Consumer<Map<String, Object>> success, Consumer<Exception> failure) {
         acquire(owner, connection, action, expected, null, success, failure);
@@ -158,12 +229,23 @@ public final class ConnectionCacheEngine {
     private void start(Pending pending) {
         String connection = pending.connection;
         try {
+            boolean rejection = "reject".equals(pending.action) || "rejectDelete".equals(pending.action);
+            if (rejection && (pending.expected == null || pending.fetchTicket == null))
+                throw new IllegalArgumentException("Rejection ownership required.");
             if (pending.fetchTicket != null && !validFetch(pending.owner, connection, pending.fetchTicket))
                 throw new IllegalStateException("Account fetch superseded.");
             if (fenced.contains(connection) && !"reconnect".equals(pending.action))
                 throw new IllegalStateException("Credential lifecycle unavailable.");
             Map<String, String> state = fenced.contains(connection) && failedCommitPriorState.containsKey(connection)
                 ? new LinkedHashMap<>(failedCommitPriorState.get(connection)) : state(connection);
+            if (fenced.contains(connection) && failedCommitPriorState.containsKey(connection)) {
+                Map<String, String> confirmed = readAll();
+                for (String key : NOTICE_KEYS) {
+                    state.remove(key);
+                    String value = confirmed.get(connection + "." + key);
+                    if (value != null) state.put(key, value);
+                }
+            }
             boolean pendingAction = "complete".equals(pending.action) || "cancel".equals(pending.action);
             boolean matches = pendingAction
                 ? "pending".equals(state.get("mode")) && pending.expected != null
@@ -172,6 +254,11 @@ public final class ConnectionCacheEngine {
                 : same(state, pending.expected, true);
             if (pending.expected != null && !matches) {
                 pending.success.accept(Collections.singletonMap("accepted", false)); next(connection); return;
+            }
+            if (rejection) reject(state);
+            if ("reject".equals(pending.action)) {
+                persistNotice(connection, state);
+                pending.success.accept(Collections.singletonMap("accepted", true)); next(connection); return;
             }
             Lease lease = new Lease(pending.owner, connection, unique(), pending.action, pending.fetchTicket);
             if ("reconnect".equals(pending.action)) {
@@ -192,7 +279,7 @@ public final class ConnectionCacheEngine {
             } else if (pendingAction) {
                 if (!matches) throw new IllegalStateException("Reconnect superseded.");
                 lease.slot = state.get("pendingSlot");
-            } else if ("delete".equals(pending.action)) {
+            } else if ("delete".equals(pending.action) || "rejectDelete".equals(pending.action)) {
                 retire(state, state.get("slot")); retire(state, legacyKey(connection));
                 if ("openai.plan".equals(connection)) retire(state, "wardpulse.codex-companion.config");
                 if ("anthropic.plan".equals(connection)) retire(state, "wardpulse.anthropic.plan.secret");
@@ -260,6 +347,8 @@ public final class ConnectionCacheEngine {
                 retire(state, state.get("slot"));
                 state.put("slot", lease.slot); state.put("identity", identity);
                 state.put("revision", unique()); state.put("mode", "active"); bindBackup(state);
+                if ("complete".equals(lease.action) || !state.containsKey("committedConnection"))
+                    state.put("committedConnection", unique());
                 state.remove("previousSlot"); state.remove("previousIdentity"); state.remove("previousMode"); state.remove("pendingSlot"); state.remove("previousBackupKey"); persist(connection, state);
             } else if ("cancel".equals(operation)) {
                 if (!"cancel".equals(lease.action)) throw new IllegalStateException("Invalid cancellation.");
@@ -272,6 +361,8 @@ public final class ConnectionCacheEngine {
             } else if ("missing".equals(operation) || ("confirm".equals(operation) && !identity.equals(state.get("identity")))) {
                 retire(state, state.get("slot")); barrier(state, "deleted");
                 state.remove("slot"); state.remove("identity"); removeBackup(state); persist(connection, state);
+            } else if ("confirm".equals(operation) && !state.containsKey("committedConnection")) {
+                state.put("committedConnection", unique()); persistNotice(connection, state);
             } else if (!"release".equals(operation) && !"confirm".equals(operation)) {
                 throw new IllegalArgumentException("Invalid credential completion.");
             }
@@ -285,9 +376,9 @@ public final class ConnectionCacheEngine {
         Map<String, String> state = state(connection);
         if (!state.containsKey("generation")) barrier(state, "legacy");
         retire(state, "wardpulse." + connection + ".secret");
-        Map<String, String> all = new LinkedHashMap<>(backend.read()); String prefix = connection + ".";
+        Map<String, String> all = new LinkedHashMap<>(readAll()); String prefix = connection + ".";
         state.forEach((key, value) -> all.put(prefix + key, value));
-        if (!backend.commit(all)) throw new IllegalStateException("Cleanup storage failed.");
+        if (!commit(all)) throw new IllegalStateException("Cleanup storage failed.");
     }
     public synchronized boolean acknowledgeCleanup(String owner, String connection, String ticket, List<String> cleaned) {
         Lease lease = lease(owner, connection, ticket);
@@ -298,9 +389,9 @@ public final class ConnectionCacheEngine {
             && !(slot.equals(state.get("backupKey")) && validBackup(state, connection))
             && !(slot.equals(legacyKey(connection)) && ("legacy".equals(state.get("mode")) || "migration".equals(state.get("mode")) || "legacy".equals(state.get("previousMode")))));
         state.put("retired", joinSlots(slots));
-        Map<String, String> all = new LinkedHashMap<>(backend.read());
+        Map<String, String> all = new LinkedHashMap<>(readAll());
         all.put(connection + ".retired", state.get("retired"));
-        return backend.commit(all);
+        return commit(all);
     }
     public synchronized void detach(String owner) {
         for (ArrayDeque<FetchPending> queue : fetchQueues.values()) queue.removeIf(pending -> pending.owner.equals(owner));
@@ -355,8 +446,8 @@ public final class ConnectionCacheEngine {
         if (generatedAt < oldAt) return false;
         state.put("snapshot", snapshot); state.put("snapshotAt", Long.toString(generatedAt)); state.put("snapshotVersion", "1"); state.put("snapshotTimeUnit", "microseconds");
         // Payload persistence is best effort and must not fence valid credentials.
-        Map<String, String> all = new LinkedHashMap<>(backend.read()); String prefix = connection + ".";
-        state.forEach((key, value) -> all.put(prefix + key, value)); return backend.commit(all);
+        Map<String, String> all = new LinkedHashMap<>(readAll()); String prefix = connection + ".";
+        state.forEach((key, value) -> all.put(prefix + key, value)); return commit(all);
     }
     /** Upgrade legacy millisecond ordering without rewriting or racing a newer payload. */
     public synchronized boolean upgradeSnapshotTimestamp(String connection, Map<String, String> expected, String snapshot, long generatedAt) {
@@ -365,19 +456,19 @@ public final class ConnectionCacheEngine {
         if (!snapshot.equals(state.get("snapshot"))) return false;
         if ("microseconds".equals(state.get("snapshotTimeUnit"))) return true;
         state.put("snapshotAt", Long.toString(generatedAt)); state.put("snapshotTimeUnit", "microseconds");
-        Map<String, String> all = new LinkedHashMap<>(backend.read()); String prefix = connection + ".";
-        state.forEach((key, value) -> all.put(prefix + key, value)); return backend.commit(all);
+        Map<String, String> all = new LinkedHashMap<>(readAll()); String prefix = connection + ".";
+        state.forEach((key, value) -> all.put(prefix + key, value)); return commit(all);
     }
     public synchronized void clearSnapshot(String connection, Map<String, String> expected) {
         Map<String, String> state = state(connection);
         if (expected != null && !same(state, expected, false)) return;
         if ("legacy".equals(state.get("mode"))) return;
         state.put("epoch", unique()); state.remove("snapshot"); state.remove("snapshotAt"); state.remove("snapshotVersion"); state.remove("snapshotTimeUnit");
-        Map<String, String> all = new LinkedHashMap<>(backend.read());
+        Map<String, String> all = new LinkedHashMap<>(readAll());
         String prefix = connection + ".";
         all.keySet().removeIf(key -> key.startsWith(prefix));
         state.forEach((key, value) -> all.put(prefix + key, value));
-        if (!backend.commit(all)) throw new IllegalStateException("Snapshot storage failed.");
+        if (!commit(all)) throw new IllegalStateException("Snapshot storage failed.");
     }
     private static final class FetchLease {
         final String owner, ticket;

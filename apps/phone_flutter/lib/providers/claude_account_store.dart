@@ -43,7 +43,10 @@ abstract interface class ClaudeAccountStore {
 }
 
 final class SecureClaudeAccountStore
-    implements ClaudeAccountStore, VersionedAccountStore<ClaudeAccountSession> {
+    implements
+        ClaudeAccountStore,
+        VersionedAccountStore<ClaudeAccountSession>,
+        ConnectionRejectionRecorder {
   SecureClaudeAccountStore({
     FlutterSecureStorage? storage,
     ConnectionCachePlatform? platform,
@@ -92,6 +95,10 @@ final class SecureClaudeAccountStore
   Future<void> delete() async {
     await _credentials.delete();
   }
+
+  @override
+  Future<bool> rejectAuthentication(CredentialVersion expected) =>
+      _credentials.recordRejection(expected, removeCredential: true);
 
   @override
   Future<void> deleteIfCurrent(CredentialVersion expected) =>

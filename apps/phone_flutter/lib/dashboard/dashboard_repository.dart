@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 
 import '../settings/debug_data_preferences.dart';
+import '../providers/connection_lifecycle.dart';
 import 'dashboard_models.dart';
 
 typedef DashboardJsonLoader = String Function();
@@ -33,16 +34,19 @@ final class DashboardLoadException implements Exception {
   const DashboardLoadException({
     this.issue = DashboardSyncIssue.dashboardUnavailable,
     this.details,
+    this.syncRejection,
   }) : reportingOutcomes = const [];
 
   DashboardLoadException.withOutcomes({
     this.issue = DashboardSyncIssue.dashboardUnavailable,
     this.details,
+    this.syncRejection,
     required Iterable<ConnectionReportingOutcome> reportingOutcomes,
   }) : reportingOutcomes = List.unmodifiable(reportingOutcomes);
 
   final DashboardSyncIssue issue;
   final String? details;
+  final ConnectionRejection? syncRejection;
   final List<ConnectionReportingOutcome> reportingOutcomes;
 
   @override

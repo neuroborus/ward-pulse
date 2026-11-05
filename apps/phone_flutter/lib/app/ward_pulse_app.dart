@@ -13,6 +13,7 @@ import '../dashboard/provider_status_severity.dart';
 import '../providers/claude_account_service.dart';
 import '../providers/codex_account_service.dart';
 import '../providers/credential_dialog.dart';
+import '../providers/connection_rejection_notice.dart';
 import '../providers/provider_connection.dart';
 import '../providers/provider_credential_store.dart';
 import '../providers/providers_screen.dart';
@@ -72,6 +73,7 @@ class WardPulseApp extends StatelessWidget {
     this.alertConditionStore = const DisabledAlertConditionStore(),
     this.alertNotifier = const SilentAlertNotifier(),
     this.notificationCoordinator,
+    this.rejectionNotices = const EmptyConnectionRejectionNoticeStore(),
   });
 
   final DashboardRepository repository;
@@ -100,6 +102,7 @@ class WardPulseApp extends StatelessWidget {
   final AlertConditionStore alertConditionStore;
   final AlertNotifier alertNotifier;
   final PhoneNotificationCoordinator? notificationCoordinator;
+  final ConnectionRejectionNoticeStore rejectionNotices;
 
   @override
   Widget build(BuildContext context) {
@@ -135,6 +138,7 @@ class WardPulseApp extends StatelessWidget {
         alertConditionStore: alertConditionStore,
         alertNotifier: alertNotifier,
         notificationCoordinator: notificationCoordinator,
+        rejectionNotices: rejectionNotices,
       ),
     );
   }
@@ -169,6 +173,7 @@ class DashboardHost extends StatefulWidget {
     required this.alertConditionStore,
     required this.alertNotifier,
     this.notificationCoordinator,
+    this.rejectionNotices = const EmptyConnectionRejectionNoticeStore(),
   });
 
   final DashboardRepository repository;
@@ -198,6 +203,7 @@ class DashboardHost extends StatefulWidget {
   final AlertConditionStore alertConditionStore;
   final AlertNotifier alertNotifier;
   final PhoneNotificationCoordinator? notificationCoordinator;
+  final ConnectionRejectionNoticeStore rejectionNotices;
 
   @override
   State<DashboardHost> createState() => _DashboardHostState();
@@ -221,6 +227,43 @@ class _DashboardHostState extends State<DashboardHost>
   DashboardSnapshot? _repositorySnapshot;
   final _reportingUpdates = <ProviderConnectionId, ConnectionReportingUpdate>{};
   ProviderConnectionId? _editReportingConnection;
+  ({ProviderConnectionId connection, int token})? _connectionReveal;
+  var _connectionRevealToken = 0;
+  var _noticeRevision = 0;
+  List<ConnectionRejectionNotice> _rejectionNotices = const [];
+
+  Future<void> _readRejectionNotices() async {
+    final revision = ++_noticeRevision;
+    try {
+      final notices = await widget.rejectionNotices.read();
+      if (mounted && revision == _noticeRevision)
+        setState(() => _rejectionNotices = notices);
+    } catch (_) {
+      // A failed read retains the last confirmed notice view.
+    }
+  }
+
+  Future<void> _dismissRejection(ConnectionRejectionNotice notice) async {
+    ++_noticeRevision;
+    try {
+      await widget.rejectionNotices.dismiss(notice);
+    } catch (_) {
+      return;
+    }
+    await _readRejectionNotices();
+  }
+
+  void _revealConnection(ProviderConnectionId connection) {
+    setState(() {
+      _editReportingConnection = null;
+      _connectionReveal = (
+        connection: connection,
+        token: ++_connectionRevealToken,
+      );
+      _selectedIndex = _providersIndex;
+    });
+  }
+
   final _reportingSaves = <ProviderConnectionId>{};
 
   /// Holds the Dashboard's card order for the run, so a poll that only moves
@@ -264,6 +307,7 @@ class _DashboardHostState extends State<DashboardHost>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    unawaited(_readRejectionNotices());
     _initializeNotifications();
     _queueNotificationFrame();
     _syncTicks = widget.syncScheduler.ticks.listen((_) {
@@ -306,6 +350,7 @@ class _DashboardHostState extends State<DashboardHost>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _queueNotificationFrame();
+    if (state == AppLifecycleState.resumed) unawaited(_readRejectionNotices());
     if (state == AppLifecycleState.resumed &&
         _selectedIndex == _settingsIndex) {
       unawaited(_refreshNotificationStatus());
@@ -797,6 +842,8 @@ class _DashboardHostState extends State<DashboardHost>
         _acceptedAlertThresholds = null;
       }
       rethrow;
+    } finally {
+      await _readRejectionNotices();
     }
   }
 
@@ -1141,6 +1188,7 @@ class _DashboardHostState extends State<DashboardHost>
   void _editReportingKey(ProviderConnectionId connection) {
     setState(() {
       _editReportingConnection = connection;
+      _connectionReveal = null;
       _selectedIndex = _providersIndex;
     });
   }
@@ -1329,6 +1377,11 @@ class _DashboardHostState extends State<DashboardHost>
                 savingConnections: Set.unmodifiable(_reportingSaves),
                 mockDataEnabled: _mockDataEnabled,
                 editConnection: _editReportingConnection,
+                revealConnection: _connectionReveal,
+                onConnectionRevealed: (token) {
+                  if (_connectionReveal?.token == token)
+                    _connectionReveal = null;
+                },
                 onEditConnectionOpened: () => _editReportingConnection = null,
                 alertThresholds: _alertThresholds,
                 onAlertThresholdsChanged: _updateAlertThresholds,
@@ -1361,24 +1414,48 @@ class _DashboardHostState extends State<DashboardHost>
               // Only the very first load has nothing to show; a reload keeps
               // the dashboard up rather than blanking it.
               ConnectionState.waiting when snapshot == null =>
-                const _LoadingView(),
+                _rejectionNotices.any((notice) => !notice.dismissed)
+                    ? SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          ConnectionFeedback(
+                            notices: _rejectionNotices,
+                            onRevealConnection: _revealConnection,
+                            onDismiss: _dismissRejection,
+                          ),
+                          const SizedBox(height: 16),
+                          const _LoadingView(),
+                        ],
+                      ),
+                    )
+                    : const _LoadingView(),
               _ when state.hasError => _ErrorView(
                 failure: _dashboardFailure(state.error),
                 onRetry: _reload,
                 onOpenProviders: _openProviders,
                 onEditReportingKey: _editReportingKey,
+                rejectionNotices: _rejectionNotices,
+                onRevealConnection: _revealConnection,
+                onDismissRejection: _dismissRejection,
               ),
               _ when snapshot != null => DashboardScreen(
                 onRefresh: _pullToRefresh,
                 snapshot: snapshot,
                 onOpenProviders: _openProviders,
                 onEditReportingKey: _editReportingKey,
+                rejectionNotices: _rejectionNotices,
+                onRevealConnection: _revealConnection,
+                onDismissRejection: _dismissRejection,
                 reveal: _reveal,
                 order: _dashboardOrder,
               ),
               _ => _ErrorView(
                 failure: const DashboardLoadException(),
                 onRetry: _reload,
+                rejectionNotices: _rejectionNotices,
+                onRevealConnection: _revealConnection,
+                onDismissRejection: _dismissRejection,
               ),
             },
           ),
@@ -1468,7 +1545,10 @@ class _DashboardHostState extends State<DashboardHost>
                       index == _settingsIndex && index != _selectedIndex;
                   setState(() {
                     _selectedIndex = index;
+                    if (index != _providersIndex) _connectionReveal = null;
                   });
+                  if (index == _dashboardIndex)
+                    unawaited(_readRejectionNotices());
                   if (enteringSettings) {
                     unawaited(_refreshNotificationStatus());
                   }
@@ -1515,17 +1595,24 @@ class _ErrorView extends StatelessWidget {
     required this.onRetry,
     this.onOpenProviders,
     this.onEditReportingKey,
+    this.rejectionNotices = const [],
+    this.onRevealConnection,
+    this.onDismissRejection,
   });
 
   final DashboardLoadException failure;
   final VoidCallback onRetry;
   final VoidCallback? onOpenProviders;
   final void Function(ProviderConnectionId)? onEditReportingKey;
+  final List<ConnectionRejectionNotice> rejectionNotices;
+  final void Function(ProviderConnectionId)? onRevealConnection;
+  final void Function(ConnectionRejectionNotice)? onDismissRejection;
 
   @override
   Widget build(BuildContext context) {
     if (failure.issue == DashboardSyncIssue.noProviders &&
-        failure.reportingOutcomes.isEmpty) {
+        failure.reportingOutcomes.isEmpty &&
+        rejectionNotices.every((notice) => notice.dismissed)) {
       return ConnectProviderPrompt(onOpenProviders: onOpenProviders);
     }
 
@@ -1538,25 +1625,22 @@ class _ErrorView extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Tooltip(
-                message: failure.issue.message,
-                child: Icon(Icons.error_outline, color: colors.error, size: 36),
-              ),
+              Icon(Icons.error_outline, color: colors.error, size: 36),
               const SizedBox(height: 12),
               Text(
                 'Dashboard unavailable',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
-              if (failure.reportingOutcomes.isEmpty)
-                Text(
-                  failure.issue.message,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: colors.onSurfaceVariant),
-                ),
-              ReportingFailures(
+              ConnectionFeedback(
                 outcomes: failure.reportingOutcomes,
+                issue: failure.issue,
+                details: failure.details,
+                rejection: failure.syncRejection,
+                notices: rejectionNotices,
                 onEditKey: onEditReportingKey,
+                onRevealConnection: onRevealConnection,
+                onDismiss: onDismissRejection,
               ),
               const SizedBox(height: 16),
               Wrap(

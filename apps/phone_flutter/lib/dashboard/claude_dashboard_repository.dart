@@ -47,6 +47,10 @@ DashboardLoadException _mapClaudeError(
   return DashboardLoadException(
     issue: _issueFor(error.failure),
     details: details,
+    syncRejection:
+        error.rejectionEventId == null
+            ? null
+            : (connection: 'anthropic.plan', eventId: error.rejectionEventId!),
   );
 }
 

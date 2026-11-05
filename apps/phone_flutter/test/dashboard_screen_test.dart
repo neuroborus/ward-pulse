@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show SemanticsAction;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -10,8 +11,176 @@ import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_screen.dart';
 import 'package:ward_pulse_phone/dashboard/status_pill.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
+import 'package:ward_pulse_phone/providers/connection_rejection_notice.dart';
 
 void main() {
+  for (final independent in [false, true]) {
+    testWidgets(
+      'dismissed key rejection ${independent ? 'retains independent sync failure' : 'suppresses matching generic feedback'}',
+      (tester) async {
+        const notice = ConnectionRejectionNotice(
+          connection: ProviderConnections.openAiPlatform,
+          eventId: 'synthetic-event',
+          dismissed: true,
+        );
+        final issue =
+            independent
+                ? DashboardSyncIssue.providerUnavailable
+                : DashboardSyncIssue.authentication;
+        final snapshot = DashboardSnapshot.empty()
+            .withReportingOutcomes([
+              ConnectionReportingOutcome(
+                connection: notice.connection,
+                category: ReportingOutcomeCategory.authenticationRejected,
+                source: ReportingOutcomeSource.live,
+                credentialVersion: CredentialVersion({
+                  'committedConnection': notice.eventId,
+                }),
+              ),
+            ])
+            .withSyncIssue(
+              issue,
+              rejection:
+                  independent
+                      ? null
+                      : (
+                        connection: notice.connection.storageKey,
+                        eventId: notice.eventId,
+                      ),
+            );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DashboardScreen(
+                snapshot: snapshot,
+                rejectionNotices: const [notice],
+                onRefresh: () async {},
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.text(issue.message),
+          independent ? findsOneWidget : findsNothing,
+        );
+        expect(
+          find.textContaining('OpenAI · Platform reporting: Key rejected'),
+          findsNothing,
+        );
+      },
+    );
+  }
+
+  for (final brightness in Brightness.values) {
+    testWidgets(
+      'historical feedback preserves status and independent actions at large text in $brightness',
+      (tester) async {
+        const notice = ConnectionRejectionNotice(
+          connection: ProviderConnections.claudePlan,
+          eventId: 'synthetic-event',
+          dismissed: false,
+        );
+        const keyNotice = ConnectionRejectionNotice(
+          connection: ProviderConnections.openAiPlatform,
+          eventId: 'synthetic-key-event',
+          dismissed: true,
+        );
+        final snapshot = DashboardSnapshot.empty()
+            .withReportingOutcomes([
+              ConnectionReportingOutcome(
+                connection: ProviderConnections.openAiPlatform,
+                category: ReportingOutcomeCategory.authenticationRejected,
+                source: ReportingOutcomeSource.live,
+                credentialVersion: CredentialVersion({
+                  'committedConnection': keyNotice.eventId,
+                }),
+              ),
+              const ConnectionReportingOutcome(
+                connection: ProviderConnections.cursorPlatform,
+                category: ReportingOutcomeCategory.accessDenied,
+                source: ReportingOutcomeSource.live,
+              ),
+            ])
+            .withSyncIssue(
+              DashboardSyncIssue.claudeAuthentication,
+              rejection: (
+                connection: notice.connection.storageKey,
+                eventId: notice.eventId,
+              ),
+            );
+        final before = dashboardProblems(snapshot);
+        ProviderConnectionId? revealed;
+        ConnectionRejectionNotice? dismissed;
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(brightness: brightness),
+            home: Scaffold(
+              body: MediaQuery(
+                data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+                child: DashboardScreen(
+                  snapshot: snapshot,
+                  onRefresh: () async {},
+                  rejectionNotices: const [notice, keyNotice],
+                  onRevealConnection: (id) => revealed = id,
+                  onDismissRejection: (event) => dismissed = event,
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final body = find.byTooltip(
+          'Review Anthropic · Claude plan connection',
+        );
+        final close = find.byTooltip(
+          'Dismiss Anthropic · Claude plan rejection warning',
+        );
+        await tester.ensureVisible(body);
+        expect(
+          tester
+              .getSemantics(body)
+              .getSemanticsData()
+              .hasAction(SemanticsAction.tap),
+          isTrue,
+        );
+        expect(
+          tester
+              .getSemantics(close)
+              .getSemanticsData()
+              .hasAction(SemanticsAction.tap),
+          isTrue,
+        );
+        expect(
+          tester.getSemantics(body).id,
+          isNot(tester.getSemantics(close).id),
+        );
+        await tester.tap(body);
+        expect(revealed, ProviderConnections.claudePlan);
+        expect(dismissed, isNull);
+        await tester.ensureVisible(close);
+        await tester.tap(close);
+        expect(dismissed, same(notice));
+        expect(
+          find.text(DashboardSyncIssue.claudeAuthentication.message),
+          findsNothing,
+        );
+        expect(
+          find.textContaining('OpenAI · Platform reporting: Key rejected'),
+          findsNothing,
+        );
+        expect(
+          find.textContaining('Cursor · Team Admin API: Access denied'),
+          findsOneWidget,
+        );
+        expect(dashboardProblems(snapshot), before);
+        expect(snapshot.overallStatus, ProviderStatus.ok);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets(
     'empty configured feedback names every failure and repairs the exact connection',
     (tester) async {

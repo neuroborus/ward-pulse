@@ -43,7 +43,10 @@ abstract interface class CodexAccountStore {
 }
 
 final class SecureCodexAccountStore
-    implements CodexAccountStore, VersionedAccountStore<CodexAccountSession> {
+    implements
+        CodexAccountStore,
+        VersionedAccountStore<CodexAccountSession>,
+        ConnectionRejectionRecorder {
   SecureCodexAccountStore({
     FlutterSecureStorage? storage,
     ConnectionCachePlatform? platform,
@@ -94,6 +97,10 @@ final class SecureCodexAccountStore
     await _credentials.delete();
     await _storage.delete(key: _legacyCompanionKey);
   }
+
+  @override
+  Future<bool> rejectAuthentication(CredentialVersion expected) =>
+      _credentials.recordRejection(expected, removeCredential: true);
 
   @override
   Future<void> deleteIfCurrent(CredentialVersion expected) =>

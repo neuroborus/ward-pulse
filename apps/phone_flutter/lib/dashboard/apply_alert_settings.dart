@@ -37,6 +37,7 @@ DashboardSnapshot applyUserAlertSettings(
       watchSummary: snapshot.watchSummary,
       syncIssue: snapshot.syncIssue,
       syncDetails: snapshot.syncDetails,
+      syncRejection: snapshot.syncRejection,
       connectionVersions: snapshot.connectionVersions,
       reportingOutcomes: snapshot.reportingOutcomes,
     );
@@ -58,6 +59,7 @@ DashboardSnapshot applyUserAlertSettings(
     watchSummary: applied.watchSummary,
     syncIssue: snapshot.syncIssue,
     syncDetails: snapshot.syncDetails,
+    syncRejection: snapshot.syncRejection,
     connectionVersions: snapshot.connectionVersions,
     reportingOutcomes: snapshot.reportingOutcomes,
   );

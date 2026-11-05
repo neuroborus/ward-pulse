@@ -48,6 +48,8 @@ public final class ConnectionCacheEngineBridge {
             case "queueLegacyCleanup": engine.queueLegacyCleanup(owner, connection, args.get("lease")); response(id, null, false); return;
             case "acknowledgeCleanup": response(id, engine.acknowledgeCleanup(owner, connection, args.get("lease"),
                 args.getOrDefault("cleaned", "").isEmpty() ? List.of() : List.of(args.get("cleaned").split("\n"))), false); return;
+            case "readNotice": response(id, engine.readNotice(connection), false); return;
+            case "dismissNotice": response(id, engine.dismissNotice(connection, args.get("eventId")), false); return;
             case "valid": response(id, engine.valid(connection, expected), false); return;
             case "validAll":
                 Map<String, Map<String, String>> versions = new HashMap<>();

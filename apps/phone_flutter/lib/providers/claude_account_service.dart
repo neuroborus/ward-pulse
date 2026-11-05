@@ -170,6 +170,14 @@ final class MobileClaudeAccountService implements ClaudeAccountService {
       if (error.failure == ClaudeAccountFailure.authentication) {
         if (managed == null) {
           await _deleteSession();
+        } else if (managed case final ConnectionRejectionRecorder recorder) {
+          if (!await recorder.rejectAuthentication(expected!))
+            throw const ClaudeAccountException(ClaudeAccountFailure.cancelled);
+          throw ClaudeAccountException(
+            error.failure,
+            error.details,
+            expected!.values['committedConnection'],
+          );
         } else {
           await managed.deleteIfCurrent(expected!);
         }

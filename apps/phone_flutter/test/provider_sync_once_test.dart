@@ -1,4 +1,16 @@
 import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:ward_pulse_phone/dashboard/phone_live_bindings.dart';
+import 'package:ward_pulse_phone/providers/provider_connection.dart';
+import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
+import 'package:ward_pulse_phone/providers/claude_account_store.dart';
+import 'package:ward_pulse_phone/providers/codex_account_store.dart';
+import 'package:ward_pulse_phone/providers/connection_rejection_notice.dart';
+import 'package:ward_pulse_phone/sync/claude_account_client.dart';
+import 'package:ward_pulse_phone/sync/codex_account_client.dart';
+import 'package:ward_pulse_phone/sync/openai_reporting_client.dart';
+import 'package:ward_pulse_phone/sync/provider_reporting.dart';
+import 'package:ward_pulse_phone/sync/provider_reporting_clients.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
@@ -7,8 +19,149 @@ import 'package:ward_pulse_phone/sync/headless_provider_sync.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_once.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 
+import 'connection_cache_test_support.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('production shared collection rejection wiring', () {
+    late NativeCacheTestBridge bridge;
+    setUpAll(() async {
+      bridge = await NativeCacheTestBridge.start();
+    });
+    tearDownAll(() => bridge.close());
+    setUp(() async {
+      FlutterSecureStorage.setMockInitialValues({});
+      await bridge.reset();
+    });
+    final catalogue = providerConnectionCatalog();
+    for (final (row, credential) in [
+      for (final row in catalogue)
+        (row, 'synthetic-saved-credential-000000000000000000'),
+      (
+        catalogue.firstWhere(
+          (row) => row.id == ProviderConnections.anthropicPlatform,
+        ),
+        'sk-ant-admin01-synthetic',
+      ),
+    ]) {
+      test(
+        'headless records ${row.id.storageKey}${credential.startsWith('sk-ant-admin') ? ' local rejection' : ''} before a failed snapshot load',
+        () async {
+          final secure = FakeSecureStorage();
+          final platform = bridge.platform('collection');
+          final now = DateTime.utc(2026, 11, 5, 12);
+          if (row.id == ProviderConnections.codexPlan) {
+            await SecureCodexAccountStore(
+              storage: secure,
+              platform: platform,
+            ).write(
+              CodexAccountSession(
+                accessToken: 'e30.eyJleHAiOjQxMDI0NDQ4MDB9.synthetic',
+                refreshToken: 'synthetic-refresh',
+                accountId: 'synthetic-account',
+                refreshedAt: now,
+              ),
+            );
+          } else if (row.id == ProviderConnections.claudePlan) {
+            await SecureClaudeAccountStore(
+              storage: secure,
+              platform: platform,
+            ).write(
+              ClaudeAccountSession(
+                accessToken: 'synthetic-access',
+                refreshToken: 'synthetic-refresh',
+                accountId: 'synthetic-account',
+                expiresAt: now.add(const Duration(days: 1)),
+              ),
+            );
+          } else {
+            await SecureProviderCredentialStore(
+              storage: secure,
+              platform: platform,
+            ).writeSecret(row.id, credential);
+          }
+          final reporting = _RejectedReportingTransport();
+          PhoneLiveBindings createLive() {
+            final http = ProviderReportingHttp(transport: reporting);
+            return PhoneLiveBindings.create(
+              secureStorage: secure,
+              cachePlatform: platform,
+              codexClient: CodexAccountClient(
+                transport: _RejectedCodexTransport(),
+                clock: () => now,
+              ),
+              claudeClient: ClaudeAccountClient(
+                transport: _RejectedClaudeTransport(),
+                clock: () => now,
+              ),
+              openAiClient: OpenAiReportingClient(http: http),
+              anthropicClient: AnthropicReportingClient(http: http),
+              cursorClient: CursorPlanClient(http: http),
+              cursorReportingClient: CursorPlatformClient(http: http),
+            );
+          }
+
+          final failures = <Object>[];
+          await providerSyncOnce(
+            load: () => loadProviderSyncWork(createLive: createLive),
+            markWidgetStale: () async {},
+            logFailure: (_, error, _) => failures.add(error),
+          );
+          expect(failures, hasLength(1));
+          final notices = NativeConnectionRejectionNoticeStore(
+            platform: platform,
+          );
+          final event = (await notices.read()).single;
+          expect(event.connection, row.id);
+          expect(event.dismissed, isFalse);
+          if (credential.startsWith('sk-ant-admin')) expect(reporting.calls, 0);
+          final live = createLive();
+          if (row.id == ProviderConnections.codexPlan) {
+            expect(await live.codexAccountService.isConnected(), isFalse);
+          } else if (row.id == ProviderConnections.claudePlan) {
+            expect(await live.claudeAccountService.isConnected(), isFalse);
+          } else {
+            expect(await live.credentialStore.readSecret(row.id), isNotNull);
+          }
+          if (row.id == ProviderConnections.cursorPlan) {
+            expect(
+              (failures.single as DashboardLoadException).reportingOutcomes,
+              isEmpty,
+            );
+          }
+          final observed = <ConnectionReportingUpdate>[];
+          if (row.id == ProviderConnections.codexPlan ||
+              row.id == ProviderConnections.claudePlan) {
+            expect(
+              (await live.repository.loadObserved(observed.add)).accounts,
+              isEmpty,
+            );
+          } else {
+            await expectLater(
+              live.repository.loadObserved(observed.add),
+              throwsA(isA<DashboardLoadException>()),
+            );
+          }
+          expect(
+            observed.where(
+              (update) => update.connection == ProviderConnections.cursorPlan,
+            ),
+            isEmpty,
+          );
+          await bridge.invoke('test', 'restart', {});
+          expect(
+            (await NativeConnectionRejectionNoticeStore(
+                  platform: bridge.platform('cold'),
+                ).read())
+                .single
+                .eventId,
+            event.eventId,
+          );
+        },
+      );
+    }
+  });
 
   test(
     'headless validates ownership immediately before each surface',
@@ -231,3 +384,43 @@ void main() {
 }
 
 typedef _RecordedFailure = ({String step, Object error, StackTrace stackTrace});
+
+final class _RejectedReportingTransport implements ProviderHttpTransport {
+  int calls = 0;
+  @override
+  Future<ProviderHttpResponse> get(
+    Uri uri, {
+    required Map<String, String> headers,
+  }) async {
+    calls++;
+    return const ProviderHttpResponse(statusCode: 401, headers: {}, body: '{}');
+  }
+
+  @override
+  Future<ProviderHttpResponse> post(
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+  }) => get(uri, headers: headers);
+}
+
+final class _RejectedCodexTransport implements CodexHttpTransport {
+  @override
+  Future<CodexHttpResponse> send(
+    String method,
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+  }) async => const CodexHttpResponse(statusCode: 401, body: '{}');
+}
+
+final class _RejectedClaudeTransport implements ClaudeHttpTransport {
+  @override
+  Future<ClaudeHttpResponse> send(
+    String method,
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+    Duration? timeout,
+  }) async => const ClaudeHttpResponse(statusCode: 401, body: '{}');
+}

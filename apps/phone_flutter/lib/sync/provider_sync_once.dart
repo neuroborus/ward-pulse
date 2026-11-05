@@ -47,7 +47,7 @@ final class ProviderSyncWork {
 /// Setup and delivery failures are recorded but swallowed so one surface never
 /// prevents another from receiving the newest snapshot.
 Future<void> providerSyncOnce({
-  ProviderSyncWorkLoader load = _loadProviderSyncWork,
+  ProviderSyncWorkLoader load = loadProviderSyncWork,
   ProviderSyncFailureLogger logFailure = _logProviderSyncFailure,
   Future<void> Function() markWidgetStale =
       HomeWidgetPhoneWidgetSyncService.markExistingRowsStale,
@@ -79,8 +79,10 @@ Future<void> providerSyncOnce({
   }, logFailure);
 }
 
-Future<ProviderSyncWork> _loadProviderSyncWork() async {
-  final live = PhoneLiveBindings.create();
+Future<ProviderSyncWork> loadProviderSyncWork({
+  PhoneLiveBindings Function()? createLive,
+}) async {
+  final live = (createLive ?? PhoneLiveBindings.create)();
   final ringPreferences = await SecureWatchRingPreferenceStore().read();
   final widgetPreferences = await SecurePhoneWidgetPreferenceStore().read();
   final alertThresholds = await SecureAlertThresholdPreferenceStore().read();

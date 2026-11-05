@@ -90,9 +90,10 @@ Future<String?> readConnectionSecret({
   required ProviderCredentialStore store,
   required ProviderConnectionId id,
   required ProviderSyncLogger logger,
+  Future<String?> Function()? readSecret,
 }) async {
   try {
-    return await store.readSecret(id);
+    return await (readSecret == null ? store.readSecret(id) : readSecret());
   } catch (_) {
     logger.record(ProviderSyncEvent.unavailable);
     throw DashboardLoadException.withOutcomes(

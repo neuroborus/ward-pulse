@@ -32,6 +32,8 @@ class ProvidersScreen extends StatefulWidget {
     this.savingConnections = const {},
     this.mockDataEnabled = false,
     this.editConnection,
+    this.revealConnection,
+    this.onConnectionRevealed,
     this.onEditConnectionOpened,
     this.statuses = const {},
     this.snapshot,
@@ -49,6 +51,8 @@ class ProvidersScreen extends StatefulWidget {
   final bool mockDataEnabled;
   final Set<ProviderConnectionId> savingConnections;
   final ProviderConnectionId? editConnection;
+  final ({ProviderConnectionId connection, int token})? revealConnection;
+  final void Function(int token)? onConnectionRevealed;
   final VoidCallback? onEditConnectionOpened;
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
@@ -82,6 +86,55 @@ class ProvidersScreen extends StatefulWidget {
 
 class _ProvidersScreenState extends State<ProvidersScreen> {
   final Map<String, bool> _hasSecret = {};
+  final _rowKeys = <ProviderConnectionId, GlobalKey>{};
+  final _rowFocus = <ProviderConnectionId, FocusNode>{};
+  var _revealGeneration = 0;
+
+  @override
+  void dispose() {
+    for (final node in _rowFocus.values) {
+      node.dispose();
+    }
+    super.dispose();
+  }
+
+  void _scheduleReveal() {
+    final request = widget.revealConnection;
+    if (request == null) return;
+    final generation = ++_revealGeneration;
+    var fromStart = true;
+    void reveal(Duration _) {
+      if (!mounted || generation != _revealGeneration) return;
+      final target = _rowKeys[request.connection]?.currentContext;
+      if (target != null) {
+        Scrollable.ensureVisible(
+          target,
+          alignment: 0,
+          duration: const Duration(milliseconds: 250),
+        );
+        _rowFocus[request.connection]?.requestFocus();
+        widget.onConnectionRevealed?.call(request.token);
+        return;
+      }
+      final controller = PrimaryScrollController.maybeOf(context);
+      if (controller == null || controller.positions.length != 1) return;
+      final position = controller.position;
+      final offset =
+          fromStart
+              ? position.minScrollExtent
+              : (position.pixels + position.viewportDimension)
+                  .clamp(position.minScrollExtent, position.maxScrollExtent)
+                  .toDouble();
+      if (!fromStart && offset <= position.pixels) return;
+      fromStart = false;
+      position.jumpTo(offset);
+      WidgetsBinding.instance.addPostFrameCallback(reveal);
+      WidgetsBinding.instance.scheduleFrame();
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback(reveal);
+  }
+
   final Map<String, String?> _labels = {};
   final _readFailures = <String>{};
   final _currentUpdates = <ProviderConnectionId, ConnectionReportingUpdate>{};
@@ -101,6 +154,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
   void initState() {
     super.initState();
     _loadCredentialState();
+    _scheduleReveal();
   }
 
   @override
@@ -123,6 +177,9 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
       );
       _loadCredentialState();
     }
+    if (oldWidget.revealConnection != widget.revealConnection &&
+        widget.revealConnection != null)
+      _scheduleReveal();
     if (oldWidget.editConnection != widget.editConnection) {
       _openingConnection = null;
       _scheduleEditor();
@@ -633,7 +690,14 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
                 )) ...[
                   if (connection.id.kind == ConnectionKind.platform)
                     const Divider(height: 1),
-                  _connectionRow(connection),
+                  Focus(
+                    key: _rowKeys.putIfAbsent(connection.id, GlobalKey.new),
+                    focusNode: _rowFocus.putIfAbsent(
+                      connection.id,
+                      FocusNode.new,
+                    ),
+                    child: _connectionRow(connection),
+                  ),
                 ],
               ],
             ),

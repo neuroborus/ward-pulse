@@ -16,10 +16,15 @@ enum CodexAccountFailure {
 typedef CodexSessionChanged = Future<void> Function(CodexAccountSession value);
 
 final class CodexAccountException implements Exception {
-  const CodexAccountException(this.failure, [this.details]);
+  const CodexAccountException(
+    this.failure, [
+    this.details,
+    this.rejectionEventId,
+  ]);
 
   final CodexAccountFailure failure;
   final String? details;
+  final String? rejectionEventId;
 }
 
 final class CodexDeviceCode {

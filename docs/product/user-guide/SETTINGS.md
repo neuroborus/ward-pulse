@@ -64,10 +64,11 @@ to a new installation or device; do not rely on a backup restoring encrypted cre
 For one connection, use **Disconnect** or **Remove** on **Providers**, as described in
 [Connect providers](/guide/providers#reconnect-change-or-remove-a-connection). Removing it
 also prevents obsolete stored data for that connection from being reused. Revoking an API
-key at the provider is a separate action.
+key at the provider is a separate action. Historical saved-rejection warnings remain on
+Dashboard after Disconnect or Remove; dismiss each with its **X**.
 
 For a complete phone reset, use Android's application storage controls for WardPulse. Clearing
-app storage removes local credentials, stored data and preferences; you will need to reconnect
+app storage removes local credentials, stored data, preferences and saved rejection warnings; you will need to reconnect
 and configure the app again. Android's names and path vary by device. There is no WardPulse
 **Delete all** button in Settings.
 

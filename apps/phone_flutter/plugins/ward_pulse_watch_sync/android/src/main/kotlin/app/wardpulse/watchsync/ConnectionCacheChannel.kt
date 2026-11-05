@@ -38,6 +38,8 @@ internal class ConnectionCacheChannel(context: Context, messenger: BinaryMesseng
                         call.argument<String>("operation") ?: error("Operation required."), call.argument<String>("identity")))
                     "queueLegacyCleanup" -> { engine.queueLegacyCleanup(owner, connection, call.argument<String>("lease") ?: error("Lease required.")); deliver(result, null) }
                     "acknowledgeCleanup" -> deliver(result, engine.acknowledgeCleanup(owner, connection, call.argument<String>("lease") ?: error("Lease required."), call.argument<List<String>>("cleaned") ?: emptyList()))
+                    "readNotice" -> deliver(result, engine.readNotice(connection))
+                    "dismissNotice" -> deliver(result, engine.dismissNotice(connection, call.argument<String>("eventId") ?: error("Event required.")))
                     "valid" -> deliver(result, engine.valid(connection, expected ?: error("Version required.")))
                     "readSnapshot" -> deliver(result, engine.readSnapshot(connection, expected ?: error("Version required.")))
                     "writeSnapshot" -> deliver(result, engine.writeSnapshot(connection, expected ?: error("Version required."),
