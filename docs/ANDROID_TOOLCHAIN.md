@@ -551,11 +551,14 @@ API 36.1 image. Compile SDK and runtime system image versions are intentionally 
 
 Before resizing, retain the settled launcher page's visible landmarks and widget host bounds.
 Long-press a freshly observed interior widget point away from screen edges, release, and
-confirm the current resize frame and handle before dragging. After every drag, capture a
-fresh native original and hierarchy; do not assume the resize overlay persists or reuse old handle
-bounds. Missing hierarchy nodes or disagreement with the original leaves the next drag
+confirm the current widget host and unique actual resize-frame/handle resource IDs in a fresh
+hierarchy against the fresh original before dragging. An optional container content description
+being absent alone does not prove the overlay is absent. After every drag, capture a fresh native
+original and hierarchy; do not assume the resize overlay persists or reuse old handle bounds.
+Missing required frame/handle nodes or disagreement with the original leaves the next drag
 unqualified: retain both observations without inferring a cause, then dismiss/reopen through
-the ordinary launcher UI from a verified interior point. Avoid an edge long-press as a way to
+the ordinary launcher UI from a verified interior point; do not retarget input or bypass the guard.
+Avoid an edge long-press as a way to
 recover resize controls. If the widget moves to another page, restore its original page and
 host bounds through ordinary launcher navigation/movement, then inspect the settled page and
 widget again. Matching width/height alone does not establish placement restoration; keep
