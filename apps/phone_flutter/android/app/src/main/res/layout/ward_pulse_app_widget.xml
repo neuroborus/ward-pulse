@@ -10,22 +10,23 @@
 
     <FrameLayout
         android:id="@+id/widget_card"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
         android:background="@drawable/ward_pulse_widget_background"
         android:importantForAccessibility="no">
 
         <ImageView
             android:id="@+id/widget_accents"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:scaleType="center"
             android:importantForAccessibility="no"
             android:contentDescription="@null" />
         <ImageView
             android:id="@+id/widget_primary"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:scaleType="center"
             android:tint="@color/ward_pulse_widget_on_surface"
             android:tintMode="src_in"
@@ -33,8 +34,8 @@
             android:contentDescription="@null" />
         <ImageView
             android:id="@+id/widget_muted"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:scaleType="center"
             android:tint="@color/ward_pulse_widget_muted"
             android:tintMode="src_in"
@@ -42,8 +43,8 @@
             android:contentDescription="@null" />
         <ImageView
             android:id="@+id/widget_stale"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:scaleType="center"
             android:tint="@color/ward_pulse_widget_stale"
             android:tintMode="src_in"

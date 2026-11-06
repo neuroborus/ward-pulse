@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
 import android.util.SizeF
@@ -40,57 +41,54 @@ class WardPulseAppWidget : AppWidgetProvider() {
     private fun refresh(
         context: Context, manager: AppWidgetManager, id: Int, data: SharedPreferences,
     ) {
-        val sizes = hostSizes(manager.getAppWidgetOptions(id))
         val display = context.resources.displayMetrics
         // The platform's bitmap allowance is 1.5 screen-sized ARGB images. Keep a lower hard cap.
         val bytes = minOf(
             PhoneWidgetLayout.MAX_BITMAP_BYTES,
             display.widthPixels.toLong() * display.heightPixels * 6L,
         ).coerceAtLeast(0)
-        val cache = data.all
-        val variants = linkedMapOf<SizeF, RemoteViews>()
-        for (size in sizes) variants[size] = buildViews(context, id, cache, size, bytes / sizes.size)
-        val views = if (Build.VERSION.SDK_INT >= 31 && variants.size > 1) {
-            RemoteViews(variants)
-        } else {
-            variants.values.first()
-        }
         // Fresh full updates replace the previous bitmap set; no accumulated partial updates/cache.
-        manager.updateAppWidget(id, views)
+        manager.updateAppWidget(id, publication(
+            context, id, data.all, manager.getAppWidgetOptions(id), bytes,
+        ).views)
     }
+
+    internal data class Sizes(val values: List<SizeF>, val responsive: Boolean)
+
+    internal data class Publication(
+        val sizes: Sizes,
+        val plans: List<PhoneWidgetLayout.Plan>,
+        val bitmapBytes: Long,
+        val views: RemoteViews,
+    )
 
     @Suppress("DEPRECATION")
-    private fun hostSizes(options: Bundle): List<SizeF> {
+    internal fun hostSizes(options: Bundle): Sizes {
         if (Build.VERSION.SDK_INT >= 31) {
             val sizes = options.getParcelableArrayList<SizeF>(AppWidgetManager.OPTION_APPWIDGET_SIZES)
-                .orEmpty().take(16).filter {
+                .orEmpty().take(16).filterNotNull().filter {
                     it.width.isFinite() && it.height.isFinite() && it.width > 0 && it.height > 0
                 }.distinct()
-            if (sizes.size in 1..2) return sizes
-            if (sizes.isNotEmpty()) {
-                // Unusual hosts get one conservative fit, never an unbounded responsive map.
-                return listOf(SizeF(sizes.minOf { it.width }, sizes.minOf { it.height }))
-            }
+            if (sizes.isNotEmpty()) return Sizes(sizes, true)
         }
-        return listOf(SizeF(
-            tighter(options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH),
-                options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH), 180).toFloat(),
-            tighter(options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT),
-                options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT), 110).toFloat(),
-        ))
+        fun axis(minimum: String, maximum: String, fallback: Int): List<Float> {
+            val values = listOf(options.getInt(minimum), options.getInt(maximum))
+                .filter { it > 0 }.map { it.coerceAtMost(16384).toFloat() }
+            return if (values.isEmpty()) listOf(fallback.toFloat(), fallback.toFloat())
+                else listOf(values.min(), values.max())
+        }
+        val widths = axis(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH,
+            AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 180)
+        val heights = axis(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT,
+            AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 110)
+        // The legacy contract is min-width/max-height portrait, max-width/min-height landscape.
+        return Sizes(listOf(SizeF(widths[0], heights[1]), SizeF(widths[1], heights[0])).distinct(), false)
     }
 
-    private fun tighter(minimum: Int, maximum: Int, fallback: Int): Int = when {
-        minimum > 0 && maximum > 0 -> minOf(minimum, maximum)
-        minimum > 0 -> minimum
-        maximum > 0 -> maximum
-        else -> fallback
-    }
-
-    private fun buildViews(
-        context: Context, id: Int, cache: Map<String, *>, size: SizeF, byteBudget: Long,
-    ): RemoteViews {
-        val views = RemoteViews(context.packageName, R.layout.ward_pulse_app_widget)
+    internal fun publication(
+        context: Context, id: Int, cache: Map<String, *>, options: Bundle, byteBudget: Long,
+    ): Publication {
+        val sizes = hostSizes(options)
         fun stored(key: String): String = cache[key] as? String ?: ""
         val stale = stored("stale") == "1"
         val count = (cache["row_count"] as? Number)?.toInt()?.coerceIn(0, PhoneWidgetLayout.MAX_ROWS) ?: 0
@@ -113,17 +111,53 @@ class WardPulseAppWidget : AppWidgetProvider() {
         val density = context.resources.displayMetrics.density
         val renderer = PhoneWidgetRenderer(context, density)
         val mark = PhoneWidgetRenderer.mark(context)
-        val width = ceil(size.width * density).toInt().coerceIn(1, 16384)
-        val height = ceil(size.height * density).toInt().coerceIn(1, 16384)
-        val plan = PhoneWidgetLayout.fit(
-            width, height, density, rows, empty, stale, renderer, byteBudget, mark.allocationByteCount,
+        fun fit(size: SizeF, budget: Long) = PhoneWidgetLayout.fit(
+            ceil(size.width * density).toInt().coerceIn(1, 16384),
+            ceil(size.height * density).toInt().coerceIn(1, 16384),
+            density, rows, empty, stale, renderer, budget, mark.allocationByteCount,
         )
+        fun cost(plan: PhoneWidgetLayout.Plan) =
+            plan.bitmapBytes() + if (plan.mark) mark.allocationByteCount.toLong() else 0L
+
+        val budget = byteBudget.coerceIn(0, PhoneWidgetLayout.MAX_BITMAP_BYTES)
+        val plans = sizes.values.map { fit(it, PhoneWidgetLayout.MAX_BITMAP_BYTES) }.toMutableList()
+        // Do not reduce complete content merely because one variant exceeds an equal share.
+        if (plans.sumOf(::cost) > budget) {
+            val pending = plans.indices.toMutableList()
+            var remaining = budget
+            // Keep inexpensive complete plans and redistribute their unused shares first.
+            while (pending.isNotEmpty()) {
+                val share = remaining / pending.size
+                val affordable = pending.filter { cost(plans[it]) <= share }
+                if (affordable.isEmpty()) break
+                for (index in affordable) remaining -= cost(plans[index])
+                pending.removeAll(affordable.toSet())
+            }
+            for ((position, index) in pending.withIndex()) {
+                plans[index] = fit(sizes.values[index], remaining / (pending.size - position))
+                remaining -= cost(plans[index])
+            }
+        }
+        val variants = plans.map { buildViews(context, id, it, renderer, mark, stale, empty) }
+        val views = when {
+            sizes.responsive && variants.size > 1 && Build.VERSION.SDK_INT >= 31 ->
+                RemoteViews(sizes.values.zip(variants).toMap())
+            !sizes.responsive && variants.size > 1 -> RemoteViews(variants[1], variants[0])
+            else -> variants.first()
+        }
+        return Publication(sizes, plans, plans.sumOf(::cost), views)
+    }
+
+    private fun buildViews(
+        context: Context, id: Int, plan: PhoneWidgetLayout.Plan, renderer: PhoneWidgetRenderer,
+        mark: Bitmap, stale: Boolean, empty: Boolean,
+    ): RemoteViews {
+        val views = RemoteViews(context.packageName, R.layout.ward_pulse_app_widget)
         val images = renderer.render(plan)
-        val card = plan.card
+        val card = if (images == null) null else plan.card
         views.setViewVisibility(R.id.widget_card, if (card == null) View.GONE else View.VISIBLE)
-        views.setViewPadding(R.id.widget_root, card?.left ?: 0, card?.top ?: 0,
-            if (card == null) 0 else width - card.right,
-            if (card == null) 0 else height - card.bottom)
+        views.setViewPadding(R.id.widget_root, 0, 0, 0, 0)
+        views.setViewPadding(R.id.widget_card, 0, 0, 0, 0)
         val layerIds = mapOf(
             PhoneWidgetLayout.Layer.PRIMARY to R.id.widget_primary,
             PhoneWidgetLayout.Layer.MUTED to R.id.widget_muted,
@@ -142,6 +176,7 @@ class WardPulseAppWidget : AppWidgetProvider() {
                 if (bounds == null || card == null) 0 else card.bottom - bounds.bottom)
         }
         val showMark = images != null && plan.mark
+        views.setViewPadding(R.id.widget_watermark, 0, 0, 0, 0)
         views.setImageViewBitmap(R.id.widget_watermark, if (showMark) mark else null)
         views.setViewVisibility(R.id.widget_watermark, if (showMark) View.VISIBLE else View.GONE)
         val description = mutableListOf(context.getString(R.string.ward_pulse_widget_title))

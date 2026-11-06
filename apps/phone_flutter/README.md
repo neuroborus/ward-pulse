@@ -149,6 +149,62 @@ Root separately owns both Android Rust ABI rebuilds and dated/normal APK provena
 native/common-data proof and safe restoration. Public captures/index updates remain separately
 admitted, with real default Day/weather and headless-publication proof still separate gates.
 
+## Android widget geometry case (HOST only)
+
+`android/app/src/androidTest/kotlin/app/wardpulse/PhoneWidgetGeometryTest.kt` is one focused
+platform instrumentation case for the production widget publication, RemoteViews and XML.
+It uses the installed SDK's `android.test.runner` and `android.test.base` facilities, without
+a downloaded test framework. SDK 36's optional JARs were inspected for the runner,
+InstrumentationTestCase and JUnit 3 classes; this source qualification is not compilation
+or execution evidence. The base library is optional in the test manifest because API24–27
+already supply those classes on the boot class path. Production APK runtime dependencies
+and versions are unchanged.
+
+The case runs on the main thread with synthetic in-memory data and unattached
+`AppWidgetHostView` instances. It registers no widget, writes no preferences and never
+activates the tap listener. It asserts actual root/card/layer dimensions, centering and
+every exterior pixel's alpha for an unchanged fitting plan under equal, larger and smaller
+measured allocations. It reapplies after deliberately changed view state, covers wide and
+primary-only complete rows, real synthetic reset instants, exact accessible Money, Extra
+quantities, stale/empty/no-fit transitions, three/four responsive sizes, the sixteen-input
+guard, sanitized/null/missing/empty list fallbacks, portrait/landscape selection and aggregate
+budget fit/exhaustion. Run the same case on API31+ and a supported pre31 phone AVD; one API
+cannot establish the other's behavior. No launcher registration or real fold transition is
+claimed by this unattached-host case.
+
+Execution remains **Pending**. Native only reviews this test's source. After whole Runner
+DONE, actual CLI exit, all known-owned retirement and fresh idle ownership, Root runs the
+unchanged full `just check-phone`, `just check-docs`, normal APK build and this HOST case.
+Both physical devices remain STOP. Select an explicitly qualified existing phone AVD and
+retain the actually installed normal APK, signer/hash/version identities, app data and
+original incident frames under the existing
+[Android toolchain workflow](../../docs/ANDROID_TOOLCHAIN.md). Preserve newer legitimate data
+and retain failed observations. Do not reset/readd a real widget or change its data to make
+the case pass. No Android execution or matched runtime RED→GREEN is recorded by adding this case.
+
+Build the ordinary candidate from `apps/phone_flutter` with `flutter build apk --debug`.
+From `apps/phone_flutter/android`, build the test APK and run only on the selected AVD:
+
+```bash
+: "${PHONE_SERIAL:?Set the qualified existing phone AVD serial}"
+./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
+adb -s "$PHONE_SERIAL" install -t -r ../build/app/outputs/apk/debug/app-debug.apk
+adb -s "$PHONE_SERIAL" install -t -r ../build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb -s "$PHONE_SERIAL" shell am instrument -w -r -e class app.wardpulse.PhoneWidgetGeometryTest app.wardpulse.test/android.test.InstrumentationTestRunner
+```
+
+Record actual commands, elapsed times, selected API/density, APK identities and instrumentation
+results, including failures or missing SDK/runtime facilities. Do not use Gradle's connected
+test task to discover or touch other devices. Restore the retained normal APK and any
+preexisting test package through the existing device-preserving workflow; remove only a
+new case-owned test package if appropriate. Verify restored rendering and retained data.
+Root separately proves real launcher resize/fold/orientation retention, both themes,
+complete rows/details/header, exterior alpha, visible accessibility and full-allocation
+cold/warm Dashboard taps, joining the active artifact/widget/data/options/variant and measured
+root/card/paint to untouched original frames. Include the existing Pixel case; physical
+cause/acceptance remains Pending until renewed physical access. This case does not replace
+that bounded proof or make HOST acceptance a Native commit prerequisite.
+
 ## Persistent Connection Recovery
 
 `PhoneLiveBindings` wires all six live connections to `ConnectionSnapshotCache` and the

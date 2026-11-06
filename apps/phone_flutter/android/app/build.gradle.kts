@@ -65,6 +65,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        testInstrumentationRunner = "android.test.InstrumentationTestRunner"
 
         ndk {
             abiFilters.clear()
@@ -111,4 +112,11 @@ flutter {
 dependencies {
     implementation("com.google.android.gms:play-services-wearable:20.0.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    // Test-only platform facilities; no downloaded test framework or runtime app dependency.
+    val sdkTestLibraries = androidComponents.sdkComponents.sdkDirectory.get().asFile
+        .resolve("platforms/android-${android.compileSdk}/optional")
+    androidTestCompileOnly(files(
+        sdkTestLibraries.resolve("android.test.base.jar"),
+        sdkTestLibraries.resolve("android.test.runner.jar"),
+    ))
 }

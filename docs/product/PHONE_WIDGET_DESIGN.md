@@ -124,11 +124,81 @@ freshness mechanism is added; retained-data STALE and publication/coalescing sta
 
 ## Own-font rendering, states and accessibility
 
+### Intrinsic geometry and size publication — 2026-11-06 revision
+
+This technical revision preserves the approved Nov3 composition. It supersedes the
+former two-variant implementation guard without increasing the global bitmap allowance.
+The supported phone minimum remains API 24. `WardPulseAppWidget.hostSizes` retains finite,
+positive, distinct API31+ advertised sizes after the existing sixteen-entry input guard;
+the platform responsive-map limit is also sixteen. Ordinary three/four-size foldables
+receive three/four actual advertised variants, rather than an independent-minima hybrid.
+Null entries, duplicates and nonpositive entries do not become variants.
+
+For supported older APIs, or a missing/null/empty usable advertised list, positive MIN/MAX
+options are normalized per axis. Portrait uses minimum width/maximum height; landscape uses
+maximum width/minimum height through the legacy `RemoteViews` orientation constructor.
+Reversed bounds are normalized, a lone positive bound supplies both ends, and absent or
+invalid dimensions use bounded 180dp width/110dp height defaults. Legacy estimates are
+capped at 16384dp; planning pixels remain bounded at 16384. Identical orientations need
+only one variant. Existing option-change and timezone refresh ownership is unchanged.
+
+`ward_pulse_app_widget.xml` keeps the transparent, full-allocation root/tap target and
+centers a `wrap_content` card whose bitmap layers also wrap content. In
+`WardPulseAppWidget.buildViews`, each native bitmap plus its card-relative insets supplies
+the intrinsic dimensions. Allocation-derived root padding is cleared. Bitmap, padding and
+visibility actions are explicitly reapplied, including hidden/empty states. Painter failure
+does not leave a painted empty card. Bundled fonts, native measurement, shared header,
+whole-column fallbacks, complete rows and exact accessible values retain their existing owners.
+
+`WardPulseAppWidget.publication` fits complete candidates before rendering, then sums
+conservative stride-padded layer costs and a wordmark charge per variant. Shared wordmark
+deduplication is not needed to justify the estimate. The publication allowance remains the
+lower of 8MiB and the existing platform screen-pixel calculation; every bitmap remains
+subject to the 4096-side guard. If the complete aggregate fits, no equal per-variant share
+can remove content. Only an aggregate excess triggers refitting: inexpensive complete
+plans retain their content, unused shares are redistributed, and remaining plans fit within
+the remaining allowance before any content bitmap is created. Height/memory pressure may
+still reduce complete trailing rows using the existing planner. More variants are a bounded
+technical correction, not permission to change typography or omit fitting information.
+
+Source evidence establishes a conditional former mechanism, not the physical incident's
+cause: for planned height P, intrinsic card C and actual root height H, former root padding
+and match-parent card measurement could produce C+(H-P). Equal planned/measured allocation
+with the expected padding falsifies that mismatch for a case. Actual physical options,
+selected variant, root/card/paint bounds and density remain Unknown. Historical illustrative
+art, previous Pixel cases and failed dump parsers establish no physical cause.
+
+The focused Android case and exact HOST command are documented in the
+[phone component guide](../../apps/phone_flutter/README.md#android-widget-geometry-case-host-only).
+It applies production RemoteViews/XML through an unattached `AppWidgetHostView`, independently
+varies planning and measured allocations, and exercises reapplication, responsive selection,
+legacy orientation fallbacks, complete fitting rows, states, exterior alpha and aggregate budgets.
+Its SDK test facilities are test-only. Existing JVM plan/format/navigation tests remain useful
+but do not prove Android application or host measurement.
+
+At this revision, Android compilation/execution, matched runtime RED→GREEN, candidate native
+geometry and post-DONE HOST checks remain **Pending**. Native reviews Android test source;
+it does not run Gradle or substitute source inspection for runtime proof. Root must bind the
+active artifact/widget/data/options/variant/density to original frames and measured root,
+card and paint bounds, including an existing Pixel case, after Runner ownership releases.
+Full-allocation cold/warm navigation, accessibility, themes, retained launcher fold/orientation
+transitions and restoration still need that proof. Both physical devices remain STOP;
+emulator evidence cannot close physical acceptance.
+
+The public [Widget guide](user-guide/WIDGET.md) already describes this unchanged intrinsic
+composition. Its ten current Widget image uses (selection, wide, labeled, primary-only and
+short, in both themes) retain their existing PNG bytes and dated capture evidence. No new
+capture or candidate image freshness is claimed. Root's fresh current-use/original-frame and
+theme review remains Pending under the [screenshot index](../assets/README.md); replace only
+images or instructions that actually need updating, preserving historical records.
+
+### Preserved rendering contract
+
 Every visible string uses the pinned bundled Noto Regular/Bold through the existing bounded
 native painter, independently of system fontScale, family and force-bold. Preserve font
 binaries, licenses and glyph checks, 4096 bitmap-side limits, the lower platform/8MiB byte
-allowance and at most two variants. Review art and synthetic JVM metrics do not prove native
-fit or system-setting independence.
+allowance and the bounded variants specified by the Nov6 revision. Review art and synthetic
+JVM metrics do not prove native fit or system-setting independence.
 
 Empty and no-fit states use the same intrinsic-card handling. Show complete `No metrics` or
 `Resize widget` at 12 Regular when possible. Exceptionally tiny hosts retain accessibility
@@ -159,8 +229,8 @@ unchanged full phone/docs and applicable design checks, normal build/artifact/in
 unchanged-input JNI joins. Do not rebuild Rust for unchanged JNI owning inputs. Finite
 native proof covers font settings, released-width 30/26/no-fit, actual row/reset/card/header
 bounds, exterior alpha, states, selection, visible accessibility and full-root cold/warm taps.
-Preserve newer legitimate data through restoration. Root and independent peer whole final
-Source review remain required after the last correction. Native commits do not await HOST;
+Preserve newer legitimate data through restoration. Root's whole independent final Source
+review remains required after the last correction. Native commits do not await HOST;
 provider/live, physical, public-image and release gaps remain separate.
 
 ## Current review exports
