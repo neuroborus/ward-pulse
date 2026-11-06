@@ -32,6 +32,9 @@ internal class ConnectionCacheChannel(context: Context, messenger: BinaryMesseng
                         { value -> deliver(result, value) }, { failure -> fail(result) })
                     "acquireFetch" -> engine.acquireFetch(owner, connection) { value -> deliver(result, value) }
                     "validFetch" -> deliver(result, engine.validFetch(owner, connection, call.argument<String>("fetchTicket") ?: error("Fetch ticket required.")))
+                    "claimAutomatic" -> deliver(result, engine.claimAutomatic(owner, connection,
+                        call.argument<String>("fetchTicket") ?: error("Fetch ticket required."), expected ?: error("Version required."),
+                        call.argument<Number>("intervalMillis")?.toLong() ?: error("Interval required.")))
                     "releaseFetch" -> { engine.releaseFetch(owner, connection, call.argument<String>("fetchTicket") ?: error("Fetch ticket required.")); deliver(result, null) }
                     "prepareMigration" -> deliver(result, engine.prepareMigration(owner, connection, call.argument<String>("lease") ?: error("Lease required.")))
                     "finish" -> deliver(result, engine.finish(owner, connection, call.argument<String>("lease") ?: error("Lease required."),

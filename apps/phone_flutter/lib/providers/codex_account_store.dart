@@ -75,6 +75,9 @@ final class SecureCodexAccountStore
   Future<R> serializeFetch<R>(Future<R> Function() operation) =>
       _credentials.serializeFetch(operation);
   @override
+  Future<void> admitAutomatic(CredentialVersion expected) =>
+      _credentials.admitAutomatic(expected);
+  @override
   Future<VersionedCredential<CodexAccountSession>?> readVersioned() async {
     final value = await _credentials.read();
     return value == null

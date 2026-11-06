@@ -6,6 +6,7 @@ import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/providers/claude_account_store.dart';
 import 'package:ward_pulse_phone/providers/codex_account_store.dart';
 import 'package:ward_pulse_phone/providers/connection_rejection_notice.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/sync/claude_account_client.dart';
 import 'package:ward_pulse_phone/sync/codex_account_client.dart';
 import 'package:ward_pulse_phone/sync/openai_reporting_client.dart';
@@ -18,11 +19,56 @@ import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/headless_provider_sync.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_once.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
+import 'package:ward_pulse_phone/sync/automatic_poll.dart';
+import 'package:ward_pulse_phone/sync/recovery_wake.dart';
 
 import 'connection_cache_test_support.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'setup failure after wholly skipped work cannot mark the widget stale',
+    () async {
+      var staleWrites = 0;
+      await providerSyncOnce(
+        load: () async {
+          final poll = AutomaticPollContext.current!;
+          poll.skipped['openai.platform'] = AutomaticPollSkipped(
+            'openai.platform',
+            CredentialVersion({}),
+            DateTime.utc(2026, 11, 6),
+          );
+          throw StateError('Synthetic post-load failure');
+        },
+        markWidgetStale: () async {
+          staleWrites++;
+        },
+        logFailure: (_, _, _) {},
+      );
+      expect(staleWrites, 0);
+    },
+  );
+  test(
+    'both registered headless tasks retain their automatic origin',
+    () async {
+      for (final entry
+          in {
+            HeadlessProviderSync.taskName: AutomaticPollOrigin.periodic,
+            WorkmanagerRecoveryWakeScheduler.taskName:
+                AutomaticPollOrigin.resetWake,
+          }.entries) {
+        AutomaticPollOrigin? observed;
+        await runHeadlessProviderTask(
+          entry.key,
+          sync: () async {
+            observed = AutomaticPollContext.current?.origin;
+          },
+        );
+        expect(observed, entry.value);
+        expect(AutomaticPollContext.current, isNull);
+      }
+    },
+  );
 
   group('production shared collection rejection wiring', () {
     late NativeCacheTestBridge bridge;
@@ -34,6 +80,38 @@ void main() {
       FlutterSecureStorage.setMockInitialValues({});
       await bridge.reset();
     });
+    test(
+      'wholly skipped headless collection does not call surface plugins',
+      () async {
+        final live = PhoneLiveBindings.create(
+          cachePlatform: bridge.platform('headless'),
+        );
+        final poll = AutomaticPollContext();
+        poll.skipped['openai.platform'] = AutomaticPollSkipped(
+          'openai.platform',
+          CredentialVersion({}),
+          DateTime.utc(2026, 11, 6),
+        );
+        final work = await poll.run(
+          () => loadProviderSyncWork(
+            createLive:
+                () => PhoneLiveBindings(
+                  credentialStore: live.credentialStore,
+                  codexAccountService: live.codexAccountService,
+                  claudeAccountService: live.claudeAccountService,
+                  repository: ValueDashboardRepository(
+                    DashboardSnapshot.empty(),
+                  ),
+                ),
+          ),
+        );
+        // No channel handlers: a publication would reach a missing plugin.
+        await work.syncWatch();
+        await work.syncWidget();
+        await work.syncAlerts();
+        expect(poll.whollySkipped, isTrue);
+      },
+    );
     final catalogue = providerConnectionCatalog();
     for (final (row, credential) in [
       for (final row in catalogue)

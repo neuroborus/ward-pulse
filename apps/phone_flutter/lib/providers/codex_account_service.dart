@@ -133,6 +133,7 @@ final class MobileCodexAccountService implements CodexAccountService {
     final session = managed == null ? await _readSession() : captured?.value;
     if (session == null) return null;
     var expected = captured?.version;
+    if (expected != null) await managed!.admitAutomatic(expected);
     try {
       final result = await _client.fetchReport(
         session,
@@ -165,6 +166,18 @@ final class MobileCodexAccountService implements CodexAccountService {
         } else {
           await managed.deleteIfCurrent(expected!);
         }
+      }
+      if (expected != null &&
+          error.failure != CodexAccountFailure.authentication &&
+          error.failure != CodexAccountFailure.cancelled) {
+        if (!await managed!.isCurrent(expected))
+          throw const CodexAccountException(CodexAccountFailure.cancelled);
+        throw CodexAccountException(
+          error.failure,
+          error.details,
+          error.rejectionEventId,
+          expected,
+        );
       }
       rethrow;
     }

@@ -9,6 +9,7 @@ import '../dashboard/dashboard_models.dart';
 import '../settings/alert_notification_preferences.dart';
 import '../settings/alert_threshold_preferences.dart';
 import 'notification_coordinator.dart';
+import 'automatic_poll.dart';
 
 abstract interface class AlertConditionStore {
   Future<bool> read(AlertConditionKey key);
@@ -220,14 +221,17 @@ final class AlertNotificationDelivery {
     Future<bool> Function() isCurrent = _alwaysCurrent,
     bool Function() isAccepted = _alwaysAccepted,
     bool Function() isDeliveryEnabled = _alwaysAccepted,
+    AutomaticPollContext? poll,
   }) async {
     if (mockData) return;
+    if (poll?.whollySkipped == true) return;
     final previous = _pending;
     final done = Completer<void>();
     _pending = done.future;
     try {
       if (previous != null) await previous;
       for (final condition in snapshot.alertConditions) {
+        if (poll?.observes(condition.key.connection) == false) continue;
         if (condition.state == AlertConditionState.unknown) continue;
         try {
           if (!isAccepted() || !await isCurrent() || !isAccepted()) return;

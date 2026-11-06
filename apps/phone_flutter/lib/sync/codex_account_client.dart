@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../providers/codex_account_store.dart';
+import '../providers/connection_lifecycle.dart';
 
 enum CodexAccountFailure {
   authentication,
@@ -20,11 +21,15 @@ final class CodexAccountException implements Exception {
     this.failure, [
     this.details,
     this.rejectionEventId,
+    this.credentialVersion,
   ]);
 
   final CodexAccountFailure failure;
   final String? details;
   final String? rejectionEventId;
+
+  /// Non-secret ownership of a failed saved-session fetch, when known.
+  final CredentialVersion? credentialVersion;
 }
 
 final class CodexDeviceCode {

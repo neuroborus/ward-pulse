@@ -6,6 +6,7 @@ import 'package:workmanager/workmanager.dart';
 import 'poll_cadence.dart';
 import 'provider_sync_once.dart';
 import 'recovery_wake.dart';
+import 'automatic_poll.dart';
 
 typedef ProviderSyncRunner = Future<void> Function();
 
@@ -75,7 +76,12 @@ Future<bool> runHeadlessProviderTask(
 }) async {
   if (task == HeadlessProviderSync.taskName ||
       task == WorkmanagerRecoveryWakeScheduler.taskName) {
-    await sync();
+    await AutomaticPollContext(
+      origin:
+          task == WorkmanagerRecoveryWakeScheduler.taskName
+              ? AutomaticPollOrigin.resetWake
+              : AutomaticPollOrigin.periodic,
+    ).run(sync);
   }
   return true;
 }

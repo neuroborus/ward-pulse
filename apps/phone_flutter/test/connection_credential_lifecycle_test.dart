@@ -5,6 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_load.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
+import 'package:ward_pulse_phone/dashboard/connection_snapshot_cache.dart';
+import 'package:ward_pulse_phone/dashboard/codex_dashboard_repository.dart';
+import 'package:ward_pulse_phone/dashboard/claude_dashboard_repository.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/providers/connection_rejection_notice.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
@@ -16,6 +19,7 @@ import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/sync/claude_account_client.dart';
 import 'package:ward_pulse_phone/sync/codex_account_client.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_logger.dart';
+import 'package:ward_pulse_phone/sync/automatic_poll.dart';
 
 import 'connection_cache_test_support.dart';
 
@@ -712,6 +716,158 @@ void main() {
   for (final family in ['claude', 'codex']) {
     _Runtime runtime(String owner, _ResponseHandler handler) =>
         _runtime(family, secure, bridge.platform(owner), now, handler);
+    test(
+      '$family manual first failure survives later cache adoption and automatic denial',
+      () async {
+        final id = family == 'codex' ? 'openai.plan' : 'anthropic.plan';
+        var limited = true, requests = 0;
+        Future<_Response> response(
+          Uri uri,
+          Map<String, String> headers,
+          String? body,
+        ) async {
+          requests++;
+          return limited ? (status: 429, body: '{}') : _usageResponse(uri);
+        }
+
+        final manual = runtime('manual', response);
+        await manual.write('synthetic-account', 'synthetic-token');
+        final version = (await manual.read())!.version;
+        final empty = DashboardSnapshot.empty(generatedAt: now);
+        final normalized = DashboardSnapshot.fromJson({
+          ...empty.toJson(),
+          'accounts': [
+            {
+              'accountId': 'synthetic-account',
+              'provider': family,
+              'connection': id,
+              'status': 'ok',
+              'today': empty.todayTotal.toJson(),
+              'week': empty.weekTotal.toJson(),
+              'month': empty.monthTotal.toJson(),
+              'credits': <Object>[],
+              'allowances': <Object>[],
+              'buckets': <Object>[],
+              'modelBreakdown': <Object>[],
+              'lastSuccessfulSyncAt': now.toIso8601String(),
+            },
+          ],
+        });
+        ConnectionSnapshotCache cache(String owner) => ConnectionSnapshotCache(
+          connection: id,
+          platform: bridge.platform(owner),
+          readCredentialVersion:
+              () async => (await runtime(owner, response).read())?.version,
+        );
+        DashboardRepository repository(String owner, _Runtime session) =>
+            family == 'codex'
+                ? codexDashboardRepository(
+                  accountService: const EmptyCodexAccountService(),
+                  fallback: const NoProvidersDashboardRepository(),
+                  cache: cache(owner),
+                  loadReport: session.fetch,
+                  normalizeReport: (_) => normalized.toJsonString(),
+                  logger: const NullProviderSyncLogger(),
+                )
+                : claudeDashboardRepository(
+                  accountService: const EmptyClaudeAccountService(),
+                  fallback: const NoProvidersDashboardRepository(),
+                  cache: cache(owner),
+                  loadReport: session.fetch,
+                  normalizeReport: (_) => normalized.toJsonString(),
+                  logger: const NullProviderSyncLogger(),
+                );
+        final foreground = repository('manual', manual);
+        final failed = await CapturedDashboardLoad.capture(foreground.load);
+        expect(
+          () => failed.value,
+          throwsA(
+            isA<DashboardLoadException>().having(
+              (error) => error.issue,
+              'issue',
+              DashboardSyncIssue.rateLimited,
+            ),
+          ),
+        );
+        expect(
+          failed.reportingOutcomes.single.credentialVersion!.values,
+          version.values,
+        );
+        expect((await cache('manual').capture()).snapshot, isNull);
+        limited = false;
+        AutomaticPollContext periodic() => AutomaticPollContext(
+          readInterval: () async => const Duration(minutes: 5),
+        );
+        final worker = repository('headless', runtime('headless', response));
+        await periodic().run(worker.load);
+        final before = requests;
+        final poll = periodic();
+        final retained = await poll.run(foreground.load);
+        expect(requests, before);
+        expect(poll.whollySkipped, isTrue);
+        expect(retained.syncIssue, DashboardSyncIssue.rateLimited);
+        expect(retained.generatedAt, now);
+        expect(retained.accounts.single.status, ProviderStatus.stale);
+        expect(retained.accounts.single.lastSuccessfulSyncAt, now);
+        expect(
+          retained.reportingOutcomes.single.source,
+          ReportingOutcomeSource.cache,
+        );
+        expect(
+          retained.reportingOutcomes.single.credentialVersion!.values,
+          version.values,
+        );
+      },
+    );
+    test(
+      '$family recreated automatic clients skip before expired-token refresh; manual bypasses',
+      () async {
+        var calls = 0;
+        Future<_Response> response(
+          Uri uri,
+          Map<String, String> headers,
+          String? body,
+        ) async {
+          calls++;
+          return _usageResponse(uri);
+        }
+
+        final foreground = runtime('foreground', response);
+        await foreground.write('synthetic-account', 'synthetic-token');
+        AutomaticPollContext periodic() => AutomaticPollContext(
+          readInterval: () async => const Duration(minutes: 60),
+        );
+        await periodic().run(foreground.fetch);
+        final before = calls;
+        await bridge.invoke('test', 'setClock', {'value': 1000});
+        final expired = _runtime(
+          family,
+          secure,
+          bridge.platform('headless'),
+          now.add(const Duration(days: 2)),
+          response,
+        );
+        await expectLater(
+          periodic().run(expired.fetch),
+          throwsA(isA<AutomaticPollSkipped>()),
+        );
+        expect(calls, before);
+        await foreground.fetch();
+        expect(calls, greaterThan(before));
+        await bridge.invoke('test', 'setClock', {'value': 300000});
+        await AutomaticPollContext(
+          origin: AutomaticPollOrigin.resetWake,
+          readInterval: () async => const Duration(minutes: 60),
+        ).run(foreground.fetch);
+        final afterReset = calls;
+        await bridge.invoke('test', 'setClock', {'value': 600000});
+        await expectLater(
+          periodic().run(foreground.fetch),
+          throwsA(isA<AutomaticPollSkipped>()),
+        );
+        expect(calls, afterReset);
+      },
+    );
     test(
       '$family owned rejection persists after credential-null refresh and restart',
       () async {

@@ -2448,6 +2448,8 @@ class _MemoryCredentialStore
 Future<void> _noRefresh() async {}
 
 final class _MemoryCredentialAccess implements ConnectionCredentialAccess {
+  @override
+  Future<void> admitAutomatic(CredentialVersion expected) async {}
   const _MemoryCredentialAccess(this.store, this.id);
   final _MemoryCredentialStore store;
   final ProviderConnectionId id;

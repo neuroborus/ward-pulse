@@ -9,8 +9,131 @@ import 'package:ward_pulse_phone/sync/poll_cadence.dart';
 import 'package:ward_pulse_phone/sync/recovery_wake.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/sync/recovery_watchlist.dart';
+import 'package:ward_pulse_phone/sync/automatic_poll.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 
 void main() {
+  test(
+    'partial skips preserve remembered windows and denied reset rebooks its exact eligibility',
+    () async {
+      final at = DateTime.utc(2026, 11, 6);
+      final source = _withAllowances(
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ),
+        {'remembered-window': at.subtract(const Duration(minutes: 1))},
+      );
+      final account = source.accounts.first;
+      final connection = account.connection ?? 'openai.plan';
+      final key = (
+        accountId: account.accountId,
+        allowanceId: 'remembered-window',
+      );
+      const freshKey = (
+        accountId: 'fresh-account',
+        allowanceId: 'fresh-window',
+      );
+      final mixed = DashboardSnapshot.fromJson({
+        ...source.toJson(),
+        'accounts': [
+          ...source.accounts.map((account) => account.toJson()),
+          {
+            ...account.toJson(),
+            'accountId': freshKey.accountId,
+            'connection': 'openai.platform',
+            'provider': 'openai',
+          },
+        ],
+      });
+      final store = _MemoryRecoveryWatchlistStore();
+      await store.write([key, freshKey]);
+      final notifier = _RecordingRecoveryNotifier(), wake = _RecordingWake();
+      final poll = AutomaticPollContext(
+        origin: AutomaticPollOrigin.resetWake,
+        readInterval: () async => const Duration(minutes: 60),
+      );
+      poll.skipped[connection] = AutomaticPollSkipped(
+        connection,
+        CredentialVersion({}),
+        at.add(const Duration(minutes: 1)),
+      );
+      poll.retainedAccountIds[connection] = {account.accountId};
+      poll.attempted.add('openai.platform');
+      await syncPlanRecoveries(
+        mixed,
+        store,
+        notifier,
+        wake,
+        poll: poll,
+        now: () => at,
+        readWindows: (_) => [],
+        readRecoveries: (_, keys) {
+          expect(keys, [freshKey]);
+          return [
+            (
+              accountId: freshKey.accountId,
+              provider: 'openai',
+              allowanceId: freshKey.allowanceId,
+              label: 'Fresh window',
+              resetsAt: null,
+            ),
+          ];
+        },
+      );
+      expect(await store.read(), [key]);
+      expect(notifier.reported.single.accountId, freshKey.accountId);
+      expect(wake.booked, [at.add(const Duration(minutes: 1))]);
+      poll.attempted.clear();
+      await syncPlanRecoveries(
+        source,
+        store,
+        notifier,
+        wake,
+        poll: poll,
+        now: () => at,
+        readWindows:
+            (_) => throw StateError('Skipped data supplies no evidence'),
+        readRecoveries:
+            (_, _) => throw StateError('Skipped data supplies no recovery'),
+        rethrowFailures: true,
+      );
+      expect(await store.read(), [key]);
+      expect(wake.cancelled, 0);
+      expect(notifier.reported, hasLength(1));
+      final bookings = wake.booked.length;
+      await syncPlanRecoveries(
+        source,
+        store,
+        notifier,
+        wake,
+        poll: poll,
+        isCurrent: () async => false,
+        rethrowFailures: true,
+      );
+      expect(await store.read(), [key]);
+      expect(wake.booked, hasLength(bookings));
+      final futureReset = at.add(const Duration(hours: 1));
+      final future = _withAllowances(source, {
+        'remembered-window': futureReset,
+      });
+      await syncPlanRecoveries(
+        future,
+        store,
+        notifier,
+        wake,
+        poll: poll,
+        now: () => at,
+        readWindows:
+            (_) => throw StateError('Skipped data supplies no evidence'),
+        readRecoveries:
+            (_, _) => throw StateError('Skipped data supplies no recovery'),
+        rethrowFailures: true,
+      );
+      expect(wake.booked.last, futureReset);
+    },
+  );
   test('a phone that has never looked remembers nothing', () async {
     // Not an error state: the first poll is what fills the list, and until then
     // there is no past for an edge to be measured against.

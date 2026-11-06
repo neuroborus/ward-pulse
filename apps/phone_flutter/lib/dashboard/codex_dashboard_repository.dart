@@ -1,6 +1,7 @@
 import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 
 import '../providers/codex_account_service.dart';
+import '../providers/provider_connection.dart';
 import '../sync/codex_account_client.dart';
 import '../sync/provider_sync_logger.dart';
 import 'dashboard_models.dart';
@@ -41,13 +42,33 @@ DashboardLoadException _mapCodexError(Object error, ProviderSyncLogger logger) {
   }
   final details = error.details ?? loadFailureDetails(error);
   logger.record(_eventFor(error.failure), details: details);
-  return DashboardLoadException(
+  return DashboardLoadException.withOutcomes(
     issue: _issueFor(error.failure),
     details: details,
     syncRejection:
         error.rejectionEventId == null
             ? null
             : (connection: 'openai.plan', eventId: error.rejectionEventId!),
+    reportingOutcomes: [
+      if (error.credentialVersion case final version?)
+        ConnectionReportingOutcome(
+          connection: ProviderConnections.codexPlan,
+          category: switch (error.failure) {
+            CodexAccountFailure.authentication =>
+              ReportingOutcomeCategory.authenticationRejected,
+            CodexAccountFailure.permissionDenied =>
+              ReportingOutcomeCategory.accessDenied,
+            CodexAccountFailure.rateLimited =>
+              ReportingOutcomeCategory.rateLimited,
+            CodexAccountFailure.invalidResponse =>
+              ReportingOutcomeCategory.malformedResponse,
+            _ => ReportingOutcomeCategory.transientFailure,
+          },
+          source: ReportingOutcomeSource.live,
+          freshness: ReportingOutcomeFreshness.current,
+          credentialVersion: version,
+        ),
+    ],
   );
 }
 

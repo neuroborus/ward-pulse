@@ -5,6 +5,8 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../sync/automatic_poll.dart';
+
 /// Android owns atomic lifecycle/cache transactions across Flutter engines.
 abstract interface class ConnectionCachePlatform {
   Future<Object?> invoke(String method, Map<String, Object?> arguments);
@@ -72,10 +74,12 @@ abstract interface class ConnectionCredentialAccess {
   Future<VersionedCredential<String>?> read();
   Future<bool> isCurrent(CredentialVersion expected);
   Future<R> serializeFetch<R>(Future<R> Function() operation);
+  Future<void> admitAutomatic(CredentialVersion expected);
 }
 
 abstract interface class VersionedAccountStore<T> {
   Future<R> serializeFetch<R>(Future<R> Function() operation);
+  Future<void> admitAutomatic(CredentialVersion expected);
   Future<bool> isCurrent(CredentialVersion expected);
   Future<VersionedCredential<T>?> readVersioned();
   Future<CredentialVersion?> refresh(T value, CredentialVersion expected);
@@ -111,6 +115,41 @@ final class ConnectionCredentialStorage
             'fetchTicket': _fetchTicket,
           }) ==
           true;
+  @override
+  Future<void> admitAutomatic(CredentialVersion expected) async {
+    final context = AutomaticPollContext.current;
+    if (context == null) return;
+    final Map<String, Object?> result;
+    try {
+      final interval = await context.interval(connection);
+      result = Map<String, Object?>.from(
+        (await platform.invoke('claimAutomatic', {
+              'connection': connection,
+              'fetchTicket': _fetchTicket,
+              'expected': expected.values,
+              'intervalMillis': interval.inMilliseconds,
+            }))!
+            as Map,
+      );
+    } catch (_) {
+      throw AutomaticPollUnavailable(connection, expected);
+    }
+    if (result['admitted'] != true) {
+      final skipped = AutomaticPollSkipped(
+        connection,
+        expected,
+        DateTime.fromMillisecondsSinceEpoch(
+          (result['nextEligible']! as num).toInt(),
+          isUtc: true,
+        ),
+      );
+      context.skipped[connection] = skipped;
+      throw skipped;
+    }
+    context.attempted.add(connection);
+    context.admittedVersions[connection] = expected;
+  }
+
   @override
   Future<R> serializeFetch<R>(Future<R> Function() operation) async {
     final lease = Map<String, Object?>.from(

@@ -2,6 +2,7 @@ import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 
 import '../sync/provider_sync_logger.dart';
 import '../sync/provider_reporting.dart';
+import '../sync/automatic_poll.dart';
 import '../providers/connection_lifecycle.dart';
 import '../providers/provider_connection.dart';
 import '../providers/provider_credential_store.dart';
@@ -18,6 +19,7 @@ typedef _ConnectionResult =
       DashboardSnapshot? snapshot,
       DashboardLoadException? failure,
       DashboardSnapshot? cached,
+      AutomaticPollSkipped? skipped,
     });
 
 /// Fetches one connection report, normalizes it, and merges with the fallback.
@@ -64,6 +66,8 @@ final class MergingConnectionRepository extends DashboardRepository {
   final DashboardSnapshotMerger _mergeSnapshots;
 
   DashboardSnapshot? _lastSuccessfulConnectionSnapshot;
+  DashboardLoadException? _lastFailure;
+  CredentialVersion? _lastFailureVersion;
   var _cacheRevision = 0;
 
   @override
@@ -127,19 +131,23 @@ final class MergingConnectionRepository extends DashboardRepository {
         );
       }
       if (secret == null) {
-        if (revision == _cacheRevision)
+        if (revision == _cacheRevision) {
           _lastSuccessfulConnectionSnapshot = null;
+          _lastFailure = null;
+          _lastFailureVersion = null;
+        }
         _logger.record(ProviderSyncEvent.skippedNoCredential);
-        return (snapshot: null, failure: null, cached: null);
+        return (snapshot: null, failure: null, cached: null, skipped: null);
       }
       final version = read?.version;
       if (!await _current(revision, version, access))
-        return (snapshot: null, failure: null, cached: null);
-      forward(
-        ConnectionReportingUpdate(connection: id, credentialVersion: version),
-      );
+        return (snapshot: null, failure: null, cached: null, skipped: null);
       return _loadOwned(revision, () async {
         if (!await _current(revision, version, access)) return null;
+        if (version != null) await access!.admitAutomatic(version);
+        forward(
+          ConnectionReportingUpdate(connection: id, credentialVersion: version),
+        );
         try {
           return await loadCredentialReport!(secret!);
         } on ProviderReportingException catch (error) {
@@ -163,14 +171,33 @@ final class MergingConnectionRepository extends DashboardRepository {
       final own =
           access == null ? await run() : await access.serializeFetch(run);
       final facts =
-          own.snapshot?.reportingOutcomes ??
-          own.failure?.reportingOutcomes ??
-          const <ConnectionReportingOutcome>[];
+          own.skipped != null
+              ? const <ConnectionReportingOutcome>[]
+              : own.snapshot?.reportingOutcomes ??
+                  own.failure?.reportingOutcomes ??
+                  const <ConnectionReportingOutcome>[];
       final current =
           own.failure != null
               ? await isFailureCurrent(own.failure!)
               : own.snapshot == null || await isSnapshotCurrent(own.snapshot!);
       if (current && revision == _cacheRevision) {
+        if (own.failure != null) {
+          _lastFailure = own.failure;
+          final stamp = own.cached?.connectionVersions[_cache?.connection];
+          final owner = _cache?.connection ?? id?.storageKey;
+          _lastFailureVersion =
+              AutomaticPollContext.current?.admittedVersions[owner] ??
+              (stamp == null ? null : CredentialVersion(stamp));
+          for (final outcome in facts) {
+            if (outcome.connection.storageKey == owner &&
+                outcome.credentialVersion != null)
+              _lastFailureVersion = outcome.credentialVersion;
+          }
+        }
+        if (own.snapshot != null && own.skipped == null) {
+          _lastFailure = null;
+          _lastFailureVersion = null;
+        }
         for (final outcome in facts) {
           forward(
             ConnectionReportingUpdate(
@@ -185,9 +212,21 @@ final class MergingConnectionRepository extends DashboardRepository {
       if (own.failure != null) {
         result = await _recover(fallback, own.failure!, revision, own.cached);
       } else if (own.snapshot != null) {
-        result = await _finishSuccess(own.snapshot!, fallback);
+        result = await _finishSuccess(
+          own.snapshot!,
+          fallback,
+          recordSuccess: own.skipped == null,
+        );
       } else {
-        result = (await fallback).value;
+        final other = (await fallback).value;
+        final skipped = own.skipped;
+        result =
+            skipped == null
+                ? other
+                : other.withConnectionVersions({
+                  ...other.connectionVersions,
+                  skipped.connection: skipped.version.values,
+                });
       }
       if (!await isSnapshotCurrent(result) || revision != _cacheRevision) {
         throw const DashboardLoadException(
@@ -318,8 +357,15 @@ final class MergingConnectionRepository extends DashboardRepository {
       final stamp = cached?.connectionVersions[_cache.connection];
       if (captured?.version == null ||
           stamp == null ||
-          !captured!.version!.sameCache(CredentialVersion(stamp)))
+          !captured!.version!.sameCache(CredentialVersion(stamp))) {
         cached = null;
+      }
+      if ((_lastFailureVersion == null ||
+              captured?.version?.sameCache(_lastFailureVersion!) != true) &&
+          revision == _cacheRevision) {
+        _lastFailure = null;
+        _lastFailureVersion = null;
+      }
       final disk = captured?.snapshot;
       if (disk != null &&
           (cached == null || disk.generatedAt.isAfter(cached.generatedAt)))
@@ -330,6 +376,75 @@ final class MergingConnectionRepository extends DashboardRepository {
     final String? report;
     try {
       report = await loadReport();
+    } on AutomaticPollSkipped catch (skipped) {
+      // OAuth/Cursor may have queued after the earlier cache capture. Read again
+      // under the credential version actually denied by the native owner.
+      final current = await _cache?.capture(expected: skipped.version);
+      var retained = _lastSuccessfulConnectionSnapshot;
+      final failure =
+          _lastFailureVersion?.sameCache(skipped.version) == true
+              ? _lastFailure
+              : null;
+      final stamp = retained?.connectionVersions[skipped.connection];
+      if (stamp == null ||
+          !skipped.version.sameCache(CredentialVersion(stamp))) {
+        retained = null;
+      }
+      if (failure == null && revision == _cacheRevision) {
+        _lastFailure = null;
+        _lastFailureVersion = null;
+      }
+      final disk = current?.snapshot;
+      if (disk != null &&
+          (retained == null || disk.generatedAt.isAfter(retained.generatedAt)))
+        retained = disk;
+      if (_cache != null && !await _cache.valid(skipped.version))
+        throw StateError('Connection changed during refresh.');
+      if (retained != null) {
+        AutomaticPollContext.current?.retainedAccountIds[skipped.connection] = {
+          for (final account in retained.accounts) account.accountId,
+        };
+        retained = retained.withReportingOutcomes([
+          for (final outcome
+              in failure?.reportingOutcomes ?? <ConnectionReportingOutcome>[])
+            ConnectionReportingOutcome(
+              connection: outcome.connection,
+              category: outcome.category,
+              source: ReportingOutcomeSource.cache,
+              freshness: ReportingOutcomeFreshness.stale,
+              credentialVersion: skipped.version,
+            ),
+        ]);
+        if (failure != null)
+          retained = retained.withStaleStatus(
+            syncIssue: failure.issue,
+            syncDetails: failure.details,
+            syncRejection: failure.syncRejection,
+          );
+      }
+      return (
+        snapshot: retained,
+        failure: null,
+        cached: null,
+        skipped: skipped,
+      );
+    } on AutomaticPollUnavailable catch (error) {
+      return _failed(
+        DashboardLoadException.withOutcomes(
+          issue: DashboardSyncIssue.credentialUnavailable,
+          reportingOutcomes: [
+            ConnectionReportingOutcome(
+              connection:
+                  ProviderConnectionId.fromStorageKey(error.connection)!,
+              category: ReportingOutcomeCategory.localReadFailure,
+              source: ReportingOutcomeSource.local,
+              freshness: ReportingOutcomeFreshness.current,
+              credentialVersion: error.version,
+            ),
+          ],
+        ),
+        cached,
+      );
     } catch (error) {
       return _failed(_attribute(_mapError(error), version), cached);
     }
@@ -339,7 +454,7 @@ final class MergingConnectionRepository extends DashboardRepository {
       }
       if (revision == _cacheRevision && captured?.version != null)
         await _cache!.clear(captured!.version);
-      return (snapshot: null, failure: null, cached: null);
+      return (snapshot: null, failure: null, cached: null, skipped: null);
     }
 
     final String normalized;
@@ -363,7 +478,7 @@ final class MergingConnectionRepository extends DashboardRepository {
       if (cacheVersion == null || !await _cache.valid(cacheVersion)) {
         if (revision == _cacheRevision)
           _lastSuccessfulConnectionSnapshot = null;
-        return (snapshot: null, failure: null, cached: null);
+        return (snapshot: null, failure: null, cached: null, skipped: null);
       }
       if (!_cache.owns(connectionSnapshot))
         return _failed(
@@ -397,7 +512,7 @@ final class MergingConnectionRepository extends DashboardRepository {
       if (cached != null && cached.generatedAt.isAfter(remembered.generatedAt))
         remembered = cached;
       if (!await _cache.valid(cacheVersion))
-        return (snapshot: null, failure: null, cached: null);
+        return (snapshot: null, failure: null, cached: null, skipped: null);
     }
     // An older successful response must not move reader-visible data backwards.
     if (remembered.generatedAt.isAfter(connectionSnapshot.generatedAt))
@@ -411,13 +526,19 @@ final class MergingConnectionRepository extends DashboardRepository {
       final outcome = _outcome(ReportingOutcomeCategory.success, version);
       connectionSnapshot = connectionSnapshot.withReportingOutcomes([outcome]);
     }
-    return (snapshot: connectionSnapshot, failure: null, cached: null);
+    return (
+      snapshot: connectionSnapshot,
+      failure: null,
+      cached: null,
+      skipped: null,
+    );
   }
 
   Future<DashboardSnapshot> _finishSuccess(
     DashboardSnapshot connectionSnapshot,
-    Future<CapturedDashboardLoad> fallback,
-  ) async {
+    Future<CapturedDashboardLoad> fallback, {
+    bool recordSuccess = true,
+  }) async {
     final capturedFallback = await fallback;
     connectionSnapshot = connectionSnapshot.withReportingOutcomes(
       _combineOutcomes(
@@ -429,7 +550,7 @@ final class MergingConnectionRepository extends DashboardRepository {
     try {
       other = capturedFallback.value;
     } on DashboardLoadException catch (error) {
-      _logger.record(ProviderSyncEvent.succeeded);
+      if (recordSuccess) _logger.record(ProviderSyncEvent.succeeded);
       if (error.issue == DashboardSyncIssue.noProviders) {
         return _publish(connectionSnapshot);
       }
@@ -441,7 +562,7 @@ final class MergingConnectionRepository extends DashboardRepository {
         ),
       );
     } catch (error) {
-      _logger.record(ProviderSyncEvent.succeeded);
+      if (recordSuccess) _logger.record(ProviderSyncEvent.succeeded);
       return _publish(
         connectionSnapshot.withSyncIssue(
           DashboardSyncIssue.dashboardUnavailable,
@@ -451,7 +572,7 @@ final class MergingConnectionRepository extends DashboardRepository {
     }
 
     if (!hasLiveAccount(other)) {
-      _logger.record(ProviderSyncEvent.succeeded);
+      if (recordSuccess) _logger.record(ProviderSyncEvent.succeeded);
       return _publish(connectionSnapshot);
     }
 
@@ -472,15 +593,22 @@ final class MergingConnectionRepository extends DashboardRepository {
               connectionSnapshot.reportingOutcomes,
             ),
           );
-      _logger.record(ProviderSyncEvent.succeeded);
+      if (recordSuccess) _logger.record(ProviderSyncEvent.succeeded);
       final issue = other.syncIssue;
+      final retainedIssue = recordSuccess ? null : connectionSnapshot.syncIssue;
       return _publish(
-        issue == null
+        issue == null && retainedIssue == null
             ? merged
             : merged.withSyncIssue(
-              issue,
-              details: other.syncDetails,
-              rejection: other.syncRejection,
+              issue ?? retainedIssue!,
+              details:
+                  issue == null
+                      ? connectionSnapshot.syncDetails
+                      : other.syncDetails,
+              rejection:
+                  issue == null
+                      ? connectionSnapshot.syncRejection
+                      : other.syncRejection,
             ),
       );
     } catch (error) {
@@ -579,7 +707,7 @@ final class MergingConnectionRepository extends DashboardRepository {
   _ConnectionResult _failed(
     DashboardLoadException failure,
     DashboardSnapshot? capturedCache,
-  ) => (snapshot: null, failure: failure, cached: capturedCache);
+  ) => (snapshot: null, failure: failure, cached: capturedCache, skipped: null);
 
   Future<DashboardSnapshot> _recover(
     Future<CapturedDashboardLoad> fallback,

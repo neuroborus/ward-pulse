@@ -5,6 +5,7 @@ import '../dashboard/plan_recoveries.dart';
 import 'poll_cadence.dart';
 import 'recovery_notifications.dart';
 import 'recovery_wake.dart';
+import 'automatic_poll.dart';
 
 /// The plan windows that were spent when the phone last looked.
 ///
@@ -87,6 +88,8 @@ Future<void> syncPlanRecoveries(
   ReadExhaustedWindows readWindows = exhaustedWindows,
   DateTime Function() now = DateTime.now,
   bool rethrowFailures = false,
+  AutomaticPollContext? poll,
+  Future<bool> Function()? isCurrent,
 }) async {
   try {
     if (mockData) {
@@ -98,8 +101,28 @@ Future<void> syncPlanRecoveries(
     // left, and asking the core would serialize the whole snapshot to be told
     // so — on most polls, since most of the time nothing is spent.
     final remembered = await store.read();
-    if (notifications && remembered.isNotEmpty) {
-      for (final recovery in readRecoveries(snapshot, remembered)) {
+    if (isCurrent != null && !await isCurrent()) return;
+    final observedAccounts = {
+      for (final account in snapshot.accounts)
+        if (poll == null ||
+            (poll.observes(account.connection ?? '') &&
+                !poll.retainedAccountIds.values.any(
+                  (ids) => ids.contains(account.accountId),
+                )))
+          account.accountId,
+    };
+    final partial = poll != null && poll.skipped.isNotEmpty;
+    final observedHistory =
+        !partial
+            ? remembered
+            : remembered
+                .where((key) => observedAccounts.contains(key.accountId))
+                .toList();
+    if (notifications &&
+        observedHistory.isNotEmpty &&
+        poll?.whollySkipped != true) {
+      for (final recovery in readRecoveries(snapshot, observedHistory)) {
+        if (isCurrent != null && !await isCurrent()) return;
         try {
           await notifier.notify(recovery);
         } catch (_) {
@@ -109,24 +132,69 @@ Future<void> syncPlanRecoveries(
         }
       }
     }
-    final spent = readWindows(snapshot);
-    await store.write(spent);
+    final protected =
+        poll == null || poll.skipped.isEmpty
+            ? <WindowKey>[]
+            : remembered
+                .where((key) => !observedAccounts.contains(key.accountId))
+                .toList();
+    final spent =
+        poll?.whollySkipped == true
+            ? remembered
+            : [
+              ...readWindows(snapshot).where(
+                (key) => !partial || observedAccounts.contains(key.accountId),
+              ),
+              ...protected,
+            ];
+    if (isCurrent != null && !await isCurrent()) return;
+    if (poll?.whollySkipped != true) await store.write(spent);
     // Booked from the reset instant rather than left to the next poll, which
     // the cadence would make up to an interval late. `null` covers every case
     // with nothing to wake for: nothing spent, nothing saying when it rolls,
     // and a reset already behind because the provider has not caught up.
-    final soonest = nextResetAmong(snapshot, spent, after: now());
-    if (soonest == null) {
-      await wake.cancel();
-    } else {
-      // Never sooner than the poll floor after this one. A window resetting a
-      // minute from now would otherwise send the woken poll straight back to a
-      // provider, and `PollCadence` calls its lower bound the strictest hard
-      // floor across connections — a wake is not an exemption from it.
+    var soonest = nextResetAmong(snapshot, spent, after: now());
+    if (soonest != null) {
       final floor = now().add(
         const Duration(minutes: PollCadence.minRefreshMinutes),
       );
-      await wake.scheduleAt(soonest.isBefore(floor) ? floor : soonest);
+      if (soonest.isBefore(floor)) soonest = floor;
+    }
+    if (poll?.origin == AutomaticPollOrigin.resetWake) {
+      for (final entry in poll!.skipped.entries) {
+        final ids = poll.retainedAccountIds[entry.key] ?? const <String>{};
+        DateTime? reset;
+        for (final account in snapshot.accounts.where(
+          (account) =>
+              ids.contains(account.accountId) ||
+              account.connection == entry.key,
+        )) {
+          for (final window in account.allowances) {
+            final at = window.resetsAt;
+            if (at != null &&
+                remembered.any(
+                  (key) =>
+                      key.accountId == account.accountId &&
+                      key.allowanceId == window.id,
+                ) &&
+                (reset == null || at.isBefore(reset)))
+              reset = at;
+          }
+        }
+        final pending = reset != null || (ids.isEmpty && protected.isNotEmpty);
+        final eligible = entry.value.nextEligible;
+        final due = reset != null && reset.isAfter(eligible) ? reset : eligible;
+        if (pending && (soonest == null || due.isBefore(soonest)))
+          soonest = due;
+      }
+    }
+    if (isCurrent != null && !await isCurrent()) return;
+    if (soonest == null) {
+      if (poll?.whollySkipped != true) await wake.cancel();
+    } else {
+      // Natural resets use the floor above; denied work keeps its native due
+      // time rather than adding another full floor after a skipped load.
+      await wake.scheduleAt(soonest);
     }
   } catch (error, stackTrace) {
     if (rethrowFailures) {

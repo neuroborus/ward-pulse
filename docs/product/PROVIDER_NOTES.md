@@ -137,10 +137,22 @@ comments, and are the single source of truth for cadence:
   5–15 by 1 minute, 15–30 by 5, and 30–60 by 10, so a single global cadence already satisfies
   every per-connection floor;
 - `effective_interval = max(user_setting, provider_minimum)` per connection;
+- automatic starts share a durable native admission anchor across foreground and headless
+  engines. Startup, timer and periodic work use the current slider preference after queued
+  ownership is obtained. Failed admitted attempts consume spacing; denied work does not.
+  Token rotation, snapshot invalidation and engine detach do not reset the anchor;
+- reset wakes use `max(5 minutes, provider_minimum)` against that same anchor, including
+  under a 60-minute preference. A denied pending reset is rebooked for its earliest eligible
+  start through the existing one-shot scheduler. Android may delay execution;
+- explicit phone/watch refresh, connection checks and reconnect loads retain their existing
+  guards, bypass automatic admission and do not advance its anchor. Resume adds no fetch;
 - automatic sync on the phone runs on an in-process scheduler while the app isolate is alive
   (full 5–60 minute slider); after Android reclaims the process, a WorkManager Dart
   entrypoint continues sync at `max(slider, 15 minutes)` (Android periodic minimum);
-- watch summary re-sent after each successful automatic sync;
+- watch/widget publication and alert/recovery bookkeeping require new evidence. A wholly
+  skipped load publishes neither surface nor alerts. In mixed loads, skipped connections
+  retain validated data and known stale/error state without new success times, consumed
+  alert markers or recovery evidence; deferred reset scheduling remains permitted;
 - a failed sync keeps the last successful snapshot visible and retries on the next tick, so a
   launch without connectivity still recovers without a manual refresh;
 - the Cursor Team Admin API row notes hourly provider-side aggregation and that refreshed values

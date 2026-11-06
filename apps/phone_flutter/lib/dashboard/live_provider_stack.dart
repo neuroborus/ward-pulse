@@ -93,6 +93,7 @@ DashboardRepository buildLiveProviderStack({
         );
         final captured = credential;
         if (token == null) return null;
+        if (captured != null) await access!.admitAutomatic(captured.version);
         try {
           final report = await fetch(token);
           if (captured != null && !await access!.isCurrent(captured.version))

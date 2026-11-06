@@ -17,6 +17,7 @@ import 'recovery_notifications.dart';
 import 'recovery_wake.dart';
 import 'recovery_watchlist.dart';
 import 'watch_sync_service.dart';
+import 'automatic_poll.dart';
 
 Future<bool> _alwaysCurrent() async => true;
 Future<void> _noAlertDelivery() async {}
@@ -54,12 +55,14 @@ Future<void> providerSyncOnce({
 }) async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  final poll = AutomaticPollContext.current ?? AutomaticPollContext();
   final ProviderSyncWork work;
   try {
-    work = await load();
+    work = await poll.run(load);
   } catch (error, stackTrace) {
     logFailure('setup', error, stackTrace);
-    await _attemptProviderSyncStep('widget', markWidgetStale, logFailure);
+    if (!poll.whollySkipped)
+      await _attemptProviderSyncStep('widget', markWidgetStale, logFailure);
     return;
   }
 
@@ -83,11 +86,12 @@ Future<ProviderSyncWork> loadProviderSyncWork({
   PhoneLiveBindings Function()? createLive,
 }) async {
   final live = (createLive ?? PhoneLiveBindings.create)();
+  final poll = AutomaticPollContext.current ?? AutomaticPollContext();
   final ringPreferences = await SecureWatchRingPreferenceStore().read();
   final widgetPreferences = await SecurePhoneWidgetPreferenceStore().read();
   final alertThresholds = await SecureAlertThresholdPreferenceStore().read();
   final snapshot = applyUserAlertSettings(
-    await live.repository.load(),
+    await poll.run(live.repository.load),
     alertThresholds,
   );
 
@@ -95,16 +99,20 @@ Future<ProviderSyncWork> loadProviderSyncWork({
     throw StateError('Connection changed during refresh.');
   return ProviderSyncWork(
     isCurrent: () => live.repository.isSnapshotCurrent(snapshot),
-    syncWatch:
-        () => const MethodChannelWatchSyncService().sync(
+    syncWatch: () async {
+      if (!poll.whollySkipped)
+        await const MethodChannelWatchSyncService().sync(
           snapshot,
           ringPreferences,
-        ),
-    syncWidget:
-        () => HomeWidgetPhoneWidgetSyncService().sync(
+        );
+    },
+    syncWidget: () async {
+      if (!poll.whollySkipped)
+        await HomeWidgetPhoneWidgetSyncService().sync(
           snapshot,
           widgetPreferences,
-        ),
+        );
+    },
     syncRecoveries: () async {
       var notifications = false;
       try {
@@ -121,6 +129,8 @@ Future<ProviderSyncWork> loadProviderSyncWork({
         const WorkmanagerRecoveryWakeScheduler(),
         notifications: notifications,
         rethrowFailures: true,
+        poll: poll,
+        isCurrent: () => live.repository.isSnapshotCurrent(snapshot),
       );
     },
     syncAlerts:
@@ -130,6 +140,7 @@ Future<ProviderSyncWork> loadProviderSyncWork({
           notifier: LocalAlertNotifier(),
         ).sync(
           snapshot,
+          poll: poll,
           alertThresholds: alertThresholds,
           isCurrent: () async {
             if (kDebugMode &&

@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 
 /** Process-wide credential leases and durable snapshot CAS; no credential values enter Java. */
 public final class ConnectionCacheEngine {
@@ -22,7 +23,9 @@ public final class ConnectionCacheEngine {
     private static final Set<String> CONNECTIONS = new HashSet<>(Arrays.asList(
         "openai.plan", "openai.platform", "anthropic.plan", "anthropic.platform", "cursor.plan", "cursor.platform"));
     private static final List<String> NOTICE_KEYS = Arrays.asList("committedConnection", "rejectionEvent", "rejectionDismissed");
+    private static final List<String> CONFIRMED_KEYS = Arrays.asList("committedConnection", "rejectionEvent", "rejectionDismissed", "automaticGeneration", "automaticIdentity", "automaticAt");
     private final Backend backend;
+    private final LongSupplier clock;
     private final Map<String, Lease> leases = new HashMap<>();
     private final Map<String, ArrayDeque<Pending>> queues = new HashMap<>();
     private final Set<String> fenced = new HashSet<>();
@@ -31,14 +34,15 @@ public final class ConnectionCacheEngine {
     private final Map<String, FetchLease> fetches = new HashMap<>();
     private final Map<String, ArrayDeque<FetchPending>> fetchQueues = new HashMap<>();
     // SharedPreferences can expose failed commits in memory. All later whole-map
-    // writes must use the last confirmed notice fields, including other connections.
-    private final Map<String, Map<String, String>> unconfirmedNotices = new HashMap<>();
+    // writes must use confirmed notice/admission fields, including other connections.
+    private final Map<String, Map<String, String>> unconfirmedMetadata = new HashMap<>();
 
-    public ConnectionCacheEngine(Backend backend) { this.backend = backend; }
+    public ConnectionCacheEngine(Backend backend) { this(backend, System::currentTimeMillis); }
+    public ConnectionCacheEngine(Backend backend, LongSupplier clock) { this.backend = backend; this.clock = clock; }
     private Map<String, String> readAll() {
         Map<String, String> all = new LinkedHashMap<>(backend.read());
-        unconfirmedNotices.forEach((connection, confirmed) -> {
-            for (String key : NOTICE_KEYS) all.remove(connection + "." + key);
+        unconfirmedMetadata.forEach((connection, confirmed) -> {
+            for (String key : CONFIRMED_KEYS) all.remove(connection + "." + key);
             confirmed.forEach((key, value) -> all.put(connection + "." + key, value));
         });
         return all;
@@ -47,14 +51,14 @@ public final class ConnectionCacheEngine {
         Map<String, String> prior = readAll();
         boolean committed;
         try { committed = backend.commit(values); } catch (RuntimeException error) { committed = false; }
-        if (committed) { unconfirmedNotices.clear(); return true; }
+        if (committed) { unconfirmedMetadata.clear(); return true; }
         for (String connection : CONNECTIONS) {
             Map<String, String> confirmed = new LinkedHashMap<>();
-            for (String key : NOTICE_KEYS) {
+            for (String key : CONFIRMED_KEYS) {
                 String value = prior.get(connection + "." + key);
                 if (value != null) confirmed.put(key, value);
             }
-            unconfirmedNotices.put(connection, confirmed);
+            unconfirmedMetadata.put(connection, confirmed);
         }
         return false;
     }
@@ -64,14 +68,17 @@ public final class ConnectionCacheEngine {
             all.remove(connection + "." + key);
             if (state.containsKey(key)) all.put(connection + "." + key, state.get(key));
         }
-        // Notice writes cannot make an uncertain credential candidate durable.
+        retainConfirmedCredentials(all);
+        if (!commit(all)) throw new IllegalStateException("Connection notice storage failed.");
+    }
+    private void retainConfirmedCredentials(Map<String, String> all) {
+        // Metadata writes cannot make an uncertain credential candidate durable.
         failedCommitPriorState.forEach((fencedConnection, prior) -> {
             if (!fenced.contains(fencedConnection)) return;
             String prefix = fencedConnection + ".";
             all.keySet().removeIf(key -> key.startsWith(prefix) && !NOTICE_KEYS.contains(key.substring(prefix.length())));
             prior.forEach((key, value) -> { if (!NOTICE_KEYS.contains(key)) all.put(prefix + key, value); });
         });
-        if (!commit(all)) throw new IllegalStateException("Connection notice storage failed.");
     }
     public synchronized Map<String, Object> readNotice(String connection) {
         requireConnection(connection);
@@ -206,6 +213,34 @@ public final class ConnectionCacheEngine {
     public synchronized boolean validFetch(String owner, String connection, String ticket) {
         FetchLease lease = fetches.get(connection);
         return lease != null && lease.owner.equals(owner) && lease.ticket.equals(ticket);
+    }
+    /** Persist an automatic start independently of credential/cache transactions. */
+    public synchronized Map<String, Object> claimAutomatic(String owner, String connection, String ticket,
+            Map<String, String> expected, long intervalMillis) {
+        requireConnection(connection);
+        Map<String, String> state = state(connection);
+        if (!validFetch(owner, connection, ticket) || fenced.contains(connection)
+                || !same(state, expected, true) || !same(state, expected, false))
+            throw new IllegalStateException("Automatic fetch superseded.");
+        if (intervalMillis < 300000L || intervalMillis > 3600000L)
+            throw new IllegalArgumentException("Invalid automatic interval.");
+        long now = clock.getAsLong();
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (state.get("generation").equals(state.get("automaticGeneration"))
+                && state.get("identity").equals(state.get("automaticIdentity"))) {
+            long due = Math.addExact(Long.parseLong(state.get("automaticAt")), intervalMillis);
+            if (now < due) {
+                result.put("admitted", false); result.put("nextEligible", due); return result;
+            }
+        }
+        Map<String, String> all = readAll();
+        all.put(connection + ".automaticGeneration", state.get("generation"));
+        all.put(connection + ".automaticIdentity", state.get("identity"));
+        all.put(connection + ".automaticAt", Long.toString(now));
+        retainConfirmedCredentials(all);
+        // A failed metadata write denies network work but never fences credentials.
+        if (!commit(all)) throw new IllegalStateException("Automatic polling storage failed.");
+        result.put("admitted", true); return result;
     }
     public synchronized void releaseFetch(String owner, String connection, String ticket) {
         if (!validFetch(owner, connection, ticket)) return;

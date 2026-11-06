@@ -26,6 +26,16 @@ The selected interval is between 5 and 60 minutes while WardPulse is open; the d
 The text beside the slider shows both cadences. Background refresh may continue when you
 are not using WardPulse, subject to Android scheduling.
 
+Automatic refreshes share their spacing across the open app, restarts and background work.
+An attempted refresh counts even when the network fails. Opening the app again can show
+saved data while the next automatic attempt is still waiting. Refresh now and connection
+checks keep their existing availability rules and do not restart that automatic interval.
+
+A pending plan reset can request another attempt after at least five minutes, even with
+a longer selected interval. If a recent automatic attempt prevents it, WardPulse schedules
+the reset attempt for its next eligible time. Android may delay that work. Reusing saved
+data while waiting does not mean a plan recovered or produce new alert notifications.
+
 Provider reporting has its own freshness. Cursor aggregates team usage by the hour, so a
 successful refresh can return unchanged figures. This applies to **Team Admin API**,
 separately from the experimental **Cursor plan** connection. See [Cursor reporting history](/guide/providers-cursor#read-the-history).

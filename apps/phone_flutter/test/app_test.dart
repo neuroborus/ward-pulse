@@ -30,6 +30,7 @@ import 'package:ward_pulse_phone/settings/settings_screen.dart';
 import 'package:ward_pulse_phone/sync/alert_notifications.dart';
 import 'package:ward_pulse_phone/sync/notification_coordinator.dart';
 import 'package:ward_pulse_phone/sync/headless_provider_sync.dart';
+import 'package:ward_pulse_phone/sync/automatic_poll.dart';
 import 'package:ward_pulse_phone/settings/alert_percent_threshold_editor.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
@@ -1182,6 +1183,59 @@ void main() {
         if (!release.isCompleted) release.complete();
         await tester.pump();
       }
+    },
+  );
+
+  testWidgets(
+    'startup and timer are automatic; resume does not fetch; manual refresh bypasses',
+    (tester) async {
+      final origins = <AutomaticPollOrigin?>[];
+      var deny = false;
+      final source = _alertTestSnapshot();
+      final repository = _CountingDashboardRepository(() {
+        final poll = AutomaticPollContext.current;
+        origins.add(poll?.origin);
+        if (deny && poll != null)
+          poll.skipped['anthropic.plan'] = AutomaticPollSkipped(
+            'anthropic.plan',
+            CredentialVersion({}),
+            DateTime.utc(2026, 11, 6),
+          );
+        return source;
+      });
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final watch = _FakeWatchSyncService(),
+          widget = _FakePhoneWidgetSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          syncScheduler: scheduler,
+          watchSyncService: watch,
+          phoneWidgetSyncService: widget,
+          readExhaustedWindows: (_) => [],
+          readPlanRecoveries: (_, _) => [],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(origins, [AutomaticPollOrigin.periodic]);
+      final pushes = watch.syncedSnapshots.length,
+          widgets = widget.syncedSnapshots.length;
+      await _notificationLifecycle(tester, AppLifecycleState.paused);
+      await _notificationLifecycle(tester, AppLifecycleState.resumed);
+      expect(origins, hasLength(1));
+      deny = true;
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(origins.last, AutomaticPollOrigin.periodic);
+      expect(watch.syncedSnapshots, hasLength(pushes));
+      expect(widget.syncedSnapshots, hasLength(widgets));
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      expect(origins.last, isNull);
+      expect(watch.syncedSnapshots.length, greaterThan(pushes));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
     },
   );
 
@@ -5793,6 +5847,8 @@ MergingConnectionRepository _reportingRepository(
 );
 
 final class _MemoryCredentialAccess implements ConnectionCredentialAccess {
+  @override
+  Future<void> admitAutomatic(CredentialVersion expected) async {}
   const _MemoryCredentialAccess(this.store, this.id);
   final _MemoryCredentialStore store;
   final ProviderConnectionId id;

@@ -221,6 +221,16 @@ native service coordinates concurrent Flutter engines in the application's singl
 process, including WorkManager; separate OS processes are unsupported. Foreground and
 headless callers validate ownership before publication.
 
+Automatic attempt admission is durable and separate from ephemeral fetch exclusion.
+Startup, foreground timer and headless periodic loads share a per-generation/principal
+start anchor; token revisions, cache invalidation, failed work and engine detach retain it.
+Periodic starts use the current preference and provider floor; reset wakes use the shared
+anchor with a five-minute/provider floor and rebook denied pending resets at eligibility.
+Manual refresh/check/reconnect loads bypass admission without moving the anchor.
+Denied work rereads current cache and supplies no fresh success or recovery evidence,
+including skipped connections in partially fresh aggregates. Wholly skipped loads do not
+publish watch/widget data or deliver alerts. Scheduling remains subject to Android delays.
+
 `just check-phone` includes `just test-phone-cache`, which runs the production Java transaction
 engine's adversarial tests with the existing Android JDK (`javac` and `java`). Flutter tests also
 exercise the real engine through a test-only JVM bridge with fake encrypted storage and HTTP

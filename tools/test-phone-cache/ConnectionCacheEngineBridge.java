@@ -18,7 +18,8 @@ public final class ConnectionCacheEngineBridge {
         public boolean commit(Map<String, String> values) { if (fail) return false; data = new HashMap<>(values); return true; }
     }
     static final Disk disk = new Disk();
-    static ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+    static long now;
+    static ConnectionCacheEngine engine = new ConnectionCacheEngine(disk, () -> now);
     public static void main(String[] unused) throws Exception {
         BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
         String line;
@@ -43,6 +44,7 @@ public final class ConnectionCacheEngineBridge {
             case "acquireFetch": engine.acquireFetch(owner, connection, value -> response(id, value, false)); return;
             case "releaseFetch": engine.releaseFetch(owner, connection, args.get("fetchTicket")); response(id, null, false); return;
             case "validFetch": response(id, engine.validFetch(owner, connection, args.get("fetchTicket")), false); return;
+            case "claimAutomatic": response(id, engine.claimAutomatic(owner, connection, args.get("fetchTicket"), expected, Long.parseLong(args.get("intervalMillis"))), false); return;
             case "finish": response(id, engine.finish(owner, connection, args.get("lease"), args.get("operation"), args.get("identity")), false); return;
             case "prepareMigration": response(id, engine.prepareMigration(owner, connection, args.get("lease")), false); return;
             case "queueLegacyCleanup": engine.queueLegacyCleanup(owner, connection, args.get("lease")); response(id, null, false); return;
@@ -63,8 +65,9 @@ public final class ConnectionCacheEngineBridge {
             case "writeSnapshot": response(id, engine.writeSnapshot(connection, expected, args.get("snapshot"), Long.parseLong(args.get("generatedAt"))), false); return;
             case "upgradeSnapshotTimestamp": response(id, engine.upgradeSnapshotTimestamp(connection, expected, args.get("snapshot"), Long.parseLong(args.get("generatedAt"))), false); return;
             case "clearSnapshot": engine.clearSnapshot(connection, expected); response(id, null, false); return;
-            case "restart": engine = new ConnectionCacheEngine(disk); response(id, null, false); return;
-            case "reset": disk.data.clear(); disk.fail = false; engine = new ConnectionCacheEngine(disk); response(id, null, false); return;
+            case "restart": engine = new ConnectionCacheEngine(disk, () -> now); response(id, null, false); return;
+            case "reset": disk.data.clear(); disk.fail = false; now = 0; engine = new ConnectionCacheEngine(disk, () -> now); response(id, null, false); return;
+            case "setClock": now = Long.parseLong(args.get("value")); response(id, null, false); return;
             case "setDisk": disk.data.put(args.get("key"), args.get("value")); response(id, null, false); return;
             case "failCommit": disk.fail = Boolean.parseBoolean(args.get("value")); response(id, null, false); return;
             case "detach": engine.detach(owner); response(id, null, false); return;

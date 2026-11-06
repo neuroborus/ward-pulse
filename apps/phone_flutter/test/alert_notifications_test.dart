@@ -8,6 +8,8 @@ import 'package:ward_pulse_phone/settings/recovery_notification_preferences.dart
 import 'package:ward_pulse_phone/settings/notification_permission_preferences.dart';
 import 'package:ward_pulse_phone/sync/alert_notifications.dart';
 import 'package:ward_pulse_phone/sync/notification_coordinator.dart';
+import 'package:ward_pulse_phone/sync/automatic_poll.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 
 import 'connection_cache_test_support.dart';
 
@@ -46,6 +48,54 @@ AlertThresholdPreferences _planRules(int? at) => AlertThresholdPreferences(
 );
 
 void main() {
+  test(
+    'a partially skipped connection neither consumes nor clears alert markers',
+    () async {
+      final conditions = _Conditions()..values[_key] = true;
+      final notifier = _Notifier();
+      final delivery = AlertNotificationDelivery(
+        preferences: _Preferences(),
+        conditions: conditions,
+        notifier: notifier,
+      );
+      final poll = AutomaticPollContext()..attempted.add('openai.platform');
+      poll.skipped[_key.connection] = AutomaticPollSkipped(
+        _key.connection,
+        CredentialVersion({}),
+        DateTime.utc(2026, 11, 6),
+      );
+      await delivery.sync(_snapshot([_clear]), poll: poll);
+      expect(conditions.values[_key], isTrue);
+      conditions.values.clear();
+      await delivery.sync(_snapshot([_crossed]), poll: poll);
+      expect(conditions.writes, 0);
+      expect(notifier.posts, isEmpty);
+      const fresh = AlertConditionKey(
+        provider: 'openai',
+        accountId: 'fresh-account',
+        connection: 'openai.platform',
+        target: BudgetAlertTarget(period: AlertBudgetPeriod.today),
+      );
+      await delivery.sync(
+        _snapshot([
+          _crossed,
+          const AlertCondition.crossed(
+            key: fresh,
+            alert: AlertSummary(
+              severity: 'warning',
+              message: 'Fresh observation',
+            ),
+          ),
+        ]),
+        poll: poll,
+      );
+      expect(notifier.posts, [fresh]);
+      expect(conditions.values.containsKey(_key), isFalse);
+      await delivery.sync(_snapshot([_crossed]));
+      expect(conditions.values[_key], isTrue);
+      expect(notifier.posts, [fresh, _key]);
+    },
+  );
   test(
     'readiness retains initialization failure and stack, then retries once',
     () async {

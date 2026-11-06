@@ -14,6 +14,7 @@ import '../providers/claude_account_service.dart';
 import '../providers/codex_account_service.dart';
 import '../providers/credential_dialog.dart';
 import '../providers/connection_rejection_notice.dart';
+import '../providers/connection_lifecycle.dart';
 import '../providers/provider_connection.dart';
 import '../providers/provider_credential_store.dart';
 import '../providers/providers_screen.dart';
@@ -25,6 +26,7 @@ import '../settings/recovery_notification_preferences.dart';
 import '../settings/refresh_interval_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
 import '../sync/alert_notifications.dart';
+import '../sync/automatic_poll.dart';
 import '../sync/headless_provider_sync.dart';
 import '../sync/manual_refresh_window.dart';
 import '../sync/notification_coordinator.dart';
@@ -219,7 +221,8 @@ class _DashboardHostState extends State<DashboardHost>
 
   var _loadRevision = 0;
   var _surfaceRevision = 0;
-  late Future<DashboardSnapshot> _snapshot = _loadSnapshot();
+  late Future<DashboardSnapshot> _snapshot = _loadSnapshot(automatic: true);
+  AutomaticPollContext? _acceptedPoll;
   DashboardSnapshot? _currentSnapshot;
   // The effective rules that produced this accepted snapshot's observations.
   AlertThresholdPreferences? _acceptedAlertThresholds;
@@ -802,8 +805,8 @@ class _DashboardHostState extends State<DashboardHost>
     return snapshot;
   });
 
-  Future<DashboardSnapshot> _loadSnapshot() {
-    final load = _loadForegroundSnapshot();
+  Future<DashboardSnapshot> _loadSnapshot({bool automatic = false}) {
+    final load = _loadForegroundSnapshot(automatic: automatic);
     // FutureBuilder subscribes on the next build. Observe classified failures
     // immediately while preserving the original future for its error UI.
     unawaited(
@@ -812,8 +815,16 @@ class _DashboardHostState extends State<DashboardHost>
     return load;
   }
 
-  Future<DashboardSnapshot> _loadForegroundSnapshot() async {
+  AutomaticPollContext _automaticPoll() => AutomaticPollContext(
+    readInterval:
+        () async => (await widget.refreshIntervalStore.read()).interval,
+  );
+
+  Future<DashboardSnapshot> _loadForegroundSnapshot({
+    bool automatic = false,
+  }) async {
     final revision = ++_loadRevision;
+    final poll = automatic ? _automaticPoll() : null;
     _invalidateNotificationEligibility();
     try {
       await _readRefreshInterval();
@@ -822,16 +833,21 @@ class _DashboardHostState extends State<DashboardHost>
       await _serializeSnapshotSettings(_readAlertThresholds);
       await _readDebugDataPreference(revision);
       await _readNotificationPreferences(revision);
-      // Rescheduling before the load keeps the next tick a full interval away, so
-      // no connection is polled faster than its floor, and a failed load still
-      // retries on the next tick. Headless WorkManager uses ≥15 minutes.
+      // Keep both schedulers registered; native admission enforces spacing
+      // across their starts. Headless WorkManager uses ≥15 minutes.
       unawaited(_scheduleAutoSync(_refreshInterval.interval));
-      final repositorySnapshot = await _observedLoad(revision);
+      final repositorySnapshot =
+          await (poll == null
+              ? _observedLoad(revision)
+              : poll.run(() => _observedLoad(revision)));
       final snapshot = await _acceptSnapshot(repositorySnapshot, revision);
-      unawaited(_syncRecoveries(snapshot));
-      unawaited(_syncWatch(snapshot));
-      unawaited(_syncPhoneWidget(snapshot));
-      unawaited(_syncAlerts(snapshot));
+      _acceptedPoll = poll;
+      unawaited(_syncRecoveries(snapshot, poll: poll));
+      if (poll?.whollySkipped != true) {
+        unawaited(_syncWatch(snapshot));
+        unawaited(_syncPhoneWidget(snapshot));
+        unawaited(_syncAlerts(snapshot));
+      }
       return snapshot;
     } catch (_) {
       // A failed foreground load leaves an error-only Dashboard. Successful
@@ -848,6 +864,7 @@ class _DashboardHostState extends State<DashboardHost>
   }
 
   Future<DashboardSnapshot> _observedLoad(int revision) async {
+    final poll = AutomaticPollContext.current;
     if (!mounted || revision != _loadRevision) {
       throw const DashboardLoadException(details: 'Refresh superseded.');
     }
@@ -881,7 +898,13 @@ class _DashboardHostState extends State<DashboardHost>
       setState(() {
         // A completed, current load is authoritative, including omissions for
         // removed connections. Its outcomes retain the current sibling facts.
-        _reportingUpdates.clear();
+        _reportingUpdates.removeWhere((id, update) {
+          final stamp = snapshot.connectionVersions[id.storageKey];
+          return poll?.observes(id.storageKey) != false ||
+              stamp == null ||
+              update.credentialVersion?.sameCache(CredentialVersion(stamp)) !=
+                  true;
+        });
         for (final outcome in snapshot.reportingOutcomes) {
           _reportingUpdates[outcome.connection] = ConnectionReportingUpdate(
             connection: outcome.connection,
@@ -923,7 +946,10 @@ class _DashboardHostState extends State<DashboardHost>
     }
   }
 
-  Future<void> _syncRecoveries(DashboardSnapshot snapshot) async {
+  Future<void> _syncRecoveries(
+    DashboardSnapshot snapshot, {
+    AutomaticPollContext? poll,
+  }) async {
     try {
       final revision = _surfaceRevision;
       var notifications = false;
@@ -946,6 +972,14 @@ class _DashboardHostState extends State<DashboardHost>
         notifications: notifications && _recoveryNotificationsEnabled,
         readRecoveries: widget.readPlanRecoveries,
         readWindows: widget.readExhaustedWindows,
+        poll: poll,
+        isCurrent: () async {
+          final current = await widget.repository.isSnapshotCurrent(snapshot);
+          return current &&
+              mounted &&
+              revision == _surfaceRevision &&
+              identical(snapshot, _currentSnapshot);
+        },
       );
     } catch (_) {
       // Recovery bookkeeping cannot publish retired data or block the dashboard.
@@ -968,6 +1002,7 @@ class _DashboardHostState extends State<DashboardHost>
       notifier: widget.alertNotifier,
     ).sync(
       snapshot,
+      poll: _acceptedPoll,
       mockData: _mockDataEnabled,
       isAccepted: accepted,
       alertThresholds: rules,
@@ -991,20 +1026,24 @@ class _DashboardHostState extends State<DashboardHost>
     }
     _autoSyncInFlight = true;
     final revision = ++_loadRevision;
+    final poll = _automaticPoll();
     try {
       // Do not invalidate: load() already refetches, and clearing caches would
       // drop stale-with-issue recovery on a failed automatic tick.
-      final repositorySnapshot = await _observedLoad(revision);
+      final repositorySnapshot = await poll.run(() => _observedLoad(revision));
       final snapshot = await _acceptSnapshot(repositorySnapshot, revision);
+      _acceptedPoll = poll;
       if (mounted && revision == _loadRevision) {
         setState(() {
           _snapshot = Future.value(snapshot);
         });
       }
-      await _syncWatch(snapshot);
-      await _syncPhoneWidget(snapshot);
-      await _syncRecoveries(snapshot);
-      await _syncAlerts(snapshot);
+      if (!poll.whollySkipped) {
+        await _syncWatch(snapshot);
+        await _syncPhoneWidget(snapshot);
+      }
+      await _syncRecoveries(snapshot, poll: poll);
+      if (!poll.whollySkipped) await _syncAlerts(snapshot);
     } on DashboardLoadException catch (failure) {
       // Keep successful data, but an error-only dashboard must follow the most
       // recent guarded result rather than the exception from its first load.

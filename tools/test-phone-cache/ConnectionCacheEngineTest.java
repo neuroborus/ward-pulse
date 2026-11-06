@@ -38,6 +38,7 @@ public final class ConnectionCacheEngineTest {
         return finish(engine, "ui", complete, "activate");
     }
     public static void main(String[] ignored) {
+        automaticAdmission(); automaticMetadataFailure(); automaticWriteCannotActivateCandidate();
         restartPartialAndMonotonic(); deletionAndOAuthRevision(); leaseQueueAndDetach(); cancellationAndMigration(); corruptionAndFailures(); identityAndAggregate(); fetchExclusion(); cleanupAcknowledgement(); supersededCancellation(); failedCommitMemoryCannotActivate(); activeBackupCleanupProtection(); timestampPrecisionAndLegacyUpgrade(); rejectionLifecycle(); rejectionOwnership(); noticeFailures(); noticeMetadataValidation();
         System.out.println("Connection cache engine: " + assertions + " assertions passed.");
     }
@@ -388,6 +389,110 @@ public final class ConnectionCacheEngineTest {
             try { engine.readNotice(C); } catch (IllegalStateException expected) { refused = true; }
             check(refused, "Incomplete or malformed notice metadata cannot invent a visible rejection.");
         }
+    }
+
+    static String fetch(ConnectionCacheEngine engine, String owner) {
+        AtomicReference<Map<String, Object>> answer = new AtomicReference<>();
+        engine.acquireFetch(owner, C, answer::set);
+        return (String)answer.get().get("fetchTicket");
+    }
+    static boolean claim(ConnectionCacheEngine engine, String owner, String ticket, Map<String, String> v, long interval) {
+        return Boolean.TRUE.equals(engine.claimAutomatic(owner, C, ticket, v, interval).get("admitted"));
+    }
+    static void automaticAdmission() {
+        Disk disk = new Disk(); long[] now = {1000};
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(disk, () -> now[0]);
+        Map<String, String> v = version(login(engine));
+        String first = fetch(engine, "foreground");
+        check(claim(engine, "foreground", first, v, 300000), "First automatic start admitted.");
+        AtomicReference<Map<String, Object>> queued = new AtomicReference<>();
+        engine.acquireFetch("headless", C, queued::set);
+        check(queued.get() == null, "Second engine waits for ownership.");
+        engine.releaseFetch("foreground", C, first); now[0]++;
+        String second = (String)queued.get().get("fetchTicket");
+        Map<String, Object> denial = engine.claimAutomatic("headless", C, second, v, 300000);
+        check(Boolean.FALSE.equals(denial.get("admitted")) && Long.valueOf(301000).equals(denial.get("nextEligible")), "Queued caller shares exact start anchor.");
+        now[0] = 300999;
+        check(!claim(engine, "headless", second, v, 300000), "One millisecond before due is denied.");
+        now[0]++;
+        check(claim(engine, "headless", second, v, 300000), "Exact boundary is admitted.");
+        engine.detach("headless");
+        engine = new ConnectionCacheEngine(disk, () -> now[0]);
+        String cold = fetch(engine, "cold");
+        check(!claim(engine, "cold", cold, v, 300000), "Detach/recreated owner retains admitted failed work.");
+        Map<String, Object> refresh = acquire(engine, "ui", "refresh", v);
+        v = version(finish(engine, "ui", refresh, "activate"));
+        check(!claim(engine, "cold", cold, v, 300000), "OAuth revision preserves spacing.");
+        engine.clearSnapshot(C, v);
+        Map<String, Object> read = acquire(engine, "ui", "read", null);
+        v = version(read); finish(engine, "ui", read, "release");
+        check(!claim(engine, "cold", cold, v, 300000), "Cache invalidation preserves spacing.");
+        now[0] += 300000;
+        check(!claim(engine, "cold", cold, v, 3600000), "Current sixty-minute preference is honored.");
+        check(claim(engine, "cold", cold, v, 300000), "Reset can use five minutes under hourly preference.");
+        now[0] += 300000;
+        check(!claim(engine, "cold", cold, v, 3600000), "Reset restarts subsequent periodic spacing.");
+        v = version(login(engine));
+        check(claim(engine, "cold", cold, v, 300000), "Replacement generation has independent admission.");
+        engine.releaseFetch("cold", C, cold);
+        boolean rejected = false;
+        try { claim(engine, "cold", cold, v, 300000); } catch (IllegalStateException expected) { rejected = true; }
+        check(rejected, "Released fetch ticket cannot claim.");
+    }
+    static void automaticMetadataFailure() {
+        class UncertainDisk extends Disk {
+            @Override public boolean commit(Map<String, String> values) {
+                data = new HashMap<>(values); return !fail;
+            }
+        }
+        UncertainDisk disk = new UncertainDisk(); long[] now = {1000};
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(disk, () -> now[0]);
+        Map<String, String> v = version(login(engine));
+        engine.writeSnapshot(C, v, "retained", 1);
+        String ticket = fetch(engine, "worker"); disk.fail = true;
+        boolean denied = false;
+        try { claim(engine, "worker", ticket, v, 300000); } catch (IllegalStateException expected) { denied = true; }
+        check(denied && engine.valid(C, v) && "retained".equals(engine.readSnapshot(C, v)), "Admission storage failure preserves credential and cache.");
+        disk.fail = false; engine.writeSnapshot(C, v, "retained", 2);
+        check(!disk.data.containsKey(C + ".automaticAt"), "Later whole-map write cannot leak failed admission.");
+        check(claim(engine, "worker", ticket, v, 300000), "Failed persistence consumes no attempt.");
+        now[0] = 301000; disk.fail = true; denied = false;
+        try { claim(engine, "worker", ticket, v, 300000); } catch (IllegalStateException expected) { denied = true; }
+        disk.fail = false; engine.writeSnapshot(C, v, "retained", 3);
+        check(denied && "1000".equals(disk.data.get(C + ".automaticAt")), "Failed update preserves confirmed anchor.");
+        check(claim(engine, "worker", ticket, v, 300000), "Retry remains eligible after failed update.");
+        engine.detach("worker");
+    }
+
+    static void automaticWriteCannotActivateCandidate() {
+        Disk disk = new Disk() {
+            @Override public boolean commit(Map<String, String> values) {
+                data = new HashMap<>(values); return !fail;
+            }
+        };
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(disk, () -> 1000L);
+        login(engine);
+        String sibling = "openai.platform";
+        AtomicReference<Map<String, Object>> answer = new AtomicReference<>();
+        engine.acquire("ui", sibling, "reconnect", null, answer::set, error -> { throw new RuntimeException(error); });
+        Map<String, Object> pending = answer.get();
+        engine.finish("ui", sibling, (String)pending.get("lease"), "release", null);
+        engine.acquire("ui", sibling, "complete", version(pending), answer::set, error -> { throw new RuntimeException(error); });
+        Map<String, String> siblingVersion = version(engine.finish("ui", sibling, (String)answer.get().get("lease"), "activate", ID));
+        pending = acquire(engine, "ui", "reconnect", null); finish(engine, "ui", pending, "release");
+        Map<String, Object> complete = acquire(engine, "ui", "complete", version(pending));
+        disk.fail = true; boolean failed = false;
+        try { finish(engine, "ui", complete, "activate"); } catch (IllegalStateException expected) { failed = true; }
+        disk.fail = false;
+        engine.acquireFetch("worker", sibling, answer::set);
+        String ticket = (String)answer.get().get("fetchTicket");
+        check(failed && Boolean.TRUE.equals(engine.claimAutomatic("worker", sibling, ticket, siblingVersion, 300000).get("admitted")), "Healthy sibling can claim after another connection's failed credential write.");
+        check("pending".equals(disk.data.get(C + ".mode")) && !disk.data.containsKey(C + ".slot"), "Admission write retains only confirmed credential state of a fenced sibling.");
+        ConnectionCacheEngine coldEngine = new ConnectionCacheEngine(disk);
+        Map<String, Object> cold = acquire(coldEngine, "cold", "read", null);
+        check("pending".equals(cold.get("mode")), "Restart cannot select the uncertain activated candidate.");
+        finish(coldEngine, "cold", cold, "release");
+        engine.releaseFetch("worker", sibling, ticket);
     }
 
 }

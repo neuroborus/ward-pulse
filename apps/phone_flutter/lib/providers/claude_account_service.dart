@@ -147,6 +147,7 @@ final class MobileClaudeAccountService implements ClaudeAccountService {
     final session = managed == null ? await _readSession() : captured?.value;
     if (session == null) return null;
     var expected = captured?.version;
+    if (expected != null) await managed!.admitAutomatic(expected);
     try {
       final result = await _client.fetchReport(
         session,
@@ -181,6 +182,18 @@ final class MobileClaudeAccountService implements ClaudeAccountService {
         } else {
           await managed.deleteIfCurrent(expected!);
         }
+      }
+      if (expected != null &&
+          error.failure != ClaudeAccountFailure.authentication &&
+          error.failure != ClaudeAccountFailure.cancelled) {
+        if (!await managed!.isCurrent(expected))
+          throw const ClaudeAccountException(ClaudeAccountFailure.cancelled);
+        throw ClaudeAccountException(
+          error.failure,
+          error.details,
+          error.rejectionEventId,
+          expected,
+        );
       }
       rethrow;
     }

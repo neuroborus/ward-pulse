@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 
 import '../providers/claude_account_store.dart';
+import '../providers/connection_lifecycle.dart';
 
 enum ClaudeAccountFailure {
   authentication,
@@ -24,11 +25,15 @@ final class ClaudeAccountException implements Exception {
     this.failure, [
     this.details,
     this.rejectionEventId,
+    this.credentialVersion,
   ]);
 
   final ClaudeAccountFailure failure;
   final String? details;
   final String? rejectionEventId;
+
+  /// Non-secret ownership of a failed saved-session fetch, when known.
+  final CredentialVersion? credentialVersion;
 }
 
 /// Pending PKCE authorization for Claude Code-compatible OAuth.

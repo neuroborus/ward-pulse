@@ -76,6 +76,15 @@ foreground/headless publication. This protects concurrent Flutter engines in one
 process and restart; it does not promise cross-process locking or atomic network delivery
 against a later disconnect.
 
+Automatic polling also persists non-secret generation/principal admission stamps and the
+last admitted start time in this private store. The native owner atomically validates the
+current fetch ticket and credential version before recording an attempt. Token revision,
+cache invalidation and fetch release/detach preserve spacing; credential replacement has
+a new generation. Admission-metadata failure blocks automatic network work without fencing
+valid credentials or retiring snapshots. Failed in-memory commits cannot leak an unconfirmed
+admission into later whole-map writes. This durable admission is separate from ephemeral
+network exclusion and does not hold a credential/storage transaction over network waits.
+
 ## Codex Account
 
 - The phone shows OpenAI's device-code page in the external browser and polls only the matching

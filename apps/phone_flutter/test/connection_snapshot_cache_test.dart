@@ -13,6 +13,7 @@ import 'package:ward_pulse_phone/dashboard/merging_connection_repository.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_logger.dart';
+import 'package:ward_pulse_phone/sync/automatic_poll.dart';
 
 import 'package:ward_pulse_phone/dashboard/dashboard_load.dart';
 import 'package:ward_pulse_phone/dashboard/openai_dashboard_repository.dart';
@@ -69,6 +70,290 @@ void main() {
     mapError:
         (_) =>
             const DashboardLoadException(issue: DashboardSyncIssue.rateLimited),
+  );
+
+  MergingConnectionRepository owned(
+    String owner,
+    String id,
+    Future<String> Function(String) load, {
+    DashboardRepository fallback = const NoProvidersDashboardRepository(),
+  }) => MergingConnectionRepository(
+    connection: ProviderConnectionId.fromStorageKey(id),
+    credentialStore: SecureProviderCredentialStore(
+      storage: secure,
+      platform: bridge.platform(owner),
+    ),
+    cache: cache(owner, id),
+    fallback: fallback,
+    loadCredentialReport: load,
+    normalizeReport: (value) => value,
+    mergeSnapshots: _merge,
+    logger: const _SilentLogger(),
+    mapError:
+        (_) =>
+            const DashboardLoadException(issue: DashboardSyncIssue.rateLimited),
+  );
+  AutomaticPollContext automatic() => AutomaticPollContext(
+    readInterval: () async => const Duration(minutes: 5),
+  );
+
+  for (final id in [
+    'openai.platform',
+    'anthropic.platform',
+    'cursor.platform',
+  ]) {
+    for (final owners in [
+      ('foreground', 'headless'),
+      ('headless', 'foreground'),
+    ]) {
+      test(
+        '$id ${owners.$1} admission suppresses queued ${owners.$2} and rereads cache',
+        () async {
+          await credentials('ui', id).write('synthetic-key');
+          final provider =
+              id == 'anthropic.platform' ? 'claude' : id.split('.').first;
+          final version = (await credentials('ui', id).read())!.version;
+          await cache(
+            'ui',
+            id,
+          ).store(_snapshot(provider, id, firstAt, 10), version);
+          final entered = Completer<void>(), release = Completer<void>();
+          var calls = 0;
+          String payload(int spend) =>
+              _snapshot(provider, id, nextAt, spend).toJsonString();
+          final first = owned(owners.$1, id, (_) async {
+            calls++;
+            entered.complete();
+            await release.future;
+            return payload(25);
+          });
+          final firstLoad = automatic().run(first.load);
+          await entered.future;
+          await bridge.invoke('test', 'setClock', {'value': 60000});
+          final second = owned(owners.$2, id, (_) async {
+            calls++;
+            return payload(99);
+          });
+          final poll = automatic();
+          final secondLoad = poll.run(second.load);
+          late DashboardSnapshot retained;
+          try {
+            expect(
+              (await cache('reader', id).capture())
+                  .snapshot!
+                  .accounts
+                  .single
+                  .today
+                  .spent
+                  ?.minorUnits,
+              10,
+            );
+          } finally {
+            release.complete();
+            retained = (await Future.wait([firstLoad, secondLoad])).last;
+          }
+          expect(calls, 1);
+          expect(poll.whollySkipped, isTrue);
+          expect(retained.accounts.single.today.spent?.minorUnits, 25);
+          expect(retained.generatedAt, nextAt);
+          expect(retained.reportingOutcomes, isEmpty);
+          await bridge.invoke('test', 'setClock', {'value': 299999});
+          await automatic().run(second.load);
+          expect(calls, 1);
+          await bridge.invoke('test', 'setClock', {'value': 300000});
+          await automatic().run(second.load);
+          expect(calls, 2);
+        },
+      );
+    }
+  }
+  test(
+    'Cursor plan failed attempt suppresses recreated clients without inventing data',
+    () async {
+      const id = ProviderConnections.cursorPlan;
+      final transport = _EmptyReportingTransport(denyCursor: true);
+      final store = SecureProviderCredentialStore(
+        storage: secure,
+        platform: bridge.platform('ui'),
+      );
+      await store.writeSecret(id, 'synthetic-session');
+      DashboardRepository live(String owner) => buildLiveProviderStack(
+        credentialStore: SecureProviderCredentialStore(
+          storage: secure,
+          platform: bridge.platform(owner),
+        ),
+        claudeAccountService: const EmptyClaudeAccountService(),
+        openAiAndCodex: const NoProvidersDashboardRepository(),
+        caches: {id.storageKey: cache(owner, id.storageKey)},
+        cursorSessionClient: CursorPlanClient(
+          http: ProviderReportingHttp(transport: transport),
+        ),
+        mergeSnapshots: _merge,
+        logger: const _SilentLogger(),
+      );
+      await CapturedDashboardLoad.capture(
+        () => automatic().run(live('ui').load),
+      );
+      expect(transport.requests, hasLength(1));
+      final poll = automatic();
+      final retained = await poll.run(live('headless').load);
+      expect(transport.requests, hasLength(1));
+      expect(poll.whollySkipped, isTrue);
+      expect(retained.accounts, isEmpty);
+      expect(retained.reportingOutcomes, isEmpty);
+    },
+  );
+  test(
+    'manual bypass keeps the anchor and partial skips retain stale evidence',
+    () async {
+      const a = 'openai.platform', b = 'anthropic.platform';
+      await credentials('ui', a).write('synthetic-A');
+      await credentials('ui', b).write('synthetic-B');
+      var calls = 0, fails = false;
+      final first = owned('ui', a, (_) async {
+        calls++;
+        if (fails) throw StateError('Synthetic rate limit');
+        return _snapshot('openai', a, firstAt, 10).toJsonString();
+      });
+      await first
+          .load(); // Manual work supplies cache, not an automatic anchor.
+      fails = true;
+      final failed = await automatic().run(first.load);
+      expect(failed.syncIssue, DashboardSyncIssue.rateLimited);
+      final fresh = owned(
+        'worker',
+        b,
+        (_) async => _snapshot('claude', b, nextAt, 20).toJsonString(),
+        fallback: first,
+      );
+      final poll = automatic();
+      final mixed = await poll.run(fresh.load);
+      expect(calls, 2);
+      expect(poll.whollySkipped, isFalse);
+      expect(mixed.accounts.first.status, ProviderStatus.stale);
+      expect(mixed.accounts.first.lastSuccessfulSyncAt, firstAt);
+      expect(
+        mixed.reportingOutcomes.where(
+          (o) =>
+              o.connection.storageKey == a &&
+              o.category == ReportingOutcomeCategory.success,
+        ),
+        isEmpty,
+      );
+      fails = false;
+      await first.load();
+      expect(calls, 3);
+      await automatic().run(first.load);
+      expect(calls, 3);
+      await bridge.invoke('test', 'setClock', {'value': 300000});
+      await automatic().run(first.load);
+      expect(calls, 4);
+    },
+  );
+  test(
+    'a denied replacement load cannot inherit the previous generation failure',
+    () async {
+      const id = 'openai.platform';
+      await credentials('ui', id).write('synthetic-old');
+      var failing = false, calls = 0;
+      final previous = owned('ui', id, (_) async {
+        calls++;
+        if (failing) throw StateError('Synthetic old failure');
+        return _snapshot('openai', id, firstAt, 10).toJsonString();
+      });
+      await previous.load();
+      failing = true;
+      expect(
+        (await automatic().run(previous.load)).syncIssue,
+        DashboardSyncIssue.rateLimited,
+      );
+      await credentials('worker', id).write('synthetic-replacement');
+      await automatic().run(
+        owned(
+          'worker',
+          id,
+          (_) async => _snapshot('openai', id, nextAt, 20).toJsonString(),
+        ).load,
+      );
+      final poll = automatic();
+      final retained = await poll.run(previous.load);
+      expect(calls, 2);
+      expect(poll.whollySkipped, isTrue);
+      expect(retained.accounts.single.status, ProviderStatus.ok);
+      expect(retained.accounts.single.lastSuccessfulSyncAt, nextAt);
+      expect(retained.syncIssue, isNull);
+      expect(retained.reportingOutcomes, isEmpty);
+    },
+  );
+  test(
+    'a skip retains a current failure when its first cached data arrives from another client',
+    () async {
+      const id = 'openai.platform';
+      await credentials('ui', id).write('synthetic-key');
+      var calls = 0;
+      final failed = owned('ui', id, (_) async {
+        calls++;
+        throw StateError('Synthetic rate limit');
+      });
+      await expectLater(
+        automatic().run(failed.load),
+        throwsA(isA<DashboardLoadException>()),
+      );
+      await owned(
+        'worker',
+        id,
+        (_) async => _snapshot('openai', id, firstAt, 20).toJsonString(),
+      ).load();
+      final poll = automatic();
+      final retained = await poll.run(failed.load);
+      expect(calls, 1);
+      expect(poll.whollySkipped, isTrue);
+      expect(retained.accounts.single.status, ProviderStatus.stale);
+      expect(retained.accounts.single.lastSuccessfulSyncAt, firstAt);
+      expect(retained.syncIssue, DashboardSyncIssue.rateLimited);
+      expect(
+        retained.reportingOutcomes.single.source,
+        ReportingOutcomeSource.cache,
+      );
+    },
+  );
+  test(
+    'queued admission resolves the current preference and metadata failure consumes no attempt',
+    () async {
+      const id = 'cursor.platform';
+      final access = credentials('ui', id);
+      await access.write('synthetic-key');
+      var calls = 0, minutes = 5;
+      final repository = owned('worker', id, (_) async {
+        calls++;
+        return _snapshot('cursor', id, firstAt, calls).toJsonString();
+      });
+      await automatic().run(repository.load);
+      await bridge.invoke('test', 'setClock', {'value': 300000});
+      final entered = Completer<void>(), release = Completer<void>();
+      final held = access.serializeFetch(() async {
+        entered.complete();
+        await release.future;
+      });
+      await entered.future;
+      final poll = AutomaticPollContext(
+        readInterval: () async => Duration(minutes: minutes),
+      );
+      final queued = poll.run(repository.load);
+      minutes = 60;
+      release.complete();
+      await held;
+      await queued;
+      expect(calls, 1);
+      expect(poll.whollySkipped, isTrue);
+      await bridge.invoke('test', 'failCommit', {'value': true});
+      await automatic().run(repository.load);
+      expect(calls, 1);
+      await bridge.invoke('test', 'failCommit', {'value': false});
+      expect(await access.read(), isNotNull);
+      await automatic().run(repository.load);
+      expect(calls, 2);
+    },
   );
 
   test(
@@ -1571,12 +1856,21 @@ final class _HeldDashboardRepository extends DashboardRepository {
 }
 
 final class _EmptyReportingTransport implements ProviderHttpTransport {
+  _EmptyReportingTransport({this.denyCursor = false});
+  final bool denyCursor;
   final requests = <String>[];
   final uris = <Uri>[];
   Map<String, dynamic>? eventRequest;
   ProviderHttpResponse reply(Uri uri, [String? requestBody]) {
     requests.add(uri.path);
     uris.add(uri);
+    if (denyCursor && uri.path == '/api/usage-summary') {
+      return const ProviderHttpResponse(
+        statusCode: 403,
+        headers: {},
+        body: '{}',
+      );
+    }
     if (uri.path == '/teams/filtered-usage-events') {
       eventRequest = jsonDecode(requestBody!) as Map<String, dynamic>;
       return ProviderHttpResponse(
@@ -1620,6 +1914,8 @@ final class _EmptyReportingTransport implements ProviderHttpTransport {
 }
 
 final class _HeldReadFailure implements ConnectionCredentialAccess {
+  @override
+  Future<void> admitAutomatic(CredentialVersion expected) async {}
   final started = Completer<void>();
   final release = Completer<void>();
   @override
@@ -1666,6 +1962,9 @@ final class _ReadFailureStore
 }
 
 final class _CurrentReadFailure implements ConnectionCredentialAccess {
+  @override
+  Future<void> admitAutomatic(CredentialVersion expected) =>
+      access.admitAutomatic(expected);
   const _CurrentReadFailure(this.access, this.version);
   final ConnectionCredentialAccess access;
   final CredentialVersion version;
