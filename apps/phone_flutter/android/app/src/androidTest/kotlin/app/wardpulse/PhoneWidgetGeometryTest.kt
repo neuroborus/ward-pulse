@@ -2,6 +2,7 @@ package app.wardpulse
 
 import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.res.Configuration
@@ -112,7 +113,13 @@ class PhoneWidgetGeometryTest : InstrumentationTestCase() {
 
     private fun host(context: Context, publication: WardPulseAppWidget.Publication) =
         AppWidgetHostView(context).apply {
-            // This unattached test host has no launcher-owned padding, id or service registration.
+            val component = ComponentName(context, WardPulseAppWidget::class.java)
+            val info = requireNotNull(AppWidgetManager.getInstance(context).installedProviders
+                .singleOrNull { it.provider == component }) {
+                "Expected exactly one installed widget provider for $component"
+            }
+            setAppWidget(AppWidgetManager.INVALID_APPWIDGET_ID, info)
+            // Initialization adds default padding; this unattached host uses the full allocation.
             setPadding(0, 0, 0, 0)
             updateAppWidget(publication.views)
         }
@@ -150,46 +157,73 @@ class PhoneWidgetGeometryTest : InstrumentationTestCase() {
             max(card.width() + 2, plan.width - ceil(20 * density).toInt()) to
                 max(card.height() + 2, plan.height - ceil(20 * density).toInt()),
         )
-        for ((width, height) in allocations) {
+        for ((allocation, dimensions) in allocations.withIndex()) {
+            val (width, height) = dimensions
             measure(host, width, height)
-            assertNative(host, plan)
+            assertNative(host, plan, "unchanged/$size/allocation=$allocation")
         }
         val root = host.findViewById<View>(R.id.widget_root)
         assertTrue("Money keeps its exact accessible currency/amount",
             root.contentDescription.toString().contains("USD 12.34"))
         root.setPadding(9, 11, 13, 15)
         root.findViewById<View>(R.id.widget_card).setPadding(7, 7, 7, 7)
-        for (id in layers.values + R.id.widget_watermark) {
-            root.findViewById<ImageView>(id).apply {
-                setImageBitmap(null)
-                setPadding(5, 5, 5, 5)
-                visibility = View.GONE
-            }
+        val expectedImages = layers.map { (layer, id) -> id to (plan.bounds(layer) != null) } +
+            (R.id.widget_watermark to plan.mark)
+        val oldBitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888).apply {
+            this.density = Bitmap.DENSITY_NONE
+            eraseColor(Color.MAGENTA)
         }
-        host.updateAppWidget(publication.views)
-        measure(host, plan.width, plan.height)
-        assertSame("Update exercises retained application", root, host.findViewById(R.id.widget_root))
-        assertNative(host, plan)
+        try {
+            for ((id, present) in expectedImages) {
+                root.findViewById<ImageView>(id).apply {
+                    // Exercise restoration of present images and clearing of absent images.
+                    setImageBitmap(if (present) null else oldBitmap)
+                    setPadding(5, 5, 5, 5)
+                    visibility = if (present) View.GONE else View.VISIBLE
+                }
+            }
+            val before = nativeDiagnostic(host, plan, "unchanged/$size/before-reapply")
+            for ((id, present) in expectedImages) if (!present) {
+                assertSame("Seeded content in view=$id: $before", oldBitmap,
+                    (root.findViewById<ImageView>(id).drawable as? BitmapDrawable)?.bitmap)
+            }
+            host.updateAppWidget(publication.views)
+            measure(host, plan.width, plan.height)
+            val diagnostic = nativeDiagnostic(host, plan, "unchanged/$size/reapply")
+            assertSame("Update exercises retained application: $diagnostic", root,
+                host.findViewById<View>(R.id.widget_root))
+            assertNative(host, plan, "unchanged/$size/reapply")
+        } finally {
+            oldBitmap.recycle()
+        }
     }
 
     private fun states(context: Context) {
         val widgetOptions = options(listOf(wide))
         val initial = publish(context, widgetOptions)
         val host = host(context, initial)
+        measure(host, wide)
+        assertNative(host, initial.plans.single(), "states/initial")
+        val retained = (listOf(R.id.widget_root, R.id.widget_card) +
+            layers.values + R.id.widget_watermark).associateWith { host.findViewById<View>(it) }
         val cases = listOf(
-            publish(context, widgetOptions, mapOf("row_count" to 0, "empty" to "1")),
-            publish(context, options(listOf(SizeF(20f, 3f)))),
-            publish(context, widgetOptions, cache(stale = true)),
-            initial,
+            "empty" to publish(context, widgetOptions, mapOf("row_count" to 0, "empty" to "1")),
+            "no-fit" to publish(context, options(listOf(SizeF(20f, 3f)))),
+            "stale" to publish(context, widgetOptions, cache(stale = true)),
+            "fresh" to initial,
         )
-        for (publication in cases) {
+        for ((name, publication) in cases) {
             host.updateAppWidget(publication.views)
             measure(host, wide)
-            assertNative(host, publication.plans.single())
+            val plan = publication.plans.single()
+            val diagnostic = nativeDiagnostic(host, plan, "states/$name")
+            for ((id, view) in retained) assertSame("Retained view=$id: $diagnostic", view,
+                host.findViewById<View>(id))
+            assertNative(host, plan, "states/$name")
         }
-        assertEquals("Stale header preserves six rows", 6, cases[2].plans.single().rows.size)
-        assertEquals(PhoneWidgetLayout.EmptyState.NO_METRICS, cases[0].plans.single().state)
-        assertNull("Tiny no-fit publishes no misleading card", cases[1].plans.single().card)
+        assertEquals("Stale header preserves six rows", 6, cases[2].second.plans.single().rows.size)
+        assertEquals(PhoneWidgetLayout.EmptyState.NO_METRICS, cases[0].second.plans.single().state)
+        assertNull("Tiny no-fit publishes no misleading card", cases[1].second.plans.single().card)
     }
 
     private fun responsive(context: Context) {
@@ -198,13 +232,15 @@ class PhoneWidgetGeometryTest : InstrumentationTestCase() {
             assertTrue(publication.sizes.responsive)
             assertEquals(count, publication.plans.size)
             val host = host(context, publication)
-            for (index in (0 until count).toList() + (count - 1 downTo 0).toList()) {
+            for ((step, index) in ((0 until count).toList() +
+                (count - 1 downTo 0).toList()).withIndex()) {
+                val case = "responsive/count=$count/step=$step/variant=$index"
                 // AppWidgetHostView selects the responsive variant during native layout.
                 measure(host, foldSizes[index])
-                assertNative(host, publication.plans[index])
+                assertNative(host, publication.plans[index], "$case/layout")
                 host.updateAppWidget(publication.views)
                 measure(host, foldSizes[index])
-                assertNative(host, publication.plans[index])
+                assertNative(host, publication.plans[index], "$case/reapply")
             }
             assertEquals("Four-size hosts keep the wide plan", 6, publication.plans[0].rows.size)
         }
@@ -222,25 +258,26 @@ class PhoneWidgetGeometryTest : InstrumentationTestCase() {
             remove(AppWidgetManager.OPTION_APPWIDGET_SIZES)
         }
         val nullList = Bundle(missing).apply {
-            putParcelableArrayList<SizeF>(AppWidgetManager.OPTION_APPWIDGET_SIZES, null)
+            putParcelableArrayList(AppWidgetManager.OPTION_APPWIDGET_SIZES, null)
         }
         val emptyList = Bundle(missing).apply {
-            putParcelableArrayList<SizeF>(AppWidgetManager.OPTION_APPWIDGET_SIZES, arrayListOf())
+            putParcelableArrayList(AppWidgetManager.OPTION_APPWIDGET_SIZES, arrayListOf<SizeF>())
         }
         for (orientation in listOf(Configuration.ORIENTATION_PORTRAIT,
             Configuration.ORIENTATION_LANDSCAPE)) {
             val context = configured(night, orientation)
-            for (options in listOf(missing, nullList, emptyList, Bundle())) {
-                val publication = publish(context, options)
+            for ((name, widgetOptions) in listOf("missing" to missing, "null" to nullList,
+                "empty" to emptyList, "default" to Bundle())) {
+                val publication = publish(context, widgetOptions)
                 assertFalse(publication.sizes.responsive)
                 val index = if (orientation == Configuration.ORIENTATION_LANDSCAPE
                     && publication.plans.size == 2) 1 else 0
                 val host = host(context, publication)
                 measure(host, publication.sizes.values[index])
-                assertNative(host, publication.plans[index])
+                assertNative(host, publication.plans[index], "fallback/$name/variant=$index/layout")
                 host.updateAppWidget(publication.views)
                 measure(host, host.width + 30, host.height + 30)
-                assertNative(host, publication.plans[index])
+                assertNative(host, publication.plans[index], "fallback/$name/variant=$index/reapply")
             }
         }
         val context = configured(night, Configuration.ORIENTATION_PORTRAIT)
@@ -257,20 +294,22 @@ class PhoneWidgetGeometryTest : InstrumentationTestCase() {
         val defaultPublication = publish(context, invalid)
         val defaultHost = host(context, defaultPublication)
         measure(defaultHost, SizeF(180f, 110f))
-        assertNative(defaultHost, defaultPublication.plans.single())
+        assertNative(defaultHost, defaultPublication.plans.single(), "fallback/invalid")
         val retainedContext = OrientationContext(configured(night, Configuration.ORIENTATION_PORTRAIT))
         val retained = publish(retainedContext, missing)
         val retainedHost = host(retainedContext, retained)
         measure(retainedHost, retained.sizes.values[0])
         val retainedRoot = retainedHost.findViewById<View>(R.id.widget_root)
-        for (index in listOf(0, 1, 0)) {
+        for ((step, index) in listOf(0, 1, 0).withIndex()) {
             retainedContext.current = configured(night, if (index == 0)
                 Configuration.ORIENTATION_PORTRAIT else Configuration.ORIENTATION_LANDSCAPE)
             retainedHost.updateAppWidget(retained.views)
             measure(retainedHost, retained.sizes.values[index])
-            assertSame("Legacy orientation reuses the host/root", retainedRoot,
-                retainedHost.findViewById(R.id.widget_root))
-            assertNative(retainedHost, retained.plans[index])
+            val case = "fallback/retained/step=$step/variant=$index"
+            val diagnostic = nativeDiagnostic(retainedHost, retained.plans[index], case)
+            assertSame("Legacy orientation reuses the host/root: $diagnostic", retainedRoot,
+                retainedHost.findViewById<View>(R.id.widget_root))
+            assertNative(retainedHost, retained.plans[index], case)
         }
     }
 
@@ -296,7 +335,7 @@ class PhoneWidgetGeometryTest : InstrumentationTestCase() {
             assertTrue("All masks and marks fit the publication allowance", publication.bitmapBytes <= budget)
             val host = host(context, publication)
             measure(host, wide)
-            assertNative(host, publication.plans.first())
+            assertNative(host, publication.plans.first(), "budget/bytes=$budget")
             for (plan in publication.plans) for (layer in layers.keys) {
                 val bounds = plan.bounds(layer) ?: continue
                 assertTrue(bounds.width() <= PhoneWidgetLayout.MAX_BITMAP_SIDE
@@ -306,21 +345,81 @@ class PhoneWidgetGeometryTest : InstrumentationTestCase() {
         }
     }
 
-    private fun assertNative(host: AppWidgetHostView, plan: PhoneWidgetLayout.Plan) {
-        val configuration = host.resources.configuration
-        val root = requireNotNull(host.findViewById<View>(R.id.widget_root)) {
-            "Widget root absent: API=${Build.VERSION.SDK_INT} host=${host.width}x${host.height} " +
-                "plan=${plan.width}x${plan.height} rows=${plan.rows.size}"
+    private fun padding(view: View) =
+        listOf(view.paddingLeft, view.paddingTop, view.paddingRight, view.paddingBottom)
+
+    private fun bounds(bounds: PhoneWidgetLayout.Bounds?) =
+        bounds?.let { "[${it.left},${it.top},${it.right},${it.bottom}]" } ?: "null"
+
+    private fun viewState(view: View?): String {
+        if (view == null) return "missing"
+        val geometry = "type=${view.javaClass.simpleName} size=${view.width}x${view.height} " +
+            "bounds=[${view.left},${view.top},${view.right},${view.bottom}] " +
+            "visibility=${view.visibility} padding=${padding(view)}"
+        if (view !is ImageView) return geometry
+        val drawable = view.drawable
+        val bitmap = (drawable as? BitmapDrawable)?.bitmap
+        val content = when {
+            bitmap == null -> "null"
+            bitmap.isRecycled -> "recycled"
+            else -> "${bitmap.width}x${bitmap.height} density=${bitmap.density} " +
+                "config=${bitmap.config} bytes=${bitmap.allocationByteCount}"
         }
-        val card = root.findViewById<View>(R.id.widget_card)
-        val diagnostic = "API=${Build.VERSION.SDK_INT} density=${host.resources.displayMetrics.density} " +
-            "host=${host.width}x${host.height} root=${root.width}x${root.height} " +
+        return "$geometry drawable=${drawable?.javaClass?.simpleName ?: "null"} bitmap=$content"
+    }
+
+    private fun nativeDiagnostic(
+        host: AppWidgetHostView, plan: PhoneWidgetLayout.Plan, case: String,
+    ): String {
+        val configuration = host.resources.configuration
+        val root = host.findViewById<View>(R.id.widget_root)
+        val card = root?.findViewById<View>(R.id.widget_card)
+        val images = layers.entries.joinToString("; ") { (layer, id) ->
+            val ink = plan.bounds(layer)
+            val expectedBitmap = ink?.let {
+                "${it.width()}x${it.height()} density=${Bitmap.DENSITY_NONE}"
+            } ?: "null"
+            val expectedDrawable = if (ink == null) "null|BitmapDrawable" else "BitmapDrawable"
+            val expectedPadding = if (ink == null || plan.card == null) listOf(0, 0, 0, 0)
+                else listOf(ink.left - plan.card.left, ink.top - plan.card.top,
+                    plan.card.right - ink.right, plan.card.bottom - ink.bottom)
+            "layer=$layer expected={drawable=$expectedDrawable bitmap=$expectedBitmap " +
+                "ink=${bounds(ink)} visibility=${if (ink == null) View.GONE else View.VISIBLE} " +
+                "padding=$expectedPadding} actual={${viewState(root?.findViewById<View>(id))}}"
+        }
+        return "case=$case API=${Build.VERSION.SDK_INT} density=${host.resources.displayMetrics.density} " +
+            "host=${host.width}x${host.height} hostPadding=${padding(host)} " +
             "fontScale=${configuration.fontScale} orientation=${configuration.orientation} " +
             "uiMode=${configuration.uiMode} plan=${plan.width}x${plan.height} rows=${plan.rows.size} " +
-            "card=[${card.left},${card.top},${card.right},${card.bottom}]"
+            "state=${plan.state} expectedCard=${bounds(plan.card)} expectedRootCardPadding=[0,0,0,0] " +
+            "root={${viewState(root)}} card={${viewState(card)}}; $images; " +
+            "layer=WATERMARK expected={drawable=${if (plan.mark) "BitmapDrawable" else "null|BitmapDrawable"} " +
+            "bitmap=${if (plan.mark) "present density=${Bitmap.DENSITY_NONE}" else "null"} " +
+            "visibility=${if (plan.mark) View.VISIBLE else View.GONE} padding=[0,0,0,0]} " +
+            "actual={${viewState(root?.findViewById<View>(R.id.widget_watermark))}}"
+    }
+
+    private fun assertBitmap(image: ImageView, present: Boolean, diagnostic: String): Bitmap? {
+        val drawable = image.drawable
+        assertTrue("Expected a bitmap drawable or cleared wrapper: $diagnostic",
+            drawable == null || drawable is BitmapDrawable)
+        val bitmap = (drawable as? BitmapDrawable)?.bitmap
+        // ImageView.setImageBitmap(null) may keep its BitmapDrawable with a null bitmap.
+        assertEquals("Bitmap content must be ${if (present) "present" else "cleared"}: $diagnostic",
+            present, bitmap != null)
+        if (bitmap != null) assertFalse("Bitmap must be usable: $diagnostic", bitmap.isRecycled)
+        return bitmap
+    }
+
+    private fun assertNative(host: AppWidgetHostView, plan: PhoneWidgetLayout.Plan, case: String) {
+        // Capture every layer before any predicate can abort this observation.
+        val diagnostic = nativeDiagnostic(host, plan, case)
+        val root = requireNotNull(host.findViewById<View>(R.id.widget_root)) { diagnostic }
+        val card = requireNotNull(root.findViewById<View>(R.id.widget_card)) { diagnostic }
         assertEquals(diagnostic, host.width, root.width)
         assertEquals(diagnostic, host.height, root.height)
-        assertEquals(diagnostic, 0, root.paddingLeft + root.paddingTop + root.paddingRight + root.paddingBottom)
+        assertEquals(diagnostic, listOf(0, 0, 0, 0), padding(root))
+        assertEquals(diagnostic, listOf(0, 0, 0, 0), padding(card))
         assertTrue("Full root keeps its tap listener: $diagnostic", root.hasOnClickListeners())
         val bounds = plan.card
         assertEquals(diagnostic, if (bounds == null) View.GONE else View.VISIBLE, card.visibility)
@@ -333,14 +432,14 @@ class PhoneWidgetGeometryTest : InstrumentationTestCase() {
                 root.contentDescription.toString().contains(PhoneWidgetLayout.rowDescription(row)))
         }
         for ((layer, id) in layers) {
-            val image = root.findViewById<ImageView>(id)
+            val image = requireNotNull(root.findViewById<View>(id) as? ImageView) { diagnostic }
             val ink = plan.bounds(layer)
             assertEquals(diagnostic, if (ink == null) View.GONE else View.VISIBLE, image.visibility)
+            val content = assertBitmap(image, ink != null, "layer=$layer: $diagnostic")
             if (ink == null) {
-                assertNull(image.drawable)
-                assertEquals(0, image.paddingLeft + image.paddingTop + image.paddingRight + image.paddingBottom)
+                assertEquals(diagnostic, listOf(0, 0, 0, 0), padding(image))
             } else {
-                val bitmap = (image.drawable as BitmapDrawable).bitmap
+                val bitmap = requireNotNull(content) { diagnostic }
                 assertEquals(diagnostic, Bitmap.DENSITY_NONE, bitmap.density)
                 assertEquals(diagnostic, ink.width(), bitmap.width)
                 assertEquals(diagnostic, ink.height(), bitmap.height)
@@ -348,14 +447,16 @@ class PhoneWidgetGeometryTest : InstrumentationTestCase() {
                 assertEquals(diagnostic, card.height, image.height)
                 assertEquals(diagnostic, card.width, bitmap.width + image.paddingLeft + image.paddingRight)
                 assertEquals(diagnostic, card.height, bitmap.height + image.paddingTop + image.paddingBottom)
-                val plannedCard = requireNotNull(bounds)
+                val plannedCard = requireNotNull(bounds) { diagnostic }
                 assertEquals(diagnostic, ink.left - plannedCard.left, image.paddingLeft)
                 assertEquals(diagnostic, ink.top - plannedCard.top, image.paddingTop)
             }
         }
-        val mark = root.findViewById<ImageView>(R.id.widget_watermark)
+        val mark = requireNotNull(root.findViewById<View>(R.id.widget_watermark) as? ImageView) { diagnostic }
         assertEquals(diagnostic, if (plan.mark) View.VISIBLE else View.GONE, mark.visibility)
-        assertEquals(diagnostic, 0, mark.paddingLeft + mark.paddingTop + mark.paddingRight + mark.paddingBottom)
+        assertEquals(diagnostic, listOf(0, 0, 0, 0), padding(mark))
+        val markBitmap = assertBitmap(mark, plan.mark, "layer=WATERMARK: $diagnostic")
+        if (markBitmap != null) assertEquals(diagnostic, Bitmap.DENSITY_NONE, markBitmap.density)
         val frame = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
         try {
             root.draw(Canvas(frame))

@@ -172,15 +172,15 @@ budget fit/exhaustion. Run the same case on API31+ and a supported pre31 phone A
 cannot establish the other's behavior. No launcher registration or real fold transition is
 claimed by this unattached-host case.
 
-Execution remains **Pending**. Native only reviews this test's source. After whole Runner
-DONE, actual CLI exit, all known-owned retirement and fresh idle ownership, Root runs the
-unchanged full `just check-phone`, `just check-docs`, normal APK build and this HOST case.
-Both physical devices remain STOP. Select an explicitly qualified existing phone AVD and
-retain the actually installed normal APK, signer/hash/version identities, app data and
-original incident frames under the existing
+Native review qualifies this test's source; compilation and execution require separate HOST
+evidence. After whole Runner DONE, actual CLI exit, all known-owned retirement and fresh idle
+ownership, Root runs the unchanged full `just check-phone`, `just check-docs`, normal APK build
+and this HOST case. Select an explicitly qualified existing phone AVD; do not run this
+instrumentation case on a physical device. Retain the actually installed normal APK,
+signer/hash/version identities, app data and original incident frames under the existing
 [Android toolchain workflow](../../docs/ANDROID_TOOLCHAIN.md). Preserve newer legitimate data
-and retain failed observations. Do not reset/readd a real widget or change its data to make
-the case pass. No Android execution or matched runtime RED→GREEN is recorded by adding this case.
+and failed observations. Do not reset/readd a real widget or change its data to make the case
+pass. Adding or reviewing the test does not establish a runtime result or real-launcher acceptance.
 
 Build the ordinary candidate from `apps/phone_flutter` with `flutter build apk --debug`.
 From `apps/phone_flutter/android`, build the test APK and run only on the selected AVD:
@@ -195,9 +195,11 @@ adb -s "$PHONE_SERIAL" shell am instrument -w -r -e class app.wardpulse.PhoneWid
 
 Record actual commands, elapsed times, selected API/density, APK identities and instrumentation
 results, including failures or missing SDK/runtime facilities. Do not use Gradle's connected
-test task to discover or touch other devices. Restore the retained normal APK and any
-preexisting test package through the existing device-preserving workflow; remove only a
-new case-owned test package if appropriate. Verify restored rendering and retained data.
+test task to discover or touch other devices. Preserve an installed newer normal candidate
+and its data; the retained normal APK is a recovery handle, not a required rollback. Use it
+only when recovery is needed through the existing device-preserving workflow. Do not remove
+a preexisting test package; remove only a test package introduced solely by this case if
+appropriate. Verify final rendering and retained data.
 Root separately proves real launcher resize/fold/orientation retention, both themes,
 complete rows/details/header, exterior alpha, visible accessibility and full-allocation
 cold/warm Dashboard taps, joining the active artifact/widget/data/options/variant and measured

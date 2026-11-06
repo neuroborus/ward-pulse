@@ -48,7 +48,8 @@ background sync, transport, storage, diagnostics and build work.
   Keep budget spent/cap at 26 Bold/11 Regular; Extra uses one 18 Bold used/cap line, with
   independent missing amounts and actual units; purchased balances remain 26 Bold.
   Use exact bundled Noto through the existing bounded native painter, glyph checks,
-  4096-side/platform-or-8MiB limits and at most two variants. Preserve whole-column fallback,
+  4096-side guard and unchanged aggregate platform-or-8MiB budget across up to sixteen API31+
+  advertised-size variants or at most two legacy orientation variants. Preserve whole-column fallback,
   trailing-row fallback only for height/memory, complete empty/no-fit text at 12 Regular,
   and accessibility-only fallback when copy cannot fit. Never hide width-unfit Money by
   dropping selected rows. Measure complete right details and reset footprints; retain real
