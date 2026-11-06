@@ -59,11 +59,15 @@ every alias the pipeline needs. Trusted commands execute in the project director
 the runner's environment. `local.properties` in each Android module removes the `ANDROID_HOME`
 dependency for Gradle.
 
-Before an audit launch, verify its actual workspace kind and snapshot footprint; use supported
-scope/placement controls and keep custody/receipt writers outside the target. A plain source
-export is warranted only when the actual directory snapshot includes unsuitable ignored/generated
-content and no supported bounded selection is available. Then verify all tracked blobs/modes and
-use supported external infrastructure, without clone/worktree/ref writes or ad hoc snapshot exclusions.
+Before an audit launch, verify its actual workspace kind and qualify primary-source membership and
+protected/control-root snapshot footprints separately. Git selection can still leave reserved roots
+such as `.claude` recursively capturing ignored/generated trees; external infrastructure alone does
+not remove source-side controls. Use supported scope/placement controls and keep custody/receipt
+writers outside the active snapshot target. Preserve unrelated dirty copies; a smaller Git selection
+is not move/deletion authorization. A plain source export is warranted only when the actual footprint
+includes unsuitable ignored/generated content and no supported bounded selection is available. Then
+verify all tracked blobs/modes and use supported external infrastructure, without clone/worktree/ref
+writes or ad hoc snapshot exclusions.
 
 On `workspace_changed`, distinguish the actual failing snapshot from a later comparison. Identify
 native bookkeeping through its actual producer and path/type/mode; explicitly admit already-existing
@@ -80,8 +84,10 @@ gap supplies a new corrective change. Otherwise preserve the blocker without bli
 manual report repair. Keep the same authorized scope, roles and guards.
 
 Until the owner changes the [2026-10-31 direction](owner-selected-mode.md), explicitly select `lazy` for every fresh `plan-authoring`, `plan-execution` and `polishing` run.
-Verify the resolved mode; defaults are insufficient. Lazy self-review/Worker confirmation is not independent Reviewer evidence.
-Use a supported stop on mismatch; preserve required checks and the coordinator's full independent ZERO.
+The managing operator verifies the owning run's actual public mode through the supported API before acceptance or an authorized coordinator commit; defaults are insufficient.
+Managed code roles report their assigned mode/protocol and complete that mode's actual verification, without managing their own Runner or adding a CLI self-status/admission/retirement probe.
+Operator mode observation and HOST work are not additional Native checks or completion/commit prerequisites. Lazy self-review/Worker confirmation is not independent Reviewer evidence.
+The operator uses a supported stop on mismatch; preserve required checks and the coordinator's full independent ZERO.
 
 Before a fresh start, reconcile one self-contained role-facing task/context against the current scoped Native
 catalogue and changed guarantees. Identify its complete Runner Native `requiredChecks` inventory separately
