@@ -79,6 +79,10 @@ Immediately before input, revalidate the current page AND a unique enabled visib
 enabled clickable ancestor from a fresh hierarchy and original frame; its current bounds and actual operation
 must support the intended action, established from current semantic labels/resource identity or a primary contract. Icon shape alone is insufficient: arrows can reorder instead of navigating/activating. Inspect both `text` and `content-desc` for page and section heading guards as well as action targets: either may identify the element while the other is empty. Match guards to observed merged/multiline semantics, keeping unqueried or missing focus fields Unknown rather than false.
 Do not reuse a picker/modal observation across model/tool round trips; prefer one prepared existing observation/action batch. A navigation/HOME return, including earlier in the same batch, does not prove the destination is settled; freshly qualify its page/target before a long-press, drag or other next input.
+Across a scroll transition, qualify the stable actual host/Activity and unique current page/list resource IDs
+against the fresh hierarchy, original and viewport. A header leaving the viewport does not alone prove page
+loss; foreground identity alone is insufficient. An unexpected Activity, empty hierarchy or missing/ambiguous
+required list leaves further input unqualified.
 For launcher widget resizing, qualify the current widget host and unique actual resize-frame/handle
 resource IDs in a fresh hierarchy against the fresh original. An optional container content description
 being absent does not prove the overlay is absent. Requalify the frame and current handle after each
