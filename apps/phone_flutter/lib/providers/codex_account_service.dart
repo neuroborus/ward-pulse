@@ -170,7 +170,7 @@ final class MobileCodexAccountService implements CodexAccountService {
       if (expected != null &&
           error.failure != CodexAccountFailure.authentication &&
           error.failure != CodexAccountFailure.cancelled) {
-        if (!await managed!.isCurrent(expected))
+        if (!await managed!.isCurrent(expected!))
           throw const CodexAccountException(CodexAccountFailure.cancelled);
         throw CodexAccountException(
           error.failure,

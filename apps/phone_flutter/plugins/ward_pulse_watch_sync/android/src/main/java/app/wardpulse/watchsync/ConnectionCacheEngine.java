@@ -226,11 +226,14 @@ public final class ConnectionCacheEngine {
             throw new IllegalArgumentException("Invalid automatic interval.");
         long now = clock.getAsLong();
         Map<String, Object> result = new LinkedHashMap<>();
+        // Both decisions report the confirmed anchor that reset wakes count from.
         if (state.get("generation").equals(state.get("automaticGeneration"))
                 && state.get("identity").equals(state.get("automaticIdentity"))) {
-            long due = Math.addExact(Long.parseLong(state.get("automaticAt")), intervalMillis);
+            long anchor = Long.parseLong(state.get("automaticAt"));
+            long due = Math.addExact(anchor, intervalMillis);
             if (now < due) {
-                result.put("admitted", false); result.put("nextEligible", due); return result;
+                result.put("admitted", false); result.put("nextEligible", due); result.put("automaticAt", anchor);
+                return result;
             }
         }
         Map<String, String> all = readAll();
@@ -240,7 +243,7 @@ public final class ConnectionCacheEngine {
         retainConfirmedCredentials(all);
         // A failed metadata write denies network work but never fences credentials.
         if (!commit(all)) throw new IllegalStateException("Automatic polling storage failed.");
-        result.put("admitted", true); return result;
+        result.put("admitted", true); result.put("automaticAt", now); return result;
     }
     public synchronized void releaseFetch(String owner, String connection, String ticket) {
         if (!validFetch(owner, connection, ticket)) return;

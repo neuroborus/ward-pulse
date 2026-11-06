@@ -134,6 +134,14 @@ final class ConnectionCredentialStorage
     } catch (_) {
       throw AutomaticPollUnavailable(connection, expected);
     }
+    // Both decisions name the confirmed start this connection's reset wakes
+    // count from; without it, recovery bookkeeping keeps its own floor.
+    if (result['automaticAt'] case final num at) {
+      context.automaticAt[connection] = DateTime.fromMillisecondsSinceEpoch(
+        at.toInt(),
+        isUtc: true,
+      );
+    }
     if (result['admitted'] != true) {
       final skipped = AutomaticPollSkipped(
         connection,

@@ -134,6 +134,202 @@ void main() {
       expect(wake.booked.last, futureReset);
     },
   );
+  test(
+    'reset wakes keep per-connection eligibility through denied and partial loads',
+    () async {
+      final start = DateTime.utc(2026, 11, 6);
+      DateTime at(int minutes) => start.add(Duration(minutes: minutes));
+      final source = DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      );
+      const a = 'anthropic.plan', b = 'anthropic.platform';
+      const aKey = (accountId: 'account-a', allowanceId: 'window-a');
+      const bKey = (accountId: 'account-b', allowanceId: 'window-b');
+      Map<String, dynamic> account(
+        WindowKey key,
+        String connection, [
+        DateTime? resetsAt,
+      ]) => {
+        ..._withAllowances(source, {
+          if (resetsAt != null) key.allowanceId: resetsAt,
+        }).accounts.single.toJson(),
+        'accountId': key.accountId,
+        'connection': connection,
+      };
+      DashboardSnapshot snapshot(List<Map<String, dynamic>> accounts) =>
+          DashboardSnapshot.fromJson({
+            ...source.toJson(),
+            'accounts': accounts,
+          });
+      AutomaticPollContext hourly() => AutomaticPollContext(
+        readInterval: () async => const Duration(minutes: 60),
+      );
+      // A started at 00:00; its periodic denial names the hourly due time.
+      AutomaticPollContext deniedA() =>
+          hourly()
+            ..skipped[a] = AutomaticPollSkipped(
+              a,
+              CredentialVersion({}),
+              at(60),
+            )
+            ..retainedAccountIds[a] = {aKey.accountId}
+            ..automaticAt[a] = at(0);
+      final retainedA = account(aKey, a, at(10));
+      final store = _MemoryRecoveryWatchlistStore();
+      final notifier = _RecordingRecoveryNotifier(), wake = _RecordingWake();
+      await syncPlanRecoveries(
+        snapshot([retainedA]),
+        store,
+        notifier,
+        wake,
+        poll:
+            hourly()
+              ..attempted.add(a)
+              ..automaticAt[a] = at(0),
+        now: () => at(0),
+        readRecoveries: (_, _) => const [],
+        readWindows: (_) => [aKey],
+      );
+      expect(wake.booked, [at(10)]);
+      // Denied startup or periodic work makes no attempt for A, so neither it
+      // nor a repeat may move A's wake to a floor counted from itself.
+      for (final instant in [at(9), at(9).add(const Duration(seconds: 30))]) {
+        await syncPlanRecoveries(
+          snapshot([retainedA]),
+          store,
+          notifier,
+          wake,
+          poll: deniedA(),
+          now: () => instant,
+          readWindows:
+              (_) => throw StateError('Skipped data supplies no evidence'),
+          readRecoveries:
+              (_, _) => throw StateError('Skipped data supplies no recovery'),
+          rethrowFailures: true,
+        );
+      }
+      expect(wake.booked, [at(10), at(10), at(10)]);
+      expect(wake.cancelled, 0);
+      expect(await store.read(), [aKey]);
+      // B starts at 00:09 and its earlier spent window refilled: B's genuine
+      // recovery is told and forgotten while A keeps its history and 00:10.
+      await store.write([aKey, bKey]);
+      await syncPlanRecoveries(
+        snapshot([retainedA, account(bKey, b)]),
+        store,
+        notifier,
+        wake,
+        poll:
+            deniedA()
+              ..attempted.add(b)
+              ..automaticAt[b] = at(9),
+        now: () => at(9),
+        readWindows: (_) => const [],
+        readRecoveries: (_, keys) {
+          expect(keys, [bKey]);
+          return [
+            (
+              accountId: bKey.accountId,
+              provider: 'claude',
+              allowanceId: bKey.allowanceId,
+              label: 'Window B',
+              resetsAt: null,
+            ),
+          ];
+        },
+      );
+      expect(notifier.reported.single.accountId, bKey.accountId);
+      expect(await store.read(), [aKey]);
+      expect(wake.booked.last, at(10));
+      // B's own near reset still waits for B's floor; A's start lends it none.
+      final fresh = _MemoryRecoveryWatchlistStore();
+      await syncPlanRecoveries(
+        snapshot([account(aKey, a), account(bKey, b, at(11))]),
+        fresh,
+        notifier,
+        wake,
+        poll:
+            deniedA()
+              ..attempted.add(b)
+              ..automaticAt[b] = at(9),
+        now: () => at(9),
+        readRecoveries: (_, _) => const [],
+        readWindows: (_) => [bKey],
+      );
+      expect(await fresh.read(), [bKey]);
+      expect(wake.booked.last, at(14));
+      // B starts at 00:12, so its own floor is 00:17.
+      Future<void> partial(
+        AutomaticPollContext poll,
+        DateTime instant,
+        Map<String, dynamic> cachedA, [
+        DateTime? resetB,
+      ]) async {
+        await store.write([aKey]);
+        await syncPlanRecoveries(
+          snapshot([cachedA, account(bKey, b, resetB)]),
+          store,
+          notifier,
+          wake,
+          poll:
+              poll
+                ..attempted.add(b)
+                ..automaticAt[b] = at(12),
+          now: () => instant,
+          readRecoveries: (_, _) => const [],
+          readWindows: (_) => [if (resetB != null) bKey],
+          rethrowFailures: true,
+        );
+      }
+
+      // Android delayed A's 00:10 wake and nothing has served it, so neither
+      // fresh B without a reset nor B's 00:30 reset may cancel or replace it.
+      var cancels = wake.cancelled;
+      await partial(deniedA(), at(12), retainedA);
+      expect(wake.booked.last, at(12));
+      await partial(deniedA(), at(12), retainedA, at(30));
+      expect(wake.booked.last, at(12));
+      expect(await store.read(), [bKey, aKey]);
+      expect(wake.cancelled, cancels);
+      // A start after the reset served it even though it failed, and so did a
+      // manual success that left A's anchor alone: the old reset is no retry.
+      final served = {
+        ...retainedA,
+        'lastSuccessfulSyncAt': at(11).toIso8601String(),
+      };
+      for (final (poll, cachedA) in [
+        (deniedA()..automaticAt[a] = at(12), retainedA),
+        (deniedA(), served),
+      ]) {
+        await partial(poll, at(14), cachedA, at(15));
+        expect(wake.booked.last, at(17));
+        final booked = wake.booked.length;
+        await partial(poll, at(14), cachedA);
+        expect(wake.booked, hasLength(booked));
+        expect(wake.cancelled, ++cancels);
+      }
+      // A current A poll that still reads the past reset is provider lag.
+      final booked = wake.booked.length;
+      await store.write([aKey]);
+      await syncPlanRecoveries(
+        snapshot([retainedA]),
+        store,
+        notifier,
+        wake,
+        poll:
+            hourly()
+              ..attempted.add(a)
+              ..automaticAt[a] = at(12),
+        now: () => at(12),
+        readRecoveries: (_, _) => const [],
+        readWindows: (_) => [aKey],
+      );
+      expect(wake.booked, hasLength(booked));
+      expect(wake.cancelled, ++cancels);
+    },
+  );
   test('a phone that has never looked remembers nothing', () async {
     // Not an error state: the first poll is what fills the list, and until then
     // there is no past for an edge to be measured against.

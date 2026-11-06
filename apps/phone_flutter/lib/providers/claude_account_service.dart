@@ -186,7 +186,7 @@ final class MobileClaudeAccountService implements ClaudeAccountService {
       if (expected != null &&
           error.failure != ClaudeAccountFailure.authentication &&
           error.failure != ClaudeAccountFailure.cancelled) {
-        if (!await managed!.isCurrent(expected))
+        if (!await managed!.isCurrent(expected!))
           throw const ClaudeAccountException(ClaudeAccountFailure.cancelled);
         throw ClaudeAccountException(
           error.failure,

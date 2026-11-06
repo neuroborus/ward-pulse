@@ -153,12 +153,51 @@ Future<void> syncPlanRecoveries(
     // the cadence would make up to an interval late. `null` covers every case
     // with nothing to wake for: nothing spent, nothing saying when it rolls,
     // and a reset already behind because the provider has not caught up.
-    var soonest = nextResetAmong(snapshot, spent, after: now());
-    if (soonest != null) {
-      final floor = now().add(
-        const Duration(minutes: PollCadence.minRefreshMinutes),
-      );
-      if (soonest.isBefore(floor)) soonest = floor;
+    //
+    // Never sooner than the reset floor of the window's own connection, counted
+    // from that connection's native start: a denied load, or one that started
+    // another connection, must not push the wake back. A load with no such
+    // start, such as a manual one, counts the floor from itself.
+    final instant = now();
+    DateTime? soonest;
+    for (final account in snapshot.accounts) {
+      final keys = [
+        for (final key in spent)
+          if (key.accountId == account.accountId) key,
+      ];
+      final connection =
+          account.connection ??
+          poll?.retainedAccountIds.entries
+              .where((entry) => entry.value.contains(account.accountId))
+              .firstOrNull
+              ?.key;
+      // A reset already behind still counts for a connection this load did not
+      // observe if neither its native start nor its last success is as late:
+      // the booked wake has not served it, so it stays due instead of being
+      // cancelled or replaced by another connection's later reset. A later
+      // start, even a failed one, or a later success, such as a manual one,
+      // served it.
+      final anchor = connection == null ? null : poll?.automaticAt[connection];
+      final seen = account.lastSuccessfulSyncAt;
+      final overdue =
+          anchor != null &&
+          !observedAccounts.contains(account.accountId) &&
+          account.allowances.any((window) {
+            final at = window.resetsAt;
+            return at != null &&
+                !at.isAfter(instant) &&
+                anchor.isBefore(at) &&
+                (seen == null || seen.isBefore(at)) &&
+                keys.any((key) => key.allowanceId == window.id);
+          });
+      var due =
+          overdue ? instant : nextResetAmong(snapshot, keys, after: instant);
+      if (due == null) continue;
+      final floor =
+          (connection == null ? null : poll?.resetEligibleAt(connection)) ??
+          instant.add(const Duration(minutes: PollCadence.minRefreshMinutes));
+      if (due.isBefore(floor)) due = floor;
+      if (soonest == null || due.isBefore(soonest)) soonest = due;
     }
     if (poll?.origin == AutomaticPollOrigin.resetWake) {
       for (final entry in poll!.skipped.entries) {

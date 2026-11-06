@@ -834,10 +834,15 @@ void main() {
 
         final foreground = runtime('foreground', response);
         await foreground.write('synthetic-account', 'synthetic-token');
+        final id = family == 'codex' ? 'openai.plan' : 'anthropic.plan';
+        DateTime anchor(int milliseconds) =>
+            DateTime.fromMillisecondsSinceEpoch(milliseconds, isUtc: true);
         AutomaticPollContext periodic() => AutomaticPollContext(
           readInterval: () async => const Duration(minutes: 60),
         );
-        await periodic().run(foreground.fetch);
+        final first = periodic();
+        await first.run(foreground.fetch);
+        expect(first.automaticAt, {id: anchor(0)});
         final before = calls;
         await bridge.invoke('test', 'setClock', {'value': 1000});
         final expired = _runtime(
@@ -847,24 +852,31 @@ void main() {
           now.add(const Duration(days: 2)),
           response,
         );
+        final denied = periodic();
         await expectLater(
-          periodic().run(expired.fetch),
+          denied.run(expired.fetch),
           throwsA(isA<AutomaticPollSkipped>()),
         );
+        // A denial reports the durable start rather than its own time.
+        expect(denied.automaticAt, {id: anchor(0)});
         expect(calls, before);
         await foreground.fetch();
         expect(calls, greaterThan(before));
         await bridge.invoke('test', 'setClock', {'value': 300000});
-        await AutomaticPollContext(
+        final reset = AutomaticPollContext(
           origin: AutomaticPollOrigin.resetWake,
           readInterval: () async => const Duration(minutes: 60),
-        ).run(foreground.fetch);
+        );
+        await reset.run(foreground.fetch);
+        expect(reset.automaticAt, {id: anchor(300000)});
         final afterReset = calls;
         await bridge.invoke('test', 'setClock', {'value': 600000});
+        final later = periodic();
         await expectLater(
-          periodic().run(foreground.fetch),
+          later.run(foreground.fetch),
           throwsA(isA<AutomaticPollSkipped>()),
         );
+        expect(later.automaticAt, {id: anchor(300000)});
         expect(calls, afterReset);
       },
     );

@@ -226,6 +226,11 @@ Startup, foreground timer and headless periodic loads share a per-generation/pri
 start anchor; token revisions, cache invalidation, failed work and engine detach retain it.
 Periodic starts use the current preference and provider floor; reset wakes use the shared
 anchor with a five-minute/provider floor and rebook denied pending resets at eligibility.
+Native admission reports that anchor for admitted and denied starts. Each spent window's
+wake is floored from its own connection's anchor, so denied or unrelated loads cannot
+postpone it; loads without that timing, including manual ones, floor from their own time.
+A skipped connection's reset already behind stays due, rather than cancelled or replaced by
+another connection's wake, until its own later start or successful load serves it.
 Manual refresh/check/reconnect loads bypass admission without moving the anchor.
 Denied work rereads current cache and supplies no fresh success or recovery evidence,
 including skipped connections in partially fresh aggregates. Wholly skipped loads do not

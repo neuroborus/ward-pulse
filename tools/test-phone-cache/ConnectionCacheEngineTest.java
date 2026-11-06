@@ -411,11 +411,13 @@ public final class ConnectionCacheEngineTest {
         engine.releaseFetch("foreground", C, first); now[0]++;
         String second = (String)queued.get().get("fetchTicket");
         Map<String, Object> denial = engine.claimAutomatic("headless", C, second, v, 300000);
-        check(Boolean.FALSE.equals(denial.get("admitted")) && Long.valueOf(301000).equals(denial.get("nextEligible")), "Queued caller shares exact start anchor.");
+        check(Boolean.FALSE.equals(denial.get("admitted")) && Long.valueOf(301000).equals(denial.get("nextEligible"))
+            && Long.valueOf(1000).equals(denial.get("automaticAt")), "Queued caller shares exact start anchor.");
         now[0] = 300999;
         check(!claim(engine, "headless", second, v, 300000), "One millisecond before due is denied.");
         now[0]++;
-        check(claim(engine, "headless", second, v, 300000), "Exact boundary is admitted.");
+        Map<String, Object> boundary = engine.claimAutomatic("headless", C, second, v, 300000);
+        check(Boolean.TRUE.equals(boundary.get("admitted")) && Long.valueOf(301000).equals(boundary.get("automaticAt")), "Exact boundary is admitted with its new anchor.");
         engine.detach("headless");
         engine = new ConnectionCacheEngine(disk, () -> now[0]);
         String cold = fetch(engine, "cold");
@@ -458,7 +460,9 @@ public final class ConnectionCacheEngineTest {
         check(claim(engine, "worker", ticket, v, 300000), "Failed persistence consumes no attempt.");
         now[0] = 301000; disk.fail = true; denied = false;
         try { claim(engine, "worker", ticket, v, 300000); } catch (IllegalStateException expected) { denied = true; }
-        disk.fail = false; engine.writeSnapshot(C, v, "retained", 3);
+        disk.fail = false;
+        check(Long.valueOf(1000).equals(engine.claimAutomatic("worker", C, ticket, v, 3600000).get("automaticAt")), "Denial reports only the confirmed anchor.");
+        engine.writeSnapshot(C, v, "retained", 3);
         check(denied && "1000".equals(disk.data.get(C + ".automaticAt")), "Failed update preserves confirmed anchor.");
         check(claim(engine, "worker", ticket, v, 300000), "Retry remains eligible after failed update.");
         engine.detach("worker");
