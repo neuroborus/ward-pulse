@@ -2772,11 +2772,15 @@ void main() {
     final stored = const AlertThresholdPreferences()
         .withConnection(
           ProviderConnections.openAiPlatform,
-          const ConnectionAlertThresholds(budget: ConnectionBudget(month: 5000)),
+          const ConnectionAlertThresholds(
+            budget: ConnectionBudget(month: 5000),
+          ),
         )
         .withConnection(
           ProviderConnections.codexPlan,
-          const ConnectionAlertThresholds(budget: ConnectionBudget(today: 2500)),
+          const ConnectionAlertThresholds(
+            budget: ConnectionBudget(today: 2500),
+          ),
         )
         .withConnection(
           ProviderConnections.cursorPlatform,
@@ -2867,7 +2871,9 @@ void main() {
       await tester.enterText(find.byType(TextField).at(2), '75');
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
-      final saved = store.value.forConnection(ProviderConnections.openAiPlatform);
+      final saved = store.value.forConnection(
+        ProviderConnections.openAiPlatform,
+      );
       expect(saved.budget.month, 7500);
       expect(watch.syncedSnapshots.last.toJson(), snapshot.toJson());
 
@@ -2888,7 +2894,9 @@ void main() {
       repository.validation.complete(false);
       await rejected;
       await tester.pumpAndSettle();
-      final newer = store.value.forConnection(ProviderConnections.openAiPlatform);
+      final newer = store.value.forConnection(
+        ProviderConnections.openAiPlatform,
+      );
       expect(newer.budget.today, 2500);
       expect(newer.budget.month, isNull);
       expect(watch.syncedSnapshots, hasLength(2));

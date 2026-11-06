@@ -232,7 +232,10 @@ void main() {
       isTrue,
     );
     expect(
-      decoded.forConnection(ProviderConnections.anthropicPlatform).budget.isEmpty,
+      decoded
+          .forConnection(ProviderConnections.anthropicPlatform)
+          .budget
+          .isEmpty,
       isTrue,
     );
   });
