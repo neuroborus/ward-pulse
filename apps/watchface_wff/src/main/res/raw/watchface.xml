@@ -5901,11 +5901,11 @@
              in them; this face owns only the declaration and how it is drawn.
              (docs/product/WATCH_RING_DESIGN.md, Upper cells, revision 2026-10-09) -->
         <ComplicationSlot
-            x="0"
-            y="0"
-            width="450"
-            height="450"
-            scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.5" pivotY="0.5"
+            x="141"
+            y="99"
+            width="52"
+            height="52"
+            scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.4866220735785953" pivotY="0.5418060200668896"
             slotId="201"
             displayName="@string/cell1_complication"
             supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
@@ -5913,9 +5913,9 @@
             <DefaultProviderPolicy
                 defaultSystemProvider="DAY_OF_WEEK"
                 defaultSystemProviderType="SHORT_TEXT" />
-            <BoundingBox x="147" y="109" width="52" height="52" />
+            <BoundingBox x="0" y="0" width="52" height="52" />
             <Complication type="SHORT_TEXT">
-            <Group x="147" y="109" width="52" height="52" name="cell1">
+            <Group x="0" y="0" width="52" height="52" name="cell1">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
@@ -6001,7 +6001,7 @@
             </Group>
             </Complication>
             <Complication type="RANGED_VALUE">
-            <Group x="147" y="109" width="52" height="52" name="cell1">
+            <Group x="0" y="0" width="52" height="52" name="cell1">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
@@ -6106,7 +6106,7 @@
             </Group>
             </Complication>
             <Complication type="MONOCHROMATIC_IMAGE">
-            <Group x="147" y="109" width="52" height="52" name="cell1Icon">
+            <Group x="0" y="0" width="52" height="52" name="cell1Icon">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
@@ -6164,11 +6164,11 @@
         </ComplicationSlot>
 
         <ComplicationSlot
-            x="0"
-            y="0"
-            width="450"
-            height="450"
-            scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.5" pivotY="0.5"
+            x="199"
+            y="83"
+            width="52"
+            height="52"
+            scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.5" pivotY="0.47324414715719065"
             slotId="202"
             displayName="@string/cell2_complication"
             supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
@@ -6176,9 +6176,9 @@
             <DefaultProviderPolicy
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="199" y="95" width="52" height="52" />
+            <BoundingBox x="0" y="0" width="52" height="52" />
             <Complication type="SHORT_TEXT">
-            <Group x="199" y="95" width="52" height="52" name="cell2">
+            <Group x="0" y="0" width="52" height="52" name="cell2">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
@@ -6249,7 +6249,7 @@
             </Group>
             </Complication>
             <Complication type="RANGED_VALUE">
-            <Group x="199" y="95" width="52" height="52" name="cell2">
+            <Group x="0" y="0" width="52" height="52" name="cell2">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
@@ -6339,7 +6339,7 @@
             </Group>
             </Complication>
             <Complication type="MONOCHROMATIC_IMAGE">
-            <Group x="199" y="95" width="52" height="52" name="cell2Icon">
+            <Group x="0" y="0" width="52" height="52" name="cell2Icon">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
@@ -6382,11 +6382,11 @@
         </ComplicationSlot>
 
         <ComplicationSlot
-            x="0"
-            y="0"
-            width="450"
-            height="450"
-            scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.5" pivotY="0.5"
+            x="257"
+            y="99"
+            width="52"
+            height="52"
+            scaleX="1.113861386138614" scaleY="1.113861386138614" pivotX="0.5133779264214047" pivotY="0.5418060200668896"
             slotId="203"
             displayName="@string/cell3_complication"
             supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
@@ -6394,9 +6394,9 @@
             <DefaultProviderPolicy
                 defaultSystemProvider="EMPTY"
                 defaultSystemProviderType="EMPTY" />
-            <BoundingBox x="251" y="109" width="52" height="52" />
+            <BoundingBox x="0" y="0" width="52" height="52" />
             <Complication type="SHORT_TEXT">
-            <Group x="251" y="109" width="52" height="52" name="cell3">
+            <Group x="0" y="0" width="52" height="52" name="cell3">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
@@ -6482,7 +6482,7 @@
             </Group>
             </Complication>
             <Complication type="RANGED_VALUE">
-            <Group x="251" y="109" width="52" height="52" name="cell3">
+            <Group x="0" y="0" width="52" height="52" name="cell3">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />
@@ -6587,7 +6587,7 @@
             </Group>
             </Complication>
             <Complication type="MONOCHROMATIC_IMAGE">
-            <Group x="251" y="109" width="52" height="52" name="cell3Icon">
+            <Group x="0" y="0" width="52" height="52" name="cell3Icon">
                     <PartDraw x="0" y="0" width="52" height="52">
                         <Ellipse x="0" y="0" width="52" height="52">
                             <Fill color="#ff0b0e0c" />

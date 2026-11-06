@@ -86,6 +86,9 @@ The operative effective layout follows the
 [whole-composition revision](#revision-2026-11-02--whole-composition-scale-and-paired-source-allowance).
 Positive paired MAIN coverage follows the
 [bounded contour correction](#revision-2026-11-02--bounded-paired-main-coverage).
+The three customizable upper carriers follow the
+[localization candidate](#revision-2026-11-06--local-upper-carrier-candidate), retaining that
+same effective geometry with native rasterization and tap acceptance still Pending.
 Earlier geometry below remains reference geometry beneath its common carrier, or dated
 historical evidence for the bytes measured then. The reference clocks follow the
 [ambient-clock alignment](#revision-2026-11-03--ambient-clock-alignment), retaining the
@@ -104,6 +107,58 @@ Canonical review generator: `tools/render-watch-ring-designs.mjs`
 Canonical face generator: `tools/render-watchface.mjs` — it writes the shipped `watchface.xml`
 and the ring-type drawables beside it.  
 Canonical preview: `apps/wear_android/design/preview-3-plan-credits.png` (and sibling variants).
+
+## Revision 2026-11-06 — local upper-carrier candidate
+
+Localize only the three customizable upper `ComplicationSlot` carriers. This candidate retains
+the accepted visual target and the single **225/202** composition mapping from the Nov2
+revision. `CELL_CARRIERS` and `cellSlot` in `tools/render-watchface.mjs` own these integer
+**52×52** carriers; pivot ratios are serialized as ordinary floating-point WFF attributes:
+
+| Slot | Carrier origin | pivotX | pivotY |
+| --- | --- | --- | --- |
+| 201 | (141,99) | 291/598 | 162/299 |
+| 202 | (199,83) | 1/2 | 283/598 |
+| 203 | (257,99) | 307/598 | 162/299 |
+
+Each upper `BoundingBox` and populated content Group is now local **(0,0,52,52)**. For the
+original reference origin `q`, carrier origin `b`, local coordinate `u`, normalized pivot `p`
+and `s = 225/202`, the table satisfies
+`b + 52p + s(u - 52p) = 225 + s(q + u - 225)` on both axes. Effective cell width remains
+**52 × 225/202**; neither reference paint nor bounds receive a second scale. `CELLS` retains
+the original world-coordinate origins used by scene chrome and `cellRing`, preserving the
+outward radial gradients and lateral bottom masks.
+
+Clipping must preserve every supported type. `SHORT_TEXT` and `RANGED_VALUE` retain the
+**46×24** text box at **(3,14)**, the opaque 52-unit well and its inscribed 1.5-unit rim.
+`MONOCHROMATIC_IMAGE` retains the same well/rim and the isolated **24×24** SOURCE/MASK
+composition at **(14,14)**. `EMPTY` still has no populated content; scene chrome beneath it
+is unchanged. These nominal envelopes fit the local box, including the well and rim at its
+edge. Algebra and containment do not prove identical native clipping or antialiasing.
+
+`check_composition_scale` in `tools/check-watchface-structure.py` requires this exact carrier
+and pivot table, local rectangles and rational mapping, retaining integer rectangles,
+normalized pivots, one scale, stable names, viewport and all existing semantic guards.
+There is no arbitrary-transform acceptance or new visual tolerance. Runtime regeneration
+retained all **18** period textures' byte identities and decoded RGBA pixels; the existing
+generator drift check itself verifies XML and texture dimensions, not pixel equality.
+Review-art inputs, generators and outputs remain unchanged.
+
+All eight IDs and their direct-slot order, types, defaults and customization remain unchanged
+in Source, as do the other five carriers, Launch owner/order/target and temperature configuration.
+Existing choices, effective bindings, settings and data must survive the later update and be
+verified in matched HOST evidence. All active/ambient paint semantics remain required,
+including fonts, text, monochrome composition, occluders, rims, fades, clips, clocks, logo,
+legends, arcs and palette. Upper cells, rule 9 remains the tap contract.
+
+**Routing repair and native acceptance: Pending.** On **2026-11-06**, one guarded awake,
+unlocked **466-pixel** centre-time tap opened **OnePlus Weather** instead of Glance. The
+registered upper bounds were already small with zero margin and excluded that point;
+full-canvas source carriers do not establish broad hit regions. The dispatch cause remains
+**UNKNOWN**. This localization is a candidate, with no native rasterization or tap effect
+claimed. Matched HOST evidence must establish whole active/ambient paint, bounds and tap
+controls with retained choices, settings and data; a candidate commit proves no physical
+acceptance. Any changed paint or unsound geometry requires correction within this candidate.
 
 ## Revision 2026-11-03 — ambient-clock alignment
 

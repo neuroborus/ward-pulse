@@ -6,6 +6,7 @@ import math
 import struct
 import sys
 from copy import deepcopy
+from fractions import Fraction
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -33,6 +34,11 @@ def check_composition_scale(root):
     """Check actual WFF2 owners before the reference-coordinate semantic guards."""
     errors = []
     canvas = {"x": "0", "y": "0", "width": "450", "height": "450"}
+    cell_carriers = {
+        "201": (141, 99, Fraction(291, 598), Fraction(162, 299)),
+        "202": (199, 83, Fraction(1, 2), Fraction(283, 598)),
+        "203": (257, 99, Fraction(307, 598), Fraction(162, 299)),
+    }
     scene = root.find("Scene")
     if root.attrib != {"width": "450", "height": "450"} or scene is None:
         return ["whole-composition scaling must retain the 450 canvas and Scene"]
@@ -46,8 +52,13 @@ def check_composition_scale(root):
     if len(slots) != 8 or len(list(root.iter("ComplicationSlot"))) != 8 or any(node is None for node in carriers):
         return ["eight direct Scene slots, chrome, clock and watermark must own the scale"]
     for owner in carriers:
-        if any(owner.get(key) != value for key, value in {**canvas, **SCALE_ATTRIBUTES}.items()):
-            errors.append(f"{owner.tag}/{owner.get('name', owner.get('slotId'))}: use one full-face scale and normalized center pivot")
+        expected = {**canvas, **SCALE_ATTRIBUTES}
+        if owner.tag == "ComplicationSlot" and owner.get("slotId") in cell_carriers:
+            x, y, pivot_x, pivot_y = cell_carriers[owner.get("slotId")]
+            expected.update(x=str(x), y=str(y), width="52", height="52",
+                            pivotX=str(float(pivot_x)), pivotY=str(float(pivot_y)))
+        if any(owner.get(key) != value for key, value in expected.items()):
+            errors.append(f"{owner.tag}/{owner.get('name', owner.get('slotId'))}: retain its exact carrier, single scale and normalized pivot")
     for node in root.iter():
         if node not in carriers and any(key in node.attrib for key in ("scaleX", "scaleY")):
             errors.append(f"{node.tag}: nested/extra scale would enlarge the composition twice")
@@ -62,7 +73,7 @@ def check_composition_scale(root):
     for owner in carriers:
         if any(node.tag in ("Transform", "Variant") and node.get("target") in
                ("x", "y", "width", "height", "pivotX", "pivotY") for node in owner):
-            errors.append("full-face carrier geometry and pivot must not be overridden")
+            errors.append("carrier geometry and pivot must not be overridden")
     for slot in slots:
         if slot.get("slotId") in ("101", "102", "105"):
             bound = slot.find("BoundingBox")
@@ -77,15 +88,22 @@ def check_composition_scale(root):
         if slot is None:
             errors.append(f"missing customizable cell {slot_id}")
             continue
-        rectangle = {"x": str(x), "y": str(y), "width": "52", "height": "52"}
+        rectangle = {"x": "0", "y": "0", "width": "52", "height": "52"}
         bound = slot.find("BoundingBox")
         if bound is None or bound.attrib != rectangle:
-            errors.append(f"cell {slot_id}: bounds must transform with content at its original integer position")
+            errors.append(f"cell {slot_id}: bounds must fill its local 52-square carrier")
         for complication in slot.findall("Complication"):
             if complication.get("type") != "EMPTY":
                 group = complication.find("Group")
                 if group is None or any(group.get(key) != value for key, value in rectangle.items()):
                     errors.append(f"cell {slot_id}: every populated type must share the transformed bounding box")
+        # Compare the fixed rational construction without a new visual tolerance.
+        bx, by, pivot_x, pivot_y = cell_carriers[slot_id]
+        scale = Fraction(225, 202)
+        for original, origin, pivot in ((x, bx, pivot_x), (y, by, pivot_y)):
+            if (not 0 <= pivot <= 1
+                    or origin + 52 * pivot * (1 - scale) != 225 + scale * (original - 225)):
+                errors.append(f"cell {slot_id}: local carrier must preserve the original global mapping")
         # The complete transformed cell rectangle must fit the physical circle.
         for px in (x, x + 52):
             for py in (y, y + 52):

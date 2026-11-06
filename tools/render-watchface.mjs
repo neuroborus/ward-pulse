@@ -54,7 +54,7 @@ const FONT_FILE = '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'
 const FACE = { size: 450, center: 225 }
 
 // Reference geometry stays in its accepted 202-radius language. Only these
-// full-face owners enlarge it; nested fonts, images, clips and strokes do not.
+// documented carriers enlarge it; nested fonts, images, clips and strokes do not.
 const COMPOSITION_SCALE = 225 / 202
 const SCALE_ATTRIBUTES = `scaleX="${COMPOSITION_SCALE}" scaleY="${COMPOSITION_SCALE}" pivotX="0.5" pivotY="0.5"`
 const PAIRED_SOURCE_ALLOWANCE = 1
@@ -370,6 +370,14 @@ const CELLS = [
   { slotId: 202, x: 199, y: 95, label: 'cell2', provider: 'EMPTY', type: 'EMPTY' },
   { slotId: 203, x: 251, y: 109, label: 'cell3', provider: 'EMPTY', type: 'EMPTY' },
 ]
+
+// Local carriers retain the global mapping; CELLS still owns the reference
+// coordinates used by the chrome and the occupied cells' radial fades.
+const CELL_CARRIERS = {
+  201: { x: 141, y: 99, pivotX: 291 / 598, pivotY: 162 / 299 },
+  202: { x: 199, y: 83, pivotX: 1 / 2, pivotY: 283 / 598 },
+  203: { x: 257, y: 99, pivotX: 307 / 598, pivotY: 162 / 299 },
+}
 
 /** Outward-half dissolve, also normalized for the lateral bottom masks. */
 const CELL_RING_FADE = [
@@ -737,6 +745,7 @@ ${body}
  * from under the complication, with two values in the same 52 units.
  */
 function cellSlot({ slotId, x, y, label, provider: systemProvider, type }) {
+  const carrier = CELL_CARRIERS[slotId]
   const pad = ' '.repeat(20)
   const well = (name) => `${cellWellFlat(COLOR.cellWell, pad)}
 ${cellRing({ x, y, name }, pad)}`
@@ -754,14 +763,14 @@ ${pad}    <Default>
 ${cellText('%s', '[COMPLICATION.RANGED_VALUE_VALUE]', `${pad}        `)}
 ${pad}    </Default>
 ${pad}</Condition>`
-  const body = (reading, name) => `            <Group x="${x}" y="${y}" width="${CELL.size}" height="${CELL.size}" name="${label}">
+  const body = (reading, name) => `            <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}">
 ${well(name)}
 ${reading}
             </Group>`
   const inset = (CELL.size - CELL.iconSize) / 2
   // The live icon's alpha masks a face-coloured source inside its own group.
   // Keep the well and border outside, and dim the composed icon only once.
-  const icon = `            <Group x="${x}" y="${y}" width="${CELL.size}" height="${CELL.size}" name="${label}Icon">
+  const icon = `            <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}Icon">
 ${well(`${label}IconBorder`)}
                 <Group x="${inset}" y="${inset}" width="${CELL.iconSize}" height="${CELL.iconSize}" name="${label}Tint" alpha="255">
                     <Variant mode="AMBIENT" target="alpha" value="140" />
@@ -776,11 +785,11 @@ ${well(`${label}IconBorder`)}
                 </Group>
             </Group>`
   return `        <ComplicationSlot
-            x="0"
-            y="0"
-            width="${FACE.size}"
-            height="${FACE.size}"
-            ${SCALE_ATTRIBUTES}
+            x="${carrier.x}"
+            y="${carrier.y}"
+            width="${CELL.size}"
+            height="${CELL.size}"
+            scaleX="${COMPOSITION_SCALE}" scaleY="${COMPOSITION_SCALE}" pivotX="${carrier.pivotX}" pivotY="${carrier.pivotY}"
             slotId="${slotId}"
             displayName="@string/${label}_complication"
             supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
@@ -788,7 +797,7 @@ ${well(`${label}IconBorder`)}
             <DefaultProviderPolicy
                 defaultSystemProvider="${systemProvider}"
                 defaultSystemProviderType="${type}" />
-            <BoundingBox x="${x}" y="${y}" width="${CELL.size}" height="${CELL.size}" />
+            <BoundingBox x="0" y="0" width="${CELL.size}" height="${CELL.size}" />
             <Complication type="SHORT_TEXT">
 ${body(providerText(pad), `${label}TextBorder`)}
             </Complication>
