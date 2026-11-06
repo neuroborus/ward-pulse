@@ -51,6 +51,7 @@ original pixels before calling it a defect; summary equality, ROI equality or a 
 alone does not prove visibility.
 Renderer metadata alone does not validate a mixed wake/handoff frame or one covered by an overlay.
 
+Before calling a failed native assertion a product defect, qualify its predicate against the applicable platform contract and the underlying content/state; object or wrapper presence alone cannot prove retained content or paint when that platform can clear the contained value.
 Before a causal claim or system correction, identify the emitting component and actual metric owner (watch, peer or other source); compare a current authoritative observation for that owner.
 A visible label/content description proves displayed UI state, not the underlying metric or cause. Retain conflicting timed/identified samples separately and leave unresolved ownership/cause Unknown.
 An entry missing from a downstream snapshot proves only its absence from that snapshot. Do not infer deleted or unconfigured connections, credential state or authentication cause without a current observation of the corresponding saved-state owner; uninspected state and cause remain Unknown.
