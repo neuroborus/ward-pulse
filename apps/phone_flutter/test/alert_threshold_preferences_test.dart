@@ -225,6 +225,16 @@ void main() {
     // Stored, but not an alert: the Providers bell must stay quiet.
     expect(saved.isEnabled, isTrue);
     expect(saved.hasAlertRules, isFalse);
+    expect(saved.budget.today, isNull);
+    expect(saved.budget.week, isNull);
+    expect(
+      decoded.forConnection(ProviderConnections.codexPlan).budget.isEmpty,
+      isTrue,
+    );
+    expect(
+      decoded.forConnection(ProviderConnections.anthropicPlatform).budget.isEmpty,
+      isTrue,
+    );
   });
 
   test(

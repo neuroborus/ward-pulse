@@ -2740,6 +2740,197 @@ void main() {
     expect(store.value.selectedIds, isNotNull);
   });
 
+  testWidgets('saved caps follow accepted reports while spend is unknown', (
+    tester,
+  ) async {
+    final empty = DashboardSnapshot.empty(
+      generatedAt: DateTime.utc(2026, 11, 6),
+    );
+    final snapshot = DashboardSnapshot.fromJson({
+      ...empty.toJson(),
+      'accounts': [
+        for (final (id, provider, connection) in [
+          ('reporting-a', 'openai', ProviderConnections.openAiPlatform),
+          ('reporting-b', 'claude', ProviderConnections.anthropicPlatform),
+          ('reporting-c', 'cursor', ProviderConnections.cursorPlatform),
+        ])
+          {
+            'accountId': id,
+            'provider': provider,
+            'connection': connection.storageKey,
+            'status': 'unknown',
+            'today': empty.todayTotal.toJson(),
+            'week': empty.weekTotal.toJson(),
+            'month': empty.monthTotal.toJson(),
+            'credits': <Object>[],
+            'allowances': <Object>[],
+            'buckets': <Object>[],
+            'modelBreakdown': <Object>[],
+          },
+      ],
+    });
+    final stored = const AlertThresholdPreferences()
+        .withConnection(
+          ProviderConnections.openAiPlatform,
+          const ConnectionAlertThresholds(budget: ConnectionBudget(month: 5000)),
+        )
+        .withConnection(
+          ProviderConnections.codexPlan,
+          const ConnectionAlertThresholds(budget: ConnectionBudget(today: 2500)),
+        )
+        .withConnection(
+          ProviderConnections.cursorPlatform,
+          const ConnectionAlertThresholds(
+            budget: ConnectionBudget(today: 0, week: -1),
+          ),
+        );
+    final store = _MemoryAlertThresholdStore();
+    store.value = AlertThresholdPreferences.decode(stored.encode());
+    final repository = _PublicationRepository(snapshot);
+    final watch = _FakeWatchSyncService();
+    final phoneWidget = _FakePhoneWidgetSyncService();
+    Future<void>? rejected;
+    try {
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          alertThresholdStore: store,
+          watchSyncService: watch,
+          phoneWidgetSyncService: phoneWidget,
+          applyAlertSettings:
+              (current, settings) => applyUserAlertSettings(
+                current,
+                settings,
+                applyJson: (input, _) => input,
+              ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (final account in snapshot.accounts) {
+        final block = find.byKey(
+          ValueKey('source-expenses.${account.accountId}'),
+        );
+        for (final period in ['today', 'week', 'month']) {
+          final row = find.descendant(
+            of: block,
+            matching: find.byKey(ValueKey('source-expense.$period')),
+          );
+          expect(
+            find.descendant(of: row, matching: find.text('No spend reported')),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(
+              of: row,
+              matching: find.text(
+                account.accountId == 'reporting-a' && period == 'month'
+                    ? 'Local cap: Configured · Awaiting report'
+                    : 'Local cap: Not set',
+              ),
+            ),
+            findsOneWidget,
+          );
+        }
+      }
+      expect(watch.syncedSnapshots.single.toJson(), snapshot.toJson());
+      expect(phoneWidget.syncedSnapshots.single.toJson(), snapshot.toJson());
+
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      final budgetButton = find.descendant(
+        of: find.widgetWithText(ProviderConnectionRow, 'Platform reporting'),
+        matching: find.byTooltip('Budget limits'),
+      );
+      await tester.scrollUntilVisible(
+        budgetButton,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(budgetButton.hitTestable(), findsOneWidget);
+      await tester.tap(budgetButton);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField).at(2)).controller!.text,
+        '50.00',
+      );
+      await tester.enterText(find.byType(TextField).at(2), '75');
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(store.writes, 0);
+      await tester.tap(budgetButton);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField).at(2)).controller!.text,
+        '50.00',
+      );
+      await tester.enterText(find.byType(TextField).at(2), '75');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      final saved = store.value.forConnection(ProviderConnections.openAiPlatform);
+      expect(saved.budget.month, 7500);
+      expect(watch.syncedSnapshots.last.toJson(), snapshot.toJson());
+
+      // New settings can be saved without owning publication of this report.
+      repository.delayNextValidation = true;
+      rejected = tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onAlertThresholdsChanged(
+            (current) => current.withConnection(
+              ProviderConnections.openAiPlatform,
+              const ConnectionAlertThresholds(
+                budget: ConnectionBudget(today: 2500),
+              ),
+            ),
+          );
+      await tester.pumpAndSettle();
+      expect(repository.validationStarted, isTrue);
+      repository.validation.complete(false);
+      await rejected;
+      await tester.pumpAndSettle();
+      final newer = store.value.forConnection(ProviderConnections.openAiPlatform);
+      expect(newer.budget.today, 2500);
+      expect(newer.budget.month, isNull);
+      expect(watch.syncedSnapshots, hasLength(2));
+      expect(phoneWidget.syncedSnapshots, hasLength(2));
+      expect(repository.loads, 1);
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      final block = find.byKey(const ValueKey('source-expenses.reporting-a'));
+      for (final period in ['today', 'week', 'month']) {
+        final row = find.descendant(
+          of: block,
+          matching: find.byKey(ValueKey('source-expense.$period')),
+        );
+        expect(
+          find.descendant(
+            of: row,
+            matching: find.text(
+              period == 'month'
+                  ? 'Local cap: Configured · Awaiting report'
+                  : 'Local cap: Not set',
+            ),
+          ),
+          findsOneWidget,
+        );
+      }
+      final displayed = tester.widget<DashboardScreen>(
+        find.byType(DashboardScreen),
+      );
+      expect(displayed.snapshot.toJson(), snapshot.toJson());
+      expect(tester.takeException(), isNull);
+    } finally {
+      if (!repository.validation.isCompleted) {
+        repository.validation.complete(false);
+      }
+      if (rejected != null) {
+        await rejected;
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    }
+  });
+
   testWidgets('Providers Platform row saves a budget limit and its alert', (
     tester,
   ) async {

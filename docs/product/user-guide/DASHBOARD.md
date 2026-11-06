@@ -51,9 +51,11 @@ also keeps exhausted rows as **0% left**. See [Watch](/guide/watch) and [Widget]
 
 API reporting can show **Today**, **Week** and **Month** spend where available. A missing
 spend report is not proof of zero billing. Each reporting source's compact expense card
-shows known spend,
-including zero, with **Local cap** shown separately. **Not set** does not hide known spend
-or itself mean an unhealthy source. A cap does not enforce provider billing. **As of** is
+shows known spend, including zero, with **Local cap** shown separately. A cap with a known
+amount and currency displays both. A saved cap awaiting spend data shows
+**Configured · Awaiting report**; missing spend still says **No spend reported**.
+**Not set** means no cap is available for that connection and period; it does not hide known
+spend or itself mean an unhealthy source. A cap does not enforce provider billing. **As of** is
 that source's successful report time in local time; **Stale** retains its previous values
 and time, independently of the Dashboard's latest update. Today starts at midnight UTC,
 Week on Monday UTC, and Month on the first calendar day UTC.

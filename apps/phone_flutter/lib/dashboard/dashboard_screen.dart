@@ -40,6 +40,7 @@ class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
     super.key,
     required this.snapshot,
+    this.configuredBudgetPeriods = const {},
     this.onOpenProviders,
     this.onEditReportingKey,
     this.rejectionNotices = const [],
@@ -51,6 +52,9 @@ class DashboardScreen extends StatefulWidget {
   });
 
   final DashboardSnapshot snapshot;
+
+  /// Positive saved caps accepted with this snapshot, keyed by connection.
+  final Map<String, Set<String>> configuredBudgetPeriods;
   final VoidCallback? onOpenProviders;
   final void Function(ProviderConnectionId)? onEditReportingKey;
   final List<ConnectionRejectionNotice> rejectionNotices;
@@ -219,6 +223,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _ProviderDashboardSections(
             sections: providerSections,
             sectionKeys: _sectionKeys,
+            configuredBudgetPeriods: widget.configuredBudgetPeriods,
             footer:
                 showMissingPurchased && hasVisibleAllowances
                     ? MissingPurchasedUsageCard(
@@ -868,10 +873,12 @@ class _ProviderDashboardSections extends StatelessWidget {
   const _ProviderDashboardSections({
     required this.sections,
     required this.sectionKeys,
+    required this.configuredBudgetPeriods,
     this.footer,
   });
 
   final List<_ProviderDashboardSection> sections;
+  final Map<String, Set<String>> configuredBudgetPeriods;
 
   /// Owned by the screen's state so a key survives rebuilds and stays a valid
   /// scroll target between the tap and the frame that answers it.
@@ -887,7 +894,10 @@ class _ProviderDashboardSections extends StatelessWidget {
           if (index > 0) const SizedBox(height: 20),
           KeyedSubtree(
             key: sectionKeys.putIfAbsent(section.provider, GlobalKey.new),
-            child: _ProviderDashboardSectionView(section: section),
+            child: _ProviderDashboardSectionView(
+              section: section,
+              configuredBudgetPeriods: configuredBudgetPeriods,
+            ),
           ),
         ],
         if (footer case final footer?) ...[const SizedBox(height: 12), footer],
@@ -897,9 +907,13 @@ class _ProviderDashboardSections extends StatelessWidget {
 }
 
 class _ProviderDashboardSectionView extends StatelessWidget {
-  const _ProviderDashboardSectionView({required this.section});
+  const _ProviderDashboardSectionView({
+    required this.section,
+    required this.configuredBudgetPeriods,
+  });
 
   final _ProviderDashboardSection section;
+  final Map<String, Set<String>> configuredBudgetPeriods;
 
   @override
   Widget build(BuildContext context) {
@@ -961,6 +975,8 @@ class _ProviderDashboardSectionView extends StatelessWidget {
           const SizedBox(height: 12),
           _ProviderDashboardSourceView(
             account: account,
+            configuredBudgetPeriods:
+                configuredBudgetPeriods[account.connection] ?? const {},
             accent: accent,
             sourceTitle: sourceTitles[index],
             caption:
@@ -1010,10 +1026,15 @@ bool _showsSourceExpenses(ProviderSnapshot account) {
 
 /// One account's reported Money and optional advisory caps, never Plan balances.
 class _SourceExpenseBlock extends StatelessWidget {
-  const _SourceExpenseBlock({required this.account, required this.title});
+  const _SourceExpenseBlock({
+    required this.account,
+    required this.title,
+    required this.configuredBudgetPeriods,
+  });
 
   final ProviderSnapshot account;
   final String title;
+  final Set<String> configuredBudgetPeriods;
 
   @override
   Widget build(BuildContext context) {
@@ -1026,8 +1047,13 @@ class _SourceExpenseBlock extends StatelessWidget {
         style: textTheme.titleMedium,
         textAlign: wide ? TextAlign.start : TextAlign.end,
       );
+      final capLabel =
+          budget.limit?.label ??
+          (configuredBudgetPeriods.contains(budget.period)
+              ? 'Configured · Awaiting report'
+              : 'Not set');
       final cap = Text(
-        'Local cap: ${budget.limit?.label ?? 'Not set'}',
+        'Local cap: $capLabel',
         style: textTheme.bodySmall,
         textAlign: wide ? TextAlign.start : TextAlign.end,
       );
@@ -1122,12 +1148,14 @@ class _SourceExpenseBlock extends StatelessWidget {
 class _ProviderDashboardSourceView extends StatelessWidget {
   const _ProviderDashboardSourceView({
     required this.account,
+    required this.configuredBudgetPeriods,
     required this.accent,
     required this.sourceTitle,
     required this.caption,
   });
 
   final ProviderSnapshot account;
+  final Set<String> configuredBudgetPeriods;
   final Color accent;
   final String sourceTitle;
   final String? caption;
@@ -1181,6 +1209,7 @@ class _ProviderDashboardSourceView extends StatelessWidget {
           _SourceExpenseBlock(
             account: account,
             title: caption ?? '$sourceTitle · Expenses',
+            configuredBudgetPeriods: configuredBudgetPeriods,
           ),
           if (cards.isNotEmpty) const SizedBox(height: 12),
         ],

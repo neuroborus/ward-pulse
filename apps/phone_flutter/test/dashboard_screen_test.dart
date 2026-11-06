@@ -1357,6 +1357,7 @@ void main() {
       WidgetTester tester,
       DashboardSnapshot snapshot, {
       FrozenOrder? order,
+      Map<String, Set<String>> configuredBudgetPeriods = const {},
     }) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -1365,6 +1366,7 @@ void main() {
             body: DashboardScreen(
               snapshot: snapshot,
               order: order,
+              configuredBudgetPeriods: configuredBudgetPeriods,
               onRefresh: _noRefresh,
             ),
           ),
@@ -1718,6 +1720,52 @@ void main() {
         }
       },
     );
+
+    testWidgets('evaluated cap currency takes precedence over saved presence', (
+      tester,
+    ) async {
+      final reporting = {
+        ...account('openai'),
+        'accountId': 'reporting-source',
+        'connection': ProviderConnections.openAiPlatform.storageKey,
+        'allowances': <Object>[],
+        'today': const BudgetState.unknownPeriod('today').toJson(),
+        'week': {
+          ...const BudgetState.unknownPeriod('week').toJson(),
+          'spent': {'minorUnits': 0, 'currency': 'EUR'},
+          'limit': {'minorUnits': 12345, 'currency': 'EUR'},
+          'remaining': {'minorUnits': 12345, 'currency': 'EUR'},
+          'usedPercent': 0.0,
+          'status': 'ok',
+        },
+        'month': {
+          ...const BudgetState.unknownPeriod('month').toJson(),
+          'limit': {'minorUnits': 4321, 'currency': 'GBP'},
+        },
+      };
+      await show(
+        tester,
+        snapshotOf([reporting]),
+        configuredBudgetPeriods: {
+          ProviderConnections.openAiPlatform.storageKey: {
+            'today',
+            'week',
+            'month',
+          },
+        },
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Local cap: Configured · Awaiting report'),
+        findsOneWidget,
+      );
+      expect(find.text('Local cap: EUR 123.45'), findsOneWidget);
+      expect(find.text('Local cap: GBP 43.21'), findsOneWidget);
+      expect(find.text('EUR 0.00'), findsOneWidget);
+      expect(find.text('No spend reported'), findsNWidgets(2));
+      expect(find.text('Local cap: Not set'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
 
     testWidgets('keeps meters and history separate within a connection', (
       tester,

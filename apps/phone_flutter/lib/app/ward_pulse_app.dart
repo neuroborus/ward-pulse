@@ -1442,6 +1442,15 @@ class _DashboardHostState extends State<DashboardHost>
               _ when snapshot != null => DashboardScreen(
                 onRefresh: _pullToRefresh,
                 snapshot: snapshot,
+                configuredBudgetPeriods: {
+                  if (_acceptedAlertThresholds case final thresholds?)
+                    for (final entry in thresholds.connections.entries)
+                      entry.key: {
+                        if ((entry.value.budget.today ?? 0) > 0) 'today',
+                        if ((entry.value.budget.week ?? 0) > 0) 'week',
+                        if ((entry.value.budget.month ?? 0) > 0) 'month',
+                      },
+                },
                 onOpenProviders: _openProviders,
                 onEditReportingKey: _editReportingKey,
                 rejectionNotices: _rejectionNotices,

@@ -83,6 +83,10 @@ The **bell icon** opens **Alert thresholds**. For a plan connection, set a share
 threshold or separate thresholds for its reported windows. Choose a preset or
 **Custom % left** to enter a whole number from **0 to 100**. Reporting periods need a limit
 under the **piggy-bank icon's** **Budget limits** before their percentage threshold is available.
+Saved limits stay available when you reopen the editor, even before spend is reported.
+Dashboard shows **Local cap: Configured · Awaiting report** for that connection and period
+until its amount and reporting currency can be shown. Missing spend stays unknown, so a
+saved limit alone does not supply a percentage, remaining amount or threshold alert.
 
 These are WardPulse settings; they do not change your provider's plan or billing limits.
 Follow the [Dashboard examples](/guide/dashboard#set-budget-limits-and-alert-thresholds).
