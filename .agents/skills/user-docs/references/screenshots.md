@@ -58,7 +58,10 @@ Index a derivative with its source only if an actual separate annotated PNG is p
   Record capture/verification dates, dimensions, known app/context, data treatment and
   locations where it is used; include a build version only if actually recorded. Do not add rows
   for planned/nonexistent screenshots as though they were captured.
-- Before declaring required replacements or approving a public capture list, determine the
+- Before declaring required replacements or approving a public capture list, bind the PNG's
+  actual producer revision/artifact to the current render owners and qualify their diff for
+  pictured UI changes. Workflow/acceptance commit titles or status do not prove such changes.
+  Unresolved producer/diff evidence keeps replacement need Pending. Determine the
   affected current-use set for this skill's freshness and theme-refresh rules. Join each
   personally viewed PNG to its owning index's current/historical use classification and
   the actual current source page/embed/gallery placement and purpose, following imported
