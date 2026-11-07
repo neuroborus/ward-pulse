@@ -263,6 +263,42 @@ void main() {
     );
   }
 
+  for (final expiry in ['getWidgetData', 'saveWidgetData']) {
+    test('ownership expiring at $expiry stops the stale marker', () async {
+      final data = <String, Object?>{
+        'row_count': 1,
+        'empty': '0',
+        'stale': '0',
+      };
+      final calls = <MethodCall>[];
+      var owned = true;
+      _bindWidgetStorage(
+        data,
+        calls: calls,
+        onCall: (call) => owned = owned && call.method != expiry,
+      );
+      await HomeWidgetPhoneWidgetSyncService.markExistingRowsStale(
+        isCurrent: () async => owned,
+      );
+      // A dispatched write lands; nothing pending after it does.
+      expect(data['stale'], expiry == 'saveWidgetData' ? '1' : '0');
+      expect(calls.where((call) => call.method == 'updateWidget'), isEmpty);
+    });
+  }
+
+  test('expired ownership stops the remaining payload writes', () async {
+    final data = <String, Object?>{};
+    final calls = <MethodCall>[];
+    var owned = true;
+    _bindWidgetStorage(data, calls: calls, onCall: (_) => owned = false);
+    await HomeWidgetPhoneWidgetSyncService.writeHomeWidgetPayload(
+      const PhoneWidgetPayload(rows: [], stale: false),
+      isCurrent: () async => owned,
+    );
+    expect(calls.map((call) => call.method), ['saveWidgetData']);
+    expect(data, {'stale': '0'});
+  });
+
   for (final failedMethod in ['saveWidgetData', 'updateWidget']) {
     test('stale marker reports a failed $failedMethod result', () async {
       final data = <String, Object?>{
@@ -291,7 +327,7 @@ void main() {
     final releaseFirstWrite = Completer<void>();
 
     final coordinator = PhoneWidgetSyncCoordinator(
-      write: (payload) async {
+      write: (payload, {required isCurrent}) async {
         written.add(payload);
         if (written.length == 1) {
           firstWriteStarted.complete();
@@ -322,7 +358,7 @@ void main() {
       final gate = Completer<void>();
 
       final coordinator = PhoneWidgetSyncCoordinator(
-        write: (payload) async {
+        write: (payload, {required isCurrent}) async {
           written.add(payload);
           if (written.length == 1) {
             await gate.future;
@@ -356,12 +392,56 @@ void main() {
     },
   );
 
+  test('a queued request carries its own ownership guard', () async {
+    final written = <PhoneWidgetPayload>[];
+    final guards = <bool>[];
+    final firstWriteStarted = Completer<void>();
+    final releaseFirstWrite = Completer<void>();
+    final coordinator = PhoneWidgetSyncCoordinator(
+      write: (payload, {required isCurrent}) async {
+        written.add(payload);
+        guards.add(await isCurrent());
+        if (written.length == 1) {
+          firstWriteStarted.complete();
+          await releaseFirstWrite.future;
+        }
+      },
+    );
+    const emptyPrefs = PhoneWidgetPreferences(selectedIds: []);
+    const defaultPrefs = PhoneWidgetPreferences();
+
+    final first = coordinator.sync(snapshot, defaultPrefs);
+    await firstWriteStarted.future;
+    var owned = true;
+    final retired = coordinator.sync(
+      snapshot,
+      emptyPrefs,
+      isCurrent: () async => owned,
+    );
+    owned = false;
+    releaseFirstWrite.complete();
+    await Future.wait([first, retired]);
+    expect(written, hasLength(1));
+
+    // A newer foreground request keeps its own default guard.
+    final superseded = coordinator.sync(
+      snapshot,
+      defaultPrefs,
+      isCurrent: () async => false,
+    );
+    final foreground = coordinator.sync(snapshot, emptyPrefs);
+    await Future.wait([superseded, foreground]);
+    expect(written, hasLength(2));
+    expect(written.last.isEmpty, isTrue);
+    expect(guards, [true, true]);
+  });
+
   test(
     'a failed write reaches the caller without poisoning the queue',
     () async {
       var attempts = 0;
       final coordinator = PhoneWidgetSyncCoordinator(
-        write: (payload) async {
+        write: (payload, {required isCurrent}) async {
           attempts++;
           if (attempts == 1) {
             throw StateError('platform unavailable');
@@ -385,12 +465,14 @@ void _bindWidgetStorage(
   Map<String, Object?> data, {
   required List<MethodCall> calls,
   String? failedMethod,
+  void Function(MethodCall call)? onCall,
 }) {
   const channel = MethodChannel('home_widget');
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   messenger.setMockMethodCallHandler(channel, (call) async {
     calls.add(call);
+    onCall?.call(call);
     final args = Map<String, Object?>.from(call.arguments as Map);
     if (call.method == failedMethod) {
       return false;

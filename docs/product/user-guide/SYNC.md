@@ -26,6 +26,9 @@ The selected interval is between 5 and 60 minutes while WardPulse is open; the d
 The text beside the slider shows both cadences. Background refresh may continue when you
 are not using WardPulse, subject to Android scheduling.
 
+In debug builds with **Mock data** on, background refresh skips provider reads and leaves
+the demo widget and watch displays unchanged. Turn Mock data off to resume it.
+
 Automatic refreshes share their spacing across the open app, restarts and background work.
 An attempted refresh counts even when the network fails. Opening the app again can show
 saved data while the next automatic attempt is still waiting. Refresh now and connection

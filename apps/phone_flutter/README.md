@@ -23,6 +23,18 @@ The verified Flutter and Android SDK baseline is documented in
 Mock dashboards are available only in debug builds and remain disabled until explicitly enabled
 in Settings. Release builds never select the mock repository.
 
+Headless WorkManager sync leaves Mock publications alone. In debug builds, each
+`providerSyncOnce` invocation reads the saved Mock choice before creating Live bindings.
+Mock, or a choice that cannot be read, skips the run without collection, admission,
+watch/widget writes, recovery, alerts or STALE, and never loads or reseeds Demo data. The
+invocation asks again after awaited setup and loads, before each effect, inside recovery
+and alert currentness checks and before every pending widget write or redraw. Once it sees
+Mock it retires; the next Mock-off run starts normally. Queued widget requests carry their
+own guard. A failed load marks STALE only while its stamps and the credentials the run
+admitted stay current; obsolete failures and rejected snapshots leave rows unmarked. A
+plugin call that was already dispatched cannot be retracted, and writes from separate
+isolates are not ordered atomically. Release builds never read the debug choice.
+
 The phone app consumes Rust-produced dashboard state; the Rust core must not depend on Flutter.
 
 Build the native libraries and run the app:
@@ -140,6 +152,8 @@ route: actual normal package/preferences, secure/core recovery watchlist and fut
 notification bookkeeping, no eligible or in-flight background work, temporary polling cadence
 **15→60 minutes**, a hard Mock cutoff and a restoration reserve. HOLD if custody is unproved.
 Mock clears recovery history and cancels its wake; Mock-off alone cannot restore them.
+Debug headless runs skip while Mock is saved, so they neither restore that history nor
+overwrite Mock frames; an already-dispatched background write still needs custody.
 Restore the actual normal package/preferences, cadence **15 minutes**, selections, OS/bridge
 state and genuine newer Live data, including derived widget/watch frames. Preserve newer
 data and real errors; never restore old secrets or snapshots to manufacture equality.

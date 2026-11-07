@@ -115,7 +115,7 @@ void main() {
       final localUpdates = <String>[];
       await providerSyncOnce(
         load:
-            () async => ProviderSyncWork(
+            (_) async => ProviderSyncWork(
               syncWatch: () => service.sync(dashboard, invalid),
               syncWidget: () async {
                 localUpdates.add('widget');
