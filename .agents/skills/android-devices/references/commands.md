@@ -45,6 +45,7 @@ After an app or Settings launch and after every navigation transition, join fres
 focus/foreground state with the settled hierarchy or original frame that identifies the
 expected visible page. Verify this before the next input or page capture. An unlocked
 device, resumed Activity or successful `am start -W` result alone does not prove that page.
+Read focus ownership from the full-service `adb -s "$DEVICE_SERIAL" shell dumpsys window`; `dumpsys window windows` may omit global focus records, so an empty focus projection is Unknown and holds capture/navigation acceptance.
 
 For menu/page catalogs, stop the navigation batch on an empty hierarchy or unexpected page.
 Retain sanitized actual foreground/page evidence; do not label captures from the intended
