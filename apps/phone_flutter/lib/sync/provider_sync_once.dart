@@ -109,9 +109,9 @@ Future<void> providerSyncOnce({
 
   final owner = HeadlessLiveOwner(debugBuild: debugBuild, debugData: debugData);
   final poll = AutomaticPollContext.current ?? AutomaticPollContext();
-  final ProviderSyncWork? work;
+  final ProviderSyncWork? loaded;
   try {
-    work = await poll.run(() => load(owner));
+    loaded = await poll.run(() => load(owner));
   } catch (error, stackTrace) {
     logFailure('setup', error, stackTrace);
     // Obsolete failures and rejected snapshots cannot mark newer rows STALE.
@@ -122,7 +122,9 @@ Future<void> providerSyncOnce({
       }, logFailure);
     return;
   }
-  if (work == null) return;
+  if (loaded == null) return;
+  // Effect closures lose the deferred local's promotion: capture non-null work.
+  final work = loaded;
 
   await _attemptProviderSyncStep('watch', () async {
     if (await work.isCurrent()) await work.syncWatch();
