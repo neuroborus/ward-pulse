@@ -17,7 +17,7 @@ does not establish the actual displayed result. Keep acceptance limited to prove
 | Distinguish form input, validation error and action visibility | [Form visibility](references/form-visibility.md) |
 | Prove which artifacts, bindings and state are actually rendered | [State and artifact identity](references/state-and-artifacts.md) |
 | Operate a timed native SDK/manual-barrier case | [Timed native cases](references/timed-native-cases.md) |
-| Before a shared-state equality guard around observation/test work or an unowned writer interval | [Live state and custody](references/live-state.md) |
+| Before a persisted ordinary Mock transition, a shared-state equality guard around observation/test work or an unowned writer interval | [Live state and custody](references/live-state.md) |
 | Verify a reported locale/unit defect or explicit unit designation | [Locale and units](references/locale-and-units.md) |
 | Correct a demonstrated coordinator verification mistake | [Mistake maintenance](references/mistake-maintenance.md) |
 

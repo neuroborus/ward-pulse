@@ -1,8 +1,15 @@
 # Live state and custody
 
-Use BEFORE a shared-state equality guard around read/test-only observation or an interval
-without writer custody, and when classifying a post-test state delta. Taking a snapshot
-does not freeze a normal live store or establish ownership of later writes.
+Use BEFORE every persisted ordinary Mock transition, a shared-state equality guard around
+read/test-only observation or an interval without writer custody, and when classifying a
+post-test state delta. Taking a snapshot does not freeze a normal live store or establish
+ownership of later writes.
+
+For ordinary Mock changes, including private regression acceptance, follow the phone owner's
+[custody and restoration contract](../../../../apps/phone_flutter/README.md#reproducible-debug-mock-data)
+for entry and restoration. Public-image intent does not limit that contract; unproved required
+custody holds entry. Later saved-mode or visible Live/widget restoration does not prove the
+pre-entry barrier or unobserved recovery/wake/notification bookkeeping preservation.
 
 ## Record before deciding
 
