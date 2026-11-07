@@ -1086,6 +1086,31 @@ platform spend are on by default; any can be hidden via Settings consumption-dis
 if at least one surface remains. The OAuth session stays in phone-secure storage and does not
 require a Codex CLI, local server, or `adb reverse`.
 
+### Package UID and full-window focus preflight
+
+For a guard that requires installed package UID or current focus, use the currently selected
+ADB server and explicit serial, and qualify the Android user scope. Acquire the relevant
+read-only shell payload through that target:
+
+```sh
+cmd package list packages -U app.wardpulse
+dumpsys window
+```
+
+Retain each command's actual status and bounded privacy-safe producer/field facts before guards,
+following [Diagnostic output privacy](#diagnostic-output-privacy). PackageManager's name filter
+is a substring filter: validate the current record format and require exactly one exact
+`package:app.wardpulse` match with a valid full `uid:` value. The existing
+[sync runner](../tools/test-phone-watch-sync/run.sh), in `package_uid`, implements the bounded
+exact-package check. Keep Android user ID, app ID and full UID distinct; do not assume
+`dumpsys package` contains `userId=` or equate that label with the required UID.
+
+Qualify the actual focus fields in the full WindowManager service result before projecting
+components. The `dumpsys window windows` subsection can omit service-level focus fields;
+its empty projection does not prove absent foreground. Missing, malformed or ambiguous
+required fields hold dependent work. Preserve that HOLD and its failure-point facts; any
+corrected acquisition is a fresh sample, not reconstructed success.
+
 ### Wear instrumentation provisioning order
 
 The default Wear runner is `IsolatedWearRunner`. It selects its test-owned application only
