@@ -69,6 +69,12 @@ implementation when a boundary obscures the consumed data. Pending or Unknown do
 justify stopping while a supported next diagnostic is available. Keep unavailable causal
 evidence Pending and name the concrete prerequisite that prevents further investigation.
 
+For SDK-based installation guards, bind packaged `uses-sdk`, the actual device API level,
+the owner's feature/client API support and the selected rendition independently. Do not use a
+minimum-SDK proxy to establish feature availability or exclude implicit installer effects;
+qualify the actual owning support/installer conditions. Retain bounded measured facts for
+each predicate before it can abort; missing qualifications remain Unknown.
+
 Before an installer/device recipe touches a protected artifact cohort, inspect expanded commands, aggregate task/module installs AND bundled assets, manifest metadata and possible platform-receiver updates; reconcile EVERY affected package with the authorized phase, not only the main APK. For protected Wear Push retention, compare the candidate embedded APK with the retained installed APK by exact bytes, validated signer and variant-owned resources BEFORE installing the host; equal versionCode or an explicit app-controller/callback guard does not establish platform preservation. Follow [Watch Face Push builds](../../../../docs/ANDROID_TOOLCHAIN.md#watch-face-push-builds).
 Hold a protected retained/bundled identity mismatch unless the owning accepted migration explicitly covers that exact new cohort. Hold other unreconciled module/package or implicit-update effects; use a supported scoped owner route or return the recipe/provisioning finding to actual Runner. Do not assume a narrower task prevents platform reactions.
 Record actual affected installed versions/hashes before and after; unexpected advancement remains a failed preservation gate/gap, never a UI Update witness inferred from test success. Keep cause unproved unless established independently; task membership or installer attribution alone is insufficient.
