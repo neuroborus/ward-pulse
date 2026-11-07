@@ -80,6 +80,8 @@ For saved app captures, verify unlocked, non-authentication UI in the same bound
 adb -s "$DEVICE_SERIAL" exec-out screencap -p > "$PRIVATE_CAPTURE_PATH"
 ```
 
+On multi-display phones and foldables, qualify the intended screen's current logical-to-physical display mapping and active state before capture, then use `screencap`'s documented `-d` physical-display option with that qualified physical ID when an explicit target is needed. Requalify after any fold/display transition; do not hardcode profile display IDs, silently strip a non-PNG result or infer the earlier failure's cause from a later successful capture.
+
 Only unfilled/unentered unlock UI may be inspected privately and transiently for geometry.
 Never capture entered pattern/PIN, retain an authentication frame as proof or publish it.
 Keep identifying content out of saved app frames. Apply user-docs before public use;
