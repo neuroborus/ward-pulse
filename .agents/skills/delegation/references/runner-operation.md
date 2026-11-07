@@ -53,6 +53,13 @@ required checks explicitly, says which ones the owner runs afterwards, and point
   --project … --task …` — where both probes see one binary, which also puts the real error on
   stderr instead of leaving it to be dug out of `state.json`.
 
+Before freezing a commit-capable run, qualify the actual repository commit-clarification path
+and its Git-ignore status; external configuration does not relocate it. Prefer omitting
+`artifactRoot` for the supported ignored `LOCAL_ARTIFACTS` default unless the actual
+alternative canonical commit path is qualified. Guidance/configuration loading alone is
+not commit-workspace preflight PASS. Preserve/reconcile rejected frozen runs before fresh
+configuration; do not change Source or ignore rules, or edit frozen inputs, to recover.
+
 Aliases live in the runner-root catalog or in the project's own
 `LOCAL_ARTIFACTS/agent-runner.json`; a project selection replaces the root selection, so list
 every alias the pipeline needs. Trusted commands execute in the project directory and inherit
@@ -97,6 +104,16 @@ Inspect the FIRST role's published discovery `requiredChecks` immediately (`plan
 For `plan-execution`, independently verify merged `validationSchedule.commands` against the admitted complete-plan Native union and resolve every step's command-index mapping against that step's admitted commands before accepting the schedule. Compare `pipelineState.requiredChecks` with the current step's resolved subset before accepting it, not with the complete-plan union. Compare exact command identities, not local C-IDs, which may be renumbered between discovery and steps. Preserve every admitted check: missing/extra commands or incorrect step mappings require supported stop/reconciliation. Apply this domain distinction to other routes only when they expose those domains; do not assume these `plan-execution` fields exist in authoring or another route.
 Put read-only discovery versus workspace-write FINALIZE and real extra-authority needs in that task/context;
 local operator guidance is not injected. Report genuine Native needs truthfully, never force empty reports.
+Before attributing an admission failure or changing authority, qualify the actual
+`capabilityRequirements`/`environmentBlockers` against their owning schema and the command's
+assigned executor and phase. Inability during nonexecuting read-only DISCOVERY alone belongs
+in `summary` as phase rationale, not as an unmet requirement of an assigned Worker's writable
+FINALIZE; this applicability distinction is not a schema ban or proof that genuine execution
+needs are absent. Every accepted environment-only row participates in admission even with
+empty `capabilityRequirements` or evidence denying an eventual restriction; reconciliation
+cannot erase it. Preserve genuinely evidenced nondelegated restrictions of the assigned
+executor without forcing empty reports, grant workarounds, HOST substitution or frozen-report
+repair, and hold if a genuine unmet need remains.
 A check assigned solely to HOST stays mandatory outside Native inventory/capability/environment-blocker
 reports; an unselected HOST command does not acquire Native applicability merely because it is mandatory.
 Keep mandatory HOST acceptance after whole DONE, run-owned process retirement and fresh separate

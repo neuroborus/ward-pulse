@@ -755,6 +755,16 @@ Treat the configured AVDs as persistent development devices:
   new process, while checking scheduled-work preservation. The gate's `stop_app` in
   `tools/test-phone-watch-sync/run.sh` re-evaluates ordinary kill within one overall
   15-second request/wait deadline and respects pending KILL intent; intent is not death.
+  For a phone-AVD cold-start case where HOME plus ordinary kill leaves the qualified app
+  UID alive, reversible navigation to resolved System Settings (verify its foreground), then
+  HOME and the same ordinary kill may be tried without changing settings. That navigation is a
+  separately managed bounded attempt: it does not extend a running stock gate's 15-second
+  deadline, add retries/navigation inside that gate or bypass its HOLD/pending-KILL contract.
+  Still require fresh UID-wide absence, old PID/start retirement and a new PID with native `COLD`; retain failed or
+  racing name/proc samples separately rather than turning them into a pass or a cause.
+  Preserve the normal artifact, preferences and scheduled work, retain cache-timestamp
+  observations and restore OS/navigation state. This conditional route permits no force-stop,
+  data/cache clearing or clock change and establishes no universal OEM behavior.
   If that proof is unavailable, report HOLD. This rule is scoped to WardPulse; the targeted
   `am force-stop com.google.android.wearable.sysui` recovery above remains valid.
 - Size `/data` before first boot. Its size is fixed once materialized, and snapshots prevent
