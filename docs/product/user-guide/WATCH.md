@@ -23,10 +23,10 @@ percentages, with the inner half first.
 Glance hides the clock to make room for larger labels. The clock remains on **Plan windows**,
 **Alerts**, the **Watch face** setup screen and the prompt shown before the first summary.
 
-Tap the WardPulse name or a usage complication on the face to open Glance. Before the first
-summary, this opens **Sync from phone**. Returning through the watch's app launcher keeps
-your current page. Swipe right or press Back from **Alerts** or **Watch face** to return to
-the previous page; from either home page, one dismissal leaves the app.
+Tap the centre time, WardPulse name or a usage complication on the face to open Glance.
+Before the first summary, this opens **Sync from phone**. Returning through the watch's app
+launcher keeps your current page. Swipe right or press Back from **Alerts** or **Watch face**
+to return to the previous page; from either home page, one dismissal leaves the app.
 
 ![Clock-free Wear Glance showing selected plan capacity and available purchased credits.](/screenshots/wear-glance-overview.png)
 
@@ -242,6 +242,14 @@ Leave the middle upper cell unassigned to see the face's built-in temperature. I
 weather complication there, its provider supplies the displayed text and covers the built-in
 reading. **Temperature** does not change that provider's units; use the provider's own settings
 where available. Clearing the assignment reveals the built-in reading again when weather is available.
+
+The built-in UV reading comes from the watch's system weather; WardPulse does not run a
+separate UV service or calculate the value. To add Weather's own tap action, select the
+right upper cell in the system watch-face editor and choose **Weather → UV**, if offered.
+On the tested OnePlus Watch 2, the complication displayed **0.0** without a **UV** prefix;
+tapping it opened Weather with the UV reading visible. Available complications, text and
+tap actions vary by watch and provider. Choose **Empty** to restore the built-in **UV …**
+reading when weather is available; that built-in reading opens Glance.
 
 Choose usage rings on the phone. Watch weather and other system complications depend on
 their own available data; refreshing provider usage does not itself update watch weather.

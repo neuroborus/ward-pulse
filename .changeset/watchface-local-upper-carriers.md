@@ -2,7 +2,5 @@
 "@wardpulse/app": patch
 ---
 
-Localize the three customizable upper watch-face complication carriers while preserving
-their existing visual mapping and configuration. This remains a candidate: the observed
-centre-time Weather launch's cause, routing repair and native paint/tap acceptance are
-unverified.
+Restore the centre-time tap to Glance while keeping upper complication taps local to their
+visible cells. Preserve existing assignments, visual mapping and provider-supplied tap actions.
