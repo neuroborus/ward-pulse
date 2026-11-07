@@ -57,7 +57,12 @@ selection changes or missing-pair data. Use the owning WFF/provider rules for sl
 Where possible, distinguish producer output, effective binding and active scene through
 supported diagnostics and normal app/renderer operations. A corrected image after scene
 recreation supports a stale-layer hypothesis; it does not identify that layer or prove a
-durable product fix by itself. For an owner-requested causal diagnosis, reversible lock/unlock
+durable product fix by itself. When the owner explicitly requests a product repair, manual
+restoration or face cycling does not complete or cancel that request or transfer the fix to
+the owner. Keep the issue open and continue available authorized Runner Source/test work
+within existing ownership boundaries while device acceptance stays Pending. Do not require
+the owner to repeat the repair request; restored paint alone does not establish its cause.
+For an owner-requested causal diagnosis, reversible lock/unlock
 symptoms or an API default do not finish the investigation. Continue available bounded
 comparisons from receiver through selected data to consumer; inspect the exact installed
 implementation when a boundary obscures the consumed data. Pending or Unknown does not
