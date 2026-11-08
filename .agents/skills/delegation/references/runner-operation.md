@@ -35,18 +35,22 @@ division to the step**, and it is authoritative for that step — so every runne
 required checks explicitly, says which ones the owner runs afterwards, and points at
 `agent-runner.md` for the reasoning.
 
-## Report genuine Runner defects
+## Track every Runner error and failed run
 
-When the coordinator identifies a genuine unexpected Runner defect, create an issue through
-supported `unexpected_issue_report`. Use concise English expected/actual behavior, occurrence,
-sanitized public evidence and explicit Unknowns; retain the issue ID and report receipt.
-Reuse or update the existing issue for the same defect instead of creating duplicates.
-Expected usage quotas, user pauses and documented environment/input errors are not automatically
-defects. Include no private prompts, transcripts, credentials or sensitive payloads. If supported
-reporting is unavailable, retain a local report marked pending publication and do not claim
-an issue was created. Reporting does not itself stop authorized product work: continue through
-supported recovery, preserving code, frozen-input guards, roles and checks, without forcing
-readiness or blindly retrying.
+Track every actual Runner error or failed run in an issue record, including expected quota,
+configuration-validation and operator errors; classify them truthfully without asserting a
+confirmed Runner bug. Reuse or update a matching existing issue with each new run occurrence;
+create a new issue only when no matching record exists. Record concise English observed error,
+actual run and mode, expected/actual behavior, Source/configuration context, sanitized public
+evidence and explicit Unknowns; retain the issue ID and report receipt. Include no private
+prompts, transcripts, credentials or sensitive payloads.
+
+Use supported `unexpected_issue_report` only when the coordinator deliberately concludes that
+behavior is unexpected, as its contract requires. If the error cannot be represented truthfully
+through supported reporting, or reporting is unavailable, retain an explicit local issue marked
+pending publication and tell the owner; never claim it was published. Tracking does not itself
+stop authorized product work: continue through supported recovery, preserving code, frozen-input
+guards, roles and checks, without forcing readiness or blindly retrying.
 
 ## Frozen configuration and backend recovery
 
