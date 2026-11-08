@@ -424,8 +424,10 @@ Scope:
   `anthropic_provider_snapshot_from_report_json` in
   `core/ward-pulse-providers/src/claude/platform.rs` uses the precise bound instead of the
   shared whole-second timestamp when selecting cost days and deciding empty periods.
-  Amounts are decimal strings in lowest currency units (cents); WardPulse rounds them to integer
-  USD cents without estimating prices from tokens.
+  Amounts are decimal strings in lowest currency units (cents); WardPulse accumulates them
+  exactly and rounds each daily and period output independently to integer USD cents, half
+  away from zero, without estimating prices from tokens. Period totals use exact amounts
+  rather than rounded daily costs.
 - Rust coalesces minute usage into one UTC-day history bucket ending at the latest reported
   usage or cost bucket end, preserving model/cache totals and daily cost alignment. A
   current-day cost bucket retains its nominal next-midnight end, not an inferred publication

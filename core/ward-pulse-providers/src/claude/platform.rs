@@ -106,7 +106,7 @@ pub fn anthropic_provider_snapshot_from_report_json(
         }
     }
 
-    let mut cost_by_bucket = BTreeMap::<DateTimeUtc, (DateTimeUtc, Option<i64>)>::new();
+    let mut cost_by_bucket = BTreeMap::<DateTimeUtc, (DateTimeUtc, Option<DecimalCents>)>::new();
     for page_json in &report.cost_pages {
         let page: RawCostPage =
             serde_json::from_str(page_json).map_err(AnthropicReportError::CostsJson)?;
@@ -116,16 +116,14 @@ pub fn anthropic_provider_snapshot_from_report_json(
             if start_micros < report_start || start_micros >= report.captured_end_micros {
                 continue;
             }
-            let mut bucket_cents = 0_i64;
+            let mut bucket_cents = DecimalCents::default();
             let mut complete = true;
             for result in &bucket.results {
                 if let Some(currency) = result.currency.as_deref() {
                     normalize_currency(currency)?;
                 }
                 if let Some(amount) = result.amount.as_deref() {
-                    bucket_cents = bucket_cents
-                        .checked_add(cents_from_decimal(amount)?)
-                        .ok_or(AnthropicReportError::NumericOverflow)?;
+                    bucket_cents = bucket_cents.checked_add(cents_from_decimal(amount)?)?;
                 } else {
                     complete = false;
                 }
@@ -133,20 +131,16 @@ pub fn anthropic_provider_snapshot_from_report_json(
             let bucket_end = utc_timestamp(bucket.ending_at.as_str())?;
             let (end, entry) = cost_by_bucket
                 .entry(start)
-                .or_insert_with(|| (bucket_end.clone(), Some(0)));
+                .or_insert_with(|| (bucket_end.clone(), Some(DecimalCents::default())));
             *end = end.clone().max(bucket_end);
-            *entry = match (*entry, complete.then_some(bucket_cents)) {
-                (Some(total), Some(cents)) => Some(
-                    total
-                        .checked_add(cents)
-                        .ok_or(AnthropicReportError::NumericOverflow)?,
-                ),
+            *entry = match (entry.take(), complete.then_some(bucket_cents)) {
+                (Some(total), Some(cents)) => Some(total.checked_add(cents)?),
                 _ => None,
             };
         }
     }
 
-    let buckets = merge_buckets(&usage_by_bucket, &cost_by_bucket);
+    let buckets = merge_buckets(&usage_by_bucket, &cost_by_bucket)?;
     let model_breakdown = model_breakdown
         .into_iter()
         .map(|(model, totals)| ModelUsage {
@@ -188,32 +182,30 @@ fn budget_for(
     period: BudgetPeriod,
     start: &DateTimeUtc,
     end_micros: i64,
-    costs: &BTreeMap<DateTimeUtc, (DateTimeUtc, Option<i64>)>,
+    costs: &BTreeMap<DateTimeUtc, (DateTimeUtc, Option<DecimalCents>)>,
 ) -> Result<ward_pulse_core::model::BudgetState, AnthropicReportError> {
     let start_micros = utc_micros(start.as_str())?;
     let mut expected_day = start_micros;
-    let mut total = 0_i64;
+    let mut total = DecimalCents::default();
     let mut complete = start_micros < end_micros;
     for (start, (_, cost)) in costs {
         let day = utc_micros(start.as_str())?;
         if day < start_micros || day >= end_micros {
             continue;
         }
-        let Some(cents) = cost.filter(|_| day == expected_day) else {
+        let Some(cents) = cost.as_ref().filter(|_| day == expected_day) else {
             complete = false;
             break;
         };
-        total = total
-            .checked_add(cents)
-            .ok_or(AnthropicReportError::NumericOverflow)?;
+        total = total.checked_add(cents.clone())?;
         expected_day += 86_400_000_000;
     }
-    Ok(calculate_budget_state(
-        period,
-        (complete && expected_day >= end_micros).then(|| Money::minor_units(total, "USD")),
-        None,
-        None,
-    ))
+    let spent = if complete && expected_day >= end_micros {
+        Some(Money::minor_units(total.rounded()?, "USD"))
+    } else {
+        None
+    };
+    Ok(calculate_budget_state(period, spent, None, None))
 }
 
 fn utc_timestamp(value: &str) -> Result<DateTimeUtc, AnthropicReportError> {
@@ -247,8 +239,8 @@ fn utc_micros(value: &str) -> Result<i64, AnthropicReportError> {
 
 fn merge_buckets(
     usage: &BTreeMap<DateTimeUtc, (DateTimeUtc, UsageTotals)>,
-    costs: &BTreeMap<DateTimeUtc, (DateTimeUtc, Option<i64>)>,
-) -> Vec<UsageBucket> {
+    costs: &BTreeMap<DateTimeUtc, (DateTimeUtc, Option<DecimalCents>)>,
+) -> Result<Vec<UsageBucket>, AnthropicReportError> {
     let mut keys: Vec<_> = usage.keys().cloned().chain(costs.keys().cloned()).collect();
     keys.sort();
     keys.dedup();
@@ -265,11 +257,17 @@ fn merge_buckets(
                 .expect("day has usage or cost")
                 .clone();
             let totals = usage.map(|(_, totals)| *totals);
-            UsageBucket {
+            Ok(UsageBucket {
                 start_at: start,
                 end_at: end,
                 cost: cost
-                    .and_then(|(_, minor)| minor.map(|value| Money::minor_units(value, "USD"))),
+                    .and_then(|(_, cents)| cents.as_ref())
+                    .map(|value| {
+                        value
+                            .rounded()
+                            .map(|minor| Money::minor_units(minor, "USD"))
+                    })
+                    .transpose()?,
                 input_tokens: totals.map(|value| value.input_tokens),
                 output_tokens: totals.map(|value| value.output_tokens),
                 cached_tokens: totals.map(|value| value.cached_tokens),
@@ -283,13 +281,59 @@ fn merge_buckets(
                 model: None,
                 project: None,
                 user: None,
-            }
+            })
         })
         .collect()
 }
 
+/// Exact signed cents, retaining all supplied fractional digits until an output is rounded.
+#[derive(Clone, Debug, Default)]
+struct DecimalCents {
+    negative: bool,
+    whole: i128,
+    fraction: Vec<u8>,
+}
+
+impl DecimalCents {
+    fn checked_add(mut self, mut other: Self) -> Result<Self, AnthropicReportError> {
+        let precision = self.fraction.len().max(other.fraction.len());
+        self.fraction.resize(precision, 0);
+        other.fraction.resize(precision, 0);
+        if self.negative == other.negative {
+            let mut carry = 0;
+            for (left, right) in self.fraction.iter_mut().zip(&other.fraction).rev() {
+                let sum = *left + *right + carry;
+                *left = sum % 10;
+                carry = sum / 10;
+            }
+            // Each operand rounds into i64, so their magnitudes fit comfortably in i128.
+            self.whole += other.whole + i128::from(carry);
+        } else {
+            if (self.whole, &self.fraction) < (other.whole, &other.fraction) {
+                std::mem::swap(&mut self, &mut other);
+            }
+            let mut borrow = 0;
+            for (left, right) in self.fraction.iter_mut().zip(&other.fraction).rev() {
+                let difference = 10 + *left - *right - borrow;
+                *left = difference % 10;
+                borrow = u8::from(difference < 10);
+            }
+            self.whole -= other.whole + i128::from(borrow);
+        }
+        self.rounded()?;
+        Ok(self)
+    }
+
+    fn rounded(&self) -> Result<i64, AnthropicReportError> {
+        let round_up = self.fraction.first().is_some_and(|digit| *digit >= 5);
+        let magnitude = self.whole + i128::from(round_up);
+        let value = if self.negative { -magnitude } else { magnitude };
+        i64::try_from(value).map_err(|_| AnthropicReportError::NumericOverflow)
+    }
+}
+
 /// Anthropic cost amounts are decimal strings in lowest currency units (cents).
-fn cents_from_decimal(source: &str) -> Result<i64, AnthropicReportError> {
+fn cents_from_decimal(source: &str) -> Result<DecimalCents, AnthropicReportError> {
     let (integer, fraction) = source.split_once('.').unwrap_or((source, ""));
     if !fraction.bytes().all(|digit| digit.is_ascii_digit()) {
         return Err(AnthropicReportError::InvalidAmount);
@@ -297,15 +341,13 @@ fn cents_from_decimal(source: &str) -> Result<i64, AnthropicReportError> {
     let whole: i64 = integer
         .parse()
         .map_err(|_| AnthropicReportError::InvalidAmount)?;
-    // Round half away from zero on the first fractional digit.
-    let round_up = fraction.bytes().next().is_some_and(|digit| digit >= b'5');
-    if round_up {
-        whole
-            .checked_add(if whole >= 0 { 1 } else { -1 })
-            .ok_or(AnthropicReportError::NumericOverflow)
-    } else {
-        Ok(whole)
-    }
+    let cents = DecimalCents {
+        negative: integer.starts_with('-'),
+        whole: i128::from(whole).abs(),
+        fraction: fraction.bytes().map(|digit| digit - b'0').collect(),
+    };
+    cents.rounded()?;
+    Ok(cents)
 }
 
 fn normalize_currency(currency: &str) -> Result<(), AnthropicReportError> {
@@ -664,29 +706,24 @@ mod tests {
     }
 
     #[test]
-    fn rounds_cent_amounts() {
-        assert_eq!(cents_from_decimal("123.45").expect("parse"), 123);
-        assert_eq!(cents_from_decimal("123.78912").expect("parse"), 124);
-        assert!(cents_from_decimal("12.3x").is_err());
-        assert!(cents_from_decimal("").is_err());
-        assert!(matches!(
-            cents_from_decimal("9223372036854775807.9"),
-            Err(AnthropicReportError::NumericOverflow)
-        ));
-    }
-
-    #[test]
-    fn checks_cost_addition_within_and_across_days() {
-        for same_day in [true, false] {
+    fn rounds_costs_after_aggregation() {
+        for (previous_day, today, expected_previous, expected_today) in [
+            (
+                serde_json::json!([]),
+                serde_json::json!([{"amount": "45.49"}, {"amount": "78.49"}]),
+                0,
+                124,
+            ),
+            (
+                serde_json::json!([{"amount": "45.49"}]),
+                serde_json::json!([{"amount": "78.49"}]),
+                45,
+                78,
+            ),
+        ] {
             let mut costs = zero_cost_days(1, 19);
-            costs["data"][17]["results"] = serde_json::json!([
-                {"amount": "9223372036854775807"}
-            ]);
-            let index = if same_day { 17 } else { 18 };
-            costs["data"][index]["results"]
-                .as_array_mut()
-                .unwrap()
-                .push(serde_json::json!({"amount": "1"}));
+            costs["data"][17]["results"] = previous_day;
+            costs["data"][18]["results"] = today;
             let report = serde_json::json!({
                 "accountId": "anthropic-local",
                 "generatedAt": "2026-07-19T12:00:00Z",
@@ -697,10 +734,172 @@ mod tests {
                 "usagePages": [],
                 "costPages": [costs.to_string()]
             });
+            let account = anthropic_provider_snapshot_from_report_json(&report.to_string())
+                .unwrap()
+                .provider_snapshot;
+            assert_eq!(
+                account.buckets[17].cost,
+                Some(Money::minor_units(expected_previous, "USD"))
+            );
+            assert_eq!(
+                account.buckets[18].cost,
+                Some(Money::minor_units(expected_today, "USD"))
+            );
+            assert_eq!(account.today.spent, account.buckets[18].cost);
+            assert_eq!(account.week.spent, Some(Money::minor_units(124, "USD")));
+            assert_eq!(account.month.spent, Some(Money::minor_units(124, "USD")));
+        }
+    }
+
+    #[test]
+    fn rounds_costs_after_repeated_buckets_and_pages() {
+        let mut costs = zero_cost_days(1, 19);
+        costs["data"][18]["results"] = serde_json::json!([{"amount": "0.1"}, {"amount": "0.1"}]);
+        let mut repeated = costs["data"][18].clone();
+        repeated["results"] = serde_json::json!([{"amount": "0.1"}]);
+        costs["data"].as_array_mut().unwrap().push(repeated);
+        let mut next_page = zero_cost_days(19, 19);
+        next_page["data"][0]["results"] = serde_json::json!([{"amount": "0.1"}, {"amount": "0.1"}]);
+        let report = serde_json::json!({
+            "accountId": "anthropic-local",
+            "generatedAt": "2026-07-19T12:00:00Z",
+            "capturedEndMicros": 1_784_462_400_000_000_i64,
+            "todayStart": "2026-07-19T00:00:00Z",
+            "weekStart": "2026-07-13T00:00:00Z",
+            "monthStart": "2026-07-01T00:00:00Z",
+            "usagePages": [],
+            "costPages": [costs.to_string(), next_page.to_string()]
+        });
+        let account = anthropic_provider_snapshot_from_report_json(&report.to_string())
+            .unwrap()
+            .provider_snapshot;
+        assert_eq!(account.buckets.len(), 19);
+        assert_eq!(account.buckets[18].cost, Some(Money::minor_units(1, "USD")));
+        assert_eq!(account.today.spent, Some(Money::minor_units(1, "USD")));
+        assert_eq!(account.week.spent, Some(Money::minor_units(1, "USD")));
+        assert_eq!(account.month.spent, Some(Money::minor_units(1, "USD")));
+    }
+
+    #[test]
+    fn rounds_cent_amounts() {
+        for (source, expected) in [
+            ("123.45", 123),
+            ("123.78912", 124),
+            ("123.5", 124),
+            ("-123.5", -124),
+            ("+0.5", 1),
+            ("-0.5", -1),
+            ("-0.49", 0),
+            ("1.", 1),
+            ("9223372036854775807.49", i64::MAX),
+            ("-9223372036854775808", i64::MIN),
+            ("-9223372036854775808.49", i64::MIN),
+        ] {
+            assert_eq!(
+                cents_from_decimal(source).unwrap().rounded().unwrap(),
+                expected,
+                "{source}"
+            );
+        }
+        for source in [
+            "12.3x",
+            "",
+            ".5",
+            "9223372036854775808",
+            "-9223372036854775809",
+        ] {
             assert!(matches!(
-                anthropic_provider_snapshot_from_report_json(&report.to_string()),
+                cents_from_decimal(source),
+                Err(AnthropicReportError::InvalidAmount)
+            ));
+        }
+        for source in [
+            "9223372036854775807.9",
+            "9223372036854775807.5",
+            "-9223372036854775808.5",
+        ] {
+            assert!(matches!(
+                cents_from_decimal(source),
                 Err(AnthropicReportError::NumericOverflow)
             ));
+        }
+    }
+
+    #[test]
+    fn adds_exact_signed_cent_amounts() {
+        for (left, right, expected) in [
+            ("1.005", "-0.51", 0),
+            ("-1.005", "0.51", 0),
+            ("-0.51", "1.01", 1),
+            ("0.51", "-1.01", -1),
+            ("-0.5", "0.5", 0),
+            ("9223372036854775807", "0.49", i64::MAX),
+            ("-9223372036854775808", "-0.49", i64::MIN),
+        ] {
+            let total = cents_from_decimal(left)
+                .unwrap()
+                .checked_add(cents_from_decimal(right).unwrap())
+                .unwrap();
+            assert_eq!(total.rounded().unwrap(), expected, "{left} + {right}");
+        }
+        for (sign, expected) in [("", 1), ("-", -1)] {
+            let left = format!("{sign}0.4{}", "9".repeat(80));
+            let right = format!("{sign}0.{}1", "0".repeat(80));
+            let total = cents_from_decimal(&left)
+                .unwrap()
+                .checked_add(cents_from_decimal(&right).unwrap())
+                .unwrap();
+            assert_eq!(total.rounded().unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn checks_cost_addition_within_and_across_days() {
+        for (first, increment, cancellation) in [
+            ("9223372036854775807", "1", "-1"),
+            ("-9223372036854775808", "-1", "1"),
+            ("9223372036854775807.4", "0.1", "-0.1"),
+            ("-9223372036854775808.4", "-0.1", "0.1"),
+        ] {
+            for aggregation in ["results", "pages", "days"] {
+                let mut costs = zero_cost_days(1, 19);
+                costs["data"][16]["results"] = serde_json::json!([{"amount": first}]);
+                let mut pages = Vec::new();
+                match aggregation {
+                    "results" => {
+                        costs["data"][16]["results"] = serde_json::json!([
+                            {"amount": first}, {"amount": increment}, {"amount": cancellation}
+                        ]);
+                    }
+                    "pages" => {
+                        for amount in [increment, cancellation] {
+                            let mut page = zero_cost_days(17, 17);
+                            page["data"][0]["results"] = serde_json::json!([{"amount": amount}]);
+                            pages.push(page.to_string());
+                        }
+                    }
+                    _ => {
+                        costs["data"][17]["results"] = serde_json::json!([{"amount": increment}]);
+                        costs["data"][18]["results"] =
+                            serde_json::json!([{"amount": cancellation}]);
+                    }
+                }
+                pages.insert(0, costs.to_string());
+                let report = serde_json::json!({
+                    "accountId": "anthropic-local",
+                    "generatedAt": "2026-07-19T12:00:00Z",
+                    "capturedEndMicros": 1_784_462_400_000_000_i64,
+                    "todayStart": "2026-07-19T00:00:00Z",
+                    "weekStart": "2026-07-13T00:00:00Z",
+                    "monthStart": "2026-07-01T00:00:00Z",
+                    "usagePages": [],
+                    "costPages": pages
+                });
+                assert!(matches!(
+                    anthropic_provider_snapshot_from_report_json(&report.to_string()),
+                    Err(AnthropicReportError::NumericOverflow)
+                ));
+            }
         }
     }
 
