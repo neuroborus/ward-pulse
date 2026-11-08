@@ -147,7 +147,9 @@ void main() {
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(channel, (call) async {
       expect(call.method, 'syncWatchSummary');
-      published.add(jsonDecode(call.arguments as String) as Map<String, dynamic>);
+      published.add(
+        jsonDecode(call.arguments as String) as Map<String, dynamic>,
+      );
       return null;
     });
     addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
@@ -182,7 +184,10 @@ void main() {
     };
     const service = MethodChannelWatchSyncService();
 
-    expect(watchRingPayloadSubtitle(dashboard, selected), 'Claude plan 0% left');
+    expect(
+      watchRingPayloadSubtitle(dashboard, selected),
+      'Claude plan 0% left',
+    );
     await service.sync(dashboard, selected);
     final populated = published.single;
     expect((populated['rings'] as List).single['usedPercent'], 100);
