@@ -83,6 +83,8 @@ adb -s "$DEVICE_SERIAL" exec-out screencap -p > "$PRIVATE_CAPTURE_PATH"
 
 On multi-display phones and foldables, qualify the intended screen's current logical-to-physical display mapping and active state before capture, then use `screencap`'s documented `-d` physical-display option with that qualified physical ID when an explicit target is needed. Requalify after any fold/display transition; do not hardcode profile display IDs, silently strip a non-PNG result or infer the earlier failure's cause from a later successful capture.
 
+Treat `uiautomator dump` as a native-file producer; command completion/output alone does not establish transferred XML, and `/dev/tty` is not a portable stdout contract without actual producer/channel proof. Use a unique private, case-owned device export path, verify the file exists and is nonempty, transfer it from the exact verified target, then parse and validate the expected XML/hierarchy before dependent target use under [native-output validation](../../ui-verification/references/state-and-artifacts.md#case-and-evidence-continuity). Retain bounded sanitized phase/invocation, exit and stdout/stderr classifications before guards; distinguish transport, idle, export, transfer/read and parse outcomes rather than treating missing XML as an empty hierarchy. Clean only the owned temporary file.
+
 Only unfilled/unentered unlock UI may be inspected privately and transiently for geometry.
 Never capture entered pattern/PIN, retain an authentication frame as proof or publish it.
 Keep identifying content out of saved app frames. Apply user-docs before public use;
