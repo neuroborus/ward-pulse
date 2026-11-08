@@ -2744,6 +2744,7 @@ void main() {
         expect(find.text('Saving…'), findsNothing);
         final month = find.widgetWithText(CheckboxListTile, 'Month');
         await tester.ensureVisible(month);
+        await tester.pumpAndSettle();
         await tester.tap(month);
         await tester.pumpAndSettle();
         expect(store.writes.last.selectedIds, [todayId, monthId]);
