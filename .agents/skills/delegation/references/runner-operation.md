@@ -188,6 +188,12 @@ never a live run: `node --test .agents/skills/delegation/scripts/observe-run-wai
 
 Bind managed controllers by `/proc` executable identity, the pinned Runner entry and exact
 project/run arguments appropriate to their supported route; Node can expose `comm=MainThread`.
+
+Installed launchers can execute from immutable runtime payloads outside the outer installation;
+qualify the actual entry using its public payload manifest and launcher modules, rather than
+an installation-path prefix. A different directory alone proves neither foreign ownership nor
+a version mismatch, and a negative outer-prefix-only census does not establish retirement.
+
 Revalidate PID + startTicks before comparisons; name/CWD alone or an empty `node`/`nodejs`
 comm-filter result proves neither ownership nor retirement. Keep the census scoped,
 including separately tracked owned descendants. An unreadable known or evidenced in-scope
