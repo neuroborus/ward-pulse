@@ -114,7 +114,8 @@ They do not supply a Plan reset time. Purchased Extra usage/on-demand meters sta
 rings; their widget eligibility is separate.
 
 Until you make a selection, defaults admit available metrics in catalogue order within both
-limits. Clearing every checkbox is an explicit choice to show no rings.
+limits. Clearing every checkbox is an explicit choice to show no rings and also hides the
+face's standalone credit row once the updated summary arrives.
 
 If saved choices exceed either limit, **Correct ring choices** keeps them visible for you to
 remove. Selected unavailable or no-longer-reported choices can still be deselected, even if

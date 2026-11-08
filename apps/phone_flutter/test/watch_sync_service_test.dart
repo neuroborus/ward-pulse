@@ -140,6 +140,92 @@ void main() {
     },
   );
 
+  test('stored all-off clears credits and matches the preview', () async {
+    final published = <Map<String, dynamic>>[];
+    const channel = MethodChannel('app.wardpulse/watch_sync');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'syncWatchSummary');
+      published.add(jsonDecode(call.arguments as String) as Map<String, dynamic>);
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    final json =
+        jsonDecode(
+              File(
+                '../../fixtures/snapshots/dashboard_today.json',
+              ).readAsStringSync(),
+            )
+            as Map<String, dynamic>;
+    final account = (json['accounts'] as List).first as Map<String, dynamic>;
+    account['provider'] = 'claude';
+    account['connection'] = 'anthropic.plan';
+    for (final period in ['today', 'week', 'month']) {
+      account[period] = BudgetState.unknownPeriod(period).toJson();
+    }
+    account['allowances'] = [
+      _cursorPool('claude-five-hour', '5h', 100),
+      {
+        ..._cursorPool('purchased', 'Purchased credits', 0),
+        'source': 'purchased',
+        'usedPercent': null,
+        'remaining': {'value': '1200', 'unit': 'credits'},
+      },
+    ];
+    final dashboard = DashboardSnapshot.fromJson(json);
+    final selected = watchRingPreferencesFromStoredIds([claudePlanRingId]);
+    const credits = {
+      'text': '1.2K',
+      'label': 'Credits left',
+      'provider': 'claude',
+    };
+    const service = MethodChannelWatchSyncService();
+
+    expect(watchRingPayloadSubtitle(dashboard, selected), 'Claude plan 0% left');
+    await service.sync(dashboard, selected);
+    final populated = published.single;
+    expect((populated['rings'] as List).single['usedPercent'], 100);
+    expect(populated['creditsGlance'], credits);
+
+    final allOff = watchRingPreferencesFromStoredIds([]);
+    expect(allOff.selectedIds, isEmpty);
+    expect(watchRingPayloadSubtitle(dashboard, allOff), 'No rings selected');
+    await service.sync(dashboard, allOff);
+    expect(published, hasLength(2));
+    final cleared = published.last;
+    expect(cleared['schemaVersion'], 9);
+    expect(cleared['rings'], isEmpty);
+    expect(cleared.containsKey('creditsGlance'), isTrue);
+    expect(cleared['creditsGlance'], isNull);
+    expect(cleared['allowances'], populated['allowances']);
+
+    await service.sync(dashboard, selected);
+    expect(published, hasLength(3));
+    expect(published.last['rings'], populated['rings']);
+    expect(published.last['creditsGlance'], credits);
+
+    (account['allowances'] as List).first['usedPercent'] = null;
+    final unknown = DashboardSnapshot.fromJson(json);
+    await service.sync(unknown, const WatchRingPreferences());
+    expect(published, hasLength(4));
+    expect(published.last['rings'], isEmpty);
+    expect(published.last['creditsGlance'], credits);
+
+    for (final id in [claudePlanRingId, 'allowance.claude.missing']) {
+      final unavailable = watchRingPreferencesFromStoredIds([id]);
+      expect(
+        watchRingPayloadSubtitle(unknown, unavailable),
+        'Selected ring data unavailable',
+      );
+      final count = published.length;
+      await service.sync(unknown, unavailable);
+      expect(published, hasLength(count + 1));
+      expect(published.last['rings'], isEmpty);
+      expect(published.last['creditsGlance'], credits);
+    }
+  });
+
   test('builds the sanitized watch summary fixture', () {
     final dashboard = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),

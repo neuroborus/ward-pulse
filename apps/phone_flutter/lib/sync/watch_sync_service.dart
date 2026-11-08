@@ -99,7 +99,10 @@ class WatchDashboardSummaryPayload {
       resolveWatchRings(snapshot, ringPreferences),
       snapshot: snapshot,
     );
-    final creditsGlance = resolveWatchCreditsGlance(snapshot);
+    final creditsGlance =
+        ringPreferences.selectedIds?.isEmpty == true
+            ? null
+            : resolveWatchCreditsGlance(snapshot);
     final window = ManualRefreshWindow.fromLastSync(
       lastSyncAt: manualRefreshAnchorAt ?? snapshot.generatedAt,
       now: clock,

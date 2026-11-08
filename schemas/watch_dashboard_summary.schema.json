@@ -88,7 +88,7 @@
       }
     },
     "creditsGlance": {
-      "description": "SHORT_TEXT remaining purchased credits for the watch strip. Null when unavailable.",
+      "description": "SHORT_TEXT remaining purchased credits for the watch strip. Null when unavailable or deliberately suppressed by an explicit empty ring selection.",
       "anyOf": [
         {
           "type": "object",

@@ -78,7 +78,9 @@ services and build work.
   unchanged. Exhaustion styling does not infer alerts, thresholds or refresh state.
 - Face strips show compact remaining credits per provider family from `allowances` (`% · 500`),
   same matching rule as Glance; accents use the family ColorRamp. `creditsGlance` is for
-  credits-only faces when there are no plan rings.
+  credits-only faces when there are no plan rings, including unset/default preferences and
+  nonempty selections with unavailable ring data. An explicit empty phone `selectedIds`
+  publishes no rings and `creditsGlance: null`, clearing the standalone credit row.
 - The app keeps two home pages: **Glance** and **Plan windows**, which says when each window
   comes back (rules in `apps/wear_android/README.md`). **Alerts** opens from the Glance pill
   (active list only — no rule editing). A **Watch face** action after all Plan windows rows,

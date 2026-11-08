@@ -1741,7 +1741,7 @@ called this band the "upper aperture"; it is the same band.
    | 3 | 101, 102, 105 | 259 / 286 / 313 | `y=259` |
    | 2 | 101, 102 | 286 / 313 | `y=286` |
    | 1 | 101 | 313 | `y=313` |
-   | 0 | none | 313 — credits only | — |
+   | 0 | none | 313 — credits only when supplied | — |
 
    **The zero row is a shipped state, not an edge case.** A payload may carry purchased
    credits and no plan ring at all, and the face has always shown that as a lone strip; before
@@ -1761,6 +1761,12 @@ called this band the "upper aperture"; it is the same band.
    rings now sit low in the well area instead of hugging the watermark. A top-anchored stack
    cannot be folded at all — the row a slot must paint would move with the ring count, and one
    slot has one height.
+
+   **Current explicit-all-off exception:** when phone preferences contain a non-null empty
+   `selectedIds`, the phone publishes `rings: []` and `creditsGlance: null`, clearing the
+   standalone credit row. Unset/default preferences and nonempty selections with unavailable
+   ring data retain the credits-only fallback. An empty resolved ring list alone does not
+   establish an explicit all-off choice.
 
 4. **One slot, two jobs: only `TITLE` collides.** Audited against the shipped `watchface.xml`
    by which slots read which channel:
