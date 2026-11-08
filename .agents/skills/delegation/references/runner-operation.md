@@ -137,6 +137,15 @@ Keep mandatory HOST acceptance after whole DONE, run-owned process retirement an
 quiescent ownership; if the route used a foreground owning CLI, also require its actual exit.
 HOST is not a Native check or Native-commit prerequisite. Preserve every scope-appropriate gate.
 
+For a custom STDIO client, intermediate `run_wait` activity requires `progress:true` and
+`tools/call` `params._meta.progressToken`, beside `params.name` and `params.arguments`, not
+inside the tool arguments. Dispatch `notifications/progress` while awaiting the same call's
+response, matching `params.progressToken`; `params.progress` is the public activity revision
+and `params.message` its message, not a heartbeat, finding count, percentage or full status.
+Intermediate progress does not resolve `run_wait`: keep that one wait until terminal state,
+required input, proved owner loss or timeout; do not replace it with status polling or start
+a second wait.
+
 Bind managed controllers by `/proc` executable identity, the pinned Runner entry and exact
 project/run arguments appropriate to their supported route; Node can expose `comm=MainThread`.
 Revalidate PID + startTicks before comparisons; name/CWD alone or an empty `node`/`nodejs`
