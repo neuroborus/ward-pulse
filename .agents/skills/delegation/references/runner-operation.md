@@ -146,6 +146,46 @@ Intermediate progress does not resolve `run_wait`: keep that one wait until term
 required input, proved owner loss or timeout; do not replace it with status polling or start
 a second wait.
 
+### Single-wait observation helper
+
+Use [observe-run-wait.mjs](../scripts/observe-run-wait.mjs) for one owned STDIO observation.
+First qualify the Node executable, Runner entry, canonical project/run binding and sole
+observation interval independently. The two assertion flags record that caller responsibility;
+neither cwd nor this helper discovers ownership. Keep other controllers and the live audit untouched.
+Supply absolute paths and a fresh output directory whose parent already exists:
+
+```bash
+"$qualified_node" .agents/skills/delegation/scripts/observe-run-wait.mjs \
+  --node "$qualified_node" --runner-entry "$qualified_runner_entry" \
+  --project "$canonical_project" --run-id "$qualified_run_id" \
+  --cursor 0 --wait-ms 900000 --output "$fresh_receipt_directory" \
+  --qualified-binding --sole-observer
+```
+
+The helper initializes protocol `2025-11-25` and sends exactly one `run_wait`, with no
+discovery, polling, retry or run control. There is no shorter client request deadline.
+Matched progress is appended to `progress.jsonl` before immediate JSONL dispatch to stdout;
+unmatched tokens are ignored. `outcome.json` retains the actual final JSON-RPC response,
+including `structuredContent`, and takes `activityCursor` only from that response. Missing
+final responses/cursors remain `Unknown`. `returned` means the wait returned, not that the
+run passed; `timedOut` is a normal server result. JSON-RPC/tool errors and protocol,
+transport, EOF, process, interruption and receipt failures remain distinct.
+
+The directory is created exclusively with mode `0700`; the three receipt files use exclusive
+creation and mode `0600`. `stderr.log` retains at most the first 64 KiB of the owned server's
+stderr, with observed/retained byte counts and truncation metadata in the outcome. Collect only
+public protocol/diagnostics, never provider stores, transcripts, prompts, credentials or environment dumps.
+Receipt failures preserve partial files and report failure; an absent or incomplete outcome is
+not evidence of success. The helper ends its own stdin normally after a response or client
+failure, observes process exit and stream closure for at most five seconds, then releases local
+handles without signaling the server or durable run. Cleanup reports actual exit or `Unknown`
+and whether the limit was reached. Exit code zero requires a normal wait result, no client
+failures and observed successful cleanup; it proves neither run retirement nor product acceptance.
+The single [controlled protocol test](../scripts/observe-run-wait.test.mjs) uses local streams,
+never a live run: `node --test .agents/skills/delegation/scripts/observe-run-wait.test.mjs`.
+
+### Controller ownership and retirement
+
 Bind managed controllers by `/proc` executable identity, the pinned Runner entry and exact
 project/run arguments appropriate to their supported route; Node can expose `comm=MainThread`.
 Revalidate PID + startTicks before comparisons; name/CWD alone or an empty `node`/`nodejs`
