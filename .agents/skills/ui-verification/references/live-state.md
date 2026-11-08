@@ -16,6 +16,12 @@ pre-entry barrier or unobserved recovery/wake/notification bookkeeping preservat
 Before shared-state hash equality/drift classification, bind BOTH expected and actual to
 the exact required object/path or named field AND byte representation (container XML versus decoded value).
 Compare matching domains; missing bindings stay Unknown. Hashes of different representations alone do not prove drift, a writer or corruption.
+Compare file modes in the same domain: Git `100644` records a versioned non-executable regular
+file, not exact POSIX permissions (`0644` versus `0664`); compare type and executable status
+for Git-mode equality. Exact POSIX-permission preservation needs retained before/after bits
+and remains Unknown when before bits are missing. Keep content, index and actual Git-mode
+guards exact; Git equality cannot replace a required POSIX guard, and neither `chmod` nor
+content edits may force equality.
 Keep applicable byte guards exact: decoded-value equality cannot replace a required container-byte guard; never canonicalize or add tolerance to obtain equality.
 Retain bounded expected AND actual presence/hashes, state source and relevant target identity, operation/phase, snapshot/read times and available
 generation/write times with their origins/timezones. Record whether writer custody covered
