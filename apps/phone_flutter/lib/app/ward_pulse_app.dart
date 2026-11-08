@@ -277,6 +277,12 @@ class _DashboardHostState extends State<DashboardHost>
       const RefreshIntervalPreference();
   WatchRingPreferences _ringPreferences = const WatchRingPreferences();
   PhoneWidgetPreferences _widgetPreferences = const PhoneWidgetPreferences();
+  WatchRingPreferences? _pendingRingPreferences;
+  PhoneWidgetPreferences? _pendingWidgetPreferences;
+  Future<void> _ringPreferenceWork = Future<void>.value();
+  Future<void> _widgetPreferenceWork = Future<void>.value();
+  var _ringPreferenceRevision = 0;
+  var _widgetPreferenceRevision = 0;
   AlertThresholdPreferences _alertThresholds =
       const AlertThresholdPreferences();
   Future<void> _snapshotSettingsWork = Future<void>.value();
@@ -528,20 +534,40 @@ class _DashboardHostState extends State<DashboardHost>
     }
   }
 
-  Future<void> _readRingPreferences() async {
-    try {
-      _ringPreferences = await widget.watchRingPreferenceStore.read();
-    } catch (_) {
-      _ringPreferences = const WatchRingPreferences();
-    }
+  Future<void> _readRingPreferences() {
+    if (!mounted || _pendingRingPreferences != null)
+      return Future<void>.value();
+    final revision = _ringPreferenceRevision;
+    return _ringPreferenceWork = _ringPreferenceWork.then((_) async {
+      if (!mounted || revision != _ringPreferenceRevision) return;
+      var value = const WatchRingPreferences();
+      try {
+        value = await widget.watchRingPreferenceStore.read();
+      } catch (_) {
+        // Only a read that still owns this revision may restore defaults.
+      }
+      if (mounted && revision == _ringPreferenceRevision) {
+        _ringPreferences = value;
+      }
+    });
   }
 
-  Future<void> _readWidgetPreferences() async {
-    try {
-      _widgetPreferences = await widget.phoneWidgetPreferenceStore.read();
-    } catch (_) {
-      _widgetPreferences = const PhoneWidgetPreferences();
-    }
+  Future<void> _readWidgetPreferences() {
+    if (!mounted || _pendingWidgetPreferences != null)
+      return Future<void>.value();
+    final revision = _widgetPreferenceRevision;
+    return _widgetPreferenceWork = _widgetPreferenceWork.then((_) async {
+      if (!mounted || revision != _widgetPreferenceRevision) return;
+      var value = const PhoneWidgetPreferences();
+      try {
+        value = await widget.phoneWidgetPreferenceStore.read();
+      } catch (_) {
+        // Only a read that still owns this revision may restore defaults.
+      }
+      if (mounted && revision == _widgetPreferenceRevision) {
+        _widgetPreferences = value;
+      }
+    });
   }
 
   Future<void> _readAlertThresholds() async {
@@ -692,30 +718,74 @@ class _DashboardHostState extends State<DashboardHost>
     await _scheduleAutoSync(value.interval);
   }
 
-  Future<void> _updateRingPreferences(WatchRingPreferences value) async {
-    await widget.watchRingPreferenceStore.write(value);
-    if (mounted) {
+  Future<void> _updateRingPreferences(
+    WatchRingPreferences Function(WatchRingPreferences current) update,
+  ) {
+    if (!mounted) return Future<void>.value();
+    final current = _pendingRingPreferences ?? _ringPreferences;
+    final value = update(current);
+    if (identical(value, current)) return Future<void>.value();
+    final revision = ++_ringPreferenceRevision;
+    final store = widget.watchRingPreferenceStore;
+    setState(() => _pendingRingPreferences = value);
+    final work = _ringPreferenceWork.then((_) async {
+      try {
+        await store.write(value);
+      } catch (_) {
+        if (mounted && revision == _ringPreferenceRevision) {
+          setState(() => _pendingRingPreferences = null);
+        }
+        rethrow;
+      }
+      if (!mounted) return;
       setState(() {
         _ringPreferences = value;
+        if (revision == _ringPreferenceRevision) _pendingRingPreferences = null;
       });
-    }
-    final snapshot = _currentSnapshot;
-    if (snapshot != null) {
-      unawaited(_syncWatch(snapshot));
-    }
+      final snapshot = _currentSnapshot;
+      if (snapshot != null) unawaited(_syncWatch(snapshot));
+    });
+    // A failed save is reported to its picker but cannot poison later work.
+    _ringPreferenceWork = work.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return work;
   }
 
-  Future<void> _updateWidgetPreferences(PhoneWidgetPreferences value) async {
-    await widget.phoneWidgetPreferenceStore.write(value);
-    if (mounted) {
+  Future<void> _updateWidgetPreferences(
+    PhoneWidgetPreferences Function(PhoneWidgetPreferences current) update,
+  ) {
+    if (!mounted) return Future<void>.value();
+    final current = _pendingWidgetPreferences ?? _widgetPreferences;
+    final value = update(current);
+    if (identical(value, current)) return Future<void>.value();
+    final revision = ++_widgetPreferenceRevision;
+    final store = widget.phoneWidgetPreferenceStore;
+    setState(() => _pendingWidgetPreferences = value);
+    final work = _widgetPreferenceWork.then((_) async {
+      try {
+        await store.write(value);
+      } catch (_) {
+        if (mounted && revision == _widgetPreferenceRevision) {
+          setState(() => _pendingWidgetPreferences = null);
+        }
+        rethrow;
+      }
+      if (!mounted) return;
       setState(() {
         _widgetPreferences = value;
+        if (revision == _widgetPreferenceRevision)
+          _pendingWidgetPreferences = null;
       });
-    }
-    final snapshot = _currentSnapshot;
-    if (snapshot != null) {
-      unawaited(_syncPhoneWidget(snapshot));
-    }
+      final snapshot = _currentSnapshot;
+      if (snapshot != null) unawaited(_syncPhoneWidget(snapshot));
+    });
+    _widgetPreferenceWork = work.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return work;
   }
 
   // Snapshot acceptance and preference transactions share one order. Provider
@@ -1143,6 +1213,7 @@ class _DashboardHostState extends State<DashboardHost>
     final revision = _surfaceRevision;
     try {
       if (!await widget.repository.isSnapshotCurrent(snapshot) ||
+          !mounted ||
           revision != _surfaceRevision ||
           !identical(snapshot, _currentSnapshot))
         return;
@@ -1159,6 +1230,7 @@ class _DashboardHostState extends State<DashboardHost>
   Future<void> _queueWatchSummary(DashboardSnapshot snapshot) async {
     final revision = _surfaceRevision;
     if (!await widget.repository.isSnapshotCurrent(snapshot) ||
+        !mounted ||
         revision != _surfaceRevision ||
         !identical(snapshot, _currentSnapshot))
       return;
@@ -1392,7 +1464,8 @@ class _DashboardHostState extends State<DashboardHost>
                 onRefresh: _pullToRefresh,
                 snapshot: snapshot,
                 reportingOutcomes: reportingOutcomes,
-                ringPreferences: _ringPreferences,
+                ringPreferences: _pendingRingPreferences ?? _ringPreferences,
+                saving: _pendingRingPreferences != null,
                 onRingPreferencesChanged: _updateRingPreferences,
               ),
               _ when _selectedIndex == _widgetIndex => WidgetScreen(
@@ -1400,7 +1473,8 @@ class _DashboardHostState extends State<DashboardHost>
                 onRefresh: _pullToRefresh,
                 snapshot: snapshot,
                 reportingOutcomes: reportingOutcomes,
-                preferences: _widgetPreferences,
+                preferences: _pendingWidgetPreferences ?? _widgetPreferences,
+                saving: _pendingWidgetPreferences != null,
                 onPreferencesChanged: _updateWidgetPreferences,
               ),
               _ when _selectedIndex == _providersIndex => ProvidersScreen(

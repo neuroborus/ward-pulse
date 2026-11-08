@@ -2486,6 +2486,454 @@ void main() {
     });
   }
 
+  testWidgets(
+    'Watchface composes overlapping picker saves across tab replacement',
+    (tester) async {
+      const todayId = 'budget.openai.platform.today';
+      const weekId = 'budget.openai.platform.week';
+      final releases = [Completer<void>(), Completer<void>()];
+      try {
+        final store =
+            _MemoryWatchRingStore()
+              ..value = const WatchRingPreferences(selectedIds: []);
+        store.beforeWrite = (_) => releases[store.writes.length - 1].future;
+        final sync = _FakeWatchSyncService();
+        Widget app() => WardPulseApp(
+          repository: ValueDashboardRepository(_surfaceSelectionSnapshot()),
+          watchRingPreferenceStore: store,
+          watchSyncService: sync,
+          applyAlertSettings: (current, _) => current,
+        );
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Watchface'));
+        await tester.pumpAndSettle();
+        final today = find.widgetWithText(CheckboxListTile, 'Today');
+        final week = find.widgetWithText(CheckboxListTile, 'Week');
+        await tester.ensureVisible(today);
+        await tester.tap(today);
+        await tester.pumpAndSettle();
+        expect(store.writes.single.selectedIds, [todayId]);
+
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Watchface'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(week);
+        await tester.tap(week);
+        await tester.pumpAndSettle();
+        expect(store.value.selectedIds, isEmpty);
+        expect(sync.syncedPreferences.last.selectedIds, isEmpty);
+
+        releases[0].complete();
+        await tester.pumpAndSettle();
+        expect(store.value.selectedIds, [todayId]);
+        expect(store.writes.map((value) => value.selectedIds).toList(), [
+          [todayId],
+          [todayId, weekId],
+        ]);
+        expect(sync.syncedPreferences.last.selectedIds, [todayId]);
+        expect(tester.widget<CheckboxListTile>(today).value, isTrue);
+        expect(tester.widget<CheckboxListTile>(week).value, isTrue);
+        expect(find.text('Saving…'), findsOneWidget);
+
+        releases[1].complete();
+        await tester.pumpAndSettle();
+        expect(store.value.selectedIds, [todayId, weekId]);
+        expect(sync.syncedPreferences.last.selectedIds, [todayId, weekId]);
+        expect(find.text('Saving…'), findsNothing);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        expect(store.reads, 2);
+        await tester.tap(find.text('Watchface'));
+        await tester.pumpAndSettle();
+        expect(tester.widget<CheckboxListTile>(today).value, isTrue);
+        expect(tester.widget<CheckboxListTile>(week).value, isTrue);
+        expect(sync.syncedPreferences.last.selectedIds, [todayId, weekId]);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        for (final release in releases) {
+          if (!release.isCompleted) release.complete();
+        }
+        await tester.pumpAndSettle();
+      }
+    },
+  );
+
+  testWidgets(
+    'Widget composes overlapping picker saves across tab replacement',
+    (tester) async {
+      const todayId = 'budget.openai.platform.today';
+      const weekId = 'budget.openai.platform.week';
+      final releases = [Completer<void>(), Completer<void>()];
+      try {
+        final store =
+            _MemoryPhoneWidgetStore()
+              ..value = const PhoneWidgetPreferences(selectedIds: []);
+        store.beforeWrite = (_) => releases[store.writes.length - 1].future;
+        final sync = _FakePhoneWidgetSyncService();
+        Widget app() => WardPulseApp(
+          repository: ValueDashboardRepository(_surfaceSelectionSnapshot()),
+          phoneWidgetPreferenceStore: store,
+          phoneWidgetSyncService: sync,
+          applyAlertSettings: (current, _) => current,
+        );
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        final today = find.widgetWithText(CheckboxListTile, 'Today');
+        final week = find.widgetWithText(CheckboxListTile, 'Week');
+        await tester.ensureVisible(today);
+        await tester.tap(today);
+        await tester.pumpAndSettle();
+        expect(store.writes.single.selectedIds, [todayId]);
+
+        await tester.tap(find.text('Watchface'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(week);
+        await tester.tap(week);
+        await tester.pumpAndSettle();
+        expect(store.value.selectedIds, isEmpty);
+        expect(sync.syncedPreferences.last.selectedIds, isEmpty);
+
+        releases[0].complete();
+        await tester.pumpAndSettle();
+        expect(store.value.selectedIds, [todayId]);
+        expect(store.writes.map((value) => value.selectedIds).toList(), [
+          [todayId],
+          [todayId, weekId],
+        ]);
+        expect(sync.syncedPreferences.last.selectedIds, [todayId]);
+        expect(tester.widget<CheckboxListTile>(today).value, isTrue);
+        expect(tester.widget<CheckboxListTile>(week).value, isTrue);
+        expect(find.text('Saving…'), findsOneWidget);
+
+        releases[1].complete();
+        await tester.pumpAndSettle();
+        expect(store.value.selectedIds, [todayId, weekId]);
+        expect(sync.syncedPreferences.last.selectedIds, [todayId, weekId]);
+        expect(find.text('Saving…'), findsNothing);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        expect(store.reads, 2);
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        expect(tester.widget<CheckboxListTile>(today).value, isTrue);
+        expect(tester.widget<CheckboxListTile>(week).value, isTrue);
+        expect(sync.syncedPreferences.last.selectedIds, [todayId, weekId]);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        for (final release in releases) {
+          if (!release.isCompleted) release.complete();
+        }
+        await tester.pumpAndSettle();
+      }
+    },
+  );
+
+  testWidgets('an older ring save failure keeps the composite pending', (
+    tester,
+  ) async {
+    const todayId = 'budget.openai.platform.today';
+    const weekId = 'budget.openai.platform.week';
+    final releases = [Completer<void>(), Completer<void>()];
+    try {
+      final store =
+          _MemoryWatchRingStore()
+            ..value = const WatchRingPreferences(selectedIds: []);
+      store.beforeWrite = (_) => releases[store.writes.length - 1].future;
+      final sync = _FakeWatchSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: ValueDashboardRepository(_surfaceSelectionSnapshot()),
+          watchRingPreferenceStore: store,
+          watchSyncService: sync,
+          applyAlertSettings: (current, _) => current,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      final today = find.widgetWithText(CheckboxListTile, 'Today');
+      final week = find.widgetWithText(CheckboxListTile, 'Week');
+      await tester.ensureVisible(today);
+      await tester.tap(today);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(week);
+      await tester.tap(week);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Widget'));
+      await tester.pumpAndSettle();
+      releases[0].completeError(StateError('Storage unavailable'));
+      await tester.pumpAndSettle();
+      expect(find.text('Could not update ring slots'), findsOneWidget);
+      expect(store.value.selectedIds, isEmpty);
+      expect(sync.syncedPreferences.last.selectedIds, isEmpty);
+      expect(store.writes.last.selectedIds, [todayId, weekId]);
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<CheckboxListTile>(today).value, isTrue);
+      expect(tester.widget<CheckboxListTile>(week).value, isTrue);
+      expect(find.text('Saving…'), findsOneWidget);
+      releases[1].complete();
+      await tester.pumpAndSettle();
+      expect(store.value.selectedIds, [todayId, weekId]);
+      expect(sync.syncedPreferences.last.selectedIds, [todayId, weekId]);
+      expect(find.text('Saving…'), findsNothing);
+      expect(tester.takeException(), isNull);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      for (final release in releases) {
+        if (!release.isCompleted) release.complete();
+      }
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets(
+    'a latest widget failure rolls back and a later edit survives disposal',
+    (tester) async {
+      const todayId = 'budget.openai.platform.today';
+      const monthId = 'budget.openai.platform.month';
+      final releases = [Completer<void>(), Completer<void>()];
+      try {
+        final store =
+            _MemoryPhoneWidgetStore()
+              ..value = const PhoneWidgetPreferences(selectedIds: [todayId]);
+        store.beforeWrite = (_) => releases[store.writes.length - 1].future;
+        final sync = _FakePhoneWidgetSyncService();
+        Widget app() => WardPulseApp(
+          repository: ValueDashboardRepository(_surfaceSelectionSnapshot()),
+          phoneWidgetPreferenceStore: store,
+          phoneWidgetSyncService: sync,
+          applyAlertSettings: (current, _) => current,
+        );
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        final week = find.widgetWithText(CheckboxListTile, 'Week');
+        await tester.ensureVisible(week);
+        await tester.tap(week);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Watchface'));
+        await tester.pumpAndSettle();
+        releases[0].completeError(StateError('Storage unavailable'));
+        await tester.pumpAndSettle();
+        expect(find.text('Could not update widget metrics'), findsOneWidget);
+        expect(sync.syncedPreferences, hasLength(1));
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        expect(store.value.selectedIds, [todayId]);
+        expect(tester.widget<CheckboxListTile>(week).value, isFalse);
+        expect(
+          tester
+              .widget<CheckboxListTile>(
+                find.widgetWithText(CheckboxListTile, 'Today'),
+              )
+              .value,
+          isTrue,
+        );
+        expect(find.text('Saving…'), findsNothing);
+        final month = find.widgetWithText(CheckboxListTile, 'Month');
+        await tester.ensureVisible(month);
+        await tester.tap(month);
+        await tester.pumpAndSettle();
+        expect(store.writes.last.selectedIds, [todayId, monthId]);
+        await tester.pumpWidget(const SizedBox());
+        releases[1].complete();
+        await tester.pumpAndSettle();
+        expect(store.value.selectedIds, [todayId, monthId]);
+        expect(sync.syncedPreferences, hasLength(1));
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        expect(tester.widget<CheckboxListTile>(month).value, isTrue);
+        expect(sync.syncedPreferences.last.selectedIds, [todayId, monthId]);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        for (final release in releases) {
+          if (!release.isCompleted) release.complete();
+        }
+        await tester.pumpAndSettle();
+      }
+    },
+  );
+
+  testWidgets('surface capacity uses pending choices before a picker rebuild', (
+    tester,
+  ) async {
+    const todayId = 'budget.openai.platform.today';
+    const ringIds = [codexPlanRingId, cursorOwnPoolId];
+    const widgetIds = [
+      'missing.a',
+      'missing.b',
+      'missing.c',
+      'missing.d',
+      'missing.e',
+    ];
+    final ringRelease = Completer<void>();
+    final widgetRelease = Completer<void>();
+    try {
+      final rings =
+          _MemoryWatchRingStore()
+            ..value = const WatchRingPreferences(selectedIds: ringIds)
+            ..beforeWrite = (_) => ringRelease.future;
+      final widgets =
+          _MemoryPhoneWidgetStore()
+            ..value = const PhoneWidgetPreferences(selectedIds: widgetIds)
+            ..beforeWrite = (_) => widgetRelease.future;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: ValueDashboardRepository(_surfaceSelectionSnapshot()),
+          watchRingPreferenceStore: rings,
+          phoneWidgetPreferenceStore: widgets,
+          applyAlertSettings: (current, _) => current,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final today = find.widgetWithText(CheckboxListTile, 'Today');
+      final week = find.widgetWithText(CheckboxListTile, 'Week');
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      final addRingToday = tester.widget<CheckboxListTile>(today).onChanged!;
+      final addRingWeek = tester.widget<CheckboxListTile>(week).onChanged!;
+      addRingToday(true);
+      addRingWeek(true);
+      addRingToday(true);
+      await tester.pumpAndSettle();
+      expect(rings.writes.single.selectedIds, [...ringIds, todayId]);
+      expect(find.textContaining('3 of 3 slots used'), findsOneWidget);
+      expect(tester.widget<CheckboxListTile>(week).onChanged, isNull);
+      await tester.tap(find.text('Widget'));
+      await tester.pumpAndSettle();
+      final addWidgetToday = tester.widget<CheckboxListTile>(today).onChanged!;
+      final addWidgetWeek = tester.widget<CheckboxListTile>(week).onChanged!;
+      addWidgetToday(true);
+      addWidgetWeek(true);
+      addWidgetToday(true);
+      await tester.pumpAndSettle();
+      expect(widgets.writes.single.selectedIds, [...widgetIds, todayId]);
+      expect(find.textContaining('6 of 6 slots used'), findsOneWidget);
+      expect(tester.widget<CheckboxListTile>(week).onChanged, isNull);
+      widgetRelease.complete();
+      await tester.pumpAndSettle();
+      expect(widgets.value.selectedIds, [...widgetIds, todayId]);
+      expect(rings.value.selectedIds, ringIds);
+      ringRelease.complete();
+      await tester.pumpAndSettle();
+      expect(rings.value.selectedIds, [...ringIds, todayId]);
+      expect(tester.takeException(), isNull);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      for (final release in [ringRelease, widgetRelease]) {
+        if (!release.isCompleted) release.complete();
+      }
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets(
+    'refresh reads cannot replace accepted edits with old data or defaults',
+    (tester) async {
+      const todayId = 'budget.openai.platform.today';
+      const weekId = 'budget.openai.platform.week';
+      final ringRead = Completer<void>();
+      final widgetRead = Completer<void>();
+      final ringWrite = Completer<void>();
+      final widgetWrite = Completer<void>();
+      try {
+        final rings =
+            _MemoryWatchRingStore()
+              ..value = const WatchRingPreferences(selectedIds: [todayId])
+              ..beforeWrite = (_) => ringWrite.future;
+        final widgets =
+            _MemoryPhoneWidgetStore()
+              ..value = const PhoneWidgetPreferences(selectedIds: [todayId])
+              ..beforeWrite = (_) => widgetWrite.future;
+        final watchSync = _FakeWatchSyncService();
+        final widgetSync = _FakePhoneWidgetSyncService();
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: ValueDashboardRepository(_surfaceSelectionSnapshot()),
+            watchRingPreferenceStore: rings,
+            phoneWidgetPreferenceStore: widgets,
+            watchSyncService: watchSync,
+            phoneWidgetSyncService: widgetSync,
+            applyAlertSettings: (current, _) => current,
+          ),
+        );
+        await tester.pumpAndSettle();
+        rings.value = const WatchRingPreferences(selectedIds: []);
+        rings.beforeRead = () => ringRead.future;
+        widgets.beforeRead = () => widgetRead.future;
+        await tester.tap(find.text('Watchface'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Refresh'));
+        await tester.pumpAndSettle();
+        expect(rings.reads, 2);
+        final week = find.widgetWithText(CheckboxListTile, 'Week');
+        await tester.ensureVisible(week);
+        await tester.tap(week);
+        await tester.pumpAndSettle();
+        expect(rings.writes, isEmpty);
+        ringRead.complete();
+        await tester.pumpAndSettle();
+        expect(rings.writes.single.selectedIds, [todayId, weekId]);
+        expect(widgets.reads, 2);
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(week);
+        await tester.tap(week);
+        await tester.pumpAndSettle();
+        expect(widgets.writes, isEmpty);
+        widgetRead.completeError(StateError('Storage unavailable'));
+        await tester.pumpAndSettle();
+        expect(widgets.writes.single.selectedIds, [todayId, weekId]);
+        expect(watchSync.syncedPreferences.last.selectedIds, [todayId]);
+        expect(widgetSync.syncedPreferences.last.selectedIds, [todayId]);
+        expect(tester.widget<CheckboxListTile>(week).value, isTrue);
+        expect(find.text('Saving…'), findsOneWidget);
+        await tester.tap(find.byTooltip('Refresh'));
+        await tester.pumpAndSettle();
+        expect(rings.reads, 2);
+        expect(widgets.reads, 2);
+        widgetWrite.complete();
+        await tester.pumpAndSettle();
+        expect(widgets.value.selectedIds, [todayId, weekId]);
+        expect(widgetSync.syncedPreferences.last.selectedIds, [
+          todayId,
+          weekId,
+        ]);
+        expect(watchSync.syncedPreferences.last.selectedIds, [todayId]);
+        await tester.tap(find.text('Watchface'));
+        await tester.pumpAndSettle();
+        expect(tester.widget<CheckboxListTile>(week).value, isTrue);
+        expect(find.text('Saving…'), findsOneWidget);
+        ringWrite.complete();
+        await tester.pumpAndSettle();
+        expect(rings.value.selectedIds, [todayId, weekId]);
+        expect(watchSync.syncedPreferences.last.selectedIds, [todayId, weekId]);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        for (final release in [ringRead, widgetRead, ringWrite, widgetWrite]) {
+          if (!release.isCompleted) release.complete();
+        }
+        await tester.pumpAndSettle();
+      }
+    },
+  );
+
   testWidgets('a reload keeps the dashboard on screen', (tester) async {
     final snapshot = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
@@ -5231,6 +5679,34 @@ DashboardSnapshot _asConnection(DashboardSnapshot snapshot) {
   });
 }
 
+DashboardSnapshot _surfaceSelectionSnapshot() {
+  final empty = DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 6));
+  return DashboardSnapshot.fromJson({
+    ...empty.toJson(),
+    'accounts': [
+      {
+        'accountId': 'openai-report',
+        'provider': 'openai',
+        'connection': 'openai.platform',
+        'status': 'ok',
+        'credits': <Object>[],
+        'allowances': <Object>[],
+        'buckets': <Object>[],
+        'modelBreakdown': <Object>[],
+        for (final period in ['today', 'week', 'month'])
+          period: {
+            ...BudgetState.unknownPeriod(period).toJson(),
+            'spent': {'minorUnits': 100, 'currency': 'USD'},
+            'limit': {'minorUnits': 1000, 'currency': 'USD'},
+            'remaining': {'minorUnits': 900, 'currency': 'USD'},
+            'usedPercent': 10.0,
+            'status': 'ok',
+          },
+      },
+    ],
+  });
+}
+
 DashboardSnapshot _alertTestSnapshot({
   bool includeWindow = true,
   String windowLabel = 'Window A',
@@ -5421,6 +5897,7 @@ class _FakeAlertNotifier implements AlertNotifier {
 
 class _FakeWatchSyncService implements WatchSyncService {
   final syncedSnapshots = <DashboardSnapshot>[];
+  final syncedPreferences = <WatchRingPreferences>[];
   final mockModes = <bool>[];
   bool fail = false;
   void Function()? refreshHandler;
@@ -5433,6 +5910,7 @@ class _FakeWatchSyncService implements WatchSyncService {
     bool mockDataMode = false,
   }) async {
     syncedSnapshots.add(snapshot);
+    syncedPreferences.add(ringPreferences);
     mockModes.add(mockDataMode);
     if (fail) throw StateError('Watch unavailable');
   }
@@ -5474,6 +5952,7 @@ class _HoldingWatchSyncService extends _FakeWatchSyncService {
 
 class _FakePhoneWidgetSyncService implements PhoneWidgetSyncService {
   final syncedSnapshots = <DashboardSnapshot>[];
+  final syncedPreferences = <PhoneWidgetPreferences>[];
   bool fail = false;
 
   @override
@@ -5482,6 +5961,7 @@ class _FakePhoneWidgetSyncService implements PhoneWidgetSyncService {
     PhoneWidgetPreferences preferences,
   ) async {
     syncedSnapshots.add(snapshot);
+    syncedPreferences.add(preferences);
     if (fail) throw StateError('Widget unavailable');
   }
 }
@@ -5536,12 +6016,23 @@ final class _CountingDashboardRepository extends DashboardRepository {
 
 class _MemoryPhoneWidgetStore implements PhoneWidgetPreferenceStore {
   PhoneWidgetPreferences value = const PhoneWidgetPreferences();
+  final writes = <PhoneWidgetPreferences>[];
+  int reads = 0;
+  Future<void> Function()? beforeRead;
+  Future<void> Function(PhoneWidgetPreferences)? beforeWrite;
 
   @override
-  Future<PhoneWidgetPreferences> read() async => value;
+  Future<PhoneWidgetPreferences> read() async {
+    reads++;
+    final captured = value;
+    await beforeRead?.call();
+    return captured;
+  }
 
   @override
   Future<void> write(PhoneWidgetPreferences next) async {
+    writes.add(next);
+    await beforeWrite?.call(next);
     value = next;
   }
 }
@@ -5560,7 +6051,9 @@ Widget _watchPicker({
               snapshot: snapshot,
               ringPreferences: preferences,
               onRefresh: () async {},
-              onRingPreferencesChanged: (next) async {
+              onRingPreferencesChanged: (update) async {
+                final next = update(preferences);
+                if (identical(next, preferences)) return;
                 onChanged(next);
                 setState(() => preferences = next);
               },
@@ -5625,12 +6118,23 @@ DashboardSnapshot _threePairDashboard({double? fableUsed = 90}) {
 
 class _MemoryWatchRingStore implements WatchRingPreferenceStore {
   WatchRingPreferences value = const WatchRingPreferences();
+  final writes = <WatchRingPreferences>[];
+  int reads = 0;
+  Future<void> Function()? beforeRead;
+  Future<void> Function(WatchRingPreferences)? beforeWrite;
 
   @override
-  Future<WatchRingPreferences> read() async => value;
+  Future<WatchRingPreferences> read() async {
+    reads++;
+    final captured = value;
+    await beforeRead?.call();
+    return captured;
+  }
 
   @override
   Future<void> write(WatchRingPreferences next) async {
+    writes.add(next);
+    await beforeWrite?.call(next);
     value = next;
   }
 }

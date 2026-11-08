@@ -15,12 +15,16 @@ class WidgetScreen extends StatefulWidget {
     required this.onPreferencesChanged,
     required this.onRefresh,
     this.reportingOutcomes = const [],
+    this.saving = false,
   });
 
   final DashboardSnapshot? snapshot;
   final Iterable<ConnectionReportingOutcome> reportingOutcomes;
   final PhoneWidgetPreferences preferences;
-  final Future<void> Function(PhoneWidgetPreferences value)
+  final bool saving;
+  final Future<void> Function(
+    PhoneWidgetPreferences Function(PhoneWidgetPreferences current) update,
+  )
   onPreferencesChanged;
 
   /// Pull-to-refresh reload, shared with the app-bar action.
@@ -31,40 +35,37 @@ class WidgetScreen extends StatefulWidget {
 }
 
 class _WidgetScreenState extends State<WidgetScreen> {
-  List<String> get _effectiveIds {
+  List<String> _selectionIds(PhoneWidgetPreferences preferences) {
     final snapshot = widget.snapshot;
-    if (!widget.preferences.usesDefaults || snapshot == null) {
-      return widget.preferences.migratedIds;
+    if (!preferences.usesDefaults || snapshot == null) {
+      return preferences.migratedIds;
     }
     return [
-      for (final metric in resolvePhoneWidgetMetrics(
-        snapshot,
-        widget.preferences,
-      ))
+      for (final metric in resolvePhoneWidgetMetrics(snapshot, preferences))
         metric.id,
     ];
   }
 
   Future<void> _toggleMetric(WatchRingMetric metric, bool selected) async {
-    if (selected && !phoneWidgetMetricIsAvailable(metric)) {
-      return;
-    }
-    final ids = [..._effectiveIds];
-    if (selected) {
-      if (ids.contains(metric.id) || ids.length >= phoneWidgetSlotCount) {
-        return;
-      }
-      ids.add(metric.id);
-    } else {
-      ids.remove(metric.id);
-    }
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      await widget.onPreferencesChanged(
-        PhoneWidgetPreferences(selectedIds: ids),
-      );
+      await widget.onPreferencesChanged((current) {
+        final ids = [..._selectionIds(current)];
+        if (selected) {
+          if (!phoneWidgetMetricIsAvailable(metric) ||
+              ids.contains(metric.id) ||
+              ids.length >= phoneWidgetSlotCount) {
+            return current;
+          }
+          ids.add(metric.id);
+        } else if (!ids.remove(metric.id)) {
+          return current;
+        }
+        return PhoneWidgetPreferences(selectedIds: ids);
+      });
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (messenger.mounted) {
+        messenger.showSnackBar(
           const SnackBar(content: Text('Could not update widget metrics')),
         );
       }
@@ -74,7 +75,7 @@ class _WidgetScreenState extends State<WidgetScreen> {
   @override
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
-    final selectedIds = _effectiveIds;
+    final selectedIds = _selectionIds(widget.preferences);
     final reported = phoneWidgetCatalog(
       snapshot,
       reportingOutcomes: widget.reportingOutcomes,
@@ -108,6 +109,7 @@ class _WidgetScreenState extends State<WidgetScreen> {
               ListTile(
                 leading: const Icon(Icons.widgets_outlined),
                 title: const Text('Home screen widget'),
+                trailing: widget.saving ? const Text('Saving…') : null,
                 subtitle: Text(
                   // Same reason as Watchface: the count explains a greyed row
                   // that the cap alone leaves looking broken.

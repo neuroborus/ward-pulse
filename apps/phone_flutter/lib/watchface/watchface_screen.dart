@@ -14,12 +14,16 @@ class WatchfaceScreen extends StatefulWidget {
     required this.onRingPreferencesChanged,
     required this.onRefresh,
     this.reportingOutcomes = const [],
+    this.saving = false,
   });
 
   final DashboardSnapshot? snapshot;
   final Iterable<ConnectionReportingOutcome> reportingOutcomes;
   final WatchRingPreferences ringPreferences;
-  final Future<void> Function(WatchRingPreferences value)
+  final bool saving;
+  final Future<void> Function(
+    WatchRingPreferences Function(WatchRingPreferences current) update,
+  )
   onRingPreferencesChanged;
 
   /// Pull-to-refresh reload, shared with the app-bar action.
@@ -35,24 +39,26 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
       watchRingSelectionIds(widget.snapshot, widget.ringPreferences);
 
   Future<void> _toggleRing(WatchRingMetric metric, bool selected) async {
-    final ids = [..._effectiveRingIds];
-    if (selected) {
-      if (!metric.isAvailable ||
-          ids.contains(metric.id) ||
-          watchRingCapacityReason([...ids, metric.id]) != null) {
-        return;
-      }
-      ids.add(metric.id);
-    } else {
-      ids.remove(metric.id);
-    }
+    final messenger = ScaffoldMessenger.of(context);
+    final snapshot = widget.snapshot;
     try {
-      await widget.onRingPreferencesChanged(
-        WatchRingPreferences(selectedIds: ids),
-      );
+      await widget.onRingPreferencesChanged((current) {
+        final ids = [...watchRingSelectionIds(snapshot, current)];
+        if (selected) {
+          if (!metric.isAvailable ||
+              ids.contains(metric.id) ||
+              watchRingCapacityReason([...ids, metric.id]) != null) {
+            return current;
+          }
+          ids.add(metric.id);
+        } else if (!ids.remove(metric.id)) {
+          return current;
+        }
+        return WatchRingPreferences(selectedIds: ids);
+      });
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (messenger.mounted) {
+        messenger.showSnackBar(
           const SnackBar(content: Text('Could not update ring slots')),
         );
       }
@@ -95,6 +101,7 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
               ListTile(
                 leading: const Icon(Icons.watch_outlined),
                 title: const Text('Wear & watch face'),
+                trailing: widget.saving ? const Text('Saving…') : null,
                 subtitle: Text(
                   // The count, not the cap: a full stack greys every unpicked
                   // row, and without it that reads as a fault rather than a

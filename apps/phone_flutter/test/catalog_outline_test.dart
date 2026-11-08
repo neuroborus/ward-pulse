@@ -40,8 +40,11 @@ void main() {
             body: WidgetScreen(
               snapshot: snapshot,
               preferences: const PhoneWidgetPreferences(selectedIds: []),
-              onPreferencesChanged: (value) async {
-                saved = value.selectedIds;
+              onPreferencesChanged: (update) async {
+                saved =
+                    update(
+                      const PhoneWidgetPreferences(selectedIds: []),
+                    ).selectedIds;
               },
               onRefresh: () async {},
             ),
@@ -94,8 +97,11 @@ void main() {
             snapshot: snapshot,
             reportingOutcomes: reportingOutcomes,
             preferences: const PhoneWidgetPreferences(selectedIds: selected),
-            onPreferencesChanged: (value) async {
-              saved = value.selectedIds;
+            onPreferencesChanged: (update) async {
+              saved =
+                  update(
+                    const PhoneWidgetPreferences(selectedIds: selected),
+                  ).selectedIds;
             },
             onRefresh: () async {},
           );
@@ -104,8 +110,11 @@ void main() {
             snapshot: snapshot,
             reportingOutcomes: reportingOutcomes,
             ringPreferences: const WatchRingPreferences(selectedIds: selected),
-            onRingPreferencesChanged: (value) async {
-              saved = value.selectedIds;
+            onRingPreferencesChanged: (update) async {
+              saved =
+                  update(
+                    const WatchRingPreferences(selectedIds: selected),
+                  ).selectedIds;
             },
             onRefresh: () async {},
           );
@@ -169,8 +178,11 @@ void main() {
             body: WidgetScreen(
               snapshot: data,
               preferences: const PhoneWidgetPreferences(selectedIds: selected),
-              onPreferencesChanged: (value) async {
-                saved = value.selectedIds;
+              onPreferencesChanged: (update) async {
+                saved =
+                    update(
+                      const PhoneWidgetPreferences(selectedIds: selected),
+                    ).selectedIds;
               },
               onRefresh: () async {},
             ),
