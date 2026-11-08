@@ -57,6 +57,8 @@ secure-storage writes/deletes. Immutable key references keep abandoned older SDK
 from clobbering a newer login. Cancelled reconnect restores the prior immutable credential
 under a fresh generation; first-time cancellation stays unconnected. Pending/unknown operations
 fail closed. Explicit reconnect can recover them without selecting an uncertain candidate.
+After a failed activation, whole-map writes for healthy sibling connections preserve the
+confirmed prior lifecycle state, so restart cannot select the unconfirmed credential slot.
 Migration backups are eligible only for the exact migrated slot, generation and token revision,
 with a matching securely read identity; ordinary OAuth refresh, replacement and deletion retire
 them. Snapshot corruption never changes the active credential pointer.

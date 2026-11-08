@@ -16,6 +16,11 @@ public final class ConnectionCacheEngineTest {
             if (fail) return false; data = new HashMap<>(values); return true;
         }
     }
+    static class MemoryUpdatingDisk extends Disk {
+        @Override public boolean commit(Map<String, String> values) {
+            data = new HashMap<>(values); return !fail;
+        }
+    }
     static void check(boolean value, String message) { assertions++; if (!value) throw new AssertionError(message); }
     @SuppressWarnings("unchecked") static Map<String, String> version(Map<String, Object> value) {
         Map<String, String> result = new HashMap<>();
@@ -39,7 +44,7 @@ public final class ConnectionCacheEngineTest {
     }
     public static void main(String[] ignored) {
         automaticAdmission(); automaticMetadataFailure(); automaticWriteCannotActivateCandidate();
-        restartPartialAndMonotonic(); deletionAndOAuthRevision(); leaseQueueAndDetach(); cancellationAndMigration(); corruptionAndFailures(); identityAndAggregate(); fetchExclusion(); cleanupAcknowledgement(); supersededCancellation(); failedCommitMemoryCannotActivate(); activeBackupCleanupProtection(); timestampPrecisionAndLegacyUpgrade(); rejectionLifecycle(); rejectionOwnership(); noticeFailures(); noticeMetadataValidation();
+        restartPartialAndMonotonic(); deletionAndOAuthRevision(); leaseQueueAndDetach(); cancellationAndMigration(); corruptionAndFailures(); identityAndAggregate(); fetchExclusion(); cleanupAcknowledgement(); supersededCancellation(); failedCommitMemoryCannotActivate(); siblingWritesCannotActivateCandidate(); emptyPriorStateSurvivesSiblingWrite(); activeBackupCleanupProtection(); timestampPrecisionAndLegacyUpgrade(); rejectionLifecycle(); rejectionOwnership(); noticeFailures(); noticeMetadataValidation();
         System.out.println("Connection cache engine: " + assertions + " assertions passed.");
     }
     static void restartPartialAndMonotonic() {
@@ -201,11 +206,6 @@ public final class ConnectionCacheEngineTest {
     }
 
     static void failedCommitMemoryCannotActivate() {
-        class MemoryUpdatingDisk extends Disk {
-            @Override public boolean commit(Map<String, String> values) {
-                data = new HashMap<>(values); return !fail;
-            }
-        }
         MemoryUpdatingDisk disk = new MemoryUpdatingDisk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
         Map<String, Object> original = login(engine);
         Map<String, Object> pending = acquire(engine, "ui", "reconnect", null); finish(engine, "ui", pending, "release");
@@ -230,6 +230,87 @@ public final class ConnectionCacheEngineTest {
         Map<String, Object> secondRestored = finish(engine, "ui", secondCancel, "cancel");
         check(current.get("slot").equals(secondRestored.get("slot")) && !original.get("slot").equals(secondRestored.get("slot")), "Second failure recovery uses immediately prior valid state.");
 
+    }
+
+    static void siblingWritesCannotActivateCandidate() {
+        for (String write : new String[]{"snapshot", "timestamp", "clear", "lifecycle"}) {
+            MemoryUpdatingDisk disk = new MemoryUpdatingDisk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+            Map<String, Object> original = login(engine);
+            String sibling = "openai.platform";
+            AtomicReference<Map<String, Object>> answer = new AtomicReference<>();
+            engine.acquire("ui", sibling, "reconnect", null, answer::set, error -> { throw new RuntimeException(error); });
+            Map<String, Object> siblingPending = answer.get();
+            engine.finish("ui", sibling, (String)siblingPending.get("lease"), "release", null);
+            engine.acquire("ui", sibling, "complete", version(siblingPending), answer::set, error -> { throw new RuntimeException(error); });
+            Map<String, Object> siblingActive = engine.finish("ui", sibling, (String)answer.get().get("lease"), "activate", ID);
+            Map<String, String> siblingVersion = version(siblingActive);
+            check(engine.writeSnapshot(sibling, siblingVersion, "retained", 1001), "Healthy sibling starts with a cache.");
+            if ("timestamp".equals(write)) {
+                disk.data.remove(sibling + ".snapshotTimeUnit"); disk.data.put(sibling + ".snapshotAt", "1");
+            }
+            Map<String, Object> pending = acquire(engine, "ui", "reconnect", null); finish(engine, "ui", pending, "release");
+            Map<String, Object> complete = acquire(engine, "ui", "complete", version(pending));
+            String uncertainSlot = (String)complete.get("writeSlot");
+            disk.fail = true; boolean failed = false;
+            try { finish(engine, "ui", complete, "activate"); } catch (IllegalStateException expected) { failed = true; }
+            check(failed && "active".equals(disk.data.get(C + ".mode")) && uncertainSlot.equals(disk.data.get(C + ".slot")), "Failed activation leaves the attempted candidate visible in memory.");
+            disk.fail = false;
+            if ("snapshot".equals(write)) {
+                check(engine.writeSnapshot(sibling, siblingVersion, "updated", 2002), "Healthy sibling snapshot write succeeds.");
+            } else if ("timestamp".equals(write)) {
+                check(engine.upgradeSnapshotTimestamp(sibling, siblingVersion, "retained", 1001), "Healthy sibling legacy timestamp upgrade succeeds.");
+            } else if ("clear".equals(write)) {
+                engine.clearSnapshot(sibling, siblingVersion);
+            } else {
+                engine.acquire("ui", sibling, "refresh", siblingVersion, answer::set, error -> { throw new RuntimeException(error); });
+                Map<String, Object> refresh = answer.get();
+                engine.finish("ui", sibling, (String)refresh.get("lease"), "release", null);
+                check(disk.data.get(sibling + ".retired").contains((String)refresh.get("writeSlot")), "Healthy sibling lifecycle write persists its cleanup reference.");
+            }
+            boolean fenced = false;
+            try { acquire(engine, "ui", "read", null); } catch (RuntimeException expected) { fenced = true; }
+            check(fenced, "Sibling " + write + " write does not clear the failed connection's fence.");
+            ConnectionCacheEngine coldEngine = new ConnectionCacheEngine(disk);
+            Map<String, Object> cold = acquire(coldEngine, "cold", "read", null);
+            check("pending".equals(cold.get("mode")) && !cold.containsKey("slot") && uncertainSlot.equals(cold.get("pendingSlot")), "Restart after sibling " + write + " write cannot select the candidate.");
+            check(pending.get("generation").equals(cold.get("generation")) && pending.get("revision").equals(cold.get("revision"))
+                && original.get("slot").equals(cold.get("previousSlot")) && original.get("identity").equals(cold.get("previousIdentity")), "Restart retains the confirmed pending barrier and prior credential.");
+            finish(coldEngine, "cold", cold, "release");
+            coldEngine.acquire("cold", sibling, "read", null, answer::set, error -> { throw new RuntimeException(error); });
+            Map<String, Object> coldSibling = answer.get();
+            check(siblingActive.get("slot").equals(coldSibling.get("slot")) && siblingVersion.get("generation").equals(coldSibling.get("generation"))
+                && siblingVersion.get("revision").equals(coldSibling.get("revision")) && ID.equals(coldSibling.get("identity")), "Sibling credential survives restart unchanged.");
+            if ("clear".equals(write)) {
+                check(!coldEngine.valid(sibling, siblingVersion) && !coldSibling.containsKey("snapshotAt")
+                    && coldEngine.readSnapshot(sibling, version(coldSibling)) == null, "Sibling clear persists and invalidates the old cache epoch.");
+            } else {
+                check(coldEngine.valid(sibling, siblingVersion) && ("snapshot".equals(write) ? "updated" : "retained").equals(coldEngine.readSnapshot(sibling, siblingVersion)), "Sibling cache survives restart with its original version.");
+                check(("snapshot".equals(write) ? "2002" : "1001").equals(coldSibling.get("snapshotAt"))
+                    && "microseconds".equals(coldSibling.get("snapshotTimeUnit")), "Sibling success timestamp survives restart exactly.");
+            }
+            coldEngine.finish("cold", sibling, (String)coldSibling.get("lease"), "release", null);
+            Map<String, Object> retry = acquire(engine, "ui", "reconnect", null); finish(engine, "ui", retry, "release");
+            Map<String, Object> cancel = acquire(engine, "ui", "cancel", version(retry));
+            check(original.get("slot").equals(finish(engine, "ui", cancel, "cancel").get("slot")), "Explicit recovery after a sibling write preserves the confirmed prior credential.");
+            check(engine.valid(C, version(login(engine))), "Successful reconnect remains usable after sibling-write recovery.");
+        }
+    }
+
+    static void emptyPriorStateSurvivesSiblingWrite() {
+        MemoryUpdatingDisk disk = new MemoryUpdatingDisk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+        Map<String, String> v = version(login(engine));
+        String empty = "cursor.plan";
+        AtomicReference<Map<String, Object>> answer = new AtomicReference<>(); AtomicReference<Exception> failure = new AtomicReference<>();
+        disk.fail = true;
+        engine.acquire("ui", empty, "reconnect", null, answer::set, failure::set);
+        check(failure.get() != null && "pending".equals(disk.data.get(empty + ".mode")), "First failed barrier is visible in memory over an empty prior namespace.");
+        disk.fail = false;
+        check(engine.writeSnapshot(C, v, "retained", 1001), "Healthy sibling writes beside an empty fenced namespace.");
+        check(disk.data.keySet().stream().noneMatch(key -> key.startsWith(empty + ".")), "Sibling write preserves an empty prior namespace without a synthetic legacy record.");
+        ConnectionCacheEngine coldEngine = new ConnectionCacheEngine(disk);
+        coldEngine.acquire("cold", empty, "read", null, answer::set, error -> { throw new RuntimeException(error); });
+        check("legacy".equals(answer.get().get("mode")), "Empty namespace retains the ordinary legacy default after restart.");
+        coldEngine.finish("cold", empty, (String)answer.get().get("lease"), "release", null);
     }
 
     static void activeBackupCleanupProtection() {

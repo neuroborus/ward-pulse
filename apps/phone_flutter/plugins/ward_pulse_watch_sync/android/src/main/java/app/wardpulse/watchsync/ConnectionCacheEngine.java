@@ -41,6 +41,7 @@ public final class ConnectionCacheEngine {
     public ConnectionCacheEngine(Backend backend, LongSupplier clock) { this.backend = backend; this.clock = clock; }
     private Map<String, String> readAll() {
         Map<String, String> all = new LinkedHashMap<>(backend.read());
+        retainConfirmedCredentials(all);
         unconfirmedMetadata.forEach((connection, confirmed) -> {
             for (String key : CONFIRMED_KEYS) all.remove(connection + "." + key);
             confirmed.forEach((key, value) -> all.put(connection + "." + key, value));
@@ -68,11 +69,11 @@ public final class ConnectionCacheEngine {
             all.remove(connection + "." + key);
             if (state.containsKey(key)) all.put(connection + "." + key, state.get(key));
         }
-        retainConfirmedCredentials(all);
         if (!commit(all)) throw new IllegalStateException("Connection notice storage failed.");
     }
     private void retainConfirmedCredentials(Map<String, String> all) {
-        // Metadata writes cannot make an uncertain credential candidate durable.
+        // Every read restores fenced credentials before metadata overlays and caller
+        // mutations, so sibling writes cannot make an uncertain candidate durable.
         failedCommitPriorState.forEach((fencedConnection, prior) -> {
             if (!fenced.contains(fencedConnection)) return;
             String prefix = fencedConnection + ".";
@@ -139,9 +140,9 @@ public final class ConnectionCacheEngine {
         if (!commit(all)) {
             fenced.add(connection);
             if (!failedCommitPriorState.containsKey(connection)) {
+                // Preserve emptiness; only state() supplies the legacy default.
                 Map<String, String> safe = new LinkedHashMap<>();
                 prior.forEach((key, value) -> { if (key.startsWith(prefix)) safe.put(key.substring(prefix.length()), value); });
-                if (safe.isEmpty()) safe.put("mode", "legacy");
                 failedCommitPriorState.put(connection, safe);
             }
             throw new IllegalStateException("Credential lifecycle storage failed.");
@@ -240,7 +241,6 @@ public final class ConnectionCacheEngine {
         all.put(connection + ".automaticGeneration", state.get("generation"));
         all.put(connection + ".automaticIdentity", state.get("identity"));
         all.put(connection + ".automaticAt", Long.toString(now));
-        retainConfirmedCredentials(all);
         // A failed metadata write denies network work but never fences credentials.
         if (!commit(all)) throw new IllegalStateException("Automatic polling storage failed.");
         result.put("admitted", true); result.put("automaticAt", now); return result;
@@ -274,16 +274,7 @@ public final class ConnectionCacheEngine {
                 throw new IllegalStateException("Account fetch superseded.");
             if (fenced.contains(connection) && !"reconnect".equals(pending.action))
                 throw new IllegalStateException("Credential lifecycle unavailable.");
-            Map<String, String> state = fenced.contains(connection) && failedCommitPriorState.containsKey(connection)
-                ? new LinkedHashMap<>(failedCommitPriorState.get(connection)) : state(connection);
-            if (fenced.contains(connection) && failedCommitPriorState.containsKey(connection)) {
-                Map<String, String> confirmed = readAll();
-                for (String key : NOTICE_KEYS) {
-                    state.remove(key);
-                    String value = confirmed.get(connection + "." + key);
-                    if (value != null) state.put(key, value);
-                }
-            }
+            Map<String, String> state = state(connection);
             boolean pendingAction = "complete".equals(pending.action) || "cancel".equals(pending.action);
             boolean matches = pendingAction
                 ? "pending".equals(state.get("mode")) && pending.expected != null
