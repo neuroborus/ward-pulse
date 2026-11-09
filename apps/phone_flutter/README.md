@@ -35,6 +35,13 @@ admitted stay current; obsolete failures and rejected snapshots leave rows unmar
 plugin call that was already dispatched cannot be retracted, and writes from separate
 isolates are not ordered atomically. Release builds never read the debug choice.
 
+After collection, each headless surface reads its own saved selection immediately before
+publication and rechecks Live ownership after that read. A selection read failure retains
+that surface's prior output without marking widget rows STALE; sibling publication,
+recovery and alerts continue under their own guards. Wholly skipped polls do not read
+surface selections or publish them. Saved defaults and explicit empty selections retain
+their existing meaning.
+
 The phone app consumes Rust-produced dashboard state; the Rust core must not depend on Flutter.
 
 Build the native libraries and run the app:

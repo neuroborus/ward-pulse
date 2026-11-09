@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -24,6 +25,7 @@ import 'package:ward_pulse_phone/sync/provider_sync_once.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/sync/automatic_poll.dart';
 import 'package:ward_pulse_phone/sync/recovery_wake.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 
 import 'connection_cache_test_support.dart';
 
@@ -100,6 +102,8 @@ void main() {
         final work = await poll.run(
           () => loadProviderSyncWork(
             HeadlessLiveOwner(),
+            watchRingStore: _WatchRead(() async => throw StateError('Skipped')),
+            widgetStore: _WidgetRead(() async => throw StateError('Skipped')),
             createLive:
                 () => PhoneLiveBindings(
                   credentialStore: live.credentialStore,
@@ -506,6 +510,351 @@ void main() {
     },
   );
 
+  group('headless saved surface choices', () {
+    test(
+      'headless watch replacement publishes the saved Fable selection',
+      () async {
+        final snapshot = _surfaceSnapshot();
+        final watchStore = SecureWatchRingPreferenceStore();
+        const initial = WatchRingPreferences(selectedIds: [claudePlanRingId]);
+        const edited = WatchRingPreferences(selectedIds: [claudeFableRingId]);
+        expect(
+          resolveWatchRings(
+            snapshot,
+            initial,
+          ).map((ring) => (ring.id, ring.usedPercent)),
+          [(claudePlanRingId, 40)],
+        );
+        expect(
+          resolveWatchRings(
+            snapshot,
+            edited,
+          ).map((ring) => (ring.id, ring.usedPercent)),
+          [(claudeFableRingId, 90)],
+        );
+        await watchStore.write(initial);
+        await SecurePhoneWidgetPreferenceStore().write(_bothWidgetChoices);
+        final capture = _SurfaceCapture();
+        _bindSurfaces(capture: capture);
+        final headless = _HeadlessRun();
+        final live = _LiveFixture(snapshot: snapshot);
+        final run = runHeadlessProviderTask(
+          HeadlessProviderSync.taskName,
+          sync: () => headless.sync(live.create),
+        );
+        addTearDown(() async {
+          if (!live.release.isCompleted) live.release.complete();
+          await run;
+        });
+        await live.started.future;
+        await watchStore.write(edited);
+        live.release.complete();
+        expect(await run, isTrue);
+
+        expect(live.loads, 1);
+        expect(headless.failures, isEmpty);
+        expect(headless.staleWrites, 0);
+        expect(capture.watchSummaries, hasLength(1));
+        expect(_watchUsage(capture.watchSummaries.single), {
+          claudeFableRingId: 90,
+        });
+        expect(
+          capture.watchSummaries.single['creditsGlance'],
+          containsPair('text', '1.2K'),
+        );
+        _expectWidgetRows(capture);
+      },
+    );
+
+    test(
+      'headless explicit empty watch selection suppresses rings and credits',
+      () async {
+        final snapshot = _surfaceSnapshot();
+        final watchStore = SecureWatchRingPreferenceStore();
+        const initial = WatchRingPreferences(
+          selectedIds: [claudePlanRingId, claudeFableRingId],
+        );
+        final populated =
+            jsonDecode(
+                  WatchDashboardSummaryPayload.fromSnapshot(
+                    snapshot,
+                    initial,
+                  ).encode(),
+                )
+                as Map<String, dynamic>;
+        expect(_watchUsage(populated), {
+          claudePlanRingId: 40,
+          claudeFableRingId: 90,
+        });
+        expect(populated['creditsGlance'], containsPair('text', '1.2K'));
+        await watchStore.write(initial);
+        await SecurePhoneWidgetPreferenceStore().write(_bothWidgetChoices);
+        final capture = _SurfaceCapture();
+        _bindSurfaces(capture: capture);
+        final headless = _HeadlessRun();
+        final live = _LiveFixture(snapshot: snapshot);
+        final run = runHeadlessProviderTask(
+          WorkmanagerRecoveryWakeScheduler.taskName,
+          sync: () => headless.sync(live.create),
+        );
+        addTearDown(() async {
+          if (!live.release.isCompleted) live.release.complete();
+          await run;
+        });
+        await live.started.future;
+        await watchStore.write(const WatchRingPreferences(selectedIds: []));
+        live.release.complete();
+        expect(await run, isTrue);
+
+        expect(live.loads, 1);
+        expect(headless.failures, isEmpty);
+        expect(headless.staleWrites, 0);
+        expect(capture.watchSummaries, hasLength(1));
+        expect(capture.watchSummaries.single['rings'], isEmpty);
+        expect(capture.watchSummaries.single['creditsGlance'], isNull);
+        _expectWidgetRows(capture);
+      },
+    );
+
+    test(
+      'headless widget removal publishes only the saved Fable row',
+      () async {
+        final snapshot = _surfaceSnapshot();
+        final widgetStore = SecurePhoneWidgetPreferenceStore();
+        const edited = PhoneWidgetPreferences(selectedIds: [claudeFableRingId]);
+        expect(
+          resolvePhoneWidgetMetrics(
+            snapshot,
+            _bothWidgetChoices,
+          ).map((metric) => (metric.id, metric.usedPercent)),
+          [(_ordinaryWidgetId, 40), (claudeFableRingId, 90)],
+        );
+        expect(
+          resolvePhoneWidgetMetrics(
+            snapshot,
+            edited,
+          ).map((metric) => (metric.id, metric.usedPercent)),
+          [(claudeFableRingId, 90)],
+        );
+        await widgetStore.write(_bothWidgetChoices);
+        await SecureWatchRingPreferenceStore().write(
+          const WatchRingPreferences(
+            selectedIds: [claudePlanRingId, claudeFableRingId],
+          ),
+        );
+        final capture = _SurfaceCapture()..widgetData.addAll(_priorWidgetRows);
+        _bindSurfaces(capture: capture);
+        final headless = _HeadlessRun();
+        final live = _LiveFixture(snapshot: snapshot);
+        final run = runHeadlessProviderTask(
+          HeadlessProviderSync.taskName,
+          sync: () => headless.sync(live.create),
+        );
+        addTearDown(() async {
+          if (!live.release.isCompleted) live.release.complete();
+          await run;
+        });
+        await live.started.future;
+        await widgetStore.write(edited);
+        live.release.complete();
+        expect(await run, isTrue);
+
+        expect(live.loads, 1);
+        expect(headless.failures, isEmpty);
+        expect(headless.staleWrites, 0);
+        expect(capture.watchSummaries, hasLength(1));
+        final rings = capture.watchSummaries.single['rings'] as List;
+        expect(rings, hasLength(1));
+        expect(rings.single['id'], claudePlanRingId);
+        expect(rings.single['usedPercent'], 40);
+        expect(rings.single['split']['id'], claudeFableRingId);
+        expect(rings.single['split']['usedPercent'], 90);
+        expect(_watchUsage(capture.watchSummaries.single), {
+          claudePlanRingId: 40,
+          claudeFableRingId: 90,
+        });
+        _expectWidgetRows(capture, includeOrdinary: false);
+      },
+    );
+
+    test(
+      'Mock observed during the watch selection read retires publication',
+      () async {
+        final capture = _SurfaceCapture()..widgetData.addAll(_priorWidgetRows);
+        final calls = _bindSurfaces(capture: capture);
+        final reading = Completer<void>();
+        final releaseRead = Completer<void>();
+        final live = _LiveFixture(snapshot: _surfaceSnapshot())
+          ..release.complete();
+        final headless = _HeadlessRun();
+        final run = runHeadlessProviderTask(
+          HeadlessProviderSync.taskName,
+          sync:
+              () => headless.sync(
+                live.create,
+                watchRingStore: _WatchRead(() async {
+                  reading.complete();
+                  await releaseRead.future;
+                  return SecureWatchRingPreferenceStore().read();
+                }),
+              ),
+        );
+        addTearDown(() async {
+          if (!releaseRead.isCompleted) releaseRead.complete();
+          await run;
+        });
+        await reading.future;
+        expect(live.loads, 1);
+        expect(calls, isEmpty);
+        await SecureDebugDataPreferenceStore().writeMockDataEnabled(true);
+        releaseRead.complete();
+        expect(await run, isTrue);
+        expect(calls, isEmpty);
+        expect(capture.widgetData, _priorWidgetRows);
+        expect(headless.failures, isEmpty);
+        expect(headless.staleWrites, 0);
+        expect(
+          await const FlutterSecureStorage().read(
+            key: 'wardpulse.recovery.exhaustedWindows',
+          ),
+          isNull,
+        );
+      },
+    );
+
+    test(
+      'replaced provenance during the widget selection read preserves dispatched watch',
+      () async {
+        await SecureWatchRingPreferenceStore().write(
+          const WatchRingPreferences(
+            selectedIds: [claudePlanRingId, claudeFableRingId],
+          ),
+        );
+        final capture = _SurfaceCapture()..widgetData.addAll(_priorWidgetRows);
+        final calls = _bindSurfaces(capture: capture);
+        final reading = Completer<void>();
+        final releaseRead = Completer<void>();
+        final live = _LiveFixture(snapshot: _surfaceSnapshot())
+          ..release.complete();
+        final headless = _HeadlessRun();
+        final run = runHeadlessProviderTask(
+          WorkmanagerRecoveryWakeScheduler.taskName,
+          sync:
+              () => headless.sync(
+                live.create,
+                widgetStore: _WidgetRead(() async {
+                  reading.complete();
+                  await releaseRead.future;
+                  return SecurePhoneWidgetPreferenceStore().read();
+                }),
+              ),
+        );
+        addTearDown(() async {
+          if (!releaseRead.isCompleted) releaseRead.complete();
+          await run;
+        });
+        await reading.future;
+        expect(live.loads, 1);
+        expect(calls, ['syncWatchSummary']);
+        expect(_watchUsage(capture.watchSummaries.single), {
+          claudePlanRingId: 40,
+          claudeFableRingId: 90,
+        });
+        live.current = false;
+        releaseRead.complete();
+        expect(await run, isTrue);
+        expect(calls, ['syncWatchSummary']);
+        expect(capture.watchSummaries, hasLength(1));
+        expect(capture.widgetData, _priorWidgetRows);
+        expect(capture.redraws, isEmpty);
+        expect(headless.failures, isEmpty);
+        expect(headless.staleWrites, 0);
+        expect(
+          await const FlutterSecureStorage().read(
+            key: 'wardpulse.recovery.exhaustedWindows',
+          ),
+          isNull,
+        );
+      },
+    );
+
+    for (final surface in ['watch', 'widget']) {
+      test(
+        '$surface selection read failure retains output and publishes its sibling',
+        () async {
+          await SecureWatchRingPreferenceStore().write(
+            const WatchRingPreferences(
+              selectedIds: [claudePlanRingId, claudeFableRingId],
+            ),
+          );
+          await SecurePhoneWidgetPreferenceStore().write(_bothWidgetChoices);
+          final priorWatch = <String, dynamic>{
+            'rings': [
+              {'id': claudePlanRingId, 'usedPercent': 20, 'split': null},
+            ],
+          };
+          final capture =
+              _SurfaceCapture()
+                ..watchSummaries.add(priorWatch)
+                ..widgetData.addAll(_priorWidgetRows);
+          final calls = _bindSurfaces(capture: capture);
+          final live = _LiveFixture(snapshot: _surfaceSnapshot())
+            ..release.complete();
+          final headless = _HeadlessRun();
+          expect(
+            await runHeadlessProviderTask(
+              HeadlessProviderSync.taskName,
+              sync:
+                  () => headless.sync(
+                    live.create,
+                    watchRingStore:
+                        surface == 'watch'
+                            ? _WatchRead(
+                              () async =>
+                                  throw StateError('Watch choice unavailable'),
+                            )
+                            : null,
+                    widgetStore:
+                        surface == 'widget'
+                            ? _WidgetRead(
+                              () async =>
+                                  throw StateError('Widget choice unavailable'),
+                            )
+                            : null,
+                  ),
+            ),
+            isTrue,
+          );
+
+          expect(live.loads, 1);
+          expect(headless.failures, [surface]);
+          expect(headless.staleWrites, 0);
+          if (surface == 'watch') {
+            expect(capture.watchSummaries, [priorWatch]);
+            expect(calls, isNot(contains('syncWatchSummary')));
+            _expectWidgetRows(capture);
+          } else {
+            expect(capture.watchSummaries, hasLength(2));
+            expect(_watchUsage(capture.watchSummaries.last), {
+              claudePlanRingId: 40,
+              claudeFableRingId: 90,
+            });
+            expect(calls, ['syncWatchSummary']);
+            expect(capture.widgetData, _priorWidgetRows);
+            expect(capture.redraws, isEmpty);
+          }
+          // A surface failure must still allow recovery bookkeeping to finish.
+          expect(
+            await const FlutterSecureStorage().read(
+              key: 'wardpulse.recovery.exhaustedWindows',
+            ),
+            '[]',
+          );
+        },
+      );
+    }
+  });
+
   group('debug Mock ownership', () {
     final tasks = [
       HeadlessProviderSync.taskName,
@@ -792,9 +1141,17 @@ final class _HeadlessRun {
     PhoneLiveBindings Function() createLive, {
     DebugDataPreferenceStore? debugData,
     bool debugBuild = true,
+    WatchRingPreferenceStore? watchRingStore,
+    PhoneWidgetPreferenceStore? widgetStore,
   }) {
     return providerSyncOnce(
-      load: (owner) => loadProviderSyncWork(owner, createLive: createLive),
+      load:
+          (owner) => loadProviderSyncWork(
+            owner,
+            createLive: createLive,
+            watchRingStore: watchRingStore,
+            widgetStore: widgetStore,
+          ),
       logFailure: (step, _, _) => failures.add(step),
       markWidgetStale: ({required isCurrent}) async {
         staleWrites++;
@@ -830,9 +1187,10 @@ final class _DebugData implements DebugDataPreferenceStore {
 
 /// Production bindings whose one repository load can be held or failed.
 final class _LiveFixture {
-  _LiveFixture({this.fail = false});
+  _LiveFixture({this.fail = false, this.snapshot});
 
   final bool fail;
+  final DashboardSnapshot? snapshot;
   final started = Completer<void>();
   final release = Completer<void>();
   var created = 0;
@@ -864,7 +1222,7 @@ final class _HeldRepository extends DashboardRepository {
     if (!_fixture.started.isCompleted) _fixture.started.complete();
     await _fixture.release.future;
     if (_fixture.fail) throw const DashboardLoadException();
-    return DashboardSnapshot.empty();
+    return _fixture.snapshot ?? DashboardSnapshot.empty();
   }
 
   @override
@@ -873,7 +1231,8 @@ final class _HeldRepository extends DashboardRepository {
 }
 
 /// Records watch and widget plugin calls; both succeed.
-List<String> _bindSurfaces() {
+List<String> _bindSurfaces({_SurfaceCapture? capture}) {
+  final output = capture ?? _SurfaceCapture();
   final calls = <String>[];
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
@@ -884,9 +1243,172 @@ List<String> _bindSurfaces() {
   for (final channel in channels) {
     messenger.setMockMethodCallHandler(channel, (call) async {
       calls.add(call.method);
-      return call.method == 'syncWatchSummary' ? null : true;
+      if (call.method == 'syncWatchSummary') {
+        output.watchSummaries.add(
+          jsonDecode(call.arguments as String) as Map<String, dynamic>,
+        );
+        return null;
+      }
+      final args = Map<String, Object?>.from(call.arguments as Map);
+      switch (call.method) {
+        case 'saveWidgetData':
+          output.widgetData[args['id']! as String] = args['data'];
+          return true;
+        case 'getWidgetData':
+          return output.widgetData[args['id']] ?? args['defaultValue'];
+        case 'updateWidget':
+          output.redraws.add(Map.of(output.widgetData));
+          return true;
+        default:
+          throw MissingPluginException();
+      }
     });
     addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
   }
   return calls;
+}
+
+final class _SurfaceCapture {
+  final watchSummaries = <Map<String, dynamic>>[];
+  final widgetData = <String, Object?>{};
+  final redraws = <Map<String, Object?>>[];
+}
+
+const _ordinaryWidgetId = 'allowance.claude.claude-five-hour';
+const _bothWidgetChoices = PhoneWidgetPreferences(
+  selectedIds: [_ordinaryWidgetId, claudeFableRingId],
+);
+const _priorWidgetRows = <String, Object?>{
+  'row_count': 2,
+  'empty': '0',
+  'stale': '0',
+  'row_0_kind': 'allowance',
+  'row_0_family': 'Claude',
+  'row_0_pool': 'Fable weekly',
+  'row_0_label': 'Claude · Fable',
+  'row_0_percent': '30% left',
+  'row_1_kind': 'allowance',
+  'row_1_family': 'Claude',
+  'row_1_pool': '5h',
+  'row_1_label': 'Claude · 5h',
+  'row_1_percent': '80% left',
+};
+
+Map<String, num> _watchUsage(Map<String, dynamic> summary) {
+  final usage = <String, num>{};
+  for (final ring in summary['rings'] as List) {
+    usage[ring['id'] as String] = ring['usedPercent'] as num;
+    final split = ring['split'];
+    if (split != null)
+      usage[split['id'] as String] = split['usedPercent'] as num;
+  }
+  return usage;
+}
+
+void _expectWidgetRows(_SurfaceCapture capture, {bool includeOrdinary = true}) {
+  final rows = [
+    ('Fable weekly', 'Claude · Fable', '10% left'),
+    if (includeOrdinary) ('5h', 'Claude · 5h', '60% left'),
+  ];
+  final data = capture.widgetData;
+  expect(data['row_count'], rows.length);
+  expect(data['stale'], '0');
+  expect(data['empty'], '0');
+  for (final (i, (pool, label, percent)) in rows.indexed) {
+    expect(data['row_${i}_kind'], 'allowance');
+    expect(data['row_${i}_family'], 'Claude');
+    expect(data['row_${i}_pool'], pool);
+    expect(data['row_${i}_label'], label);
+    expect(data['row_${i}_percent'], percent);
+  }
+  for (var i = rows.length; i < phoneWidgetSlotCount; i++) {
+    final cleared = data.entries.where(
+      (entry) => entry.key.startsWith('row_${i}_'),
+    );
+    expect(cleared, isNotEmpty);
+    expect(cleared.map((entry) => entry.value), everyElement(''));
+  }
+  expect(capture.redraws, hasLength(1));
+  expect(capture.redraws.single, data);
+}
+
+DashboardSnapshot _surfaceSnapshot() {
+  final base =
+      DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 9)).toJson();
+  return DashboardSnapshot.fromJson({
+    ...base,
+    'accounts': [
+      {
+        'accountId': 'claude-local',
+        'provider': 'claude',
+        'connection': ProviderConnections.claudePlan.storageKey,
+        'status': 'ok',
+        'today': base['todayTotal'],
+        'week': base['weekTotal'],
+        'month': base['monthTotal'],
+        'credits': <Object?>[],
+        'buckets': <Object?>[],
+        'modelBreakdown': <Object?>[],
+        'lastSuccessfulSyncAt': '2026-11-09T00:00:00Z',
+        'allowances': [
+          for (final (id, label, usedPercent, windowMinutes) in [
+            ('claude-five-hour', '5h', 40.0, 300),
+            ('claude-seven-day-fable', 'Fable weekly', 90.0, 10080),
+          ])
+            {
+              'id': id,
+              'source': 'plan',
+              'label': label,
+              'usedPercent': usedPercent,
+              'used': null,
+              'limit': null,
+              'remaining': null,
+              'unlimited': false,
+              'windowMinutes': windowMinutes,
+              'resetsAt': null,
+              'status': 'ok',
+            },
+          {
+            'id': 'claude-extra-usage',
+            'source': 'purchased',
+            'label': 'Extra usage',
+            'usedPercent': null,
+            'used': null,
+            'limit': null,
+            'remaining': {'value': '1200', 'unit': 'credits'},
+            'unlimited': false,
+            'windowMinutes': null,
+            'resetsAt': null,
+            'status': 'ok',
+          },
+        ],
+      },
+    ],
+  });
+}
+
+final class _WatchRead implements WatchRingPreferenceStore {
+  _WatchRead(this.load);
+
+  final Future<WatchRingPreferences> Function() load;
+
+  @override
+  Future<WatchRingPreferences> read() => load();
+
+  @override
+  Future<void> write(WatchRingPreferences value) =>
+      throw UnsupportedError('Read-only test store.');
+}
+
+final class _WidgetRead implements PhoneWidgetPreferenceStore {
+  _WidgetRead(this.load);
+
+  final Future<PhoneWidgetPreferences> Function() load;
+
+  @override
+  Future<PhoneWidgetPreferences> read() => load();
+
+  @override
+  Future<void> write(PhoneWidgetPreferences value) =>
+      throw UnsupportedError('Read-only test store.');
 }

@@ -146,12 +146,12 @@ Future<void> providerSyncOnce({
 Future<ProviderSyncWork?> loadProviderSyncWork(
   HeadlessLiveOwner owner, {
   PhoneLiveBindings Function()? createLive,
+  WatchRingPreferenceStore? watchRingStore,
+  PhoneWidgetPreferenceStore? widgetStore,
 }) async {
   if (!await owner.isLive()) return null;
   final live = (createLive ?? PhoneLiveBindings.create)();
   final poll = AutomaticPollContext.current ?? AutomaticPollContext();
-  final ringPreferences = await SecureWatchRingPreferenceStore().read();
-  final widgetPreferences = await SecurePhoneWidgetPreferenceStore().read();
   final alertThresholds = await SecureAlertThresholdPreferenceStore().read();
   if (!await owner.isLive()) return null;
   final DashboardSnapshot loaded;
@@ -183,19 +183,25 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
   return ProviderSyncWork(
     isCurrent: isCurrent,
     syncWatch: () async {
-      if (!poll.whollySkipped)
-        await const MethodChannelWatchSyncService().sync(
-          snapshot,
-          ringPreferences,
-        );
+      if (poll.whollySkipped) return;
+      final ringPreferences =
+          await (watchRingStore ?? SecureWatchRingPreferenceStore()).read();
+      if (!await isCurrent()) return;
+      await const MethodChannelWatchSyncService().sync(
+        snapshot,
+        ringPreferences,
+      );
     },
     syncWidget: () async {
-      if (!poll.whollySkipped)
-        await HomeWidgetPhoneWidgetSyncService().sync(
-          snapshot,
-          widgetPreferences,
-          isCurrent: isCurrent,
-        );
+      if (poll.whollySkipped) return;
+      final widgetPreferences =
+          await (widgetStore ?? SecurePhoneWidgetPreferenceStore()).read();
+      if (!await isCurrent()) return;
+      await HomeWidgetPhoneWidgetSyncService().sync(
+        snapshot,
+        widgetPreferences,
+        isCurrent: isCurrent,
+      );
     },
     syncRecoveries: () async {
       var notifications = false;
