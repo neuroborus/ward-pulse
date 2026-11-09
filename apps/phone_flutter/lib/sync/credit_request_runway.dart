@@ -1,4 +1,5 @@
 import '../dashboard/dashboard_models.dart';
+import 'selected_data_freshness.dart';
 
 /// Internal credits-per-typical-request estimates for watch-ring **sort only**.
 ///
@@ -38,7 +39,15 @@ double? creditRequestRunwayForProvider(
 double? purchasedCreditsRemainingForProvider(
   DashboardSnapshot snapshot,
   String provider,
+) => resolvePurchasedCreditsForProvider(snapshot, provider)?.remaining;
+
+/// The existing finite sum and exactly the allowances that supplied it.
+({double remaining, List<SurfaceDataContributor> contributors})?
+resolvePurchasedCreditsForProvider(
+  DashboardSnapshot snapshot,
+  String provider,
 ) {
+  final contributors = <SurfaceDataContributor>[];
   double total = 0;
   var sawFinite = false;
 
@@ -62,6 +71,7 @@ double? purchasedCreditsRemainingForProvider(
         continue;
       }
       total += value;
+      contributors.add((account: account, status: allowance.status));
       sawFinite = true;
     }
   }
@@ -69,5 +79,5 @@ double? purchasedCreditsRemainingForProvider(
   if (!sawFinite) {
     return null;
   }
-  return total;
+  return (remaining: total, contributors: contributors);
 }

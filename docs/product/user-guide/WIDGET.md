@@ -110,6 +110,10 @@ The number that fits depends on your launcher's allocation and the actual labels
   in the same header as the mark, without reserving another row. Refresh the phone when
   network/provider access is available; see [Sync](/guide/sync#offline-failed-refresh-and-restart).
 
+The marker follows the widget's chosen metrics and displayed purchased credits. Updating a
+different connection does not clear it; a fresh report for the retained data does. Watch
+choices are independent, so Watch and widget stale markers can differ.
+
 A missing value is not invented as zero. Accessibility retains each visible metric's full
 identity even when its label is hidden, and describes only displayed details and resets.
 Expense spend, Extra used/cap and purchased credits left have distinct meanings.

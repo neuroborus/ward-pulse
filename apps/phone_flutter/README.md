@@ -241,6 +241,13 @@ are cached; provider credentials stay in platform-secure storage. Fresh reposito
 restart can merge current data with stale failed connections without changing their original
 success times. Mock data never enters this store.
 
+Watch and widget freshness follows each surface's resolved metrics and displayed purchased
+credits independently. A retained stale owner marks its displayed data stale even when a
+newer warning determines the aggregate status. Fresh-only selections ignore unrelated stale
+accounts; empty or unavailable output with no contributors keeps the aggregate fallback.
+`WatchRingMetric` retains its exact owning account and connection locally; payload formats
+and metric statuses remain unchanged.
+
 Credential generation, OAuth revision and cache epoch are separate. Reconnect/disconnect
 barriers and conditional writes prevent old requests from restoring removed accounts. The
 native service coordinates concurrent Flutter engines in the application's single Android

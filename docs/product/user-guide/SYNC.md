@@ -48,6 +48,9 @@ separately from the experimental **Cursor plan** connection. See [Cursor reporti
 After a successful report, WardPulse keeps that connection's data locally. If a later
 refresh fails, it can show those values with their original successful timestamps and
 mark them stale. A fresh result for one provider can coexist with earlier stale data for another.
+Watch and widget selections keep their stale markers when another connection updates.
+Each surface follows the metrics and purchased credits it displays, so selecting only fresh
+data avoids a stale marker from an unrelated connection.
 
 This recovery works across phone app restarts and background polling. A new connection
 that has never reported successfully has no earlier data to recover. Provider sign-in and

@@ -8,9 +8,184 @@ import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/manual_refresh_window.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_once.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_payload.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
+
+import 'selected_data_freshness_test_support.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('retained selection stays stale through mixed warning refreshes', () {
+    final codex = freshnessAccount(
+      'codex',
+      'openai.plan',
+      allowances: [
+        freshnessAllowance('codex-primary'),
+        freshnessAllowance('credits', purchased: true, remaining: '320'),
+      ],
+    );
+    final success = freshnessSnapshot([codex], overall: ProviderStatus.ok);
+    final retained = success.withStaleStatus().accounts.single;
+    final warning = freshnessAccount(
+      'claude',
+      'anthropic.platform',
+      status: ProviderStatus.warning,
+    );
+    const watchChoice = WatchRingPreferences(selectedIds: [codexPlanRingId]);
+    const widgetChoice = PhoneWidgetPreferences(
+      selectedIds: ['allowance.codex.codex-primary'],
+    );
+    // Production merge_dashboard_snapshots_json takes the newest time and
+    // ProviderStatus::worst ranks Warning above Stale. Exercise that boundary
+    // directly; the repository test merger instead forces aggregate Stale.
+    for (final minute in [10, 20]) {
+      final updatedAt = freshnessSuccessAt.add(Duration(minutes: minute));
+      final freshWarning = freshnessAccount(
+        'claude',
+        'anthropic.platform',
+        status: ProviderStatus.warning,
+        at: updatedAt,
+      );
+      final mixed = freshnessSnapshot([retained, freshWarning], at: updatedAt);
+      expect(mixed.overallStatus, ProviderStatus.warning);
+      expect(
+        mixed.generatedAt,
+        freshnessSuccessAt.add(Duration(minutes: minute)),
+      );
+      expect(retained.toJson(), {...codex.toJson(), 'status': 'stale'});
+      expect(retained.accountId, 'openai.plan-account');
+      expect(retained.connection, 'openai.plan');
+      expect(retained.lastSuccessfulSyncAt, freshnessSuccessAt);
+      expect(retained.allowances.first.status, ProviderStatus.ok);
+      expect(retained.month.status, ProviderStatus.ok);
+      expect(retained.month.spent!.minorUnits, 2500);
+      final watch = _freshnessWatch(mixed, watchChoice);
+      expect(watch['overallStatus'], 'warning');
+      expect(watch['generatedAt'], mixed.generatedAt.toIso8601String());
+      final ring = (watch['rings'] as List).single;
+      expect(ring['id'], codexPlanRingId);
+      expect(ring['usedPercent'], 40);
+      expect(ring['status'], 'ok');
+      expect(watch['isStale'], isTrue);
+      final widget = buildPhoneWidgetPayload(mixed, widgetChoice);
+      expect(widget.rows.single.remainingPercent, 60);
+      expect(widget.rows.single.creditsSuffix, '320 credits');
+      expect(widget.stale, isTrue);
+    }
+    final recoveredAt = freshnessSuccessAt.add(const Duration(minutes: 30));
+    final refreshed = ProviderSnapshot.fromJson({
+      ...codex.toJson(),
+      'lastSuccessfulSyncAt': recoveredAt.toIso8601String(),
+    });
+    final recovered = freshnessSnapshot([refreshed, warning], at: recoveredAt);
+    expect(recovered.accounts.first.lastSuccessfulSyncAt, recoveredAt);
+    expect(_freshnessWatch(recovered, watchChoice)['isStale'], isFalse);
+    expect(buildPhoneWidgetPayload(recovered, widgetChoice).stale, isFalse);
+  });
+
+  test('Watch credits follow the first displayed balance, not the sum', () {
+    final plan = freshnessAccount(
+      'claude',
+      'anthropic.plan',
+      allowances: [
+        freshnessAllowance('claude-five-hour'),
+        freshnessAllowance('first', purchased: true, remaining: '5'),
+      ],
+    );
+    final later = freshnessAccount(
+      'claude',
+      'anthropic.platform',
+      status: ProviderStatus.stale,
+      allowances: [
+        freshnessAllowance('later', purchased: true, remaining: '7'),
+      ],
+    );
+    const choice = WatchRingPreferences(selectedIds: [claudePlanRingId]);
+    final mixed = freshnessSnapshot([
+      plan,
+      later,
+    ], overall: ProviderStatus.stale);
+    final watch = _freshnessWatch(mixed, choice);
+    expect(watch['creditsGlance']['text'], '12');
+    expect(
+      watch['isStale'],
+      isFalse,
+    ); // Standalone total is hidden by the ring.
+    final zero = freshnessAccount(
+      'claude',
+      'anthropic.platform',
+      allowances: [
+        freshnessAllowance(
+          'zero',
+          purchased: true,
+          remaining: '0',
+          status: ProviderStatus.stale,
+        ),
+      ],
+    );
+    expect(
+      _freshnessWatch(freshnessSnapshot([zero, plan]), choice)['isStale'],
+      isTrue,
+    );
+  });
+
+  test('standalone Watch credits count only displayed contributors', () {
+    final credits = freshnessAccount(
+      'codex',
+      'openai.plan',
+      allowances: [
+        freshnessAllowance('credits', purchased: true, remaining: '5'),
+      ],
+    );
+    final tokens = freshnessAccount(
+      'claude',
+      'anthropic.plan',
+      status: ProviderStatus.stale,
+      allowances: [
+        freshnessAllowance(
+          'tokens',
+          purchased: true,
+          remaining: '9',
+          unit: 'tokens',
+        ),
+      ],
+    );
+    const unavailable = WatchRingPreferences(selectedIds: [codexPlanRingId]);
+    final mixed = freshnessSnapshot([
+      credits,
+      tokens,
+    ], overall: ProviderStatus.stale);
+    final watch = _freshnessWatch(mixed, unavailable);
+    expect(watch['rings'], isEmpty);
+    expect(watch['creditsGlance']['text'], '5');
+    expect(watch['isStale'], isFalse);
+    final unlimited = freshnessAccount(
+      'claude',
+      'anthropic.plan',
+      allowances: [
+        freshnessAllowance('unlimited', purchased: true, unlimited: true),
+      ],
+    );
+    final overridden = _freshnessWatch(
+      freshnessSnapshot([tokens, unlimited], overall: ProviderStatus.stale),
+      unavailable,
+    );
+    expect(overridden['creditsGlance']['text'], '∞');
+    expect(overridden['isStale'], isFalse);
+    final retained =
+        freshnessSnapshot([credits]).withStaleStatus().accounts.single;
+    expect(
+      _freshnessWatch(freshnessSnapshot([retained]), unavailable)['isStale'],
+      isTrue,
+    );
+    final empty = _freshnessWatch(
+      mixed,
+      const WatchRingPreferences(selectedIds: []),
+    );
+    expect(empty['creditsGlance'], isNull);
+    expect(empty['isStale'], isTrue); // No contributors: aggregate fallback.
+  });
 
   for (final (claudeUsed, fableUsed) in <(double?, double?)>[
     (40, 90),
@@ -777,3 +952,15 @@ Map<String, dynamic> _cursorPool(String id, String label, double usedPercent) {
     'status': 'ok',
   };
 }
+
+Map<String, dynamic> _freshnessWatch(
+  DashboardSnapshot snapshot,
+  WatchRingPreferences preferences,
+) =>
+    jsonDecode(
+          WatchDashboardSummaryPayload.fromSnapshot(
+            snapshot,
+            preferences,
+          ).encode(),
+        )
+        as Map<String, dynamic>;

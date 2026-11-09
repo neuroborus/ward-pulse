@@ -27,6 +27,10 @@ mock state on its own. Mock summaries are accepted only when explicitly marked b
 build, and release Wear builds reject them.
 The app marks a summary stale when the phone reports stale data or its generation time is at
 least two hours old, twice the longest planned MVP polling interval.
+The phone's `isStale` describes the selected rings and their displayed credits, or standalone
+credits when no rings render. Glance honors that flag independently of aggregate status:
+a fresh selection does not become stale because an unrelated account is stale. Mock and
+fault details, rate-limit blocking and phone refresh permissions keep their existing precedence.
 
 The phone and Wear APKs intentionally share the `app.wardpulse` application ID. Their
 namespaces remain separate, and paired builds must use the same signing certificate for Data

@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../dashboard/dashboard_models.dart';
 import '../providers/provider_connection.dart';
 import '../sync/credit_request_runway.dart';
+import '../sync/selected_data_freshness.dart';
 
 /// Maximum simultaneous rings on watch and watch-face surfaces.
 const watchRingSlotCount = 3;
@@ -89,6 +90,7 @@ final class WatchRingMetric {
     this.spent,
     this.limit,
     this.unavailableReason,
+    this.account,
   });
 
   final String id;
@@ -99,6 +101,15 @@ final class WatchRingMetric {
   /// Consumed capacity 0–100 from the provider (Watch/WFF arcs use remaining).
   final double? usedPercent;
   final ProviderStatus status;
+
+  /// Exact snapshot owner, including its connection and retained-data status.
+  /// Placeholder catalog entries have no owning account.
+  final ProviderSnapshot? account;
+
+  SurfaceDataContributor? get contributor {
+    final owner = account;
+    return owner == null ? null : (account: owner, status: status);
+  }
 
   /// Money behind a budget ring — the face strip reads it instead of a percent.
   /// Allowance rings leave both null: a plan window has no price.
@@ -269,10 +280,14 @@ List<String> migrateWatchRingSelectedIds(
 ///
 /// Exhausted windows remain eligible: a blocked window cannot be bypassed by
 /// showing a less-used window from the same plan.
-WatchRingMetric? collapseClaudePlanRing(Iterable<AllowanceState> allowances) {
+WatchRingMetric? collapseClaudePlanRing(
+  Iterable<AllowanceState> allowances, {
+  ProviderSnapshot? account,
+}) {
   return _collapsePlanRing(
     allowances,
     id: claudePlanRingId,
+    account: account,
     title: 'Claude plan',
     windowIds: _claudePlanWindowIds,
     labelFor:
@@ -282,13 +297,15 @@ WatchRingMetric? collapseClaudePlanRing(Iterable<AllowanceState> allowances) {
 
 /// Collapse each Codex limit independently; neither can hide the other.
 List<WatchRingMetric> collapseCodexPlanRings(
-  Iterable<AllowanceState> allowances,
-) {
+  Iterable<AllowanceState> allowances, {
+  ProviderSnapshot? account,
+}) {
   return [
     for (final limit in _codexPlanLimits)
       if (_collapsePlanRing(
             allowances,
             id: limit.id,
+            account: account,
             title: limit.label,
             windowIds: limit.windows,
           )
@@ -302,6 +319,7 @@ WatchRingMetric? _collapsePlanRing(
   required String id,
   required String title,
   required List<String> windowIds,
+  ProviderSnapshot? account,
   String Function(AllowanceState)? labelFor,
 }) {
   final windows = [
@@ -326,6 +344,7 @@ WatchRingMetric? _collapsePlanRing(
       label: title,
       usedPercent: null,
       status: windows.first.status,
+      account: account,
       unavailableReason: 'This allowance has no percentage to show.',
     );
   }
@@ -336,6 +355,7 @@ WatchRingMetric? _collapsePlanRing(
     label: labelFor?.call(winner) ?? winner.label,
     usedPercent: winner.usedPercent,
     status: winner.status,
+    account: account,
   );
 }
 
@@ -372,27 +392,32 @@ List<WatchRingMetric> watchRingCatalog(
       continue;
     }
     if (account.provider == 'claude' && collapseClaudePlan) {
-      final collapsed = collapseClaudePlanRing(account.allowances);
+      final collapsed = collapseClaudePlanRing(
+        account.allowances,
+        account: account,
+      );
       if (collapsed != null) {
         metrics.add(collapsed);
       }
       for (final allowance in account.allowances) {
         if (allowance.source == AllowanceSource.plan &&
             allowance.id == 'claude-seven-day-fable') {
-          metrics.add(_allowanceMetric(account.provider, allowance));
+          metrics.add(_allowanceMetric(account, allowance));
         }
       }
       if (includePurchased) {
         for (final allowance in account.allowances) {
           if (allowance.source == AllowanceSource.purchased) {
-            metrics.add(_allowanceMetric(account.provider, allowance));
+            metrics.add(_allowanceMetric(account, allowance));
           }
         }
       }
       continue;
     }
     if (account.provider == 'codex' && collapseCodexPlan) {
-      metrics.addAll(collapseCodexPlanRings(account.allowances));
+      metrics.addAll(
+        collapseCodexPlanRings(account.allowances, account: account),
+      );
     }
     for (final allowance in account.allowances) {
       if (account.provider == 'codex' &&
@@ -406,7 +431,7 @@ List<WatchRingMetric> watchRingCatalog(
       if (allowance.source == AllowanceSource.purchased && !includePurchased) {
         continue;
       }
-      metrics.add(_allowanceMetric(account.provider, allowance));
+      metrics.add(_allowanceMetric(account, allowance));
     }
   }
 
@@ -670,13 +695,17 @@ String? providerFromRingId(String ringId) {
   return parts[1];
 }
 
-WatchRingMetric _allowanceMetric(String provider, AllowanceState allowance) {
+WatchRingMetric _allowanceMetric(
+  ProviderSnapshot account,
+  AllowanceState allowance,
+) {
   final percent = allowance.usedPercent;
   return WatchRingMetric(
-    id: 'allowance.$provider.${allowance.id}',
+    id: 'allowance.${account.provider}.${allowance.id}',
     label: allowance.label,
     usedPercent: percent,
     status: allowance.status,
+    account: account,
     unavailableReason:
         percent == null ? 'This allowance has no percentage to show.' : null,
   );
@@ -696,11 +725,15 @@ List<WatchRingMetric> _connectionBudgetMetrics(ProviderSnapshot account) {
       if (budget.spent != null ||
           connection == 'anthropic.platform' ||
           connection == 'cursor.platform')
-        _budgetMetric(connection, budget),
+        _budgetMetric(connection, budget, account: account),
   ];
 }
 
-WatchRingMetric _budgetMetric(String connection, BudgetState budget) {
+WatchRingMetric _budgetMetric(
+  String connection,
+  BudgetState budget, {
+  ProviderSnapshot? account,
+}) {
   final spent = budget.spent;
   final limit = budget.limit;
   final String? unavailableReason;
@@ -723,6 +756,7 @@ WatchRingMetric _budgetMetric(String connection, BudgetState budget) {
     label: budget.periodLabel,
     usedPercent: percent,
     status: budget.status,
+    account: account,
     spent: budget.spent,
     limit: budget.limit,
     unavailableReason: unavailableReason,

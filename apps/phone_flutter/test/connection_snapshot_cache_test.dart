@@ -14,6 +14,10 @@ import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_logger.dart';
 import 'package:ward_pulse_phone/sync/automatic_poll.dart';
+import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
+import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_payload.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 
 import 'package:ward_pulse_phone/dashboard/dashboard_load.dart';
 import 'package:ward_pulse_phone/dashboard/openai_dashboard_repository.dart';
@@ -232,6 +236,8 @@ void main() {
       expect(poll.whollySkipped, isFalse);
       expect(mixed.accounts.first.status, ProviderStatus.stale);
       expect(mixed.accounts.first.lastSuccessfulSyncAt, firstAt);
+      _expectSelectedBudgetFreshness(mixed, a, stale: true);
+      _expectSelectedBudgetFreshness(mixed, b, stale: false);
       expect(
         mixed.reportingOutcomes.where(
           (o) =>
@@ -248,6 +254,32 @@ void main() {
       await bridge.invoke('test', 'setClock', {'value': 300000});
       await automatic().run(first.load);
       expect(calls, 4);
+    },
+  );
+  test(
+    'partial skip without prior failure does not create stale surface data',
+    () async {
+      const a = 'openai.platform', b = 'anthropic.platform';
+      await credentials('ui', a).write('synthetic-A');
+      await credentials('ui', b).write('synthetic-B');
+      final first = owned(
+        'ui',
+        a,
+        (_) async => _snapshot('openai', a, firstAt, 10).toJsonString(),
+      );
+      await automatic().run(first.load);
+      final fresh = owned(
+        'worker',
+        b,
+        (_) async => _snapshot('claude', b, nextAt, 20).toJsonString(),
+        fallback: first,
+      );
+      final poll = automatic();
+      final mixed = await poll.run(fresh.load);
+      expect(poll.whollySkipped, isFalse);
+      expect(poll.skipped.keys, [a]);
+      expect(mixed.accounts.first.lastSuccessfulSyncAt, firstAt);
+      _expectSelectedBudgetFreshness(mixed, a, stale: false);
     },
   );
   test(
@@ -1993,4 +2025,26 @@ final class _RecordingCachePlatform implements ConnectionCachePlatform {
     methods.add(method);
     return delegate.invoke(method, arguments);
   }
+}
+
+void _expectSelectedBudgetFreshness(
+  DashboardSnapshot snapshot,
+  String connection, {
+  required bool stale,
+}) {
+  final id = 'budget.$connection.month';
+  final watch = jsonDecode(
+    WatchDashboardSummaryPayload.fromSnapshot(
+      snapshot,
+      WatchRingPreferences(selectedIds: [id]),
+    ).encode(),
+  );
+  expect((watch['rings'] as List).single['id'], id);
+  expect(watch['isStale'], stale);
+  final widget = buildPhoneWidgetPayload(
+    snapshot,
+    PhoneWidgetPreferences(selectedIds: [id]),
+  );
+  expect(widget.rows.single.spent, isNotNull);
+  expect(widget.stale, stale);
 }

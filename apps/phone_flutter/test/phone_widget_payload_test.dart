@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,10 @@ import 'package:ward_pulse_phone/dashboard/provider_status_color.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_payload.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
+import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
+import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
+
+import 'selected_data_freshness_test_support.dart';
 
 void main() {
   final snapshot = DashboardSnapshot.fromJsonString(
@@ -133,6 +138,154 @@ void main() {
         expect(rows.single.resetsAt, isNull);
       }
     }
+  });
+
+  test(
+    'surface choices isolate plan and platform freshness after capacity',
+    () {
+      final plan = freshnessAccount(
+        'claude',
+        'anthropic.plan',
+        allowances: [freshnessAllowance('claude-five-hour', usedPercent: 80)],
+      );
+      final platform = freshnessAccount('claude', 'anthropic.platform');
+      final retained =
+          freshnessSnapshot([platform]).withStaleStatus().accounts.single;
+      final mixed = freshnessSnapshot([
+        plan,
+        retained,
+      ], overall: ProviderStatus.stale);
+      const planChoice = PhoneWidgetPreferences(
+        selectedIds: ['allowance.claude.claude-five-hour'],
+      );
+      const budgetChoice = PhoneWidgetPreferences(
+        selectedIds: ['budget.anthropic.platform.month'],
+      );
+      final watch = jsonDecode(
+        WatchDashboardSummaryPayload.fromSnapshot(
+          mixed,
+          const WatchRingPreferences(selectedIds: [claudePlanRingId]),
+        ).encode(),
+      );
+      expect(watch['isStale'], isFalse);
+      expect(buildPhoneWidgetPayload(mixed, planChoice).stale, isFalse);
+      final budget = buildPhoneWidgetPayload(mixed, budgetChoice);
+      expect(budget.rows.single.spent!.minorUnits, 2500);
+      expect(budget.rows.single.remainingPercent, 75);
+      expect(budget.stale, isTrue);
+      final limited = buildPhoneWidgetPayload(
+        mixed,
+        const PhoneWidgetPreferences(
+          selectedIds: [
+            'allowance.claude.claude-five-hour',
+            'budget.anthropic.platform.month',
+          ],
+        ),
+        maxSlots: 1,
+      );
+      expect(limited.rows.single.remainingPercent, 20);
+      expect(limited.stale, isFalse);
+      final reversed = freshnessSnapshot([
+        freshnessSnapshot([plan]).withStaleStatus().accounts.single,
+        platform,
+      ]);
+      expect(buildPhoneWidgetPayload(reversed, budgetChoice).stale, isFalse);
+      expect(
+        jsonDecode(
+          WatchDashboardSummaryPayload.fromSnapshot(
+            reversed,
+            const WatchRingPreferences(selectedIds: [claudePlanRingId]),
+          ).encode(),
+        )['isStale'],
+        isTrue,
+      );
+    },
+  );
+
+  test('widget freshness follows the displayed credit sum contributors', () {
+    final plan = freshnessAccount(
+      'claude',
+      'anthropic.plan',
+      allowances: [
+        freshnessAllowance('claude-five-hour'),
+        freshnessAllowance('credits', purchased: true, remaining: '5'),
+      ],
+    );
+    const choice = PhoneWidgetPreferences(
+      selectedIds: ['allowance.claude.claude-five-hour'],
+    );
+    ProviderSnapshot credit({
+      String unit = 'credits',
+      bool unlimited = false,
+    }) => freshnessAccount(
+      'claude',
+      'anthropic.platform',
+      status: ProviderStatus.stale,
+      allowances: [
+        freshnessAllowance(
+          'other',
+          purchased: true,
+          remaining: '0',
+          unit: unit,
+          unlimited: unlimited,
+        ),
+      ],
+    );
+    final summed = buildPhoneWidgetPayload(
+      freshnessSnapshot([plan, credit()]),
+      choice,
+    );
+    expect(summed.rows.single.creditsSuffix, '5 credits');
+    expect(summed.stale, isTrue); // Eligible zero participates in the sum.
+    final tokens = buildPhoneWidgetPayload(
+      freshnessSnapshot([
+        plan,
+        credit(unit: 'tokens'),
+      ], overall: ProviderStatus.stale),
+      choice,
+    );
+    expect(tokens.rows.single.creditsSuffix, '5 credits');
+    expect(tokens.stale, isFalse);
+    final unlimited = buildPhoneWidgetPayload(
+      freshnessSnapshot([
+        plan,
+        credit(unlimited: true),
+      ], overall: ProviderStatus.stale),
+      choice,
+    );
+    expect(unlimited.rows.single.creditsSuffix, isNull);
+    expect(
+      unlimited.stale,
+      isFalse,
+    ); // Suppressed sums supply no displayed data.
+  });
+
+  test('consumed stale metrics mark both surfaces despite a healthy owner', () {
+    final account = freshnessAccount(
+      'cursor',
+      'cursor.plan',
+      allowances: [
+        freshnessAllowance('cursor-plan-models', status: ProviderStatus.stale),
+      ],
+    );
+    final mixed = freshnessSnapshot([account]);
+    expect(account.status, ProviderStatus.ok);
+    expect(
+      buildPhoneWidgetPayload(
+        mixed,
+        const PhoneWidgetPreferences(selectedIds: [cursorOwnPoolId]),
+      ).stale,
+      isTrue,
+    );
+    expect(
+      jsonDecode(
+        WatchDashboardSummaryPayload.fromSnapshot(
+          mixed,
+          const WatchRingPreferences(selectedIds: [cursorOwnPoolId]),
+        ).encode(),
+      )['isStale'],
+      isTrue,
+    );
   });
 
   test('marks stale when overall status is stale', () {

@@ -47,14 +47,13 @@ fun glanceRefreshChrome(
     // gray, disabled control, while stale and mock data have no channel but this line.
     val detail = when {
         summary.dataMode == WatchDataMode.MOCK -> "Mock data"
-        summary.isStale || summary.overallStatus == PulseStatus.STALE -> "Stale"
+        summary.isStale -> "Stale"
         rateLimited -> "Rate limited"
         summary.overallStatus == PulseStatus.AUTH_REQUIRED -> "Auth required"
         summary.overallStatus == PulseStatus.WARNING -> "Warning"
         summary.overallStatus == PulseStatus.ERROR -> "Error"
         summary.overallStatus == PulseStatus.UNKNOWN -> "Unknown"
-        summary.overallStatus == PulseStatus.OK -> null
-        else -> summary.overallStatus.label
+        else -> null
     }
 
     // Rate-limit blocks taps; phone cadence also blocks while pulse may stay OK.

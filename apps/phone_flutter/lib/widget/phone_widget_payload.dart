@@ -3,6 +3,7 @@ import '../dashboard/provider_status_color.dart';
 import '../providers/provider_connection.dart';
 import '../settings/watch_ring_preferences.dart';
 import '../sync/credit_request_runway.dart';
+import '../sync/selected_data_freshness.dart';
 import '../sync/watch_credits_glance.dart';
 import 'phone_widget_preferences.dart';
 
@@ -84,16 +85,27 @@ PhoneWidgetPayload buildPhoneWidgetPayload(
     resolvePhoneWidgetMetrics(snapshot, preferences),
     maxSlots: maxSlots,
   );
+  final credits = [
+    for (final metric in metrics) _phoneWidgetCredits(snapshot, metric.id),
+  ];
   return PhoneWidgetPayload(
-    stale: snapshot.overallStatus == ProviderStatus.stale,
-    rows: [for (final metric in metrics) _phoneWidgetRow(snapshot, metric)],
+    stale: selectedDataIsStale(snapshot, [
+      for (final metric in metrics)
+        if (metric.contributor case final contributor?) contributor,
+      for (final credit in credits) ...?credit?.contributors,
+    ]),
+    rows: [
+      for (var i = 0; i < metrics.length; i++)
+        _phoneWidgetRow(snapshot, metrics[i], creditsSuffix: credits[i]?.text),
+    ],
   );
 }
 
 PhoneWidgetRow _phoneWidgetRow(
   DashboardSnapshot snapshot,
-  WatchRingMetric metric,
-) {
+  WatchRingMetric metric, {
+  String? creditsSuffix,
+}) {
   final provider = providerFromRingId(metric.id);
   final connection = connectionFromBudgetRingId(metric.id);
   final String? family;
@@ -126,7 +138,7 @@ PhoneWidgetRow _phoneWidgetRow(
     extraUsed: extra ? allowance?.used : null,
     extraCap: extra ? allowance?.limit : null,
     accentArgb: phoneWidgetAccentArgb(metric.id),
-    creditsSuffix: phoneWidgetCreditsSuffix(snapshot, metric.id),
+    creditsSuffix: creditsSuffix,
     resetsAt: allowance?.resetsAt,
   );
 }
@@ -136,7 +148,13 @@ PhoneWidgetRow _phoneWidgetRow(
 /// Matches Wear Glance / face strips: append finite purchased `credits` on plan
 /// windows only. Purchased-meter rows (Extra usage, on-demand) already *are* the
 /// credit pool — do not repeat. Budgets and missing/unlimited balances omit.
-String? phoneWidgetCreditsSuffix(DashboardSnapshot snapshot, String metricId) {
+String? phoneWidgetCreditsSuffix(DashboardSnapshot snapshot, String metricId) =>
+    _phoneWidgetCredits(snapshot, metricId)?.text;
+
+({String text, List<SurfaceDataContributor> contributors})? _phoneWidgetCredits(
+  DashboardSnapshot snapshot,
+  String metricId,
+) {
   final provider = providerFromRingId(metricId);
   if (provider == null) {
     return null;
@@ -145,11 +163,14 @@ String? phoneWidgetCreditsSuffix(DashboardSnapshot snapshot, String metricId) {
       AllowanceSource.purchased) {
     return null;
   }
-  final remaining = purchasedCreditsRemainingForProvider(snapshot, provider);
-  if (remaining == null || remaining <= 0) {
+  final credits = resolvePurchasedCreditsForProvider(snapshot, provider);
+  if (credits == null || credits.remaining <= 0) {
     return null;
   }
-  return '${compactCreditCount(remaining)} credits';
+  return (
+    text: '${compactCreditCount(credits.remaining)} credits',
+    contributors: credits.contributors,
+  );
 }
 
 AllowanceState? _phoneWidgetAllowance(

@@ -7,6 +7,7 @@ import 'package:ward_pulse_watch_sync/ward_pulse_watch_sync.dart';
 import '../dashboard/dashboard_models.dart';
 import '../settings/watch_ring_preferences.dart';
 import 'manual_refresh_window.dart';
+import 'selected_data_freshness.dart';
 import 'watch_credits_glance.dart';
 
 abstract interface class WatchSyncService {
@@ -160,7 +161,16 @@ class WatchDashboardSummaryPayload {
         for (final alert in snapshot.alerts)
           {'severity': alert.severity, 'message': alert.message},
       ],
-      'isStale': snapshot.overallStatus == ProviderStatus.stale,
+      'isStale': selectedDataIsStale(snapshot, [
+        for (final ring in rings) ...[
+          if (ring.contributor case final contributor?) contributor,
+          if (providerFromRingId(ring.id) case final provider?)
+            if (watchRingCreditContributor(snapshot, provider)
+                case final contributor?)
+              contributor,
+        ],
+        if (rings.isEmpty) ...?creditsGlance?.contributors,
+      ]),
     });
   }
 

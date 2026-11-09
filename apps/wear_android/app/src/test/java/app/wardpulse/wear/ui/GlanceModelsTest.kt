@@ -45,6 +45,28 @@ class GlanceModelsTest {
     }
 
     @Test
+    fun refreshChrome_retainedSelectionOutranksAggregateWarning() {
+        val chrome = glanceRefreshChrome(
+            baseSummary(overall = PulseStatus.WARNING, isStale = true),
+            refreshAllowed = true,
+        )
+        assertEquals("Stale", chrome.detail)
+        assertFalse(chrome.ok)
+        assertTrue(chrome.enabled)
+    }
+
+    @Test
+    fun refreshChrome_freshSelectionIgnoresAggregateStale() {
+        val chrome = glanceRefreshChrome(
+            baseSummary(overall = PulseStatus.STALE, isStale = false),
+            refreshAllowed = true,
+        )
+        assertNull(chrome.detail)
+        assertTrue(chrome.ok)
+        assertTrue(chrome.enabled)
+    }
+
+    @Test
     fun refreshChrome_rateLimitedDisablesWithDetail() {
         val chrome =
             glanceRefreshChrome(
