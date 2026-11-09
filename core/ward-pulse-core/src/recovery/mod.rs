@@ -12,7 +12,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::model::{AccountId, AllowanceState, DashboardSnapshot, ProviderKind};
+use crate::model::{AccountId, AllowanceSource, AllowanceState, DashboardSnapshot, ProviderKind};
 use crate::time::DateTimeUtc;
 
 /// One plan window, named the only way it is unique: allowance ids repeat
@@ -24,7 +24,7 @@ pub struct WindowKey {
     pub allowance_id: String,
 }
 
-/// A window that was exhausted and has room again.
+/// A plan window that was exhausted and has room again.
 ///
 /// Carries only what delivery needs to name and time the notification: no
 /// money, no raw provider fields, no credentials.
@@ -42,7 +42,7 @@ pub struct PlanRecovery {
     pub resets_at: Option<DateTimeUtc>,
 }
 
-/// Windows with nothing left in them — what to remember until the next poll.
+/// Plan windows with nothing left in them — what to remember until the next poll.
 pub fn exhausted_windows(snapshot: &DashboardSnapshot) -> Vec<WindowKey> {
     snapshot
         .accounts
@@ -60,8 +60,9 @@ pub fn exhausted_windows(snapshot: &DashboardSnapshot) -> Vec<WindowKey> {
         .collect()
 }
 
-/// Windows from `exhausted` that the new snapshot reports usable again.
+/// Plan windows from `exhausted` that the new snapshot reports usable again.
 ///
+/// Purchased allowances stay silent even when their keys are remembered.
 /// A window the snapshot no longer reports stays silent: a disconnected
 /// provider has not recovered, it has stopped saying anything.
 pub fn plan_recoveries(exhausted: &[WindowKey], next: &DashboardSnapshot) -> Vec<PlanRecovery> {
@@ -85,21 +86,23 @@ pub fn plan_recoveries(exhausted: &[WindowKey], next: &DashboardSnapshot) -> Vec
     recoveries
 }
 
-/// A window with nothing left. An unlimited window can never be here, and one
+/// A plan window with nothing left. An unlimited window can never be here, and one
 /// reporting no percentage says nothing either way.
 fn is_exhausted(allowance: &AllowanceState) -> bool {
-    !allowance.unlimited
+    allowance.source == AllowanceSource::Plan
+        && !allowance.unlimited
         && allowance
             .used_percent
             .is_some_and(|percent| percent >= 100.0)
 }
 
-/// A window a user can spend against again.
+/// A plan window a user can spend against again.
 fn has_room(allowance: &AllowanceState) -> bool {
-    allowance.unlimited
-        || allowance
-            .used_percent
-            .is_some_and(|percent| percent < 100.0)
+    allowance.source == AllowanceSource::Plan
+        && (allowance.unlimited
+            || allowance
+                .used_percent
+                .is_some_and(|percent| percent < 100.0))
 }
 
 #[cfg(test)]
@@ -176,6 +179,18 @@ mod tests {
     }
 
     #[test]
+    fn only_exhausted_plan_windows_are_remembered() {
+        let mut purchased = allowance("extra", Some(100.0));
+        purchased.source = AllowanceSource::Purchased;
+        let snapshot = snapshot(vec![account(
+            "claude",
+            vec![allowance("weekly", Some(100.0)), purchased],
+        )]);
+
+        assert_eq!(exhausted_windows(&snapshot), vec![key("claude", "weekly")]);
+    }
+
+    #[test]
     fn windows_of_two_accounts_keep_their_own_names() {
         let snapshot = snapshot(vec![
             account("claude", vec![allowance("weekly", Some(100.0))]),
@@ -205,6 +220,40 @@ mod tests {
             recoveries[0].resets_at,
             Some(DateTimeUtc::new("2026-08-16T12:00:00Z"))
         );
+    }
+
+    #[test]
+    fn remembered_purchased_windows_do_not_recover_after_reset() {
+        let mut plan = allowance("weekly", Some(0.0));
+        plan.label = "Weekly plan".to_string();
+        plan.resets_at = Some(DateTimeUtc::new("2026-08-23T12:00:00Z"));
+        let mut purchased = allowance("extra", Some(0.0));
+        purchased.source = AllowanceSource::Purchased;
+        purchased.resets_at = Some(DateTimeUtc::new("2026-09-16T12:00:00Z"));
+        let next = snapshot(vec![account("claude", vec![plan, purchased])]);
+
+        assert_eq!(
+            plan_recoveries(&[key("claude", "weekly"), key("claude", "extra")], &next),
+            vec![PlanRecovery {
+                account_id: "claude".to_string(),
+                provider: ProviderKind::Claude,
+                allowance_id: "weekly".to_string(),
+                label: "Weekly plan".to_string(),
+                resets_at: Some(DateTimeUtc::new("2026-08-23T12:00:00Z")),
+            }]
+        );
+    }
+
+    #[test]
+    fn a_remembered_unlimited_plan_window_recovers_without_a_percentage() {
+        let mut unlimited = allowance("weekly", None);
+        unlimited.unlimited = true;
+        let next = snapshot(vec![account("claude", vec![unlimited])]);
+
+        let recoveries = plan_recoveries(&[key("claude", "weekly")], &next);
+
+        assert_eq!(recoveries.len(), 1);
+        assert_eq!(recoveries[0].allowance_id, "weekly");
     }
 
     #[test]
