@@ -26,6 +26,7 @@ import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/sync/automatic_poll.dart';
 import 'package:ward_pulse_phone/sync/recovery_wake.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_sync.dart';
 
 import 'connection_cache_test_support.dart';
 
@@ -453,26 +454,8 @@ void main() {
         'row_0_label': 'Claude plan',
       };
       final original = Map<String, Object?>.from(data);
-      var redraws = 0;
-      const channel = MethodChannel('home_widget');
-      final messenger =
-          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-      messenger.setMockMethodCallHandler(channel, (call) async {
-        final args = Map<String, Object?>.from(call.arguments as Map);
-        switch (call.method) {
-          case 'getWidgetData':
-            return data[args['id']] ?? args['defaultValue'];
-          case 'saveWidgetData':
-            data[args['id']! as String] = args['data'];
-            return true;
-          case 'updateWidget':
-            redraws += 1;
-            return true;
-          default:
-            throw MissingPluginException();
-        }
-      });
-      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final capture = _SurfaceCapture()..widgetData.addAll(data);
+      _bindSurfaces(capture: capture);
       final failures = <String>[];
       final succeeded = await runHeadlessProviderTask(
         HeadlessProviderSync.taskName,
@@ -485,8 +468,8 @@ void main() {
 
       expect(succeeded, isTrue);
       expect(failures, ['setup']);
-      expect(data, {...original, 'stale': '1'});
-      expect(redraws, 1);
+      expect(capture.widgetData, {...original, 'stale': '1'});
+      expect(capture.redraws, hasLength(1));
     },
   );
 
@@ -955,42 +938,29 @@ void main() {
     for (final replaced in [false, true]) {
       final credentials = replaced ? 'replaced' : 'kept';
       final outcome = replaced ? 'leave rows unmarked' : 'mark rows STALE';
-      test('$credentials credentials at widget reads $outcome', () async {
+      test('$credentials before STALE $outcome', () async {
         final data = <String, Object?>{
           'row_count': 1,
           'empty': '0',
           'stale': '0',
         };
-        final calls = <String>[];
         final held = _LiveFixture(fail: true)..release.complete();
-        const channel = MethodChannel('home_widget');
-        final messenger =
-            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-        messenger.setMockMethodCallHandler(channel, (call) async {
-          final args = Map<String, Object?>.from(call.arguments as Map);
-          calls.add(call.method);
-          switch (call.method) {
-            case 'getWidgetData':
-              if (args['id'] == 'empty' && replaced) held.current = false;
-              return data[args['id']] ?? args['defaultValue'];
-            case 'saveWidgetData':
-              data[args['id']! as String] = args['data'];
-              return true;
-            case 'updateWidget':
-              return true;
-            default:
-              throw MissingPluginException();
-          }
-        });
-        addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+        final capture = _SurfaceCapture()..widgetData.addAll(data);
+        final calls = _bindSurfaces(capture: capture);
         final failures = <String>[];
         await providerSyncOnce(
           load: (owner) => loadProviderSyncWork(owner, createLive: held.create),
+          markWidgetStale: ({required isCurrent}) async {
+            if (replaced) held.current = false;
+            await HomeWidgetPhoneWidgetSyncService.markExistingRowsStale(
+              isCurrent: isCurrent,
+            );
+          },
           logFailure: (step, _, _) => failures.add(step),
           debugData: _DebugData(false),
         );
         expect(failures, ['setup']);
-        expect(data['stale'], replaced ? '0' : '1');
+        expect(capture.widgetData['stale'], replaced ? '0' : '1');
         expect(calls.contains('updateWidget'), !replaced);
       });
     }
@@ -1241,6 +1211,7 @@ List<String> _bindSurfaces({_SurfaceCapture? capture}) {
   const channels = [
     MethodChannel('app.wardpulse/watch_sync'),
     MethodChannel('home_widget'),
+    MethodChannel('app.wardpulse/widget_publication'),
   ];
   for (final channel in channels) {
     messenger.setMockMethodCallHandler(channel, (call) async {
@@ -1251,13 +1222,19 @@ List<String> _bindSurfaces({_SurfaceCapture? capture}) {
         );
         return null;
       }
-      final args = Map<String, Object?>.from(call.arguments as Map);
       switch (call.method) {
-        case 'saveWidgetData':
-          output.widgetData[args['id']! as String] = args['data'];
+        case 'publish':
+          output.widgetData.addAll(
+            Map<String, Object?>.from(call.arguments as Map),
+          );
           return true;
-        case 'getWidgetData':
-          return output.widgetData[args['id']] ?? args['defaultValue'];
+        case 'markStale':
+          if ((output.widgetData['row_count'] as int? ?? 0) <= 0 ||
+              output.widgetData['empty'] == '1') {
+            return null;
+          }
+          output.widgetData['stale'] = '1';
+          return true;
         case 'updateWidget':
           output.redraws.add(Map.of(output.widgetData));
           return true;

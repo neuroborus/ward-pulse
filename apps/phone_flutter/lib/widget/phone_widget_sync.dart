@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:home_widget/home_widget.dart';
 
 import '../dashboard/dashboard_models.dart';
@@ -50,9 +51,9 @@ typedef PhoneWidgetPayloadWriter =
 /// Serializes overlapping syncs in one Flutter isolate (latest wins).
 ///
 /// Foreground UI and headless WorkManager each get their own isolate, so this
-/// does not cross-engine-lock SharedPreferences writes — only coalesces callers
-/// that share the same engine. Each request keeps its own guard; once that
-/// expires, its remaining writes stop. A plugin call that was already
+/// only coalesces callers that share the same engine. Native publications are
+/// complete across engines, without chronological ordering. Each request keeps
+/// its own guard; once that expires, subsequent effects stop. A call already
 /// dispatched cannot be retracted.
 final class PhoneWidgetSyncCoordinator {
   PhoneWidgetSyncCoordinator({required PhoneWidgetPayloadWriter write})
@@ -105,7 +106,7 @@ final class PhoneWidgetSyncCoordinator {
   }
 }
 
-/// Writes payload keys for [WardPulseAppWidget] via `home_widget`.
+/// Publishes complete payloads for the Android widget, then redraws via home_widget.
 final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
   HomeWidgetPhoneWidgetSyncService({PhoneWidgetSyncCoordinator? coordinator})
     : _coordinator = coordinator ?? _sharedCoordinator;
@@ -116,28 +117,23 @@ final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
   final PhoneWidgetSyncCoordinator _coordinator;
 
   static const _maxRows = phoneWidgetSlotCount;
+  static const _publication = MethodChannel('app.wardpulse/widget_publication');
 
   /// Marks retained launcher rows after a failed poll, without inventing data.
   ///
   /// Only the status flag changes; an empty or cleared payload stays empty.
-  /// [isCurrent] is checked again after the awaited reads and before redraw.
+  /// Native eligibility and the flag-only commit share the publication monitor.
   static Future<void> markExistingRowsStale({
     PhoneWidgetSyncGuard isCurrent = _alwaysCurrent,
   }) async {
-    final count =
-        await HomeWidget.getWidgetData<int>('row_count', defaultValue: 0) ?? 0;
-    if (count <= 0) {
+    if (!await isCurrent()) {
       return;
     }
-    final empty = await HomeWidget.getWidgetData<String>(
-      'empty',
-      defaultValue: '0',
-    );
-    if (empty == '1' || !await isCurrent()) {
+    final saved = await _publication.invokeMethod<bool>('markStale');
+    if (saved == null) {
       return;
     }
-    final saved = await HomeWidget.saveWidgetData<String>('stale', '1');
-    if (saved != true) {
+    if (!saved) {
       throw StateError('Could not save widget stale status.');
     }
     if (!await isCurrent()) {
@@ -165,25 +161,17 @@ final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
 
   /// Persists [payload] and asks the launcher to redraw.
   ///
-  /// Stops before the next write or redraw once [isCurrent] fails.
+  /// A dispatched publication may finish after ownership expires; no retraction.
   static Future<void> writeHomeWidgetPayload(
     PhoneWidgetPayload payload, {
     PhoneWidgetSyncGuard isCurrent = _alwaysCurrent,
   }) async {
-    Future<bool> save<T>(String id, T value) async {
-      if (!await isCurrent()) {
-        return false;
-      }
-      await HomeWidget.saveWidgetData<T>(id, value);
-      return true;
-    }
-
     final rows = payload.rows.take(_maxRows).toList(growable: false);
-    if (!await save<String>('stale', payload.stale ? '1' : '0') ||
-        !await save<String>('empty', payload.isEmpty ? '1' : '0') ||
-        !await save<int>('row_count', rows.length)) {
-      return;
-    }
+    final publication = <String, Object>{
+      'stale': payload.stale ? '1' : '0',
+      'empty': payload.isEmpty ? '1' : '0',
+      'row_count': rows.length,
+    };
     for (var i = 0; i < _maxRows; i++) {
       final row = i < rows.length ? rows[i] : null;
       final fields = <String, String>{
@@ -207,18 +195,26 @@ final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
         'color': row?.accentArgb.toRadixString(16).padLeft(8, '0') ?? '',
       };
       for (final entry in fields.entries) {
-        if (!await save<String>('row_${i}_${entry.key}', entry.value)) {
-          return;
-        }
+        publication['row_${i}_${entry.key}'] = entry.value;
       }
     }
     if (!await isCurrent()) {
       return;
     }
-    await HomeWidget.updateWidget(
+    final saved = await _publication.invokeMethod<bool>('publish', publication);
+    if (saved != true) {
+      throw StateError('Could not save widget publication.');
+    }
+    if (!await isCurrent()) {
+      return;
+    }
+    final updated = await HomeWidget.updateWidget(
       name: phoneWidgetProviderName,
       androidName: phoneWidgetProviderName,
       qualifiedAndroidName: phoneWidgetQualifiedAndroidName,
     );
+    if (updated != true) {
+      throw StateError('Could not redraw the widget.');
+    }
   }
 }

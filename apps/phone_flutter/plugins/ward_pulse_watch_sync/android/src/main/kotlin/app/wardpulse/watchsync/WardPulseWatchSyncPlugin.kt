@@ -15,12 +15,14 @@ class WardPulseWatchSyncPlugin : FlutterPlugin, MethodChannel.MethodCallHandler 
     private lateinit var applicationContext: Context
     private lateinit var channel: MethodChannel
     private var connectionCache: ConnectionCacheChannel? = null
+    private var widgetPublication: PhoneWidgetPublicationChannel? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         applicationContext = binding.applicationContext
         channel = MethodChannel(binding.binaryMessenger, CHANNEL_NAME)
         channel.setMethodCallHandler(this)
         connectionCache = ConnectionCacheChannel(applicationContext, binding.binaryMessenger)
+        widgetPublication = PhoneWidgetPublicationChannel(applicationContext, binding.binaryMessenger)
     }
 
     override fun onMethodCall(
@@ -54,6 +56,8 @@ class WardPulseWatchSyncPlugin : FlutterPlugin, MethodChannel.MethodCallHandler 
         channel.setMethodCallHandler(null)
         connectionCache?.detach()
         connectionCache = null
+        widgetPublication?.detach()
+        widgetPublication = null
     }
 
     private fun queueWatchSummary(

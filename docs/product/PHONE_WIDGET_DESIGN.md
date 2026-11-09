@@ -122,6 +122,56 @@ English `Reset DD MMM HH:mm`, with a zero-padded day; timezone redraw reformats 
 Budget and sibling resets, as-of values and rollover are never inferred. No ticker or new
 freshness mechanism is added; retained-data STALE and publication/coalescing stay unchanged.
 
+### Atomic cache publication — 2026-11-09 technical correction
+
+`HomeWidgetPhoneWidgetSyncService.writeHomeWidgetPayload` sends a complete map through
+`PhoneWidgetPublicationChannel`, using home_widget 0.9.3's `HomeWidgetPreferences` and flat keys.
+The store validates count, empty/STALE flags and all sixteen fields of all six slots, clearing
+absent fields/removed slots with empty strings. It stages one editor outside a process-shared
+monitor and commits once inside it. Retained-row STALE holds that monitor across snapshot,
+eligibility and flag-only commit; initial/empty data stays unchanged. Neither path clears
+unrelated keys or replays old rows. `WardPulseAppWidget.refresh` → `data.all` → `publication`
+is unchanged. Same-isolate coalescing and guards remain before dispatch and redraw. Dispatched
+effects may finish, without chronological ordering, cancellation or retraction. Abandoned
+staging exposes no partial publication. Storage failure suppresses redraw; a failed disk
+commit may expose complete new in-memory data, without rollback.
+
+`PhoneWidgetPublicationTest` uses real isolated preferences and the actual consumer: fixed
+old/A/B inputs expose old, complete B while A is staged, then complete A. The supplied
+per-field-commit overlay must fail the same coherence assertion; compile/setup/timeout/cleanup
+failures are not RED. `PhoneWidgetRoundTripTest` separately requires awaited Dart-origin
+replies and consumer observations from MainActivity's implicit engine and a distinct
+Activity-free auto-registered engine. Builds/runtime proofs remain HOST Pending. Source review
+and the Java layout/decoding/navigation harness prove neither persistence nor channel reachability.
+
+HOST uses a qualified phone AVD with both fixture packages absent. Preserve normal APK identity,
+installed package/data, selections and launcher; verify fixture/test IDs, target/runner,
+signer/version/hash and bundle/native identities before installation. From the phone directory:
+
+```sh
+ORG_GRADLE_PROJECT_wardpulseWidgetPublicationTest=true flutter build apk --debug --target=test_driver/phone_widget_publication.dart
+```
+
+From its Android directory:
+
+```sh
+./gradlew --no-daemon -PwardpulseWidgetPublicationTest=true -Ptarget=test_driver/phone_widget_publication.dart :app:assembleDebug :app:assembleDebugAndroidTest
+adb -s "$PHONE_SERIAL" install -t ../build/app/outputs/apk/debug/app-debug.apk
+adb -s "$PHONE_SERIAL" install -t ../build/app/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+timeout --kill-after=5s 90s adb -s "$PHONE_SERIAL" shell am instrument -w -r -e class app.wardpulse.PhoneWidgetPublicationTest,app.wardpulse.PhoneWidgetRoundTripTest app.wardpulse.widgetpublicationtest.test/android.test.InstrumentationTestRunner
+```
+
+Do not launch before instrumentation. Pair the debug-only selector with the actual fixture
+target, relative to the Flutter source root or equivalently qualified. Require actual tests
+and teardown, not ADB exit alone. Roundtrip waits share one monotonic 60-second deadline plus
+ten seconds for teardown; HOST timeout bounds blocking framework calls. On every outcome,
+retire a remaining owned fixture process, verify retirement, then uninstall only owned
+`app.wardpulse.widgetpublicationtest.test` and `app.wardpulse.widgetpublicationtest` packages.
+Forced retirement cannot make incomplete teardown PASS. Rebuild `lib/main.dart` without the
+selector; never copy back normal data. Full HOST gates remain separate. This fixture proves no
+provider/scheduler behavior, normal-package acceptance or original-incident reproduction.
+Historical evidence and visual acceptance below remain unchanged.
+
 ## Own-font rendering, states and accessibility
 
 ### Intrinsic geometry and size publication — 2026-11-06 revision

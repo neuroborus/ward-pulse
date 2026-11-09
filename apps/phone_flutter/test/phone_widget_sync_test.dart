@@ -258,48 +258,79 @@ void main() {
         _bindWidgetStorage(stored, calls: calls);
         await HomeWidgetPhoneWidgetSyncService.markExistingRowsStale();
         expect(stored, data);
-        expect(calls.where((call) => call.method != 'getWidgetData'), isEmpty);
+        expect(calls.map((call) => call.method), ['markStale']);
       },
     );
   }
 
-  for (final expiry in ['getWidgetData', 'saveWidgetData']) {
-    test('ownership expiring at $expiry stops the stale marker', () async {
-      final data = <String, Object?>{
-        'row_count': 1,
-        'empty': '0',
-        'stale': '0',
-      };
-      final calls = <MethodCall>[];
-      var owned = true;
-      _bindWidgetStorage(
-        data,
-        calls: calls,
-        onCall: (call) => owned = owned && call.method != expiry,
-      );
-      await HomeWidgetPhoneWidgetSyncService.markExistingRowsStale(
-        isCurrent: () async => owned,
-      );
-      // A dispatched write lands; nothing pending after it does.
-      expect(data['stale'], expiry == 'saveWidgetData' ? '1' : '0');
-      expect(calls.where((call) => call.method == 'updateWidget'), isEmpty);
-    });
+  for (final method in ['markStale', 'publish']) {
+    test(
+      'ownership before and during $method bounds subsequent effects',
+      () async {
+        final data = <String, Object?>{
+          'row_count': 1,
+          'empty': '0',
+          'stale': '0',
+        };
+        final calls = <MethodCall>[];
+        var owned = false;
+        final started = Completer<void>();
+        final release = Completer<void>();
+        _bindWidgetStorage(
+          data,
+          calls: calls,
+          onCall: (call) async {
+            if (call.method == method) {
+              started.complete();
+              await release.future;
+            }
+          },
+        );
+        Future<void> write() =>
+            method == 'markStale'
+                ? HomeWidgetPhoneWidgetSyncService.markExistingRowsStale(
+                  isCurrent: () async => owned,
+                )
+                : HomeWidgetPhoneWidgetSyncService.writeHomeWidgetPayload(
+                  PhoneWidgetPayload(
+                    rows: List.generate(
+                      phoneWidgetSlotCount,
+                      (i) => PhoneWidgetRow(
+                        label: 'Published $i',
+                        remainingPercent: i,
+                        accentArgb: 0xff91c4b1,
+                      ),
+                    ),
+                    stale: false,
+                  ),
+                  isCurrent: () async => owned,
+                );
+        await write();
+        expect(calls, isEmpty);
+        owned = true;
+        final run = write();
+        await started.future;
+        owned = false;
+        release.complete();
+        await run;
+        expect(data['stale'], method == 'markStale' ? '1' : '0');
+        expect(
+          data['row_count'],
+          method == 'markStale' ? 1 : phoneWidgetSlotCount,
+        );
+        expect(data['empty'], '0');
+        if (method == 'publish') {
+          for (var i = 0; i < phoneWidgetSlotCount; i++) {
+            expect(data['row_${i}_label'], 'Published $i');
+            expect(data['row_${i}_percent'], '$i% left');
+          }
+        }
+        expect(calls.where((call) => call.method == 'updateWidget'), isEmpty);
+      },
+    );
   }
 
-  test('expired ownership stops the remaining payload writes', () async {
-    final data = <String, Object?>{};
-    final calls = <MethodCall>[];
-    var owned = true;
-    _bindWidgetStorage(data, calls: calls, onCall: (_) => owned = false);
-    await HomeWidgetPhoneWidgetSyncService.writeHomeWidgetPayload(
-      const PhoneWidgetPayload(rows: [], stale: false),
-      isCurrent: () async => owned,
-    );
-    expect(calls.map((call) => call.method), ['saveWidgetData']);
-    expect(data, {'stale': '0'});
-  });
-
-  for (final failedMethod in ['saveWidgetData', 'updateWidget']) {
+  for (final failedMethod in ['markStale', 'updateWidget']) {
     test('stale marker reports a failed $failedMethod result', () async {
       final data = <String, Object?>{
         'row_count': 1,
@@ -312,7 +343,7 @@ void main() {
         HomeWidgetPhoneWidgetSyncService.markExistingRowsStale(),
         throwsStateError,
       );
-      if (failedMethod == 'saveWidgetData') {
+      if (failedMethod == 'markStale') {
         expect(data['stale'], '0');
         expect(calls.where((call) => call.method == 'updateWidget'), isEmpty);
       } else {
@@ -320,6 +351,21 @@ void main() {
       }
     });
   }
+
+  test(
+    'failed complete publication reports failure and suppresses redraw',
+    () async {
+      final calls = <MethodCall>[];
+      _bindWidgetStorage({}, calls: calls, failedMethod: 'publish');
+      await expectLater(
+        HomeWidgetPhoneWidgetSyncService.writeHomeWidgetPayload(
+          const PhoneWidgetPayload(rows: [], stale: false),
+        ),
+        throwsStateError,
+      );
+      expect(calls.map((call) => call.method), ['publish']);
+    },
+  );
 
   test('overlapping syncs keep only the newer payload', () async {
     final written = <PhoneWidgetPayload>[];
@@ -465,31 +511,41 @@ void _bindWidgetStorage(
   Map<String, Object?> data, {
   required List<MethodCall> calls,
   String? failedMethod,
-  void Function(MethodCall call)? onCall,
+  Future<void> Function(MethodCall call)? onCall,
 }) {
   const channel = MethodChannel('home_widget');
+  const publication = MethodChannel('app.wardpulse/widget_publication');
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-  messenger.setMockMethodCallHandler(channel, (call) async {
+  Future<Object?> handle(MethodCall call) async {
     calls.add(call);
-    onCall?.call(call);
-    final args = Map<String, Object?>.from(call.arguments as Map);
+    await onCall?.call(call);
     if (call.method == failedMethod) {
       return false;
     }
     switch (call.method) {
-      case 'getWidgetData':
-        return data[args['id']] ?? args['defaultValue'];
-      case 'saveWidgetData':
-        data[args['id']! as String] = args['data'];
+      case 'publish':
+        data.addAll(Map<String, Object?>.from(call.arguments as Map));
+        return true;
+      case 'markStale':
+        if ((data['row_count'] as int? ?? 0) <= 0 || data['empty'] == '1') {
+          return null;
+        }
+        data['stale'] = '1';
         return true;
       case 'updateWidget':
         return true;
       default:
         throw MissingPluginException();
     }
+  }
+
+  messenger.setMockMethodCallHandler(channel, handle);
+  messenger.setMockMethodCallHandler(publication, handle);
+  addTearDown(() {
+    messenger.setMockMethodCallHandler(channel, null);
+    messenger.setMockMethodCallHandler(publication, null);
   });
-  addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
 }
 
 /// Mock fixture as a real connection: mock accounts hold no metric slots.

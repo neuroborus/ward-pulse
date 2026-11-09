@@ -32,8 +32,13 @@ and alert currentness checks and before every pending widget write or redraw. On
 Mock it retires; the next Mock-off run starts normally. Queued widget requests carry their
 own guard. A failed load marks STALE only while its stamps and the credentials the run
 admitted stay current; obsolete failures and rejected snapshots leave rows unmarked. A
-plugin call that was already dispatched cannot be retracted, and writes from separate
-isolates are not ordered atomically. Release builds never read the debug choice.
+plugin call that was already dispatched cannot be retracted. Technical correction
+(2026-11-09): native widget publication commits one complete six-slot cache across engines;
+retained-row STALE uses the same process monitor for its snapshot and flag-only commit.
+This gives no chronological ordering or rollback after disk failure. Persistence/consumer
+and foreground/Activity-free Dart roundtrip HOST proofs remain pending; see
+[atomic publication](../../docs/product/PHONE_WIDGET_DESIGN.md#atomic-cache-publication--2026-11-09-technical-correction)
+for the isolated fixture invocation and limits. Release builds never read the debug choice.
 
 After collection, each headless surface reads its own saved selection immediately before
 publication and rechecks Live ownership after that read. A selection read failure retains
