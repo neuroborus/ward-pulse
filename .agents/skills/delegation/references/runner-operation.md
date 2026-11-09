@@ -12,6 +12,8 @@ Runner, supply requirements, measurements, findings and acceptance criteria, not
 implementation patch for Runner merely to apply. Subagents may coordinate, operate, read and
 review Runner work, but may not implement it independently.
 
+Before recreating repeated operational logic, check the responsible skill's scripts and existing supported recipes or stock tools. Reuse a sufficient entrypoint; if a genuinely repeated gap remains, queue the smallest Runner-authored helper beside its responsible skill with a short invocation/limits reference. Keep existing project/build/test tools with their owners, and do not turn optional consolidation into a blocker for active product work or a general command framework.
+
 Before launching direct declarative `plan-execution`, qualify the exact submitted plan bytes with the installed stock parser and its serializer/round-trip; retain the accepted step/check scope bound to those bytes. Do not guess the grammar or prepend explanatory Markdown the parser has not accepted. A parsing failure holds launch; preserve the failed packet and prepare a fresh supported correction without changing frozen inputs.
 
 Choose supported pipelines and worker steps by their current capabilities, not just their
