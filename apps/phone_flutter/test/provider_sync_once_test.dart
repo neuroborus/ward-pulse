@@ -1151,6 +1151,8 @@ final class _HeadlessRun {
             createLive: createLive,
             watchRingStore: watchRingStore,
             widgetStore: widgetStore,
+            // Neither empty nor 40%/90% fixture snapshots have spent windows.
+            readWindows: (_) => const [],
           ),
       logFailure: (step, _, _) => failures.add(step),
       markWidgetStale: ({required isCurrent}) async {

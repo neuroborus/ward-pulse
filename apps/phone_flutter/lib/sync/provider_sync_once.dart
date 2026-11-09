@@ -7,6 +7,7 @@ import '../dashboard/apply_alert_settings.dart';
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../dashboard/phone_live_bindings.dart';
+import '../dashboard/plan_recoveries.dart';
 import '../settings/alert_notification_preferences.dart';
 import '../settings/alert_threshold_preferences.dart';
 import '../settings/debug_data_preferences.dart';
@@ -148,6 +149,7 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
   PhoneLiveBindings Function()? createLive,
   WatchRingPreferenceStore? watchRingStore,
   PhoneWidgetPreferenceStore? widgetStore,
+  ReadExhaustedWindows readWindows = exhaustedWindows,
 }) async {
   if (!await owner.isLive()) return null;
   final live = (createLive ?? PhoneLiveBindings.create)();
@@ -218,6 +220,7 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
         LocalRecoveryNotifier(),
         const WorkmanagerRecoveryWakeScheduler(),
         notifications: notifications,
+        readWindows: readWindows,
         rethrowFailures: true,
         poll: poll,
         isCurrent: isCurrent,
