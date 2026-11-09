@@ -25,6 +25,8 @@ starting; do not invent a no-commit mode. If the task forbids commits and no sup
 noncommitting route fits, report that conflict and continue independent authorized work
 rather than implement by hand.
 
+Codex-managed `COMMIT` is readiness-only: the pinned adapter admits a limited set of Git verbs, so an ordinarily read-only command can still be rejected. The operator qualifies the actual pinned policy; the managed role uses only admitted read-only operations and leaves additional operator Git preflight outside that turn. Readiness must not stage or create the commit; the constrained executor owns those effects. Handle rejection through [error tracking](#track-every-runner-error-and-failed-run) and [supported recovery](#frozen-configuration-and-backend-recovery).
+
 **Who runs which check is settled in
 [agent-runner.md](../../finalization/agent-runner.md).** It carries the division between what
 a step proves inside its sandbox and what the owner runs on the host, with reasons and dates.
