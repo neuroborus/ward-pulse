@@ -420,7 +420,8 @@ void main() {
       expect(watchRingSelectionIds(failed, retainedPreferences), [
         retainedBudget.id,
       ]);
-      final retainedRing = resolveWatchRings(failed, retainedPreferences).single;
+      final retainedRing =
+          resolveWatchRings(failed, retainedPreferences).single;
       expect(retainedRing.id, retainedBudget.id);
       expect(retainedRing.spent?.toJson(), retainedSpend);
       expect(retainedRing.limit?.toJson(), retainedLimit);
