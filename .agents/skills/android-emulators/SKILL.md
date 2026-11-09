@@ -45,6 +45,10 @@ For physical phones and watches over USB/wireless ADB, use
 - Treat **Failed to enable emulator pairing** as a non-fatal consent timeout only in the
   documented verified flow, when the companion activity is already open at `CONSENT`. Do not
   generalize that conclusion to other pairing failures.
+- Before a paired gate, follow the toolchain's [bridge preflight](../../../docs/ANDROID_TOOLCHAIN.md#restarting-a-paired-emulator-set)
+  for both current endpoint tuples and expected-peer qualification; a retained reverse tuple alone
+  does not qualify the two-ended bridge or connectivity. Missing endpoints remain a setup limitation
+  unless causal transition evidence establishes more.
 - Verify both `WearableService` views through [diagnostic output privacy](../../../docs/ANDROID_TOOLCHAIN.md#diagnostic-output-privacy).
   Retain only allowlisted connection/peer-match facts, not raw service records; confirm the
   WardPulse receipt log and refreshed complication values as the toolchain guide requires.
