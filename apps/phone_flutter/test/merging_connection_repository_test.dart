@@ -367,13 +367,31 @@ void main() {
       expect(failed.watchSummary.status, ProviderStatus.stale);
       expect(failed.syncIssue, DashboardSyncIssue.rateLimited);
       expect(failed.syncDetails, 'Provider request failed');
+      final catalog = watchRingCatalog(failed);
+      const defaultPreferences = WatchRingPreferences();
+      final defaultIds = watchRingSelectionIds(failed, defaultPreferences);
+      expect(defaultIds, [
+        'budget.openai.platform.today',
+        'budget.openai.platform.week',
+        'budget.openai.platform.month',
+      ]);
+      for (final id in defaultIds) {
+        final budget = catalog.singleWhere((ring) => ring.id == id);
+        expect(budget.isAvailable, isTrue);
+        expect(budget.account?.accountId, 'openai-account');
+        expect(budget.spent?.toJson(), {'minorUnits': 150, 'currency': 'USD'});
+      }
+      expect(
+        resolveWatchRings(failed, defaultPreferences).map((ring) => ring.id),
+        defaultIds,
+      );
       final payload = jsonDecode(
         WatchDashboardSummaryPayload.fromSnapshot(
           failed,
-          const WatchRingPreferences(),
+          defaultPreferences,
         ).encode(),
       );
-      expect(payload['isStale'], isTrue);
+      expect(payload['isStale'], isFalse);
       expect(payload['providers'], [
         {
           'provider': 'openai',
@@ -386,6 +404,37 @@ void main() {
           'todaySpent': {'minorUnits': 200, 'currency': 'USD'},
         },
       ]);
+      final retainedBudget = catalog.singleWhere(
+        (ring) =>
+            ring.account?.accountId == 'claude-account' &&
+            ring.id.endsWith('.today'),
+      );
+      expect(retainedBudget.id, 'budget.anthropic.platform.today');
+      expect(retainedBudget.account?.accountId, 'claude-account');
+      expect(retainedBudget.account?.connection, 'anthropic.platform');
+      final retainedPreferences = WatchRingPreferences(
+        selectedIds: [retainedBudget.id],
+      );
+      const retainedSpend = {'minorUnits': 200, 'currency': 'USD'};
+      final retainedLimit = failed.accounts.last.today.limit!.toJson();
+      expect(watchRingSelectionIds(failed, retainedPreferences), [
+        retainedBudget.id,
+      ]);
+      final retainedRing = resolveWatchRings(failed, retainedPreferences).single;
+      expect(retainedRing.id, retainedBudget.id);
+      expect(retainedRing.spent?.toJson(), retainedSpend);
+      expect(retainedRing.limit?.toJson(), retainedLimit);
+      final retainedPayload = jsonDecode(
+        WatchDashboardSummaryPayload.fromSnapshot(
+          failed,
+          retainedPreferences,
+        ).encode(),
+      );
+      final retainedPayloadRing = (retainedPayload['rings'] as List).single;
+      expect(retainedPayloadRing['id'], retainedBudget.id);
+      expect(retainedPayloadRing['spent'], retainedSpend);
+      expect(retainedPayloadRing['limit'], retainedLimit);
+      expect(retainedPayload['isStale'], isTrue);
 
       connection = _liveSnapshot(snapshot, 'claude', recoveredAt, 250);
       loadReport = () async => '{"sanitized":true}';
@@ -398,6 +447,26 @@ void main() {
       expect(recovered.todayTotal.spent?.minorUnits, 400);
       expect(recovered.overallStatus, ProviderStatus.ok);
       expect(recovered.syncIssue, isNull);
+      expect(watchRingSelectionIds(recovered, retainedPreferences), [
+        retainedBudget.id,
+      ]);
+      const recoveredSpend = {'minorUnits': 250, 'currency': 'USD'};
+      final recoveredRing =
+          resolveWatchRings(recovered, retainedPreferences).single;
+      expect(recoveredRing.id, retainedBudget.id);
+      expect(recoveredRing.spent?.toJson(), recoveredSpend);
+      expect(recoveredRing.limit?.toJson(), retainedLimit);
+      final recoveredPayload = jsonDecode(
+        WatchDashboardSummaryPayload.fromSnapshot(
+          recovered,
+          retainedPreferences,
+        ).encode(),
+      );
+      final recoveredPayloadRing = (recoveredPayload['rings'] as List).single;
+      expect(recoveredPayloadRing['id'], retainedBudget.id);
+      expect(recoveredPayloadRing['spent'], recoveredSpend);
+      expect(recoveredPayloadRing['limit'], retainedLimit);
+      expect(recoveredPayload['isStale'], isFalse);
       expect(logger.events, [
         ProviderSyncEvent.succeeded,
         ProviderSyncEvent.usingCachedSnapshot,
