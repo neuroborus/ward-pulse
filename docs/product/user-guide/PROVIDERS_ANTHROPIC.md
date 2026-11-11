@@ -12,8 +12,12 @@ Use the Claude account whose plan windows you want to read.
 3. Copy the authorization code from the callback page, including its **CODE#STATE** form.
 4. Return to WardPulse, paste it into the authorization field and tap **Continue**.
 
-This field expects the callback authorization code, not an API key. If the attempt expires
-or is cancelled, start a new attempt rather than reusing the old code.
+This field expects the callback authorization code, not an API key. If sign-in fails, for
+example because the code is incomplete, belongs to an earlier attempt or has expired, the
+dialog shows the error with **Restart sign-in** and **Cancel**. Tap **Restart sign-in**, then
+**Open browser**, approve access again, paste the new code and tap **Continue**. The old code
+cannot be reused. **Cancel** closes the dialog. A failed or cancelled attempt does not replace
+an existing Claude plan connection.
 
 **Extra usage** shows the monthly amount Claude reports as used and the applicable monthly
 cap, when available. WardPulse displays these quantities in **Credits**. Do not read that

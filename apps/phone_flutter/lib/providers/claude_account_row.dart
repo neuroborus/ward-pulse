@@ -129,7 +129,11 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow> {
       final connected = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
-        builder: (context) => _ClaudeLoginDialog(attempt: attempt),
+        builder:
+            (context) => _ClaudeLoginDialog(
+              attempt: attempt,
+              startLogin: widget.accountService.startLogin,
+            ),
       );
       if (connected == true && mounted) {
         // Drop any pre-OAuth pasted access token for this connection.
@@ -198,9 +202,12 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow> {
 }
 
 class _ClaudeLoginDialog extends StatefulWidget {
-  const _ClaudeLoginDialog({required this.attempt});
+  const _ClaudeLoginDialog({required this.attempt, required this.startLogin});
 
   final ClaudeLoginAttempt attempt;
+
+  /// Begins the fresh authorization that replaces a failed attempt.
+  final Future<ClaudeLoginAttempt> Function() startLogin;
 
   @override
   State<_ClaudeLoginDialog> createState() => _ClaudeLoginDialogState();
@@ -209,21 +216,33 @@ class _ClaudeLoginDialog extends StatefulWidget {
 class _ClaudeLoginDialogState extends State<_ClaudeLoginDialog> {
   final _codeController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  late ClaudeLoginAttempt _attempt;
   String? _browserError;
-  String? _submitError;
+  String? _error;
   bool _submitting = false;
+
+  /// The current attempt has ended without connecting; only Restart continues.
+  bool _failed = false;
+  bool _restarting = false;
   bool _completed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _attempt = widget.attempt;
+  }
 
   @override
   void dispose() {
     _codeController.dispose();
     if (!_completed) {
-      widget.attempt.cancel();
+      _attempt.cancel();
     }
     super.dispose();
   }
 
   Future<void> _openBrowser() async {
+    final attempt = _attempt;
     if (_browserError != null) {
       setState(() {
         _browserError = null;
@@ -231,7 +250,7 @@ class _ClaudeLoginDialogState extends State<_ClaudeLoginDialog> {
     }
     try {
       final opened = await launchUrl(
-        widget.attempt.authorization.authorizationUri,
+        attempt.authorization.authorizationUri,
         mode: LaunchMode.externalApplication,
       );
       if (opened || !mounted) {
@@ -242,7 +261,8 @@ class _ClaudeLoginDialogState extends State<_ClaudeLoginDialog> {
         return;
       }
     }
-    if (mounted) {
+    // A failed, restarting or replaced attempt no longer owns the feedback.
+    if (mounted && identical(attempt, _attempt) && !_failed && !_restarting) {
       setState(() {
         _browserError = 'Could not open the browser';
       });
@@ -250,33 +270,65 @@ class _ClaudeLoginDialogState extends State<_ClaudeLoginDialog> {
   }
 
   Future<void> _submit() async {
-    if (_submitting || !(_formKey.currentState?.validate() ?? false)) {
+    if (_submitting ||
+        _failed ||
+        !(_formKey.currentState?.validate() ?? false)) {
       return;
     }
     setState(() {
       _submitting = true;
-      _submitError = null;
+      _error = null;
     });
     try {
-      await widget.attempt.completeWithCode(_codeController.text);
+      await _attempt.completeWithCode(_codeController.text);
       _completed = true;
       if (mounted) {
         Navigator.of(context).pop(true);
       }
     } on ClaudeAccountException catch (error) {
-      if (mounted && error.failure != ClaudeAccountFailure.cancelled) {
-        setState(() {
-          _submitError = error.details ?? 'Claude sign-in failed';
-          _submitting = false;
-        });
-      }
+      _fail(error.details ?? 'Claude sign-in failed');
     } catch (_) {
-      if (mounted) {
-        setState(() {
-          _submitError = 'Claude sign-in failed';
-          _submitting = false;
-        });
+      _fail('Claude sign-in failed');
+    }
+  }
+
+  /// Replaces the spent attempt; its authorization code is never reused.
+  Future<void> _restart() async {
+    if (_restarting) {
+      return;
+    }
+    setState(() {
+      _restarting = true;
+      _error = null;
+      _browserError = null;
+    });
+    try {
+      final attempt = await widget.startLogin();
+      if (!mounted) {
+        attempt.cancel();
+        return;
       }
+      _codeController.clear();
+      setState(() {
+        _attempt = attempt;
+        _failed = false;
+        _restarting = false;
+      });
+    } on ClaudeAccountException catch (error) {
+      _fail(error.details ?? 'Could not start Claude sign-in');
+    } catch (_) {
+      _fail('Could not start Claude sign-in');
+    }
+  }
+
+  void _fail(String message) {
+    if (mounted) {
+      setState(() {
+        _error = message;
+        _failed = true;
+        _submitting = false;
+        _restarting = false;
+      });
     }
   }
 
@@ -298,7 +350,7 @@ class _ClaudeLoginDialogState extends State<_ClaudeLoginDialog> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _codeController,
-              enabled: !_submitting,
+              enabled: !_submitting && !_failed,
               autocorrect: false,
               enableSuggestions: false,
               decoration: const InputDecoration(
@@ -315,10 +367,10 @@ class _ClaudeLoginDialogState extends State<_ClaudeLoginDialog> {
               },
             ),
             const SizedBox(height: 12),
-            if (_submitting) const LinearProgressIndicator(),
-            if (_submitError != null)
+            if (_submitting || _restarting) const LinearProgressIndicator(),
+            if (_error != null)
               Text(
-                _submitError!,
+                _error!,
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             if (_browserError != null) ...[
@@ -337,15 +389,22 @@ class _ClaudeLoginDialogState extends State<_ClaudeLoginDialog> {
               _submitting ? null : () => Navigator.of(context).pop(false),
           child: const Text('Cancel'),
         ),
-        FilledButton.icon(
-          onPressed: _submitting ? null : _openBrowser,
-          icon: const Icon(Icons.open_in_browser),
-          label: const Text('Open browser'),
-        ),
-        FilledButton(
-          onPressed: _submitting ? null : _submit,
-          child: const Text('Continue'),
-        ),
+        if (_failed)
+          FilledButton(
+            onPressed: _restarting ? null : _restart,
+            child: const Text('Restart sign-in'),
+          )
+        else ...[
+          FilledButton.icon(
+            onPressed: _submitting ? null : _openBrowser,
+            icon: const Icon(Icons.open_in_browser),
+            label: const Text('Open browser'),
+          ),
+          FilledButton(
+            onPressed: _submitting ? null : _submit,
+            child: const Text('Continue'),
+          ),
+        ],
       ],
     );
   }

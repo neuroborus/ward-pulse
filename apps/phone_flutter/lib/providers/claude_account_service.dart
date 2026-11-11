@@ -15,16 +15,25 @@ final class ClaudeLoginAttempt {
   final ClaudeAuthorizationRequest authorization;
   final Future<void> Function(String pastedCode) _completeWithCode;
   final void Function() _cancel;
+  bool _submitted = false;
   bool _finished = false;
 
+  /// Accepts one code; success or failure ends the attempt.
+  ///
+  /// Recovery needs a fresh [ClaudeAccountService.startLogin] authorization.
   Future<void> completeWithCode(String pastedCode) async {
-    if (_finished) {
+    if (_submitted || _finished) {
       throw const ClaudeAccountException(ClaudeAccountFailure.cancelled);
     }
-    await _completeWithCode(pastedCode);
-    _finished = true;
+    _submitted = true;
+    try {
+      await _completeWithCode(pastedCode);
+    } finally {
+      _finished = true;
+    }
   }
 
+  /// Still applies while a submitted completion is in flight.
   void cancel() {
     if (_finished) {
       return;

@@ -111,6 +111,13 @@ network exclusion and does not hold a credential/storage transaction over networ
 - The phone opens Claude Code's PKCE authorize URL in the external browser. After approval, the
   user pastes the short-lived authorization code (`CODE#STATE`) from Anthropic's callback page;
   the phone exchanges it for tokens. Anthropic does not offer a device-code grant for this client.
+- Each sign-in attempt owns a fresh PKCE verifier/state and reconnect ticket and accepts one
+  pasted code; a malformed code or mismatched state is rejected before any token request.
+  Success or failure ends the attempt. A failed attempt cancels its ticket, keeping the prior
+  confirmed session (a first sign-in stays unconnected), and rejects later codes before any
+  network request; Restart sign-in begins a new attempt. Cancellation still applies while a
+  completion is in flight, a newer attempt supersedes older ones, and success is reported only
+  after secure persistence and accepted activation.
 - Access and rotating refresh tokens stay in platform-secure storage. Authorization codes and
   tokens are never logged, sent to Wear OS, or passed across the Rust FFI boundary.
 - Token refresh and session writes are serialized. Anthropic rotates refresh tokens; the phone

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_load.dart';
@@ -710,6 +711,86 @@ void main() {
       final retained = (await b.read())!;
       expect(retained.value, 'new');
       expect(retained.version.values, newerVersion.values);
+    },
+  );
+
+  test(
+    'failed Claude sign-in retains the session; only fresh authorization replaces it',
+    () async {
+      final tokenBodies = <String?>[];
+      final tokens = jsonEncode({
+        'access_token': 'fake-replacement',
+        'refresh_token': 'fake-replacement-refresh',
+        'expires_in': 3600,
+      });
+      final account = SecureClaudeAccountStore(
+        storage: secure,
+        platform: bridge.platform('ui'),
+      );
+      await account.write(
+        ClaudeAccountSession(
+          accessToken: 'fake-confirmed',
+          refreshToken: 'fake-refresh',
+          expiresAt: now.add(const Duration(hours: 1)),
+          accountId: 'fake-account',
+        ),
+      );
+      final service = MobileClaudeAccountService(
+        store: account,
+        client: ClaudeAccountClient(
+          transport: _ClaudeTransport((uri, headers, body) async {
+            tokenBodies.add(body);
+            return (status: 200, body: tokens);
+          }),
+          clock: () => now,
+          // Seeded: each attempt draws its own deterministic PKCE pair.
+          random: Random(1),
+        ),
+      );
+
+      final failed = await service.startLogin();
+      await expectLater(
+        failed.completeWithCode('CODE#'),
+        throwsA(
+          isA<ClaudeAccountException>().having(
+            (error) => error.failure,
+            'failure',
+            ClaudeAccountFailure.invalidResponse,
+          ),
+        ),
+      );
+      expect(tokenBodies, isEmpty);
+      final retained =
+          await SecureClaudeAccountStore(
+            storage: secure,
+            platform: bridge.platform('cold'),
+          ).read();
+      expect(retained?.accessToken, 'fake-confirmed');
+      // Even a matching code cannot revive the spent attempt or its ticket.
+      await expectLater(
+        failed.completeWithCode('fake-code#${failed.authorization.state}'),
+        throwsA(
+          isA<ClaudeAccountException>().having(
+            (error) => error.failure,
+            'failure',
+            ClaudeAccountFailure.cancelled,
+          ),
+        ),
+      );
+      expect(tokenBodies, isEmpty);
+
+      final fresh = await service.startLogin();
+      expect(fresh.authorization.state, isNot(failed.authorization.state));
+      await fresh.completeWithCode('fresh-code#${fresh.authorization.state}');
+      final exchange = Uri.splitQueryString(tokenBodies.single!);
+      expect(exchange['code'], 'fresh-code');
+      expect(exchange['code_verifier'], fresh.authorization.codeVerifier);
+      final replaced =
+          await SecureClaudeAccountStore(
+            storage: secure,
+            platform: bridge.platform('cold'),
+          ).read();
+      expect(replaced?.accessToken, 'fake-replacement');
     },
   );
 

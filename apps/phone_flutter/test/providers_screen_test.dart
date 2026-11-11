@@ -18,6 +18,7 @@ import 'package:ward_pulse_phone/providers/providers_screen.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/settings/alert_percent_threshold_editor.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
+import 'package:ward_pulse_phone/sync/claude_account_client.dart';
 
 void main() {
   group('owned connection reveal', () {
@@ -1590,6 +1591,334 @@ void main() {
     );
   }
 
+  group('Claude plan sign-in recovery', () {
+    final field = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(TextFormField),
+    );
+    final progress = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(LinearProgressIndicator),
+    );
+
+    bool enabled(WidgetTester tester, String label) {
+      final button = find.ancestor(
+        of: find.text(label),
+        matching: find.bySubtype<ButtonStyleButton>(),
+      );
+      return tester.widget<ButtonStyleButton>(button).enabled;
+    }
+
+    Future<void> openSignIn(
+      WidgetTester tester,
+      ClaudeAccountService service,
+      VoidCallback onCredentialsChanged,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ProvidersScreen(
+              onRefresh: _noRefresh,
+              credentialStore: _MemoryCredentialStore(),
+              codexAccountService: const EmptyCodexAccountService(),
+              claudeAccountService: service,
+              onCredentialsChanged: onCredentialsChanged,
+              alertThresholds: const AlertThresholdPreferences(),
+              onAlertThresholdsChanged: (_) async {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final row = _inRow('Claude plan', find.text('Claude plan'));
+      await tester.scrollUntilVisible(
+        row,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(row);
+      await tester.pump();
+      // The row's progress keeps animating behind the dialog, so elapse the
+      // route transition rather than waiting for the tree to settle.
+      await tester.pump(const Duration(seconds: 1));
+    }
+
+    /// Holds each real browser launch until the test resolves its result.
+    List<Completer<bool>> holdLaunches(
+      WidgetTester tester,
+      List<MethodCall> calls,
+    ) {
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      final messenger = tester.binding.defaultBinaryMessenger;
+      final results = <Completer<bool>>[];
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        final result = Completer<bool>();
+        results.add(result);
+        return result.future;
+      });
+      return results;
+    }
+
+    testWidgets('failed code entry restarts with a fresh authorization', (
+      tester,
+    ) async {
+      final events = <String>[];
+      const failure = ClaudeAccountException(
+        ClaudeAccountFailure.invalidResponse,
+        'Claude sign-in · HTTP 400',
+      );
+      final restart = Completer<ClaudeLoginAttempt>();
+      final release = Completer<void>();
+      final stale = _claudeAttempt('stale', events, () async => throw failure);
+      final fresh = _claudeAttempt('fresh', events, () => release.future);
+      final service = _QueuedClaudeAccountService(events, [
+        Future.value(stale),
+        restart.future,
+      ]);
+      var changes = 0;
+      await openSignIn(tester, service, () => changes++);
+
+      await tester.enterText(field, 'stale-code#stale');
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      // The spent attempt offers only recovery; its controls cannot resubmit.
+      expect(progress, findsNothing);
+      expect(find.text(failure.details!), findsOneWidget);
+      expect(find.text('Continue'), findsNothing);
+      expect(find.text('Open browser'), findsNothing);
+      expect(tester.widget<TextFormField>(field).enabled, isFalse);
+      expect(enabled(tester, 'Cancel'), isTrue);
+
+      await tester.tap(find.text('Restart sign-in'));
+      await tester.pump();
+      expect(progress, findsOneWidget);
+      expect(enabled(tester, 'Restart sign-in'), isFalse);
+      expect(enabled(tester, 'Cancel'), isTrue);
+      restart.complete(fresh);
+      await tester.pump();
+      expect(progress, findsNothing);
+      expect(find.text(failure.details!), findsNothing);
+      expect(find.text('Restart sign-in'), findsNothing);
+      expect(tester.widget<TextFormField>(field).controller!.text, isEmpty);
+      expect(tester.widget<TextFormField>(field).enabled, isTrue);
+      expect(enabled(tester, 'Open browser'), isTrue);
+      expect(enabled(tester, 'Continue'), isTrue);
+
+      await tester.enterText(field, 'fresh-code#fresh');
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      expect(progress, findsOneWidget);
+      expect(changes, 0);
+      release.complete();
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(changes, 1);
+      expect(_inRow('Claude plan', find.text('Connected')), findsOneWidget);
+      expect(_inRow('Claude plan', find.byType(RowProgress)), findsNothing);
+      expect(events, [
+        'start',
+        'stale submit stale-code#stale',
+        'start',
+        'fresh submit fresh-code#fresh',
+      ]);
+    });
+
+    testWidgets('cancelled completion stays dismissible and restartable', (
+      tester,
+    ) async {
+      final events = <String>[];
+      const failure = ClaudeAccountException(ClaudeAccountFailure.cancelled);
+      final stale = _claudeAttempt('stale', events, () async => throw failure);
+      final fresh = _claudeAttempt('fresh', events, () async {});
+      final service = _QueuedClaudeAccountService(events, [
+        Future.value(stale),
+        Future.value(fresh),
+      ]);
+      var changes = 0;
+      await openSignIn(tester, service, () => changes++);
+
+      await tester.enterText(field, 'stale-code#stale');
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      expect(progress, findsNothing);
+      expect(find.text('Claude sign-in failed'), findsOneWidget);
+      expect(tester.widget<TextFormField>(field).enabled, isFalse);
+      expect(enabled(tester, 'Cancel'), isTrue);
+      expect(enabled(tester, 'Restart sign-in'), isTrue);
+
+      await tester.tap(find.text('Restart sign-in'));
+      await tester.pump();
+      expect(tester.widget<TextFormField>(field).enabled, isTrue);
+      expect(enabled(tester, 'Continue'), isTrue);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(changes, 0);
+      expect(_inRow('Claude plan', find.text('Not connected')), findsOneWidget);
+      // Dismissal cancels the installed fresh attempt, never the spent one.
+      expect(events, [
+        'start',
+        'stale submit stale-code#stale',
+        'start',
+        'fresh cancel',
+      ]);
+    });
+
+    testWidgets('a stale browser result cannot mark a restarting sign-in', (
+      tester,
+    ) async {
+      final events = <String>[];
+      const failure = ClaudeAccountException(
+        ClaudeAccountFailure.invalidResponse,
+        'Claude sign-in · HTTP 400',
+      );
+      final calls = <MethodCall>[];
+      final launches = holdLaunches(tester, calls);
+      final restart = Completer<ClaudeLoginAttempt>();
+      final stale = _claudeAttempt('stale', events, () async => throw failure);
+      final fresh = _claudeAttempt('fresh', events, () async {});
+      final service = _QueuedClaudeAccountService(events, [
+        Future.value(stale),
+        restart.future,
+      ]);
+      var changes = 0;
+      try {
+        await openSignIn(tester, service, () => changes++);
+
+        await tester.tap(find.text('Open browser'));
+        await tester.pump();
+        expect(calls.single.method, 'launch');
+        expect(
+          calls.single.arguments,
+          containsPair('url', 'https://claude.invalid/authorize'),
+        );
+        await tester.enterText(field, 'stale-code#stale');
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
+        await tester.tap(find.text('Restart sign-in'));
+        await tester.pump();
+        expect(progress, findsOneWidget);
+
+        // The spent attempt's launch ends while its replacement is created.
+        launches.single.complete(false);
+        await tester.pump();
+        expect(find.text('Could not open the browser'), findsNothing);
+        restart.complete(fresh);
+        await tester.pump();
+        expect(progress, findsNothing);
+        expect(find.text('Could not open the browser'), findsNothing);
+        expect(tester.widget<TextFormField>(field).controller!.text, isEmpty);
+        expect(tester.widget<TextFormField>(field).enabled, isTrue);
+        expect(enabled(tester, 'Open browser'), isTrue);
+        expect(enabled(tester, 'Continue'), isTrue);
+
+        await tester.enterText(field, 'fresh-code#fresh');
+        await tester.tap(find.text('Continue'));
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(changes, 1);
+        expect(_inRow('Claude plan', find.text('Connected')), findsOneWidget);
+        expect(calls, hasLength(1));
+        expect(events, [
+          'start',
+          'stale submit stale-code#stale',
+          'start',
+          'fresh submit fresh-code#fresh',
+        ]);
+      } finally {
+        // Settle held work even after a failure, before fake async ends.
+        await tester.pumpWidget(const SizedBox());
+        for (final launch in launches) {
+          if (!launch.isCompleted) launch.complete(false);
+        }
+        if (!restart.isCompleted) restart.complete(fresh);
+        await tester.pump();
+      }
+    });
+
+    testWidgets('only the current attempt reports a failed browser launch', (
+      tester,
+    ) async {
+      final events = <String>[];
+      const failure = ClaudeAccountException(
+        ClaudeAccountFailure.invalidResponse,
+        'Claude sign-in · HTTP 400',
+      );
+      final calls = <MethodCall>[];
+      final launches = holdLaunches(tester, calls);
+      final stale = _claudeAttempt('stale', events, () async => throw failure);
+      final fresh = _claudeAttempt('fresh', events, () async {});
+      final service = _QueuedClaudeAccountService(events, [
+        Future.value(stale),
+        Future.value(fresh),
+      ]);
+      var changes = 0;
+      try {
+        await openSignIn(tester, service, () => changes++);
+
+        await tester.tap(find.text('Open browser'));
+        await tester.pump();
+        expect(calls.single.method, 'launch');
+        await tester.enterText(field, 'stale-code#stale');
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
+        await tester.tap(find.text('Restart sign-in'));
+        await tester.pump();
+        expect(find.text('Restart sign-in'), findsNothing);
+
+        // The replaced attempt's launch fails after the fresh one is installed.
+        launches.single.completeError(PlatformException(code: 'launch_failed'));
+        await tester.pump();
+        expect(find.text('Could not open the browser'), findsNothing);
+        expect(tester.widget<TextFormField>(field).controller!.text, isEmpty);
+        expect(tester.widget<TextFormField>(field).enabled, isTrue);
+        expect(enabled(tester, 'Open browser'), isTrue);
+        expect(enabled(tester, 'Continue'), isTrue);
+
+        // The current attempt still reports its own failure; retry clears it.
+        await tester.tap(find.text('Open browser'));
+        await tester.pump();
+        expect(calls, hasLength(2));
+        launches[1].complete(false);
+        await tester.pump();
+        expect(find.text('Could not open the browser'), findsOneWidget);
+        await tester.tap(find.text('Open browser'));
+        await tester.pump();
+        expect(find.text('Could not open the browser'), findsNothing);
+        expect(calls.map((call) => call.method), [
+          'launch',
+          'launch',
+          'launch',
+        ]);
+
+        // The retried launch ends only after dismissal disposed the dialog.
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(events, [
+          'start',
+          'stale submit stale-code#stale',
+          'start',
+          'fresh cancel',
+        ]);
+        launches[2].complete(false);
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+        expect(changes, 0);
+      } finally {
+        // Settle held work even after a failure, before fake async ends.
+        await tester.pumpWidget(const SizedBox());
+        for (final launch in launches) {
+          if (!launch.isCompleted) launch.complete(false);
+        }
+        await tester.pump();
+      }
+    });
+  });
+
   testWidgets(
     'reporting controls and primary tap open only their own dialogs',
     (tester) async {
@@ -2272,6 +2601,48 @@ class _DelayedCodexAccountService implements CodexAccountService {
   @override
   Future<String?> fetchReport() async =>
       throw StateError('Unexpected provider request');
+  @override
+  Future<void> disconnect() async => throw StateError('Unexpected disconnect');
+}
+
+/// An ordinary attempt that records each submitted code and its cancellation.
+ClaudeLoginAttempt _claudeAttempt(
+  String state,
+  List<String> events,
+  Future<void> Function() complete,
+) => ClaudeLoginAttempt(
+  authorization: ClaudeAuthorizationRequest(
+    authorizationUri: Uri.parse('https://claude.invalid/authorize'),
+    codeVerifier: 'synthetic-verifier',
+    state: state,
+  ),
+  completeWithCode: (code) {
+    events.add('$state submit $code');
+    return complete();
+  },
+  cancel: () => events.add('$state cancel'),
+);
+
+/// Starts the queued attempts in order for the row and its mounted dialog.
+final class _QueuedClaudeAccountService implements ClaudeAccountService {
+  _QueuedClaudeAccountService(this.events, this.logins);
+
+  final List<String> events;
+  final List<Future<ClaudeLoginAttempt>> logins;
+
+  @override
+  Future<bool> isConnected() async => false;
+
+  @override
+  Future<ClaudeLoginAttempt> startLogin() {
+    events.add('start');
+    return logins.removeAt(0);
+  }
+
+  @override
+  Future<String?> fetchReport() async =>
+      throw StateError('Unexpected provider request');
+
   @override
   Future<void> disconnect() async => throw StateError('Unexpected disconnect');
 }
