@@ -619,8 +619,8 @@ them with `systemctl --user restart plasma-kglobalaccel` rather than restarting 
 
 ### Diagnostic output privacy
 
-Before service, window/task or environment inspection, identify the exact question and
-allowlist the minimum facts needed. Project them before stdout/stderr reaches tool output,
+Before service, window/task or environment inspection, including manual/read-only preflight
+and text captures, identify the exact question and allowlist the minimum facts needed. Project them before stdout/stderr reaches tool output,
 logs, saved artifacts or another agent; never return raw sensitive service/environment data
 for later redaction. Peer checks retain connection state, expected peer/role match and
 required bridge-presence results. Compare necessary identities privately and retain match,
@@ -1098,13 +1098,13 @@ require a Codex CLI, local server, or `adb reverse`.
 
 ### Package UID and full-window focus preflight
 
-For a guard that requires installed package UID or current focus, use the currently selected
-ADB server and explicit serial, and qualify the Android user scope. Acquire the relevant
+For a guard that requires installed package UID or current focus, including manual navigation,
+use the currently selected ADB server and explicit serial, and qualify the Android user scope. Acquire the relevant
 read-only shell payload through that target:
 
 ```sh
 cmd package list packages -U app.wardpulse
-dumpsys window
+dumpsys window -a
 ```
 
 Retain each command's actual status and bounded privacy-safe producer/field facts before guards,
@@ -1117,8 +1117,8 @@ exact-package check. Keep Android user ID, app ID and full UID distinct; do not 
 
 Qualify the actual focus fields in the full WindowManager service result before projecting
 components. The `dumpsys window windows` subsection can omit service-level focus fields;
-its empty projection does not prove absent foreground. Missing, malformed or ambiguous
-required fields hold dependent work. Preserve that HOLD and its failure-point facts; any
+its empty projection leaves focus Unknown and does not prove absent foreground or a product
+defect. Missing, malformed or ambiguous required fields hold dependent work. Preserve that HOLD and its failure-point facts; any
 corrected acquisition is a fresh sample, not reconstructed success.
 
 ### Wear instrumentation provisioning order
