@@ -27,7 +27,7 @@ starting; do not invent a no-commit mode. If the task forbids commits and no sup
 noncommitting route fits, report that conflict and continue independent authorized work
 rather than implement by hand.
 
-Codex-managed `COMMIT` is readiness-only: the pinned adapter admits a limited set of Git verbs, so an ordinarily read-only command can still be rejected. The operator qualifies the actual pinned policy; the managed role uses only admitted read-only operations and leaves additional operator Git preflight outside that turn. Readiness must not stage or create the commit; the constrained executor owns those effects. Handle rejection through [error tracking](#track-every-runner-error-and-failed-run) and [supported recovery](#frozen-configuration-and-backend-recovery).
+Codex-managed `COMMIT` is readiness-only: the pinned adapter admits a limited set of Git verbs, so an ordinarily read-only command can still be rejected. The operator qualifies the actual pinned policy; the managed role uses only admitted read-only operations and leaves additional operator Git preflight outside that turn. Readiness must not stage or create the commit; the constrained executor owns those effects. Handle rejection through [error classification](#classify-runner-failures-and-report-new-defects) and [supported recovery](#frozen-configuration-and-backend-recovery).
 
 **Who runs which check is settled in
 [agent-runner.md](../../finalization/agent-runner.md).** It carries the division between what
@@ -41,22 +41,42 @@ division to the step**, and it is authoritative for that step — so every runne
 required checks explicitly, says which ones the owner runs afterwards, and points at
 `agent-runner.md` for the reasoning.
 
-## Track every Runner error and failed run
+## Classify Runner failures and report new defects
 
-Track every actual Runner error or failed run in an issue record, including expected quota,
-configuration-validation and operator errors; classify them truthfully without asserting a
-confirmed Runner bug. Reuse or update a matching existing issue with each new run occurrence;
-create a new issue only when no matching record exists. Record concise English observed error,
-actual run and mode, expected/actual behavior, Source/configuration context, sanitized public
-evidence and explicit Unknowns; retain the issue ID and report receipt. Include no private
-prompts, transcripts, credentials or sensitive payloads.
+Classify the actual symptom against the current supported contract before opening a Runner
+issue. Retain concise English operational facts: actual route/run/mode, expected and observed
+behavior, relevant Source/configuration, public evidence and explicit Unknowns. A failed command,
+expected configuration/budget/environment HOLD, ordinary slowness or quota rejection alone does
+not establish a Runner defect. Ordinary Source/test/acceptance findings stay actual Runner work.
 
-Use supported `unexpected_issue_report` only when the coordinator deliberately concludes that
-behavior is unexpected, as its contract requires. If the error cannot be represented truthfully
-through supported reporting, or reporting is unavailable, retain an explicit local issue marked
-pending publication and tell the owner; never claim it was published. Tracking does not itself
-stop authorized product work: continue through supported recovery, preserving code, frozen-input
-guards, roles and checks, without forcing readiness or blindly retrying.
+Bare known MCP `Transport closed`, a stale client after an update, client restart or deferred
+runtime activation alone is insufficient issue evidence. Briefly state the symptom, qualified
+recovery route and next action. Prefer an already-authorized healthy documented CLI route with
+its actual current runtime and guide over speculative issue churn or repeated owner intervention.
+A working CLI does not prove the failed MCP connection recovered; an unrecovered known client
+connection does not by itself block that healthy CLI. Preserve frozen inputs and ownership; no
+blind replay, forced readiness, model substitution or new authority follows from route recovery.
+Actual confirmed Opus quota exhaustion alone permits the reconciled fresh all-Sol fallback under
+[owner-selected mode](owner-selected-mode.md); ordinary failure or slowness does not.
+
+For EVERY NEW genuinely unexpected Runner incident or credible concrete supported-contract
+violation, the coordinator creates a separate NEW issue through supported `unexpected_issue_report`.
+Do not append a new occurrence to or reuse an existing issue, or edit issue-store files manually.
+A repeated observation of the same old frozen failure is not a new incident. State the concrete
+observed deviation and suspected/confirmed classification truthfully; an unknown engine-code cause
+remains Unknown. Include no credentials, private prompts/transcripts or sensitive payloads, and
+retain the actual issue ID and supported report receipt.
+
+Notify the owner on Telegram, then STOP/end execution pending repair and explicit owner resumption.
+Complete only safe known lifecycle/custody closure before stopping; no fresh launch, blind retry or
+Worker switch around a supported new defect. If supported reporting is unavailable, retain a
+private report explicitly pending publication, notify Telegram and stop on the same terms; never
+claim it was published. A convenient alternative route does not override this stop once a new
+supported defect is established.
+
+This classification/recovery policy grants no global updates, client restarts, process kills,
+profile changes or frozen-input mutations. Use only existing explicit authorization and the
+documented supported recovery controls.
 
 ## Frozen configuration and backend recovery
 
