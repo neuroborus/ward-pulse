@@ -9,8 +9,10 @@ Use this skill for work under `core/` and Rust-owned contracts.
 
 ## Architecture
 
-- Keep `ward-pulse-core` independent from provider transport and platform APIs.
-- Keep `ward-pulse-providers` focused on parsing, validation, normalization, and provider-specific capability mapping.
+- Keep `ward-pulse-core` independent from provider transport and platform APIs;
+  put reusable business decisions in shared, provider-neutral Rust modules.
+- Keep `ward-pulse-providers` focused on parsing, validation, normalization, and
+  mapping evidenced provider capabilities and relationships into core data.
 - Keep `ward-pulse-ffi` as the source-of-truth platform boundary, not a dumping ground for app behavior.
 - Keep `ward-pulse-cli` useful for local snapshots, fixture inspection, and developer diagnostics.
 
@@ -18,6 +20,8 @@ Use this skill for work under `core/` and Rust-owned contracts.
 
 - Provider-specific raw data enters the core; normalized dashboard snapshots leave the core.
 - Rust owns budgets, credits, projections, alerts, model breakdowns, status mapping, and watch summary derivation.
+- Base shared policy on normalized data and evidenced relationships, rather than
+  provider-name branches or duplicated decisions in platform shells.
 - Alert evaluation uses **user-configured** rules/thresholds from platform preferences
   (`calculate_alerts(snapshot, settings)`). Each configured rule is a single whole used-%
   threshold (`at`, 0–100). Connection-local Plan-window overrides use normalized allowance
@@ -25,8 +29,11 @@ Use this skill for work under `core/` and Rust-owned contracts.
   Providers owns Plan defaults, every reported Plan window, Purchased and reporting-budget
   rules. Do not invent dashboard alerts from allowance or budget `ProviderStatus` alone;
   status chrome and the alerts list are separate.
-- Platform code owns HTTP clients, TLS, retries, background execution, secure credential retrieval, encrypted storage, and UI state.
-- Prefer deterministic functions that are easy to fixture-test.
+- Platform code owns transport (HTTP clients, TLS, retries), background scheduling
+  and execution, secure credential retrieval, encrypted storage, notification and
+  surface delivery, and UI state.
+- Prefer small, conventional deterministic functions and models that are easy to
+  fixture-test; avoid a general framework for a shared rule.
 - Preserve previous successful snapshot semantics when modeling sync failure states.
 - Avoid adding new crates unless they are conventional, lightweight, and justified by the use case.
 
