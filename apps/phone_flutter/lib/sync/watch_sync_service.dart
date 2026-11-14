@@ -203,10 +203,13 @@ Map<String, Object?> _splitToJson(WatchRingMetric ring) {
   };
 }
 
-/// Trim ordinary float noise without rounding a positive remainder to zero.
+/// Trim ordinary float noise without rounding a positive remainder to zero
+/// or positive usage to none: Wear reads exact zero as a full ring.
 double _watchUsedPercent(double used) {
   final rounded = double.parse(used.toStringAsFixed(1));
-  return used < 100 && rounded >= 100 ? used : rounded;
+  if (used < 100 && rounded >= 100) return used;
+  if (used > 0 && rounded <= 0) return used;
+  return rounded;
 }
 
 String _ringLabel(WatchRingMetric ring) {

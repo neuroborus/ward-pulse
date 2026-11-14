@@ -175,6 +175,46 @@ Root separately owns both Android Rust ABI rebuilds and dated/normal APK provena
 native/common-data proof and safe restoration. Public captures/index updates remain separately
 admitted, with real default Day/weather and headless-publication proof still separate gates.
 
+## Fractional watch usage witness
+
+Watch publication trims float noise to one decimal, but keeps the original value when that
+rounding would turn positive usage into `0` or a positive remainder into `100`: Wear reads
+exact zero as a full ring. Ordinary rings and split halves share this rule.
+
+`watch_sync_service_test.dart` *publishes fractional usage as positive partial use* sends the
+core-produced `dashboard_watch_fractional.json` (USD 4 of 10000 minor units, 0.04% used)
+through `MethodChannelWatchSyncService.sync`. The unpaired `budget.openai.platform.today`
+ring keeps exact Money and 0.04%; a separate Cursor Models/Other pair keeps its identities,
+order and 0.04%/0.03%. Both captured publications must equal
+`watch_dashboard_summary_fractional.json` and `watch_dashboard_summary_fractional_pair.json`,
+which `WatchSummaryStoreTest` decodes on Wear.
+
+For a fresh producer→phone→Wear witness, set `WARDPULSE_WATCH_WITNESS_DIR` to a new private
+empty directory. The Rust test writes its actual output there; the phone test then reads only
+that export, rejects a missing, malformed or different one and writes both raw publications
+before its usage assertions. Every file is created exclusively, so a reused directory fails:
+
+```sh
+export WARDPULSE_WATCH_WITNESS_DIR="$(mktemp -d)"
+(cd core && cargo test -p ward-pulse-ffi tests::fractional_watch_snapshot_matches_fixture -- --exact)
+(cd apps/phone_flutter && flutter test test/watch_sync_service_test.dart \
+  --plain-name 'publishes fractional usage as positive partial use')
+```
+
+Then pass both publications to the
+[Wear replay](../wear_android/README.md#adaptive-face-complication-contract) using the same
+`WARDPULSE_WATCH_WITNESS_DIR`. After replay and retaining the required witness evidence,
+remove this task's private directory and unset the variable before Native or full ordinary
+checks:
+
+```sh
+rm -r -- "${WARDPULSE_WATCH_WITNESS_DIR:?}"
+unset WARDPULSE_WATCH_WITNESS_DIR
+```
+
+Ordinary checks compare with the committed fixtures without exporting. This proves
+publication and decoding/classification only, not Data Layer delivery or paint.
+
 ## Android widget geometry case (HOST only)
 
 `android/app/src/androidTest/kotlin/app/wardpulse/PhoneWidgetGeometryTest.kt` is one focused

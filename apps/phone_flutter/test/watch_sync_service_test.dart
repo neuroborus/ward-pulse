@@ -598,6 +598,103 @@ void main() {
     }
   });
 
+  /// Real core output (USD 0.04 of USD 100.00) published as the phone sends it.
+  /// With `WARDPULSE_WATCH_WITNESS_DIR` set, this reads only the producer's
+  /// fresh export there and writes both publications back for Wear replay.
+  test('publishes fractional usage as positive partial use', () async {
+    const producerName = 'dashboard_watch_fractional.json';
+    const publicationNames = [
+      'watch_dashboard_summary_fractional.json',
+      'watch_dashboard_summary_fractional_pair.json',
+    ];
+    final witnessDir = Platform.environment['WARDPULSE_WATCH_WITNESS_DIR'];
+    final controlled =
+        File('../../fixtures/snapshots/$producerName').readAsStringSync();
+    final produced =
+        witnessDir == null
+            ? controlled
+            : File('$witnessDir/$producerName').readAsStringSync();
+    // A missing, malformed or different export fails here, with no fallback.
+    expect(jsonDecode(produced), jsonDecode(controlled));
+
+    final published = <String>[];
+    const channel = MethodChannel('app.wardpulse/watch_sync');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'syncWatchSummary');
+      published.add(call.arguments as String);
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    final json = jsonDecode(produced) as Map<String, dynamic>;
+    final account = (json['accounts'] as List).single as Map<String, dynamic>;
+    final pairDashboard = DashboardSnapshot.fromJson({
+      ...json,
+      'accounts': [
+        {
+          ...account,
+          'accountId': 'cursor-local',
+          'provider': 'cursor',
+          'connection': 'cursor.plan',
+          'allowances': [
+            _cursorPool('cursor-plan-models', 'Cursor Models', 0.04),
+            _cursorPool('cursor-plan-other', 'Other Models', 0.03),
+          ],
+        },
+      ],
+    });
+    const service = MethodChannelWatchSyncService();
+    await service.sync(
+      DashboardSnapshot.fromJson(json),
+      const WatchRingPreferences(selectedIds: ['budget.openai.platform.today']),
+    );
+    await service.sync(
+      pairDashboard,
+      const WatchRingPreferences(
+        selectedIds: [cursorOwnPoolId, cursorOtherPoolId],
+      ),
+    );
+    expect(published, hasLength(2));
+    if (witnessDir != null) {
+      for (final (name, encoded) in [
+        (publicationNames.first, published.first),
+        (publicationNames.last, published.last),
+      ]) {
+        // Exclusive creation refuses a publication left by an earlier run.
+        File('$witnessDir/$name')
+          ..createSync(exclusive: true)
+          ..writeAsStringSync(encoded, flush: true);
+      }
+    }
+
+    final ordinary = jsonDecode(published.first) as Map<String, dynamic>;
+    final ring = (ordinary['rings'] as List).single as Map<String, dynamic>;
+    expect(ring['id'], 'budget.openai.platform.today');
+    expect(ring['spent'], {'minorUnits': 4, 'currency': 'USD'});
+    expect(ring['limit'], {'minorUnits': 10000, 'currency': 'USD'});
+    expect(ring['split'], isNull);
+    // Wear reads exact zero as a full ring, so positive use must stay positive.
+    expect(ring['usedPercent'], allOf(greaterThan(0), lessThan(100)));
+    expect(ring['usedPercent'], 0.04);
+    final pair = jsonDecode(published.last) as Map<String, dynamic>;
+    final band = (pair['rings'] as List).single as Map<String, dynamic>;
+    expect(band['id'], cursorOwnPoolId);
+    expect(band['usedPercent'], 0.04);
+    expect(band['split']['id'], cursorOtherPoolId);
+    expect(band['split']['usedPercent'], 0.03);
+    for (final (name, payload) in [
+      (publicationNames.first, ordinary),
+      (publicationNames.last, pair),
+    ]) {
+      expect(
+        payload,
+        jsonDecode(File('../../fixtures/snapshots/$name').readAsStringSync()),
+        reason: name,
+      );
+    }
+  });
+
   test('ships a lone Cursor pool whole and packs both pools into one ring', () {
     final json =
         jsonDecode(

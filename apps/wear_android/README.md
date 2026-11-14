@@ -274,6 +274,39 @@ The removed Spark identity, replacement order, obsolete selections and clear/del
 remain covered. These are decoder/construction witnesses only; execution, service delivery
 and WFF paint remain **Pending**.
 
+`WatchSummaryStoreTest.fractionalUsageStaysPartialThroughDecodingAndClassification` reads
+`watch_dashboard_summary_fractional.json` and `watch_dashboard_summary_fractional_pair.json`,
+the phone's real publications of a core-produced USD 4/10000 minor-unit budget. Through
+`saveEncoded`, `load` and `glanceLegendRows` in its private store, the unpaired
+`budget.openai.platform.today` ring keeps exact Money and 0.04% positive partial usage
+with `isFull=false`. The Cursor Models/Other pair keeps both identities, its inner/outer
+order, 0.04%/0.03% usage and independent `isFull=false` flags. Exact zero still means full;
+rounded `100% left` text never decides it.
+
+For a fresh cross-language replay, pass both captured publications unchanged as the stock
+instrumentation arguments `fractionalWatchPayload` and `fractionalWatchPairPayload` (see
+the [phone witness](../phone_flutter/README.md#fractional-watch-usage-witness)), keeping the
+same `WARDPULSE_WATCH_WITNESS_DIR` set. A replay with one argument missing, blank or
+undecodable fails; it never falls back to the fixtures.
+With compatible target and test APKs installed per the
+[provisioning order](../../docs/ANDROID_TOOLCHAIN.md#wear-instrumentation-provisioning-order),
+the inner single quotes keep each JSON publication one device-shell argument:
+
+```sh
+adb -s "$WEAR_SERIAL" shell am instrument -w -r \
+  -e class app.wardpulse.wear.data.WatchSummaryStoreTest#fractionalUsageStaysPartialThroughDecodingAndClassification \
+  -e fractionalWatchPayload "'$(cat "$WARDPULSE_WATCH_WITNESS_DIR/watch_dashboard_summary_fractional.json")'" \
+  -e fractionalWatchPairPayload "'$(cat "$WARDPULSE_WATCH_WITNESS_DIR/watch_dashboard_summary_fractional_pair.json")'" \
+  app.wardpulse.test/app.wardpulse.wear.IsolatedWearRunner
+```
+
+After retaining the required witness evidence, follow the phone witness cleanup to remove
+the private directory and `unset WARDPULSE_WATCH_WITNESS_DIR` before Native or full ordinary
+checks.
+
+This is decoder/classifier proof only; Data Layer delivery and Glance/WFF paint remain
+separate acceptance, and arbitrarily tiny positive usage need not differ visibly in pixels.
+
 `AdaptiveRangedComplicationTest.creditsAndReorderedExtrasRoundTripWithExactWireContracts`
 adds Android validation and Parcel roundtrips for the production credits-only construction
 (VALUE/MAX100, TITLE `credits`, Codex color, TEXT `500`, description `500 100%`) and the

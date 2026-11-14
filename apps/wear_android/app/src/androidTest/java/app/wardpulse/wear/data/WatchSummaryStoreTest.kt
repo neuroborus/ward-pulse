@@ -24,6 +24,7 @@ import app.wardpulse.wear.model.RingHalf
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.WatchDataMode
 import app.wardpulse.wear.ui.RingFamily
+import app.wardpulse.wear.ui.glanceLegendRows
 import java.time.Instant
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -83,6 +84,60 @@ class WatchSummaryStoreTest {
         assertEquals(1, rings.size)
         assertEquals("allowance.cursor.cursor-plan-other", rings.first().split?.id)
         assertEquals(62.0, rings.first().split?.usedPercent)
+    }
+
+    /**
+     * Fractional usage as the phone publishes it (`watch_sync_service_test.dart`), decoded and
+     * classified by production code. A replay passes both captured publications as the
+     * `fractionalWatchPayload` and `fractionalWatchPairPayload` arguments; with neither it
+     * reads the shared fixtures. Decoder/classifier proof only; no delivery or paint evidence.
+     */
+    @Test
+    fun fractionalUsageStaysPartialThroughDecodingAndClassification() {
+        val arguments = InstrumentationRegistry.getArguments()
+        val replay = listOf("fractionalWatchPayload", "fractionalWatchPairPayload")
+            .map { arguments.getString(it) }
+        val (ordinaryEncoded, pairEncoded) = if (replay.all { it == null }) {
+            listOf("fractional", "fractional_pair").map { suffix ->
+                testContext.assets.open("watch_dashboard_summary_$suffix.json")
+                    .bufferedReader()
+                    .use { it.readText() }
+            }
+        } else {
+            // A partial or blank replay fails here instead of falling back to a fixture.
+            replay.map { value ->
+                requireNotNull(value?.takeIf { it.isNotBlank() }) { "Replay needs both payloads" }
+            }
+        }
+
+        assertTrue(store.saveEncoded(ordinaryEncoded))
+        val ordinary = requireNotNull(store.load())
+        val ordinaryRow = glanceLegendRows(ordinary).single()
+        val ring = ordinary.rings.single()
+        // Report the actual decoded zero/full semantics before a numeric assertion can fail.
+        assertFalse(
+            "Decoded ${ring.id}: usedPercent=${ring.usedPercent}, isFull=${ordinaryRow.isFull}",
+            ordinaryRow.isFull,
+        )
+        assertEquals("budget.openai.platform.today", ring.id)
+        assertEquals(Money(4, "USD"), ring.spent)
+        assertEquals(Money(10_000, "USD"), ring.limit)
+        assertNull(ring.split)
+        // Exact zero means a full ring; rounded `100% left` text must not decide that.
+        assertTrue(ring.usedPercent > 0.0 && ring.usedPercent < 100.0)
+        assertEquals(0.04, ring.usedPercent, 0.0)
+
+        assertTrue(store.saveEncoded(pairEncoded))
+        val pair = requireNotNull(store.load())
+        val pairRow = glanceLegendRows(pair).single()
+        val band = pair.rings.single()
+        val outer = requireNotNull(band.split)
+        assertEquals("allowance.cursor.cursor-plan-models", band.id)
+        assertEquals("allowance.cursor.cursor-plan-other", outer.id)
+        assertEquals(0.04, band.usedPercent, 0.0)
+        assertEquals(0.03, outer.usedPercent, 0.0)
+        assertFalse(pairRow.isFull)
+        assertFalse(requireNotNull(pairRow.secondaryArc).isFull)
     }
 
     /** Canonical decoding and construction only; no service delivery or WFF paint evidence. */

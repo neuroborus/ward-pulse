@@ -518,6 +518,57 @@ mod tests {
             .is_none());
     }
 
+    /// Real budget and snapshot production for USD 0.04 spent of USD 100.00:
+    /// 0.04% used, which the phone must not publish to Wear as zero.
+    ///
+    /// With `WARDPULSE_WATCH_WITNESS_DIR` set, the produced bytes are first
+    /// written to a new file there for the phone regression to read.
+    #[test]
+    fn fractional_watch_snapshot_matches_fixture() {
+        use ward_pulse_core::budget::calculate_budget_state;
+        use ward_pulse_core::model::{connection, BudgetPeriod, Money, ProviderKind};
+
+        let generated_at = DateTimeUtc::new("2026-06-27T18:42:00Z");
+        let usd = |minor_units| Some(Money::minor_units(minor_units, "USD"));
+        let today = calculate_budget_state(BudgetPeriod::Today, usd(4), usd(10_000), None);
+        let account = ProviderSnapshot {
+            account_id: "openai-platform-local".to_owned(),
+            provider: ProviderKind::OpenAi,
+            connection: Some(connection::OPENAI_PLATFORM.to_owned()),
+            status: today.status,
+            today,
+            week: calculate_budget_state(BudgetPeriod::Week, None, None, None),
+            month: calculate_budget_state(BudgetPeriod::Month, None, None, None),
+            credits: Vec::new(),
+            allowances: Vec::new(),
+            buckets: Vec::new(),
+            model_breakdown: Vec::new(),
+            last_successful_sync_at: Some(generated_at.clone()),
+            last_error: None,
+        };
+        let produced = dashboard_json(generated_at, vec![account]).expect("serialize snapshot");
+
+        if let Some(dir) = std::env::var_os("WARDPULSE_WATCH_WITNESS_DIR") {
+            use std::io::Write;
+            // `create_new` refuses a file left by an earlier run.
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(std::path::PathBuf::from(dir).join("dashboard_watch_fractional.json"))
+                .and_then(|mut file| file.write_all(produced.as_bytes()))
+                .expect("export a fresh producer witness");
+        }
+
+        let actual: serde_json::Value =
+            serde_json::from_str(&produced).expect("parse produced snapshot");
+        let expected: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../fixtures/snapshots/dashboard_watch_fractional.json"
+        ))
+        .expect("parse fractional snapshot fixture");
+        assert_eq!(actual, expected);
+        assert_eq!(actual["accounts"][0]["today"]["usedPercent"], 0.04);
+    }
+
     /// The golden both sides read: this crate builds it, and the phone parses
     /// the same file. A drift here is a contract break, not a test detail.
     #[test]
