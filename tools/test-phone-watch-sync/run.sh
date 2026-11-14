@@ -73,6 +73,14 @@ prepare() {
 bounded() {
   local seconds=$1
   shift
+  if (( ${DELIVERY_ACTIVE:-0} )); then
+    # Reserve kill grace and one integral-clock tick inside the delivery budget.
+    local remaining=$((DELIVERY_DEADLINE - SECONDS - 2))
+    (( remaining > 0 )) || hold 'Delivery deadline expired.'
+    (( seconds <= remaining )) || seconds=$remaining
+    timeout --kill-after=1s "${seconds}s" "$@"
+    return
+  fi
   if (( PRE_DEATH_DEADLINE )); then
     # Keep the existing five-second kill grace inside this phase's total bound,
     # with one additional tick for the integral SECONDS clock.
@@ -95,7 +103,14 @@ hold() {
     OBS_ERROR=$*
     exit 1
   fi
-  printf 'HOLD: %s\n' "$*" >&2
+  if (( ${DELIVERY_ACTIVE:-0} && BASH_SUBSHELL == 0 )); then delivery_report || :; fi
+  if command -v timeout >/dev/null; then
+    # A full or closed stderr cannot keep this failure from reaching owned cleanup.
+    timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "%s\n" "$1" >&2' bash "HOLD: $*" || :
+  else
+    # Timeout is verified before any owned cleanup exists; keep earlier reasons visible.
+    printf 'HOLD: %s\n' "$*" >&2
+  fi
   exit 1
 }
 
@@ -166,26 +181,39 @@ resolve_devices() {
   hold 'Timed out discovering the online canonical phone and Wear pair.'
 }
 
+# One closed record localizes each rejected identity sample. Like the other bounded
+# diagnostic writers, it can neither replace the failure nor delay cleanup.
+process_diagnostic() {
+  local record
+  printf -v record 'Process identity: role=%s action=%s phase=%s guard=%s traversal=%s boundary=%s subject=%s status=%s' \
+    "$1" "${LIFECYCLE_ACTION:-none}" "$2" "$3" "${5:-Unknown}" "${6:-Unknown}" "${7:-Unknown}" "$4"
+  timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "%s\n" "$1" >&2' bash "$record" || :
+}
+
 # ps is reconciled twice around /proc start-time reads. No cmdline, environment,
-# private app data or arbitrary process output leaves the device.
+# private app data or arbitrary process output leaves the device; a rejected
+# sample returns only its closed guard and list position, never identities.
 processes() {
-  local uid=${UIDS[$2]} observer= released=0
-  [[ "$uid" =~ ^[1-9][0-9]{0,9}$ ]] && (( uid <= 2147483647 )) || return 1
+  local uid=${UIDS[$2]} observer= released=0 phase=${3:-Unknown} output status=0 rejected
+  [[ "$uid" =~ ^[1-9][0-9]{0,9}$ ]] && (( uid <= 2147483647 )) \
+    || { process_diagnostic "$2" "$phase" uid_input Unknown; return 1; }
   if [[ "$2" == phone && -n "$OBSERVER" ]]; then
     observer=$OBSERVER released=$OBSERVER_RELEASED
     [[ "$observer" =~ ^[1-9][0-9]*\ [1-9][0-9]*\ wardpulse-work-snapshot-[0-9]+$ &&
-       "$released" =~ ^[01]$ ]] || return 1
+       "$released" =~ ^[01]$ ]] || { process_diagnostic "$2" "$phase" observer_input Unknown; return 1; }
   fi
-  adb_on "$1" shell -n "uid=$uid observer=\"$observer\" released=$released" '
+  output=$(adb_on "$1" shell -n "uid=$uid observer=\"$observer\" released=$released" '
     set -eu
-    observer_pid= observer_start= observer_name= retired=0
+    observer_pid= observer_start= observer_name= retired=0 traversal=Unknown boundary=Unknown subject=Unknown
     if [ -n "$observer" ]; then read -r observer_pid observer_start observer_name <<EOF
 $observer
 EOF
     fi
+    # Read errors stay on the device; a rejection prints only this closed record.
+    reject() { printf "reject %s %s %s %s\n" "$1" "$traversal" "$boundary" "$subject"; exit 1; }
     list() {
-      raw=$(ps -A -o UID,PID,NAME) || exit 1
-      [ "${#raw}" -le 1048576 ] || return 1
+      raw=$(ps -A -o UID,PID,NAME 2>/dev/null) || reject list_read
+      [ "${#raw}" -le 1048576 ] || reject list_size
       records=$(printf "%s\n" "$raw" | awk -v uid="$uid" -v pid="$observer_pid" -v name="$observer_name" '\''
         function fail() { bad=1; exit 1 }
         NR == 1 { if (NF != 3 || $1 != "UID" || $2 != "PID" || $3 != "NAME") fail(); next }
@@ -197,31 +225,36 @@ EOF
           records[rows]=$2 " " $3
         }
         END { if (bad || !NR) exit 1; for (i=1; i<=rows; i++) print records[i] }
-      '\'') || return 1
-      [ -z "$records" ] || printf "%s\n" "$records" | sort
+      '\'') || reject list_rows
+      # The list is set in this shell; a rejection inside a substitution would be captured.
+      current=
+      [ -z "$records" ] || current=$(printf "%s\n" "$records" | sort) || reject list_read
     }
     identities() {
+      traversal=$1
       # Keep retirement state in this shell across both lists and traversals.
       for boundary in before after; do
-        current=$(list) || return 1
+        list
         inventory= found=0
         while read -r pid name; do
           [ -n "$pid" ] || continue
+          subject=app
           if [ "$pid" = "$observer_pid" ]; then
-            [ "$retired" = 0 ] || return 1
+            subject=observer
+            [ "$retired" = 0 ] || reject observer_reappeared
             found=1
           fi
-          start=$(awk '\''{ sub(/^.*\) /, ""); print $20 }'\'' "/proc/$pid/stat") || {
-            [ "$released" = 1 ] && [ "$pid" = "$observer_pid" ] && [ ! -e "/proc/$pid" ] || return 1
+          start=$(awk '\''{ sub(/^.*\) /, ""); print $20 }'\'' "/proc/$pid/stat" 2>/dev/null) || {
+            [ "$released" = 1 ] && [ "$pid" = "$observer_pid" ] && [ ! -e "/proc/$pid" ] || reject stat_read
             retired=1
             continue
           }
           printf "%s\n" "$start" | awk '\''
             NR != 1 || NF != 1 || $0 !~ /^[1-9][0-9]*$/ || length($0) > 20 ||
             (length($0) == 20 && ("x" $0) > "x18446744073709551615") { exit 1 }
-          '\'' || return 1
+          '\'' || reject start_value
           if [ "$pid" = "$observer_pid" ]; then
-            [ "$start" = "$observer_start" ] || return 1
+            [ "$start" = "$observer_start" ] || reject observer_start
             [ "$released" = 0 ] || continue
           fi
           inventory="$inventory$pid $start $name
@@ -229,31 +262,45 @@ EOF
         done <<EOF
 $current
 EOF
+        subject=Unknown
         if [ "$released" = 1 ] && [ "$found" = 0 ]; then
-          [ ! -e "/proc/$observer_pid" ] || return 1
+          [ ! -e "/proc/$observer_pid" ] || reject observer_present
           retired=1
         fi
         if [ "$boundary" = before ]; then before=$inventory
-        else [ "$before" = "$inventory" ] || return 1; fi
+        else [ "$before" = "$inventory" ] || reject boundary_mismatch; fi
       done
     }
-    boot=$(cat /proc/sys/kernel/random/boot_id) || exit 1
-    identities || exit 1
+    boot=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null) || reject boot_read
+    identities first || exit 1
     first=$inventory
-    identities || exit 1
-    [ "$first" = "$inventory" ]
-    [ "$boot" = "$(cat /proc/sys/kernel/random/boot_id)" ]
+    identities second || exit 1
+    traversal=Unknown boundary=Unknown
+    [ "$first" = "$inventory" ] || reject traversal_mismatch
+    [ "$boot" = "$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)" ] || reject boot_continuity
     printf "boot %s\n" "$boot"
     if [ "$released" = 1 ] && [ "$retired" = 0 ]; then first="$first$observer
 "; fi
     printf "%s" "$first" | sort
-  ' | tr -d '\r'
+  ' | tr -d '\r') || status=$?
+  # Only an allowlisted device record is retained. Any other failure is an acquisition
+  # or command-status failure: beyond its measured status, its cause stays Unknown.
+  rejected='^reject (boot_read|list_read|list_size|list_rows|observer_reappeared|stat_read|start_value|'
+  rejected+='observer_start|observer_present|boundary_mismatch|traversal_mismatch|boot_continuity) '
+  rejected+='(first|second|Unknown) (before|after|Unknown) (app|observer|Unknown)$'
+  if [[ "${output##*$'\n'}" =~ $rejected ]]; then
+    process_diagnostic "$2" "$phase" "${BASH_REMATCH[1]}" "$status" "${BASH_REMATCH[@]:2}"
+    return 1
+  fi
+  (( status == 0 )) || { process_diagnostic "$2" "$phase" acquisition "$status"; return 1; }
+  printf '%s\n' "$output"
 }
 
 app_processes() {
   local snapshot
-  snapshot=$(processes "$1" "$2") || hold 'Process identity read failed or raced.'
-  [[ "${snapshot%%$'\n'*}" == "boot ${BOOT[$2]}" ]] || hold 'Device rebooted during measurement.'
+  snapshot=$(processes "$1" "$2" "${3:-}") || hold 'Process identity read failed or raced.'
+  [[ "${snapshot%%$'\n'*}" == "boot ${BOOT[$2]}" ]] \
+    || { process_diagnostic "$2" "${3:-Unknown}" expected_boot 0; hold 'Device rebooted during measurement.'; }
   local identities
   identities=$(printf '%s\n' "$snapshot" | sed '1d')
   # Inventory accounts separately for the attested reader after GO, including retirement.
@@ -421,6 +468,7 @@ barrier() {
   adb_on "$serial" shell -n log -p i -t WardPulseGate "$marker" || hold 'Cannot place monitoring boundary.'
   deadline=$((SECONDS + 5))
   if (( OBSERVING && deadline > OBS_LIMIT )); then deadline=$OBS_LIMIT; fi
+  if (( ${DELIVERY_ACTIVE:-0} && deadline > DELIVERY_DEADLINE )); then deadline=$DELIVERY_DEADLINE; fi
   if (( PRE_DEATH_DEADLINE && deadline >= PRE_DEATH_DEADLINE )); then deadline=$((PRE_DEATH_DEADLINE - 1)); fi
   while (( SECONDS < deadline )); do
     [[ $(wc -c <"$SCRATCH/$role.events") -le 262144 ]] || hold 'Event observation exceeded its safe bound.'
@@ -443,6 +491,10 @@ barrier() {
       CURSOR[$role]=$line
       [[ "$EVENTS" != *GAP* ]] || hold 'Event loss or monitoring gap.'
       record_sync_events "$role"
+      if (( ${DELIVERING:-0} )); then
+        DELIVERY_BOUNDARY[$role]="$line@$SECONDS"
+        DELIVERY_COVERAGE[$role]=CompleteThroughBoundary
+      fi
       if [[ "$tag" == CLOSE ]]; then
         OBS_CLOSED[${PRODUCERS[$role]}]=1 OBS_CLOSED[${PROJECTORS[$role]}]=1
       fi
@@ -996,6 +1048,11 @@ package_uid() {
   value=$(adb_on "$1" shell -n cmd package list packages -U "$APP_ID" | tr -d '\r') \
     || hold 'Installed package UID unavailable.'
   [[ ${#value} -le 16384 ]] || hold 'Package UID inventory exceeds its bound.'
+  parse_package_uid "$value" || hold 'Package UID inventory is missing, malformed or ambiguous.'
+}
+
+parse_package_uid() {
+  local value=$1
   # PackageManager applies a substring filter; watchface siblings are valid records.
   # Validate the entire bounded inventory, then require exactly the owned package.
   printf '%s\n' "$value" | awk -v package="$APP_ID" '
@@ -1008,7 +1065,7 @@ package_uid() {
       if ($1 == "package:" package) { exact++; result=uid }
     }
     END { if (bad || exact != 1) exit 1; print result }
-  ' || hold 'Package UID inventory is missing, malformed or ambiguous.'
+  '
 }
 
 installed_apk() {
@@ -1580,20 +1637,616 @@ launch_app() {
   hold 'Timed out proving a new app process after launch.'
 }
 
+delivery_report() {
+  (( ! DELIVERY_REPORTED )) || return 0
+  DELIVERY_REPORTED=1
+  local elapsed=$((SECONDS - DELIVERY_STARTED)) remaining=$((DELIVERY_DEADLINE - SECONDS)) report line
+  (( remaining >= 0 )) || remaining=0
+  printf -v report 'Delivery: phase=%s elapsed=%ss remaining=%ss process_proof=%s FRESH_PUBLICATION=%s FRESH_RECEIPT=%s sync_attempted=%s stale_ui_snapshots=%s\n' \
+    "$DELIVERY_PHASE" "$elapsed" "$remaining" "$DELIVERY_PROCESS_PROOF" \
+    "$FRESH_PUBLICATION" "$FRESH_RECEIPT" "$DELIVERY_SYNC_ATTEMPTED" "${DELIVERY_UI_STALE:-0}"
+  report+=${DELIVERY_UI_DISCARDS:-}
+  if [[ "$DELIVERY_PHASE" != delivery ]]; then
+    # An interrupted UI attempt names its unfinished stage, which has no duration.
+    printf -v line 'Delivery UI attempt: invocation=%s:%s route=%s %s unfinished=%s since=%s remaining=%s\n' \
+      "$$" "$DELIVERY_UI_INVOCATION" "$DELIVERY_PHASE" "$DELIVERY_UI_FACTS" \
+      "$DELIVERY_UI_STAGE" "$DELIVERY_UI_STAGE_AT" "$((DELIVERY_DEADLINE - DELIVERY_UI_STAGE_AT))"
+    report+=$line
+  fi
+  local role
+  for role in phone wear; do
+    printf -v line 'Delivery observation: role=%s last_completed=%s coverage=%s\n' "$role" \
+      "${DELIVERY_BOUNDARY[$role]:-Unknown}" "${DELIVERY_COVERAGE[$role]:-Unknown}"
+    report+=$line
+  done
+  report+='Zero flags mean no accepted observation; incomplete coverage and causal absence remain Unknown.'
+  # One bounded, best-effort write: a full or closed stderr cannot stall cleanup or change status.
+  timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "%s\n" "$1" >&2' bash "$report"
+}
+
+delivery_check_time() {
+  (( SECONDS < DELIVERY_DEADLINE )) || hold 'Delivery deadline expired.'
+}
+
+# Closes the current UI stage at tick $2 and opens stage $1 there, so one integral-clock
+# read separates them. Only stages after the capture tick have fields: a discard's
+# durations sum to its age, and a stage that is not reached stays Unknown. A trap never
+# runs inside one assignment command, so one publishes the duration with the next stage.
+delivery_ui_stage() {
+  local facts=${DELIVERY_UI_FACTS/"$DELIVERY_UI_STAGE=Unknown"/"$DELIVERY_UI_STAGE=$(($2 - DELIVERY_UI_STAGE_AT))"}
+  DELIVERY_UI_FACTS=$facts DELIVERY_UI_STAGE=$1 DELIVERY_UI_STAGE_AT=$2
+}
+
+# A discarded snapshot keeps one closed record for the bounded delivery report, with
+# no write, pacing or retry here. Each discard needs its own capture at least five
+# ticks old, so the original 30-tick budget holds at most six records. Only the record
+# closes the current stage; one command then retains, counts and ends the attempt.
+delivery_ui_stale() {
+  local site=$1 route=$2 checked=$3 record
+  local facts=${DELIVERY_UI_FACTS/"$DELIVERY_UI_STAGE=Unknown"/"$DELIVERY_UI_STAGE=$((checked - DELIVERY_UI_STAGE_AT))"}
+  printf -v record 'Delivery UI discard: invocation=%s:%s route=%s site=%s %s checked=%s age=%s remaining=%s\n' \
+    "$$" "$DELIVERY_UI_INVOCATION" "$route" "$site" "$facts" "$checked" \
+    "$((checked - DELIVERY_UI_CAPTURED))" "$((DELIVERY_DEADLINE - checked))"
+  DELIVERY_UI_DISCARDS+=$record DELIVERY_UI_STALE=$((DELIVERY_UI_STALE + 1)) DELIVERY_PHASE=delivery
+}
+
+delivery_observe() {
+  local role serial current
+  DELIVERY_PROCESS_PROOF=Unknown
+  for role in phone wear; do
+    serial=$PHONE_SERIAL
+    [[ "$role" == phone ]] || serial=$WEAR_SERIAL
+    delivery_check_time
+    DELIVERY_COVERAGE[$role]=Incomplete
+    barrier "$role" "$serial"
+    DELIVERY_BOUNDARY[$role]="${CURSOR[$role]}@$SECONDS"
+    DELIVERY_COVERAGE[$role]=CompleteThroughBoundary
+    [[ "$EVENTS" != *KILL* && "$EVENTS" != *DEATH* && "$EVENTS" != *START* ]] \
+      || hold 'App process activity raced delivery.'
+    current=$(app_processes "$serial" "$role") || hold 'Cannot observe delivery process.'
+    [[ "$current" == "${RUNNING[$role]}" ]] || hold 'App process changed during delivery.'
+    delivery_check_time
+  done
+  DELIVERY_PROCESS_PROOF=Verified
+}
+
+# Retain one closed failure record before cleanup; reporting cannot replace the failure.
+delivery_ui_fail() {
+  local guard=$1 failure=$2 status=$3 error=$4 detail= record
+  if [[ "$guard" == parser_exit && -f "$SCRATCH/delivery.failure" ]]; then
+    IFS= read -r -n 2048 detail <"$SCRATCH/delivery.failure" || :
+  fi
+  if [[ -n "$detail" ]]; then
+    printf -v record 'Delivery UI: phase=%s invocation=%s:%s status=%s %s' \
+      "$DELIVERY_PHASE" "$$" "$DELIVERY_UI_INVOCATION" "$status" "$detail"
+  else
+    case "$status" in
+      124) error=Timeout ;;
+      137) error=Killed ;;
+      127) error=CommandUnavailable ;;
+    esac
+    printf -v record 'Delivery UI: phase=%s invocation=%s:%s read=%s producer=%s producer_pid=Unknown guard=%s failure=%s status=%s error=%s target=Unknown viewport=Unknown blocking=Unknown' \
+      "$DELIVERY_PHASE" "$$" "$DELIVERY_UI_INVOCATION" "$DELIVERY_UI_READ" \
+      "$DELIVERY_UI_PRODUCER" "$guard" "$failure" "$status" "$error"
+  fi
+  # Match the existing bounded diagnostic-writer pattern, without changing failure status.
+  timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "%s\n" "$1" >&2' bash "$record" || :
+  hold 'Delivery UI qualification failed.'
+}
+
+# Stdout is action-only; bounded, typed failure facts stay in owned scratch until reported.
+delivery_ui_target() {
+  bounded 3 python3 - "$SCRATCH" "$1" "${UIDS[phone]}" <<'PY_UI'
+import os
+import re
+import sys
+from pathlib import Path
+from xml.etree import ElementTree as ET
+
+
+NATIVE_FACTS = ('physical_count', 'override_count', 'density_count', 'density_override_count',
+                'focus_count', 'focused_app_count', 'window_count', 'window_ordinal',
+                'visibility_count', 'frame_count', 'host_count', 'host_owner_match',
+                'obstruction_count')
+facts = dict.fromkeys(NATIVE_FACTS + ('read', 'native_stable', 'node_count', 'package_match',
+                      'dialog_count', 'match_count', 'semantic_match', 'enabled',
+                      'control_scope', 'action_owner_match', 'clickable', 'visible',
+                      'navigation_selected',
+                      'inside_frame', 'inside_display', 'overlap_count', 'target', 'hit_area',
+                      'viewport', 'blocking'), 'Unknown')
+
+
+class GuardRejected(Exception):
+    pass
+
+
+def require(ok, guard, **measured):
+    facts.update(measured)
+    if not ok:
+        raise GuardRejected(guard)
+
+
+def rect(value):
+    match = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', value)
+    require(match, 'rectangle_syntax')
+    box = tuple(map(int, match.groups()))
+    require(box[0] < box[2] and box[1] < box[3], 'rectangle_order')
+    return box
+
+
+def inside(a, b):
+    return b[0] <= a[0] < a[2] <= b[2] and b[1] <= a[1] < a[3] <= b[3]
+
+
+def overlap(a, b):
+    return max(a[0], b[0]) < min(a[2], b[2]) and max(a[1], b[1]) < min(a[3], b[3])
+
+
+def native(path, uid):
+    # An unfinished after-read must not inherit successful before-read facts.
+    facts.update(dict.fromkeys(NATIVE_FACTS, 'Unknown'))
+    facts['read'] = 'NativeBefore' if path.name == 'delivery.before' else 'NativeAfter'
+    body = path.read_text()
+    require(len(body) <= 262144, 'native_size')
+    physical = re.findall(r'^Physical size: (\d+)x(\d+)\r?$', body, re.M)
+    override = re.findall(r'^Override size: (\d+)x(\d+)\r?$', body, re.M)
+    require(len(physical) == 1 and len(override) <= 1, 'display_unique',
+            physical_count=len(physical), override_count=len(override))
+    width, height = map(int, (override or physical)[0])
+    require(0 < width < height <= 8192, 'display_portrait')
+    physical_density = re.findall(r'^Physical density: (\d+)\r?$', body, re.M)
+    override_density = re.findall(r'^Override density: (\d+)\r?$', body, re.M)
+    require(len(physical_density) == 1 and len(override_density) <= 1, 'density_unique',
+            density_count=len(physical_density), density_override_count=len(override_density))
+    density = int((override_density or physical_density)[0])
+    require(0 < density <= 1280, 'density_range')
+    focus = re.findall(r'mCurrentFocus=Window\{([^}]+)\}', body)
+    require(len(focus) == 1 and re.fullmatch(
+        r'[a-f0-9]+ u0 app\.wardpulse/(?:app\.wardpulse)?\.MainActivity', focus[0]),
+        'foreground_window', focus_count=len(focus))
+    focused = re.findall(r'mFocusedApp=.*ActivityRecord\{([^}]+)\}', body)
+    require(len(focused) == 1 and re.search(
+        r'\bu0 app\.wardpulse/(?:app\.wardpulse)?\.MainActivity(?: |$)', focused[0]),
+        'foreground_activity', focused_app_count=len(focused))
+    windows = list(re.finditer(r'(?m)^([ \t]*)Window #\d+ Window\{([^}\r\n]+)\}:[^\n]*$', body))
+    facts['window_count'] = len(windows)
+    host = []
+    obstructions = []
+    for ordinal, record in enumerate(windows, 1):
+        facts.update(window_ordinal=ordinal, visibility_count='Unknown', frame_count='Unknown')
+        # Full-service output also contains global/display records. Only deeper
+        # indented lines belong to this window; never borrow another frame.
+        lines = []
+        for line in body[record.end():].splitlines():
+            if not line.strip():
+                continue
+            if len(line) - len(line.lstrip()) <= len(record[1]):
+                break
+            lines.append(line)
+        window = '\n'.join(lines)
+        identity = record[2]
+        if 'mHasSurface=true' not in window:
+            continue
+        shown = re.findall(r'\bisOnScreen=(true|false)\b', window)
+        visible = re.findall(r'\bisVisible=(true|false)\b', window)
+        require(len(shown) == len(visible) == 1, 'window_visibility_unique',
+                visibility_count=(len(shown), len(visible)))
+        if shown == ['false'] or visible == ['false']:
+            continue
+        frames = set(re.findall(r'(?:mFrame=|\bframe=)(\[\d+,\d+\]\[\d+,\d+\])', window))
+        require(len(frames) == 1, 'window_frame_unique', frame_count=len(frames))
+        frame = rect(frames.pop())
+        if identity == focus[0]:
+            owner_match = bool(re.search(r'\bmOwnerUid=' + re.escape(uid) + r'\b', window))
+            require(owner_match, 'host_owner', host_owner_match=owner_match)
+            require('mViewVisibility=0x0' in window and 'mObscured=false' in window,
+                    'host_visible_unobscured')
+            require('mHaveFrame=true' in window and inside(frame, (0, 0, width, height)),
+                    'host_frame')
+            host.append(frame)
+        else:
+            obstructions.append(frame)
+    require(len(host) == 1, 'host_unique', host_count=len(host),
+            obstruction_count=len(obstructions))
+    return focus[0], host[0], (0, 0, width, height), density, sorted(obstructions)
+
+
+def target(scratch, mode, uid):
+    before = native(scratch / 'delivery.before', uid)
+    after = native(scratch / 'delivery.after', uid)
+    require(before == after, 'native_stable', native_stable=before == after)
+    _, frame, display, density, obstructions = after
+    facts['read'] = 'Hierarchy'
+    data = (scratch / 'delivery.xml').read_bytes()
+    require(len(data) <= 262144 and b'<!' not in data, 'hierarchy_size_markup')
+    root = ET.fromstring(data)
+    require(root.tag == 'hierarchy' and root.get('rotation') == '0', 'hierarchy_root_rotation')
+    nodes = list(root.iter('node'))
+    require(0 < len(nodes) <= 2048, 'hierarchy_nodes', node_count=len(nodes))
+    package_match = all(n.get('package') in ('app.wardpulse', 'com.android.systemui', '') for n in nodes)
+    require(package_match, 'hierarchy_packages', package_match=package_match)
+    dialogs = sum(n.get('class', '').endswith('Dialog') for n in nodes)
+    require(not dialogs, 'hierarchy_dialogs', dialog_count=dialogs)
+    parents = {child: parent for parent in root.iter() for child in parent}
+
+    def labels(node):
+        return [line.strip() for attr in ('text', 'content-desc')
+                for line in node.get(attr, '').splitlines() if line.strip()]
+
+    def has(node, text):
+        return text in labels(node)
+
+    def bounds(node):
+        return rect(node.get('bounds', ''))
+
+    def visible(node):
+        return node.get('visible-to-user', 'true') == 'true' and overlap(bounds(node), frame)
+
+    def matches(text):
+        return [n for n in nodes if has(n, text) and visible(n)]
+
+    def unique(items, guard):
+        require(len(items) == 1, guard, match_count=len(items))
+        return items[0]
+
+    def actionable(node, scope):
+        facts.update(dict.fromkeys(('action_owner_match', 'enabled', 'clickable',
+                                    'visible', 'target'), 'Unknown'))
+        facts['control_scope'] = scope
+        require(node.get('package') == 'app.wardpulse' and node.get('enabled') == 'true',
+                'action_owner_enabled', action_owner_match=node.get('package') == 'app.wardpulse',
+                enabled=node.get('enabled') == 'true')
+        clickable = node.get('clickable') == 'true'
+        shown = visible(node) if clickable else 'Unknown'
+        require(clickable and shown, 'action_clickable_visible',
+                clickable=clickable, visible=shown)
+
+    def safe(box, hit=None):
+        facts['target'] = box
+        require(inside(box, frame) and inside(box, display), 'target_inside',
+                inside_frame=inside(box, frame), inside_display=inside(box, display))
+        blocking = [other for other in obstructions if overlap(hit or box, other)]
+        require(not blocking, 'target_unobstructed', overlap_count=len(blocking),
+                blocking=blocking[0] if blocking else 'Unknown')
+
+    def interior(box):
+        # A tap may leave out only a fringe: an obstruction across one whole side
+        # of the control that stops short of its would-be center. Any other overlap
+        # stays in the hit area and still blocks the tap.
+        x, y = (box[0] + box[2]) // 2, (box[1] + box[3]) // 2
+        left, top, right, bottom = box
+        for other in obstructions:
+            full_width = other[0] <= box[0] and box[2] <= other[2]
+            full_height = other[1] <= box[1] and box[3] <= other[3]
+            if full_width and y < other[1] < box[3] <= other[3]:
+                bottom = min(bottom, other[1])
+            elif full_width and other[1] <= box[1] < other[3] <= y:
+                top = max(top, other[3])
+            elif full_height and x < other[0] < box[2] <= other[2]:
+                right = min(right, other[0])
+            elif full_height and other[0] <= box[0] < other[2] <= x:
+                left = max(left, other[2])
+        return left, top, right, bottom
+
+    def tap(node):
+        actionable(node, 'Tap')
+        box = bounds(node)
+        hit = interior(box)
+        facts['hit_area'] = hit
+        safe(box, hit)
+        require(hit[2] - hit[0] >= 24 and hit[3] - hit[1] >= 24, 'tap_size')
+        for other in nodes:
+            if other is node or other.get('clickable') != 'true' or not visible(other):
+                continue
+            related = node in other.iter() or other in node.iter()
+            other_box = bounds(other) if not related else None
+            conflict = not related and overlap(box, other_box)
+            require(not conflict, 'tap_unrelated_control', semantic_match=related,
+                    blocking=other_box if conflict else 'Unknown')
+        print('TAP', (hit[0] + hit[2]) // 2, (hit[1] + hit[3]) // 2)
+
+    def controls(text):
+        # Merged semantics may contain several lines, while an unmerged label
+        # may be a child of the actual enabled clickable node.
+        candidates = set()
+        for node in matches(text):
+            while node in parents and node.get('clickable') != 'true':
+                node = parents[node]
+            if node.get('clickable') == 'true':
+                candidates.add(node)
+        return list(candidates)
+
+    def control(text):
+        # The label selects a guard internally; arbitrary captured text is never reported.
+        guards = {'Dashboard': 'dashboard_control_unique', 'Settings': 'settings_control_unique',
+                  'Mock data': 'mock_control_unique'}
+        return unique(controls(text), guards[text])
+
+    selected = 'Dashboard' if mode == 'dashboard' else 'Settings'
+    navigation = control(selected)
+    actionable(navigation, 'Navigation')
+    require(navigation.get('selected') == 'true', 'navigation_selected',
+            navigation_selected=navigation.get('selected') == 'true')
+    if mode == 'dashboard':
+        if not matches('Usage dashboard'):
+            require(not matches('Dashboard unavailable') and not matches('Open Providers'),
+                    'dashboard_readiness')
+            print('WAIT')
+            return
+        unique(matches('Usage dashboard'), 'dashboard_heading_unique')
+        require(any(visible(n) and any(line.startswith(('Updated ', 'Showing previous data · Updated '))
+                                     for line in labels(n)) for n in nodes), 'dashboard_timestamp')
+        tap(control('Settings'))
+        return
+
+    scroll = unique([n for n in nodes if n.get('scrollable') == 'true' and visible(n)],
+                    'settings_scroll_unique')
+    facts.update(dict.fromkeys(('clickable', 'visible', 'target'), 'Unknown'))
+    require(scroll.get('package') == 'app.wardpulse' and scroll.get('enabled') == 'true',
+            'settings_scroll_owner_enabled', control_scope='SettingsScroll',
+            action_owner_match=scroll.get('package') == 'app.wardpulse',
+            enabled=scroll.get('enabled') == 'true')
+    require(any(matches(text) for text in ('Refresh', 'Refresh interval', 'Notifications',
+                                         'Mock data', 'Diagnostics', 'Watch summary',
+                                         'Widget summary', 'Send to watch', 'Help')), 'settings_semantics')
+    box = bounds(scroll)
+    viewport = (max(box[0], frame[0]), max(box[1], frame[1]),
+                min(box[2], frame[2]), min(box[3], frame[3], bounds(navigation)[1]))
+    facts['viewport'] = viewport
+    require(viewport[2] - viewport[0] >= 100 and viewport[3] - viewport[1] >= 160,
+            'settings_viewport')
+
+    def seek(distance=None):
+        # Upward content scrolling never invokes the list's pull-to-refresh.
+        height = viewport[3] - viewport[1]
+        # Flutter consumes up to 18 logical pixels before dragging content.
+        # Reserve that distance even when revealing only a clipped edge.
+        slop = (18 * density + 159) // 160
+        distance = min(height // 3, slop + (distance or height // 3))
+        require(distance > slop, 'scroll_drag_threshold')
+        x = (viewport[0] + viewport[2]) // 2
+        end = viewport[1] + height // 3
+        start = end + distance
+        safe((x - 2, end - 2, x + 2, start + 2))
+        print('SCROLL', x, start, x, end)
+
+    if mode == 'mock':
+        if not matches('Mock data'):
+            require(not matches('Diagnostics') and not matches('Send to watch'), 'mock_not_skipped')
+            seek()
+            return
+        mock = control('Mock data')
+        require(mock in scroll.iter(), 'mock_scroll_owner', semantic_match=mock in scroll.iter())
+        actionable(mock, 'Mock')
+        require(mock.get('checkable') == 'true' and mock.get('checked') == 'false', 'mock_off')
+        mock_box = bounds(mock)
+        facts['target'] = mock_box
+        if not inside(mock_box, viewport):
+            require(mock_box[1] >= viewport[1] and mock_box[2] <= viewport[2], 'mock_reveal_direction')
+            seek(max(16, mock_box[3] - viewport[3] + 16))
+            return
+        safe(mock_box)
+        print('MOCK_OFF')
+        return
+
+    require(mode == 'sync', 'sync_mode')
+    rows = matches('Send to watch')
+    if not rows:
+        require(not matches('Help'), 'sync_not_skipped')
+        seek()
+        return
+    row = unique(rows, 'sync_row_unique')
+    require(row in scroll.iter(), 'sync_row_owner', semantic_match=row in scroll.iter())
+    # Diagnostics' static "Sync" status is never an action or a receipt. Flutter
+    # may merge all noninteractive card labels while keeping its button separate.
+    row_box = bounds(row)
+    buttons = controls('Sync')
+    if not buttons:
+        # A clipped row can expose its label before its trailing control exists
+        # in the visible hierarchy. Reveal only a small further slice of content.
+        require(row_box[3] >= viewport[3], 'sync_clipped_control')
+        seek(max(16, (viewport[3] - viewport[1]) // 8))
+        return
+    button = unique(buttons, 'sync_button_unique')
+    require(button in scroll.iter(), 'sync_button_owner', semantic_match=button in scroll.iter())
+    actionable(button, 'Sync')
+    button_box = bounds(button)
+    facts['target'] = button_box
+    require(row_box[1] <= (button_box[1] + button_box[3]) // 2 <= row_box[3]
+            or (button_box[1] <= (row_box[1] + row_box[3]) // 2 <= button_box[3]), 'sync_row_alignment')
+    ancestor = row
+    while ancestor in parents and button not in ancestor.iter():
+        ancestor = parents[ancestor]
+    associated = ancestor is not scroll and ancestor in scroll.iter()
+    require(associated, 'sync_card_owner', semantic_match=associated)
+    require(inside(button_box, bounds(ancestor)), 'sync_card_bounds')
+    require(not any(has(n, 'Mock data') for n in ancestor.iter('node')), 'sync_card_not_mock')
+    if any(has(n, text) for n in ancestor.iter('node')
+           for text in ('Watch summary', 'Widget summary')):
+        # The shared Diagnostics card must own both the complete label group
+        # and its sole action; a nearby Sync elsewhere in the list is ambiguous.
+        require(all(any(has(n, text) for n in ancestor.iter('node'))
+                    for text in ('Sync', 'Watch summary', 'Widget summary', 'Send to watch')),
+                'sync_card_complete')
+        require(ancestor.get('clickable') != 'true', 'sync_card_noninteractive')
+        require(all(n in button.iter() or button in n.iter()
+                    for n in ancestor.iter('node') if n.get('clickable') == 'true'), 'sync_card_sole_action')
+    if (not inside(button_box, viewport) or button_box[3] - button_box[1] < 24
+            or (button_box[1] + button_box[3]) // 2 > viewport[3] - 16):
+        require(button_box[1] >= viewport[1] and button_box[2] <= viewport[2], 'sync_reveal_direction')
+        seek(max(16, button_box[3] - viewport[3] + 16))
+        return
+    tap(button)
+
+
+def failure(guard, kind, error):
+    # Only literals, bounded counts/booleans and parsed integer rectangles are retained.
+    def value(item):
+        if isinstance(item, tuple):
+            return ','.join(value(part) for part in item)
+        if isinstance(item, int) and not isinstance(item, bool) and not 0 <= item <= 1048576:
+            return 'Unknown'
+        return str(item)
+
+    record = f'guard={guard} failure={kind} error={error} producer=PythonTarget '
+    record += f'producer_pid={os.getpid()} '
+    record += ' '.join(f'{key}={value(item)}' for key, item in facts.items())
+    try:
+        (Path(sys.argv[1]) / 'delivery.failure').write_text(record[:2048] + '\n')
+    except OSError:
+        pass
+
+
+try:
+    target(Path(sys.argv[1]), sys.argv[2], sys.argv[3])
+except GuardRejected as rejected:
+    failure(str(rejected), 'predicate', 'GuardRejected')
+    sys.exit(1)
+except ET.ParseError:
+    failure('hierarchy_parse', 'parse', 'InvalidXml')
+    sys.exit(1)
+except UnicodeError:
+    failure('capture_encoding', 'parse', 'InvalidEncoding')
+    sys.exit(1)
+except (ValueError, OSError) as error:
+    failure('capture_read' if isinstance(error, OSError) else 'numeric_parse',
+            'acquisition' if isinstance(error, OSError) else 'parse',
+            'ReadError' if isinstance(error, OSError) else 'InvalidNumber')
+    sys.exit(1)
+PY_UI
+}
+
+delivery_ui_observe() {
+  local mode=$1 packages uid status
+  DELIVERY_PROCESS_PROOF=Unknown
+  DELIVERY_UI_INVOCATION=$(( ${DELIVERY_UI_INVOCATION:-0} + 1 ))
+  DELIVERY_UI_FACTS='captured=Unknown acquisition=Unknown parse=Unknown qualification=Unknown pre_input=Unknown'
+  # Publish the route last; a report never pairs it with another attempt's facts or stage.
+  DELIVERY_UI_STAGE=preparation DELIVERY_UI_STAGE_AT=$SECONDS DELIVERY_PHASE=$mode
+  DELIVERY_UI_READ=Uid DELIVERY_UI_PRODUCER=AdbPackageList
+  packages=$(adb_on "$PHONE_SERIAL" shell -n cmd package list packages -U "$APP_ID" | tr -d '\r') \
+    || delivery_ui_fail package_uid acquisition "$?" ExitStatus
+  [[ ${#packages} -le 16384 ]] || delivery_ui_fail uid_inventory_size predicate 1 GuardRejected
+  DELIVERY_UI_PRODUCER=AwkPackageUid
+  status=0
+  uid=$(parse_package_uid "$packages") || status=$?
+  if (( status != 0 )); then
+    (( status != 1 )) || delivery_ui_fail uid_inventory predicate "$status" GuardRejected
+    delivery_ui_fail uid_inventory subprocess "$status" ExitStatus
+  fi
+  [[ "$uid" == "${UIDS[phone]}" ]] || delivery_ui_fail uid_match predicate 1 GuardRejected
+  DELIVERY_UI_PRODUCER=AdbPackageList
+  packages=$(adb_on "$PHONE_SERIAL" shell -n cmd package list packages -U --uid "${UIDS[phone]}" | tr -d '\r') \
+    || delivery_ui_fail uid_ownership acquisition "$?" ExitStatus
+  [[ "$packages" == "package:$APP_ID uid:${UIDS[phone]}" ]] || delivery_ui_fail uid_exclusive predicate 1 GuardRejected
+  if [[ -z "$DELIVERY_UI_DIR" ]]; then
+    DELIVERY_UI_READ=Staging DELIVERY_UI_PRODUCER=AdbMktemp
+    DELIVERY_UI_DIR=$(adb_on "$PHONE_SERIAL" shell -n mktemp -d /data/local/tmp/wardpulse-sync-XXXXXXXX | tr -d '\r') \
+      || delivery_ui_fail staging_create acquisition "$?" ExitStatus
+    [[ "$DELIVERY_UI_DIR" =~ ^/data/local/tmp/wardpulse-sync-[a-zA-Z0-9]{8}$ ]] \
+      || delivery_ui_fail staging_path predicate 1 GuardRejected
+  fi
+  DELIVERY_UI_READ=NativeBefore DELIVERY_UI_PRODUCER=AdbWindow
+  adb_on "$PHONE_SERIAL" shell -n 'wm size; wm density; dumpsys window -a' >"$SCRATCH/delivery.before" \
+    || delivery_ui_fail native_before acquisition "$?" ExitStatus
+  DELIVERY_UI_CAPTURED=$SECONDS
+  # Preparation has no field; one command publishes the capture tick with acquisition.
+  DELIVERY_UI_FACTS=${DELIVERY_UI_FACTS/captured=Unknown/captured=$DELIVERY_UI_CAPTURED} \
+    DELIVERY_UI_STAGE=acquisition DELIVERY_UI_STAGE_AT=$DELIVERY_UI_CAPTURED
+  DELIVERY_UI_READ=Hierarchy DELIVERY_UI_PRODUCER=AdbUiAutomator
+  adb_on "$PHONE_SERIAL" shell -n "
+    rm -f '$DELIVERY_UI_DIR/hierarchy.xml' &&
+    uiautomator dump '$DELIVERY_UI_DIR/hierarchy.xml' >/dev/null &&
+    test \"\$(wc -c <'$DELIVERY_UI_DIR/hierarchy.xml')\" -le 262144 &&
+    cat '$DELIVERY_UI_DIR/hierarchy.xml'
+  " >"$SCRATCH/delivery.xml" || delivery_ui_fail hierarchy_capture acquisition "$?" ExitStatus
+  DELIVERY_UI_READ=NativeAfter DELIVERY_UI_PRODUCER=AdbWindow
+  adb_on "$PHONE_SERIAL" shell -n 'wm size; wm density; dumpsys window -a' >"$SCRATCH/delivery.after" \
+    || delivery_ui_fail native_after acquisition "$?" ExitStatus
+  delivery_ui_stage parse "$SECONDS"
+  DELIVERY_UI_READ=Target DELIVERY_UI_PRODUCER=PythonTarget
+  : >"$SCRATCH/delivery.failure"
+  status=0
+  DELIVERY_TARGET=$(delivery_ui_target "$mode") || status=$?
+  (( status == 0 )) || delivery_ui_fail parser_exit subprocess "$status" ExitStatus
+  delivery_ui_stage qualification "$SECONDS"
+  delivery_observe
+  # Completed qualification remains mandatory; accepted publication needs no input.
+  (( ! FRESH_PUBLICATION )) || return 0
+  delivery_check_time
+}
+
 wait_for_summary() {
-  local current deadline=$((SECONDS + 30))
-  while (( SECONDS < deadline )); do
-    barrier phone "$PHONE_SERIAL"
-    [[ "$EVENTS" != *KILL* && "$EVENTS" != *DEATH* && "$EVENTS" != *START* ]] || hold 'Phone process activity raced delivery.'
-    barrier wear "$WEAR_SERIAL"
-    [[ "$EVENTS" != *KILL* && "$EVENTS" != *DEATH* && "$EVENTS" != *START* ]] || hold 'Wear process activity raced delivery.'
-    [[ "$EVENTS" != *RECEIPT* ]] || FRESH_RECEIPT=1
-    current=$(app_processes "$WEAR_SERIAL" wear) || hold 'Cannot observe delivery process.'
-    [[ "$current" == "${RUNNING[wear]}" ]] || hold 'Wear process changed during delivery.'
-    if (( FRESH_RECEIPT && FRESH_PUBLICATION )); then return; fi
+  local route=dashboard scrolls=0 action x y end_x end_y extra checked
+  DELIVERY_STARTED=$SECONDS DELIVERY_DEADLINE=$((SECONDS + 30))
+  DELIVERY_ACTIVE=1 DELIVERY_REPORTED=0 DELIVERY_SYNC_ATTEMPTED=0 DELIVERY_UI_STALE=0
+  DELIVERY_PHASE=delivery DELIVERY_PROCESS_PROOF=Unknown DELIVERY_UI_DISCARDS=
+  while (( SECONDS < DELIVERY_DEADLINE )); do
+    delivery_observe
+    if (( FRESH_RECEIPT && FRESH_PUBLICATION )); then DELIVERY_ACTIVE=0; return; fi
+    if (( ! FRESH_PUBLICATION && ! DELIVERY_SYNC_ATTEMPTED )); then
+      delivery_ui_observe "$route"
+      if (( FRESH_RECEIPT && FRESH_PUBLICATION )); then DELIVERY_ACTIVE=0; return; fi
+      if (( FRESH_PUBLICATION )); then DELIVERY_PHASE=delivery; continue; fi
+      # Evidence five ticks old, here or immediately before input, is discarded
+      # without input. The next pass requalifies from a new complete capture
+      # within the same original deadline. One clock read serves each check and its record.
+      checked=$SECONDS
+      (( checked - DELIVERY_UI_CAPTURED < 5 )) \
+        || { delivery_ui_stale after_qualification "$route" "$checked"; continue; }
+      delivery_ui_stage pre_input "$checked"
+      read -r action x y end_x end_y extra <<< "$DELIVERY_TARGET"
+      DELIVERY_PROCESS_PROOF=Unknown
+      DELIVERY_COVERAGE[phone]=Incomplete
+      barrier phone "$PHONE_SERIAL"
+      [[ "$EVENTS" != *KILL* && "$EVENTS" != *DEATH* && "$EVENTS" != *START* ]] \
+        || hold 'Phone process activity raced guarded input.'
+      DELIVERY_BOUNDARY[phone]="${CURSOR[phone]}@$SECONDS"
+      DELIVERY_COVERAGE[phone]=CompleteThroughBoundary
+      DELIVERY_PROCESS_PROOF=Verified
+      delivery_check_time
+      if (( FRESH_RECEIPT && FRESH_PUBLICATION )); then DELIVERY_ACTIVE=0; return; fi
+      if (( FRESH_PUBLICATION )); then DELIVERY_PHASE=delivery; continue; fi
+      [[ -z "$extra" ]] || hold 'Malformed guarded delivery action.'
+      # Recheck the monitored stream after qualification, immediately before any
+      # input. Publication observed on the way to Settings needs no extra Sync.
+      if (( ! FRESH_PUBLICATION )); then
+        case "$action" in
+          WAIT) [[ "$route" == dashboard && -z "$x$y$end_x$end_y" ]] || hold 'Unexpected readiness state.' ;;
+          MOCK_OFF) [[ "$route" == mock && -z "$x$y$end_x$end_y" ]] || hold 'Unexpected Mock proof.'; route=sync ;;
+          TAP)
+            [[ "$x $y" =~ ^[0-9]+\ [0-9]+$ && -z "$end_x$end_y" ]] || hold 'Malformed guarded tap.'
+            [[ "$route" == dashboard || "$route" == sync ]] || hold 'Unexpected delivery tap.'
+            checked=$SECONDS
+            (( checked - DELIVERY_UI_CAPTURED < 5 )) \
+              || { delivery_ui_stale before_tap "$route" "$checked"; continue; }
+            delivery_ui_stage input "$checked"
+            delivery_check_time
+            if [[ "$route" == sync ]]; then DELIVERY_SYNC_ATTEMPTED=1; fi
+            adb_on "$PHONE_SERIAL" shell -n input tap "$x" "$y" || hold 'Guarded delivery tap failed.'
+            if [[ "$route" == dashboard ]]; then route=mock; fi ;;
+          SCROLL)
+            [[ "$route" == mock || "$route" == sync ]] || hold 'Unexpected delivery scroll.'
+            [[ "$x $y $end_x $end_y" =~ ^[0-9]+\ [0-9]+\ [0-9]+\ [0-9]+$ ]] || hold 'Malformed guarded scroll.'
+            # A discarded scroll performs no gesture and consumes no scrolling bound.
+            checked=$SECONDS
+            (( checked - DELIVERY_UI_CAPTURED < 5 )) \
+              || { delivery_ui_stale before_scroll "$route" "$checked"; continue; }
+            delivery_ui_stage input "$checked"
+            (( ++scrolls <= 6 )) || hold 'Send to watch was not safely revealed within bounded scrolling.'
+            delivery_check_time
+            adb_on "$PHONE_SERIAL" shell -n input swipe "$x" "$y" "$end_x" "$end_y" 200 \
+              || hold 'Guarded delivery scroll failed.' ;;
+          *) hold 'Unrecognized guarded delivery action.' ;;
+        esac
+        delivery_check_time
+      fi
+    fi
+    DELIVERY_PHASE=delivery
+    delivery_check_time
     sleep 0.2
   done
-  hold 'No fresh redacted WardPulseSync callback after the measurement boundary.'
+  hold 'No distinct fresh publication and Wear receipt within the original delivery deadline.'
 }
 
 package_update_time() {
@@ -1611,7 +2264,7 @@ update_install() {
   # dumpsys timestamps have second precision; make a real same-APK update observable.
   sleep 1
   barrier "$role" "$serial"
-  old=$(app_processes "$serial" "$role") || hold 'Cannot record pre-update process identities.'
+  old=$(app_processes "$serial" "$role" pre-update) || hold 'Cannot record pre-update process identities.'
   reconcile_role "$role" "$serial" "$old"
   printf '%s pre-update process identities (empty means already absent):\n%s\n' "$role" "$old"
   LIFECYCLE_ACTION="$role:update"
@@ -1628,7 +2281,7 @@ update_install() {
   if [[ "$role" == phone ]]; then
     PHONE_APK_PATH=$path PHONE_APK_HASH=$built PHONE_UPDATE_TIME=$after
   fi
-  current=$(app_processes "$serial" "$role") || hold 'Cannot observe post-update processes.'
+  current=$(app_processes "$serial" "$role" post-update) || hold 'Cannot observe post-update processes.'
   reconcile_role "$role" "$serial" "$current"
   while read -r pid ticks name; do
     [[ -n "$pid" ]] || continue
@@ -2075,8 +2728,19 @@ observe() {
 
 cleanup() {
   local result=$? pid deadline retired=1 current identity unknown
-  # Preserve the failure status and the Reader's existing cleanup budgets.
   local PRE_DEATH_DEADLINE=0
+  if (( ${DELIVERY_ACTIVE:-0} && result != 0 )); then delivery_report || :; fi
+  DELIVERY_ACTIVE=0
+  if [[ "$DELIVERY_UI_DIR" =~ ^/data/local/tmp/wardpulse-sync-[a-zA-Z0-9]{8}$ ]]; then
+    if ! adb_on "$PHONE_SERIAL" shell -n rm -f "$DELIVERY_UI_DIR/hierarchy.xml" ||
+       ! adb_on "$PHONE_SERIAL" shell -n rmdir "$DELIVERY_UI_DIR"; then
+      # Staging failure reports are bounded too, so a blocked stderr cannot delay monitor retirement.
+      timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "%s\n" "$1" >&2' bash \
+        'HOLD: Owned delivery UI staging could not be removed.' || :
+      result=1
+    fi
+  fi
+  # Preserve the failure status and the Reader's existing cleanup budgets.
   local running stopped wrapper_state=unowned wrapper_exit=unknown wrapper_action=none cleanup_exit=unknown
   local device_retirement=unobserved uid_retirement=unobserved staging=absent descriptors=closed
   local diagnostic_action=none diagnostic_exit=unknown
@@ -2134,7 +2798,10 @@ cleanup() {
     deadline=$((SECONDS + 8))
     while ! adb_on "$PHONE_SERIAL" shell -n "test ! -e /proc/$READER_DEVICE_PID"; do
       if (( SECONDS >= deadline )); then
-        printf 'HOLD: Reader retirement is unproved; owned staging retained.\n' >&2
+        # Retirement HOLDs are bounded too, so a blocked stderr cannot stall the
+        # staging decision or the remaining owned cleanup.
+        timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "%s\n" "$1" >&2' bash \
+          'HOLD: Reader retirement is unproved; owned staging retained.' || :
         result=1 retired=0
         break
       fi
@@ -2158,7 +2825,8 @@ cleanup() {
       sleep 0.2
     done
     if (( ! retired )); then
-      printf 'HOLD: Failed reader loading left unreconciled UID processes; staging retained.\n' >&2
+      timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "%s\n" "$1" >&2' bash \
+        'HOLD: Failed reader loading left unreconciled UID processes; staging retained.' || :
       uid_retirement=unproved
     else
       uid_retirement=reconciled
@@ -2169,7 +2837,8 @@ cleanup() {
     if (( retired )); then
       if remove_reader_staging; then staging=removed
       else
-        printf 'HOLD: Owned device reader staging could not be removed.\n' >&2
+        timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "%s\n" "$1" >&2' bash \
+          'HOLD: Owned device reader staging could not be removed.' || :
         result=1 staging=failed
       fi
     fi
@@ -2190,7 +2859,7 @@ verify() {
   [[ -n "$FLUTTER_BIN" && -x "$FLUTTER_BIN" ]] || hold 'Flutter not found; set WARDPULSE_FLUTTER_BIN explicitly.'
   require_executable "$REPO_ROOT/apps/wear_android/gradlew"
   local tool role serial snapshot pid ticks name key
-  for tool in timeout awk sha256sum mktemp mkfifo sort sed tr cut wc cp grep mkdir rm rmdir sleep; do
+  for tool in python3 timeout awk sha256sum mktemp mkfifo sort sed tr cut wc cp grep mkdir rm rmdir sleep; do
     command -v "$tool" >/dev/null || hold "Required host executable not found: $tool"
   done
   (( BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4) )) \
@@ -2459,6 +3128,12 @@ INITIAL_DEATHS=0 INITIAL_DEATH_UNTIL=0
 RETENTION_DEADLINE=0 LAST_OBSERVATION=0 LEDGER_READY=0 SENDER_COVERED=0
 PHONE_ACTIVITY=0 WORK_ACTIVITY=0
 PRE_DEATH_DEADLINE=0
+DELIVERY_ACTIVE=0 DELIVERY_REPORTED=0 DELIVERY_STARTED=0 DELIVERY_DEADLINE=0
+DELIVERY_PHASE=delivery DELIVERY_PROCESS_PROOF=Unknown DELIVERY_SYNC_ATTEMPTED=0
+DELIVERY_UI_DIR= DELIVERY_TARGET= DELIVERY_UI_CAPTURED=0 DELIVERY_UI_STALE=0
+DELIVERY_UI_INVOCATION=0 DELIVERY_UI_READ=Unknown DELIVERY_UI_PRODUCER=Unknown
+DELIVERY_UI_DISCARDS= DELIVERY_UI_FACTS= DELIVERY_UI_STAGE=Unknown DELIVERY_UI_STAGE_AT=0
+declare -A DELIVERY_BOUNDARY=() DELIVERY_COVERAGE=()
 OBSERVING=0 OBS_REQUEST=0 OBS_COMPLETE=0 OBS_LIMIT=0 OBS_EXPIRES=0
 OBS_OUTPUT_FAILED=0 OBS_PROTOCOL=1
 OBS_LAUNCHING=0 OBS_PENDING_SIGNAL=0
