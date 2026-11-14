@@ -716,6 +716,94 @@ void main() {
       reason: 'purchased-meter rows are the credit pool; do not repeat credits',
     );
   });
+
+  test('keeps known-zero purchased credits distinct from absent balances', () {
+    for (final remaining in ['0.00', null]) {
+      final withCredits = DashboardSnapshot.fromJson({
+        ...DashboardSnapshot.empty(
+          generatedAt: DateTime.utc(2026, 11, 14),
+        ).toJson(),
+        'accounts': [
+          {
+            'accountId': 'claude-plan',
+            'provider': 'claude',
+            'connection': 'anthropic.plan',
+            'status': 'ok',
+            for (final period in ['today', 'week', 'month'])
+              period: BudgetState.unknownPeriod(period).toJson(),
+            'credits': <Object>[],
+            'buckets': <Object>[],
+            'modelBreakdown': <Object>[],
+            'allowances': [
+              {
+                'id': 'claude-five-hour',
+                'source': 'plan',
+                'label': '5h',
+                'usedPercent': 40.0,
+                'windowMinutes': 300,
+                'status': 'ok',
+              },
+              {
+                'id': 'claude-extra-usage',
+                'source': 'purchased',
+                'label': 'Extra usage',
+                'remaining':
+                    remaining == null
+                        ? null
+                        : {'value': remaining, 'unit': 'credits'},
+                'status': 'stale',
+              },
+            ],
+          },
+        ],
+      });
+      final payload = buildPhoneWidgetPayload(
+        withCredits,
+        const PhoneWidgetPreferences(
+          selectedIds: ['allowance.claude.claude-five-hour'],
+        ),
+      );
+      expect(payload.rows, hasLength(1));
+      final row = payload.rows.single;
+      expect(row.label, 'Claude · 5h');
+      expect(row.percentText, '60% left');
+      if (remaining == null) {
+        expect(row.creditsSuffix, isNull);
+        expect(row.line, '60% left · Claude · 5h');
+        expect(payload.stale, isFalse);
+      } else {
+        expect(row.creditsSuffix, '0 credits');
+        expect(row.line, '60% left · Claude · 5h · 0 credits');
+        expect(payload.stale, isTrue);
+      }
+    }
+  });
+
+  test('omits nonfinite purchased credit sums and their contributors', () {
+    final payload = buildPhoneWidgetPayload(
+      freshnessSnapshot([
+        freshnessAccount(
+          'claude',
+          'anthropic.plan',
+          allowances: [
+            freshnessAllowance('claude-five-hour'),
+            freshnessAllowance('credits', purchased: true, remaining: '1e308'),
+            freshnessAllowance(
+              'other',
+              purchased: true,
+              remaining: '1e308',
+              status: ProviderStatus.stale,
+            ),
+          ],
+        ),
+      ], overall: ProviderStatus.stale),
+      const PhoneWidgetPreferences(
+        selectedIds: ['allowance.claude.claude-five-hour'],
+      ),
+    );
+    expect(payload.rows.single.creditsSuffix, isNull);
+    expect(payload.stale, isFalse);
+  });
 }
 
 Map<String, Object?> _allowance(

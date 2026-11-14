@@ -164,7 +164,7 @@ String? phoneWidgetCreditsSuffix(DashboardSnapshot snapshot, String metricId) =>
     return null;
   }
   final credits = resolvePurchasedCreditsForProvider(snapshot, provider);
-  if (credits == null || credits.remaining <= 0) {
+  if (credits == null || !credits.remaining.isFinite || credits.remaining < 0) {
     return null;
   }
   return (

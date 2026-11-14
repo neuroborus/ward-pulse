@@ -84,7 +84,8 @@ rather than placing more metrics side by side.
 
 Labels use two lines for the provider and full pool name, including **Cursor / Models**.
 Purchased credits appear as a compact balance such as `32.4K`; `K` and `M` mean thousands
-and millions. A reset appears only when that selected allowance reports a real reset time.
+and millions. A known zero balance appears as `0`; missing balances are omitted. A reset
+appears only when that selected allowance reports a real reset time.
 It uses your phone's local time, for example **Reset 10 Feb 11:45**. Missing reset times are
 omitted, and a displayed boundary does not itself confirm that capacity has returned.
 
