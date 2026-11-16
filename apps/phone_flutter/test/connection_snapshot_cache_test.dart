@@ -4,13 +4,16 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
 import 'package:ward_pulse_phone/dashboard/apply_alert_settings.dart';
+import 'package:ward_pulse_phone/dashboard/codex_dashboard_repository.dart';
 import 'package:ward_pulse_phone/dashboard/connection_snapshot_cache.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/dashboard/merging_connection_repository.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
+import 'package:ward_pulse_phone/providers/codex_account_service.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_logger.dart';
 import 'package:ward_pulse_phone/sync/automatic_poll.dart';
@@ -100,6 +103,205 @@ void main() {
   AutomaticPollContext automatic() => AutomaticPollContext(
     readInterval: () async => const Duration(minutes: 5),
   );
+
+  DashboardRepository codex(
+    String owner,
+    ConnectionReportLoader load, {
+    ConnectionCachePlatform? platform,
+    ReportNormalizer normalizeReport = normalizeCodexReportJson,
+  }) => codexDashboardRepository(
+    accountService: const EmptyCodexAccountService(),
+    fallback: ValueDashboardRepository(
+      _snapshot('openai', 'openai.platform', DateTime.utc(2026, 11, 14, 9), 1),
+    ),
+    cache: ConnectionSnapshotCache(
+      connection: 'openai.plan',
+      platform: platform ?? bridge.platform(owner),
+      readCredentialVersion:
+          () async => (await credentials(owner, 'openai.plan').read())?.version,
+    ),
+    loadReport: load,
+    normalizeReport: normalizeReport,
+    mergeSnapshots: mergeDashboardSnapshotsJson,
+    logger: const _SilentLogger(),
+  );
+
+  test('late older Codex report retains newer normalized cache', () async {
+    const id = 'openai.plan';
+    final reportA = _codexReport('2026-11-14T09:00:00.100Z', 60);
+    final reportB = _codexReport('2026-11-14T09:00:00.800Z', 90);
+    final accessA = credentials('a', id);
+    final accessB = credentials('b', id);
+    await accessA.write('synthetic-codex-session');
+    final version = (await accessA.read())!.version;
+    final normalizations = <({String input, String output})>[];
+    String normalize(String input) {
+      final output = normalizeCodexReportJson(input);
+      normalizations.add((input: input, output: output));
+      stdout.writeln(
+        'Codex normalization: ${jsonEncode({'input': input, 'output': output})}',
+      );
+      return output;
+    }
+
+    final heldA = Completer<void>(), releaseA = Completer<void>();
+    final platform = _RecordingCachePlatform(bridge.platform('a'));
+    var failA = false;
+    final a = codex(
+      'a',
+      () async {
+        final report = await accessA.serializeFetch(() async {
+          if (failA) throw StateError('Sanitized offline failure.');
+          return reportA;
+        });
+        // serializeFetch has validated and released A's native fetch ticket.
+        heldA.complete();
+        await releaseA.future;
+        return report;
+      },
+      platform: platform,
+      normalizeReport: normalize,
+    );
+    final lateLoad = CapturedDashboardLoad.capture(a.load);
+    try {
+      await Future.any([
+        heldA.future,
+        lateLoad.then<void>((result) {
+          result.value;
+          throw StateError('Codex A completed before its hold.');
+        }),
+      ]);
+      final newer =
+          await codex(
+            'b',
+            () => accessB.serializeFetch(() async => reportB),
+            normalizeReport: normalize,
+          ).load();
+      final persistedBeforeA = DashboardSnapshot.fromJsonString(
+        await bridge.invoke('test', 'readSnapshot', {
+              'connection': id,
+              'expected': version.values,
+            })
+            as String,
+      );
+      releaseA.complete();
+      final late = (await lateLoad).value;
+      final durable = DashboardSnapshot.fromJsonString(
+        await bridge.invoke('test', 'readSnapshot', {
+              'connection': id,
+              'expected': version.values,
+            })
+            as String,
+      );
+      failA = true;
+      platform.failSnapshotRead = true;
+      final DashboardSnapshot memory;
+      try {
+        memory = await a.load();
+      } finally {
+        platform.failSnapshotRead = false;
+      }
+      await bridge.invoke('test', 'restart', {});
+      final cold =
+          await codex(
+            'cold',
+            () => credentials('cold', id).serializeFetch<String?>(() async {
+              throw StateError('Sanitized cold offline failure.');
+            }),
+            normalizeReport: normalize,
+          ).load();
+
+      // Gather every cache path before asserting the substantive downgrade contract.
+      final observations = {
+        'late return': late,
+        'durable payload': durable,
+        'memory fallback': memory,
+        'cold recovery': cold,
+      };
+      for (final entry in observations.entries) {
+        _expectCodexUsage(entry.value, 90, reason: entry.key);
+      }
+      _expectCodexUsage(newer, 90, reason: 'B success');
+      _expectCodexUsage(persistedBeforeA, 90, reason: 'B persisted before A');
+      expect(newer.syncIssue, isNull);
+      expect(late.syncIssue, isNull);
+
+      // Precision diagnostics follow B retention so the old library fails above.
+      expect(normalizations.map((record) => record.input), [reportB, reportA]);
+      for (final record in normalizations) {
+        final normalized = jsonDecode(record.output) as Map;
+        final expected =
+            record.input == reportA
+                ? '2026-11-14T09:00:00.1Z'
+                : '2026-11-14T09:00:00.8Z';
+        expect(normalized['generatedAt'], expected);
+        expect(
+          (normalized['accounts'] as List).single['lastSuccessfulSyncAt'],
+          expected,
+        );
+      }
+      final normalizedA = DashboardSnapshot.fromJsonString(
+        normalizations.last.output,
+      );
+      final normalizedB = DashboardSnapshot.fromJsonString(
+        normalizations.first.output,
+      );
+      expect(
+        normalizedB.generatedAt
+            .difference(normalizedA.generatedAt)
+            .inMicroseconds,
+        700000,
+      );
+      for (final snapshot in [
+        newer,
+        persistedBeforeA,
+        ...observations.values,
+      ]) {
+        final account = snapshot.accounts.singleWhere(
+          (account) => account.provider == 'codex',
+        );
+        expect(
+          snapshot.generatedAt,
+          DateTime.parse('2026-11-14T09:00:00.800Z'),
+        );
+        expect(
+          account.lastSuccessfulSyncAt,
+          DateTime.parse('2026-11-14T09:00:00.800Z'),
+        );
+      }
+    } finally {
+      platform.failSnapshotRead = false;
+      if (!releaseA.isCompleted) releaseA.complete();
+      await lateLoad;
+    }
+  });
+
+  test('equal Codex instants accept a later completed refresh', () async {
+    const id = 'openai.plan';
+    final access = credentials('ui', id);
+    await access.write('synthetic-codex-session');
+    final first =
+        await codex(
+          'ui',
+          () => access.serializeFetch(
+            () async => _codexReport('2026-11-14T09:00:00.100Z', 60),
+          ),
+        ).load();
+    final second =
+        await codex(
+          'ui',
+          () => access.serializeFetch(
+            () async => _codexReport('2026-11-14T09:00:00.100000Z', 90),
+          ),
+        ).load();
+    final durable = (await cache('reader', id).capture()).snapshot!;
+    _expectCodexUsage(first, 60, reason: 'first equal-instant refresh');
+    _expectCodexUsage(second, 90, reason: 'later equal-instant refresh');
+    _expectCodexUsage(durable, 90, reason: 'equal-instant durable payload');
+    expect(second.generatedAt, first.generatedAt);
+    expect(durable.generatedAt, first.generatedAt);
+    expect(first.generatedAt, DateTime.parse('2026-11-14T09:00:00.100Z'));
+  });
 
   for (final id in [
     'openai.platform',
@@ -1811,6 +2013,39 @@ void main() {
   }
 }
 
+String _codexReport(String generatedAt, int usedPercent) {
+  final report =
+      jsonDecode(
+            File(
+              '../../fixtures/providers/codex/report.json',
+            ).readAsStringSync(),
+          )
+          as Map<String, dynamic>;
+  report['generatedAt'] = generatedAt;
+  final limits = report['rateLimits'] as Map;
+  limits['rateLimits']['primary']['usedPercent'] = usedPercent;
+  limits['rateLimitsByLimitId']['codex']['primary']['usedPercent'] =
+      usedPercent;
+  return jsonEncode(report);
+}
+
+void _expectCodexUsage(
+  DashboardSnapshot snapshot,
+  int usedPercent, {
+  required String reason,
+}) {
+  final account = snapshot.accounts.singleWhere(
+    (account) => account.provider == 'codex',
+  );
+  expect(account.accountId, 'codex-local', reason: reason);
+  expect(account.connection, 'openai.plan', reason: reason);
+  final allowance = account.allowances.singleWhere(
+    (allowance) => allowance.source == AllowanceSource.plan,
+  );
+  expect(allowance.id, 'codex-primary', reason: reason);
+  expect(allowance.usedPercent, usedPercent, reason: '$reason: retained usage');
+}
+
 DashboardSnapshot _snapshot(
   String provider,
   String connection,
@@ -2020,9 +2255,13 @@ final class _RecordingCachePlatform implements ConnectionCachePlatform {
   _RecordingCachePlatform(this.delegate);
   final ConnectionCachePlatform delegate;
   final methods = <String>[];
+  bool failSnapshotRead = false;
   @override
   Future<Object?> invoke(String method, Map<String, Object?> arguments) {
     methods.add(method);
+    if (failSnapshotRead && method == 'readSnapshot') {
+      return Future.error(StateError('Sanitized snapshot read failure.'));
+    }
     return delegate.invoke(method, arguments);
   }
 }

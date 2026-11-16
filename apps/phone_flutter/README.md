@@ -314,6 +314,46 @@ engine's adversarial tests with the existing Android JDK (`javac` and `java`). F
 exercise the real engine through a test-only JVM bridge with fake encrypted storage and HTTP
 responses. No live credentials, emulator state or provider network are used by these tests.
 
+The cache regression `late older Codex report retains newer normalized cache` in
+`test/connection_snapshot_cache_test.dart` also uses the production Rust
+`normalizeCodexReportJson` and `mergeDashboardSnapshotsJson` bindings. On Linux, build the
+native HOST library before phone tests and select its verified output directory through
+the stock `LD_LIBRARY_PATH` loader route. From the repository root:
+
+```sh
+(cd core && cargo build -p ward-pulse-ffi)
+test -f core/target/debug/libward_pulse_ffi.so
+LD_LIBRARY_PATH="$PWD/core/target/debug${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" just check-phone
+```
+
+The phone CI workflow performs the same HOST build before its existing `flutter test` step.
+The full `check-phone` recipe is unchanged. For the focused HOST regression, from
+`apps/phone_flutter/` after that build:
+
+```sh
+LD_LIBRARY_PATH="$PWD/../../core/target/debug${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  flutter test test/connection_snapshot_cache_test.dart \
+  --plain-name 'late older Codex report retains newer normalized cache'
+```
+
+The test records the sanitized normalization inputs and unchanged production outputs. It
+lets B (`.800Z`, 90% used) persist after A (`.100Z`, 60%) releases its managed fetch ticket,
+then releases A's completion. It collects late return, durable payload, reader-visible memory
+fallback and recovery after native-engine/repository restart before asserting B retention;
+precision diagnostics follow. A separate equal-instant control accepts a later refresh at
+`.100000Z` after `.100Z`.
+
+Causal replay and runtime acceptance remain Root/operator HOST work after whole code DONE,
+owning CLI exit, known process retirement and a separate fresh public idle observation.
+Run the same final focused test in separate fresh Flutter processes with the retained old
+production library and freshly built final library. Expose the retained library as
+`libward_pulse_ffi.so` through an ordinary directory symlink and select that directory via
+`LD_LIBRARY_PATH`; keep test inputs, Dart source and the native bridge/engine identical.
+Record actual loaded-library paths/hashes, test/input/native-engine hashes and normalization
+outputs for both runs. Only successful setup followed by failure at B retention is causal
+RED; loading, compilation, transport or timeout failures are infrastructure failures.
+Source review and the earlier normalization-only precision probe supply no runtime PASS.
+
 Final-APK emulator acceptance on 2026-10-13 covered three real plan connections (Codex,
 Claude and Cursor), a production periodic WorkManager task in a fresh background process,
 offline cold-start recovery with unchanged cached data/success times, and restored live

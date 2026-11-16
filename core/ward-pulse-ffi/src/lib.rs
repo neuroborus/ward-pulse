@@ -186,7 +186,7 @@ fn merge_dashboard_snapshots_json(
     let generated_at = snapshots
         .iter()
         .map(|snapshot| &snapshot.generated_at)
-        .max_by(|left, right| left.as_str().cmp(right.as_str()))
+        .max()
         .cloned()
         .ok_or(DashboardSnapshotJsonError::EmptySnapshots)?;
     let accounts = snapshots
@@ -780,32 +780,59 @@ mod tests {
 
     #[test]
     fn result_api_normalizes_codex_report_json() {
-        let request = CString::new(include_str!(
-            "../../../fixtures/providers/codex/report.json"
-        ))
-        .expect("request has no null bytes");
+        for (generated_at, expected) in [
+            ("2026-07-19T12:00:00Z", "2026-07-19T12:00:00Z"),
+            ("2026-11-14T09:00:00.100Z", "2026-11-14T09:00:00.1Z"),
+            ("2026-11-14T09:00:00.800Z", "2026-11-14T09:00:00.8Z"),
+            ("2026-11-14T09:00:00.123456Z", "2026-11-14T09:00:00.123456Z"),
+        ] {
+            let mut report: serde_json::Value = serde_json::from_str(include_str!(
+                "../../../fixtures/providers/codex/report.json"
+            ))
+            .expect("parse sanitized Codex report");
+            report["generatedAt"] = generated_at.into();
+            let request = CString::new(report.to_string()).expect("request has no null bytes");
 
-        let value = unsafe { ward_pulse_codex_dashboard_snapshot_result_json(request.as_ptr()) };
-        assert!(!value.is_null());
+            let value =
+                unsafe { ward_pulse_codex_dashboard_snapshot_result_json(request.as_ptr()) };
+            assert!(!value.is_null());
 
-        let result: serde_json::Value = serde_json::from_str(
-            unsafe { CStr::from_ptr(value) }
-                .to_str()
-                .expect("result is UTF-8"),
-        )
-        .expect("parse result JSON");
-        assert_eq!(result["status"], "success");
+            let result: serde_json::Value = serde_json::from_str(
+                unsafe { CStr::from_ptr(value) }
+                    .to_str()
+                    .expect("result is UTF-8"),
+            )
+            .expect("parse result JSON");
+            unsafe { ward_pulse_string_free(value) };
+            assert_eq!(result["status"], "success");
 
-        let snapshot: serde_json::Value =
-            serde_json::from_str(result["dashboardJson"].as_str().expect("dashboard JSON"))
-                .expect("parse dashboard JSON");
-        assert_eq!(snapshot["accounts"][0]["provider"], "codex");
-        assert_eq!(
-            snapshot["accounts"][0]["allowances"][0]["usedPercent"],
-            84.0
-        );
+            let snapshot: serde_json::Value =
+                serde_json::from_str(result["dashboardJson"].as_str().expect("dashboard JSON"))
+                    .expect("parse dashboard JSON");
+            assert_eq!(snapshot["accounts"][0]["provider"], "codex");
+            assert_eq!(
+                snapshot["accounts"][0]["allowances"][0]["usedPercent"],
+                84.0
+            );
+            assert_eq!(snapshot["generatedAt"], expected);
+            assert_eq!(snapshot["accounts"][0]["lastSuccessfulSyncAt"], expected);
+        }
+    }
 
-        unsafe { ward_pulse_string_free(value) };
+    #[test]
+    fn merge_selects_positive_fraction_after_its_whole_second() {
+        let whole = "2026-11-14T09:00:00Z";
+        let fraction = "2026-11-14T09:00:00.1Z";
+        for times in [[whole, fraction], [fraction, whole]] {
+            let snapshots = times.map(|time| build_dashboard_snapshot(time.into(), vec![]));
+            let merged = merge_dashboard_snapshots_json(
+                &serde_json::to_string(&snapshots).expect("serialize snapshots"),
+            )
+            .expect("merge snapshots");
+            let snapshot: DashboardSnapshot =
+                serde_json::from_str(&merged).expect("parse snapshot");
+            assert_eq!(snapshot.generated_at.as_str(), fraction);
+        }
     }
 
     #[test]

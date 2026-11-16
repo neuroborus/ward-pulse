@@ -32,7 +32,20 @@ Platform code owns transport, TLS, background scheduling, secure credential retr
 ### Validation stops short of rejecting timestamps
 
 Rust validates what it can act on. It deliberately does **not** reject a malformed instant:
-`DateTimeUtc` normalizes what it recognizes and passes anything else through unchanged.
+`DateTimeUtc` in `core/ward-pulse-core/src/time.rs` recognizes the numeric UTC shape
+`YYYY-MM-DDTHH:MM:SS[.digits]Z` without calendar validation. It retains nonzero fractions,
+trims insignificant trailing zeros and makes all-zero fractions equivalent to whole seconds.
+Its shared `Ord` compares seconds and then fractional digits, treating missing positions as
+zero. Recognized UTC values sort before opaque values, which sort lexically. Construction
+and deserialization remain infallible. Outside recognized forms, legacy removal of a dotted
+suffix before uppercase `Z` remains; other input passes through unchanged. This does not
+expand accepted timezones.
+
+`merge_dashboard_snapshots_json` in `core/ward-pulse-ffi/src/lib.rs` uses that shared ordering
+for the newest snapshot. A late older report cannot replace newer same-second cache data,
+including after restart; equal instants remain eligible to replace it. The supported end-to-end
+precision is microseconds within Dart/native timestamp representability. The core retains
+longer decimal fractions without promising that precision across the platform boundary.
 
 The reason is the failure mode, not the type. Instants arrive inside provider payloads, so a
 fallible parse would fail the whole report over one field, and a local-first dashboard would
@@ -422,8 +435,9 @@ Scope:
   `buildLiveProviderStack` in `apps/phone_flutter/lib/dashboard/live_provider_stack.dart`
   carries the captured `generatedAt` and private integer `capturedEndMicros` together.
   `anthropic_provider_snapshot_from_report_json` in
-  `core/ward-pulse-providers/src/claude/platform.rs` uses the precise bound instead of the
-  shared whole-second timestamp when selecting cost days and deciding empty periods.
+  `core/ward-pulse-providers/src/claude/platform.rs` continues to use the private precise
+  captured-end bound when selecting cost days and deciding empty periods, independently
+  of shared timestamp canonicalization.
   Amounts are decimal strings in lowest currency units (cents); WardPulse accumulates them
   exactly and rounds each daily and period output independently to integer USD cents, half
   away from zero, without estimating prices from tokens. Period totals use exact amounts
@@ -540,8 +554,9 @@ Missing or null resets stay absent; malformed or overflowing resets return the s
 `InvalidTimestamp` adapter error for ordinary and legacy windows. Optional Fable uses only
 its joined limit's own reset through the same parser; missing, malformed or overflowing
 Fable resets stay absent without discarding ordinary windows or borrowing their reset.
-This boundary leaves the shared infallible `DateTimeUtc` and its text-based equality and
-ordering policy unchanged; see [Boundary](#boundary).
+This independent reset parser still emits whole seconds; it does not use the shared
+`DateTimeUtc` format recognizer to validate or convert resets. Shared fractional
+canonicalization and ordering are described in [Boundary](#boundary).
 
 This is a compatibility integration, not a published third-party API. Endpoint or OAuth client
 changes may require an app update. Never log tokens, authorization codes, or raw response bodies.

@@ -60,7 +60,14 @@ jobs:
       - run: dart format --output=none --set-exit-if-changed lib
         working-directory: bindings/dart
       - run: flutter analyze
+      - name: Build host Rust FFI
+        working-directory: core
+        run: |
+          cargo build -p ward-pulse-ffi
+          test -f target/debug/libward_pulse_ffi.so
       - run: flutter test
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/core/target/debug
       - run: tools/build-android-rust/build.sh
         working-directory: .
       - run: flutter build apk --debug

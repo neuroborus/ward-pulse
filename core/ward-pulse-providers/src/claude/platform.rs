@@ -1007,7 +1007,7 @@ mod tests {
             }
             assert_eq!(
                 account.last_successful_sync_at.as_ref().unwrap().as_str(),
-                format!("{}Z", &stamp[..19])
+                stamp
             );
         }
     }
