@@ -35,6 +35,16 @@
     }
   },
   "$defs": {
+    "historyOwner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["connection", "identity"],
+      "description": "Private local history scope from an accepted credential's lifecycle identity digest. Not a normalized account ID or a lifecycle currentness stamp; never displayed or sent to watch/widget surfaces.",
+      "properties": {
+        "connection": { "type": "string", "minLength": 1 },
+        "identity": { "type": "string", "minLength": 1 }
+      }
+    },
     "alert": {
       "type": "object",
       "additionalProperties": false,
@@ -52,6 +62,7 @@
         "provider": { "$ref": "#/$defs/providerKind" },
         "accountId": { "type": "string" },
         "connection": { "type": "string" },
+        "historyOwner": { "$ref": "#/$defs/historyOwner" },
         "target": {
           "anyOf": [
             {
@@ -224,6 +235,7 @@
           "minLength": 1,
           "description": "Owning connection key. Absent on snapshots built before adapters stamped it; alerts then fall back to the provider's plan."
         },
+        "historyOwner": { "$ref": "#/$defs/historyOwner" },
         "status": { "$ref": "#/$defs/providerStatus" },
         "today": { "$ref": "budget_state.schema.json" },
         "week": { "$ref": "budget_state.schema.json" },

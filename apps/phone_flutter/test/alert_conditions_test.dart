@@ -25,6 +25,77 @@ void main() {
     }
   });
 
+  test(
+    'history owners survive account copies and qualify typed key equality',
+    () {
+      final ownerJson = {
+        'connection': 'anthropic.plan',
+        'identity': List.filled(64, 'a').join(),
+      };
+      final base =
+          DashboardSnapshot.empty(
+            generatedAt: DateTime.utc(2026, 10, 16),
+          ).toJson();
+      final encoded = {
+        ...base,
+        'accounts': [
+          {
+            'accountId': 'account-a',
+            'provider': 'claude',
+            'connection': 'anthropic.plan',
+            'historyOwner': ownerJson,
+            'status': 'ok',
+            'today': base['todayTotal'],
+            'week': base['weekTotal'],
+            'month': base['monthTotal'],
+            'credits': <Object>[],
+            'allowances': <Object>[],
+            'buckets': <Object>[],
+            'modelBreakdown': <Object>[],
+            'lastSuccessfulSyncAt': null,
+            'lastError': null,
+          },
+        ],
+        'alertConditions': [
+          {
+            'key': {...keyJson, 'historyOwner': ownerJson},
+            'state': 'unknown',
+          },
+        ],
+      };
+      final snapshot = DashboardSnapshot.fromJson(encoded);
+      final key = snapshot.alertConditions.single.key;
+      expect(snapshot.toJson(), encoded);
+      expect(key.historyOwner, snapshot.accounts.single.historyOwner);
+      expect(key, AlertConditionKey.fromJson(key.toJson()));
+      final otherKeys = [
+        AlertConditionKey.fromJson(keyJson),
+        for (final owner in [
+          {...ownerJson, 'identity': List.filled(64, 'b').join()},
+          {...ownerJson, 'connection': 'other-connection'},
+        ])
+          AlertConditionKey.fromJson({...keyJson, 'historyOwner': owner}),
+      ];
+      expect({
+        key,
+        AlertConditionKey.fromJson(key.toJson()),
+        ...otherKeys,
+      }, hasLength(4));
+      for (final copy in [
+        DashboardSnapshot.fromJsonString(snapshot.toJsonString()),
+        snapshot.withStaleStatus(),
+        snapshot.withSyncIssue(DashboardSyncIssue.rateLimited),
+        snapshot.withConnectionVersions(const {}),
+        snapshot.withReportingOutcomes(const []),
+      ]) {
+        expect(copy.accounts.single.historyOwner, key.historyOwner);
+        expect(copy.accounts.single.toJson()['historyOwner'], ownerJson);
+        expect(copy.alertConditions.single.key, key);
+        expect(copy.watchSummary.toJson(), isNot(contains('historyOwner')));
+      }
+    },
+  );
+
   test('typed observations round-trip and survive every snapshot copy', () {
     const alert = {
       'severity': 'warning',

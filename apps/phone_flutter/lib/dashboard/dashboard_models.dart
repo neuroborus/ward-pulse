@@ -389,11 +389,40 @@ class DashboardSnapshot {
   );
 }
 
+/// Private history scope from an accepted credential's lifecycle identity digest.
+/// Currentness stamps and normalized account IDs remain separate.
+final class HistoryOwner {
+  const HistoryOwner({required this.connection, required this.identity});
+
+  final String connection;
+  final String identity;
+
+  factory HistoryOwner.fromJson(Map<String, dynamic> json) => HistoryOwner(
+    connection: json['connection'] as String,
+    identity: json['identity'] as String,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'connection': connection,
+    'identity': identity,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is HistoryOwner &&
+      other.connection == connection &&
+      other.identity == identity;
+
+  @override
+  int get hashCode => Object.hash(connection, identity);
+}
+
 class ProviderSnapshot {
   const ProviderSnapshot({
     required this.accountId,
     required this.provider,
     this.connection,
+    this.historyOwner,
     required this.status,
     required this.today,
     required this.week,
@@ -414,6 +443,7 @@ class ProviderSnapshot {
   /// Carried verbatim so the round trip back into the core keeps alert rules
   /// keyed by connection rather than by provider family.
   final String? connection;
+  final HistoryOwner? historyOwner;
   final ProviderStatus status;
   final BudgetState today;
   final BudgetState week;
@@ -430,6 +460,10 @@ class ProviderSnapshot {
       accountId: json['accountId'] as String,
       provider: json['provider'] as String,
       connection: json['connection'] as String?,
+      historyOwner:
+          json['historyOwner'] == null
+              ? null
+              : HistoryOwner.fromJson(_jsonMap(json['historyOwner'])),
       status: _statusFromJson(json['status']),
       today: BudgetState.fromJson(_jsonMap(json['today'])),
       week: BudgetState.fromJson(_jsonMap(json['week'])),
@@ -453,6 +487,7 @@ class ProviderSnapshot {
     'accountId': accountId,
     'provider': provider,
     if (connection != null) 'connection': connection,
+    if (historyOwner != null) 'historyOwner': historyOwner!.toJson(),
     'status': status.name,
     'today': today.toJson(),
     'week': week.toJson(),
@@ -472,6 +507,7 @@ class ProviderSnapshot {
       accountId: accountId,
       provider: provider,
       connection: connection,
+      historyOwner: historyOwner,
       status: value,
       today: today,
       week: week,
@@ -1000,12 +1036,14 @@ final class AlertConditionKey {
     required this.provider,
     required this.accountId,
     required this.connection,
+    this.historyOwner,
     required this.target,
   });
 
   final String provider;
   final String accountId;
   final String connection;
+  final HistoryOwner? historyOwner;
   final AlertConditionTarget target;
 
   factory AlertConditionKey.fromJson(Map<String, dynamic> json) =>
@@ -1013,6 +1051,10 @@ final class AlertConditionKey {
         provider: json['provider'] as String,
         accountId: json['accountId'] as String,
         connection: json['connection'] as String,
+        historyOwner:
+            json['historyOwner'] == null
+                ? null
+                : HistoryOwner.fromJson(_jsonMap(json['historyOwner'])),
         target: AlertConditionTarget.fromJson(_jsonMap(json['target'])),
       );
 
@@ -1020,6 +1062,7 @@ final class AlertConditionKey {
     'provider': provider,
     'accountId': accountId,
     'connection': connection,
+    if (historyOwner != null) 'historyOwner': historyOwner!.toJson(),
     'target': target.toJson(),
   };
 
@@ -1029,10 +1072,12 @@ final class AlertConditionKey {
       other.provider == provider &&
       other.accountId == accountId &&
       other.connection == connection &&
+      other.historyOwner == historyOwner &&
       other.target == target;
 
   @override
-  int get hashCode => Object.hash(provider, accountId, connection, target);
+  int get hashCode =>
+      Object.hash(provider, accountId, connection, historyOwner, target);
 }
 
 enum AlertConditionState { crossed, clear, unknown }

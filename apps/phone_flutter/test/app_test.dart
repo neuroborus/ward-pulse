@@ -5018,7 +5018,13 @@ void main() {
       await preferences.writeMockDataEnabled(true);
       final watchlist =
           _MemoryRecoveryWatchlistStore()
-            ..keys = const [(accountId: 'codex-demo', allowanceId: 'weekly')];
+            ..keys = const [
+              (
+                accountId: 'codex-demo',
+                allowanceId: 'weekly',
+                historyOwner: null,
+              ),
+            ];
 
       await tester.pumpWidget(
         WardPulseApp(
@@ -5434,7 +5440,11 @@ void main() {
   testWidgets(
     'saved Recovery Off during validation preserves tracking and wake work',
     (tester) async {
-      const window = (accountId: 'account-a', allowanceId: 'weekly');
+      const window = (
+        accountId: 'account-a',
+        allowanceId: 'weekly',
+        historyOwner: null,
+      );
       final repository = _PublicationRepository(DashboardSnapshot.empty());
       final preference = _MemoryRecoveryNotificationStore();
       final watchlist = _MemoryRecoveryWatchlistStore();
@@ -5458,6 +5468,7 @@ void main() {
                   for (final key in remembered)
                     (
                       accountId: key.accountId,
+                      historyOwner: null,
                       provider: 'claude',
                       allowanceId: key.allowanceId,
                       label: 'Weekly plan',

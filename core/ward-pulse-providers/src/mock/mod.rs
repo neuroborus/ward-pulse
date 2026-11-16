@@ -40,6 +40,7 @@ pub fn mock_provider_snapshot(account_id: impl Into<String>) -> ProviderSnapshot
         account_id: account_id.into(),
         provider: ProviderKind::Mock,
         connection: Some(connection::MOCK_PLAN.to_string()),
+        history_owner: None,
         status: ProviderStatus::Ok,
         today: calculate_budget_state(
             BudgetPeriod::Today,

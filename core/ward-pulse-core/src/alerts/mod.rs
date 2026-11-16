@@ -322,6 +322,7 @@ fn condition_for_target(
             provider: account.provider,
             account_id: account.account_id.clone(),
             connection: connection_key(account).into(),
+            history_owner: account.history_owner.clone(),
             target,
         },
         state,
@@ -372,8 +373,8 @@ fn provider_label(provider: ProviderKind) -> &'static str {
 mod tests {
     use super::*;
     use crate::model::{
-        BudgetPeriod, BudgetState, Money, ProviderSnapshot, ProviderStatus, Quantity, QuantityUnit,
-        WatchSummary,
+        BudgetPeriod, BudgetState, HistoryOwner, Money, ProviderSnapshot, ProviderStatus, Quantity,
+        QuantityUnit, WatchSummary,
     };
     use crate::time::DateTimeUtc;
 
@@ -412,6 +413,7 @@ mod tests {
             account_id: "claude".into(),
             provider: ProviderKind::Claude,
             connection: None,
+            history_owner: None,
             status: ProviderStatus::Warning,
             today: budget(0.0),
             week: budget(0.0),
@@ -461,6 +463,46 @@ mod tests {
         let snapshot = snapshot_with(claude_account(purchased(84.0)), budget(90.0));
         assert!(calculate_alerts(&snapshot, &AlertSettings::default()).is_empty());
         assert!(calculate_alert_conditions(&snapshot, &AlertSettings::default()).is_empty());
+    }
+
+    #[test]
+    fn condition_keys_separate_history_owners_without_changing_displayed_alerts() {
+        let owner = HistoryOwner {
+            connection: connection::CLAUDE_PLAN.into(),
+            identity: "a".repeat(64),
+        };
+        let mut account = claude_account(plan_window("weekly", Some(90.0)));
+        account.history_owner = Some(owner.clone());
+        let settings = AlertSettings {
+            connections: HashMap::from([(
+                connection::CLAUDE_PLAN.into(),
+                ConnectionAlertThresholds {
+                    plan: PercentThreshold { at: Some(80) },
+                    ..ConnectionAlertThresholds::default()
+                },
+            )]),
+        };
+        let first = conditions_for_account(&account, &settings).remove(0);
+        assert_eq!(first.key.history_owner, Some(owner.clone()));
+        assert_eq!(conditions_for_account(&account, &settings)[0], first);
+
+        for other in [
+            None,
+            Some(HistoryOwner {
+                identity: "b".repeat(64),
+                ..owner.clone()
+            }),
+            Some(HistoryOwner {
+                connection: "other-connection".into(),
+                ..owner.clone()
+            }),
+        ] {
+            account.history_owner = other;
+            let condition = conditions_for_account(&account, &settings).remove(0);
+            assert_eq!(condition.key.account_id, first.key.account_id);
+            assert_ne!(condition.key, first.key);
+            assert_eq!(condition.state, first.state);
+        }
     }
 
     #[test]
@@ -517,6 +559,7 @@ mod tests {
                 provider: ProviderKind::Claude,
                 account_id: "claude".into(),
                 connection: connection::CLAUDE_PLAN.into(),
+                history_owner: None,
                 target: AlertConditionTarget::Allowance {
                     source: AllowanceSource::Plan,
                     id: "a".into()

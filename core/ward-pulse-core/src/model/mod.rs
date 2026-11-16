@@ -67,6 +67,17 @@ pub mod connection {
     pub const MOCK_PLAN: &str = "mock.plan";
 }
 
+/// Private local history scope, bound by the shell to accepted credentials.
+///
+/// `identity` is the existing lifecycle identity digest, never credential bytes.
+/// Lifecycle generation/revision/epoch prove currentness, not history identity.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryOwner {
+    pub connection: String,
+    pub identity: String,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BudgetPeriod {
@@ -253,6 +264,8 @@ pub struct ProviderSnapshot {
     /// before adapters stamped it; alerts then fall back to the provider's plan.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub connection: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_owner: Option<HistoryOwner>,
     pub status: ProviderStatus,
     pub today: BudgetState,
     pub week: BudgetState,
@@ -289,6 +302,8 @@ pub struct AlertConditionKey {
     pub account_id: AccountId,
     /// Resolved connection key, including the legacy provider fallback.
     pub connection: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_owner: Option<HistoryOwner>,
     pub target: AlertConditionTarget,
 }
 

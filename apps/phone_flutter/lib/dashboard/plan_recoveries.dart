@@ -5,8 +5,9 @@ import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 import 'dashboard_models.dart';
 
 /// One plan window, named the only way it is unique: allowance ids repeat
-/// across accounts, so the account travels with them.
-typedef WindowKey = ({String accountId, String allowanceId});
+/// across accounts and accepted connection owners.
+typedef WindowKey =
+    ({String accountId, String allowanceId, HistoryOwner? historyOwner});
 
 /// A window that was spent and has room again.
 ///
@@ -16,6 +17,7 @@ typedef WindowKey = ({String accountId, String allowanceId});
 typedef PlanRecovery =
     ({
       String accountId,
+      HistoryOwner? historyOwner,
       String provider,
       String allowanceId,
       String label,
@@ -97,7 +99,12 @@ DateTime? nextResetAmong(
 String encodeWindowKeys(List<WindowKey> keys) {
   return jsonEncode([
     for (final key in keys)
-      {'accountId': key.accountId, 'allowanceId': key.allowanceId},
+      {
+        'accountId': key.accountId,
+        'allowanceId': key.allowanceId,
+        if (key.historyOwner != null)
+          'historyOwner': key.historyOwner!.toJson(),
+      },
   ]);
 }
 
@@ -123,6 +130,12 @@ List<WindowKey> _decodeWindowKeys(String json) {
       (
         accountId: (key as Map<String, dynamic>)['accountId'] as String,
         allowanceId: key['allowanceId'] as String,
+        historyOwner:
+            key['historyOwner'] == null
+                ? null
+                : HistoryOwner.fromJson(
+                  key['historyOwner'] as Map<String, dynamic>,
+                ),
       ),
   ];
 }
@@ -133,6 +146,12 @@ PlanRecovery planRecoveryFromJson(Map<String, dynamic> json) {
   final resetsAt = json['resetsAt'];
   return (
     accountId: json['accountId'] as String,
+    historyOwner:
+        json['historyOwner'] == null
+            ? null
+            : HistoryOwner.fromJson(
+              json['historyOwner'] as Map<String, dynamic>,
+            ),
     provider: json['provider'] as String,
     allowanceId: json['allowanceId'] as String,
     label: json['label'] as String,

@@ -29,10 +29,12 @@ void main() {
       final connection = account.connection ?? 'openai.plan';
       final key = (
         accountId: account.accountId,
+        historyOwner: null,
         allowanceId: 'remembered-window',
       );
       const freshKey = (
         accountId: 'fresh-account',
+        historyOwner: null,
         allowanceId: 'fresh-window',
       );
       final mixed = DashboardSnapshot.fromJson({
@@ -74,6 +76,7 @@ void main() {
           return [
             (
               accountId: freshKey.accountId,
+              historyOwner: null,
               provider: 'openai',
               allowanceId: freshKey.allowanceId,
               label: 'Fresh window',
@@ -145,8 +148,16 @@ void main() {
         ).readAsStringSync(),
       );
       const a = 'anthropic.plan', b = 'anthropic.platform';
-      const aKey = (accountId: 'account-a', allowanceId: 'window-a');
-      const bKey = (accountId: 'account-b', allowanceId: 'window-b');
+      const aKey = (
+        accountId: 'account-a',
+        allowanceId: 'window-a',
+        historyOwner: null,
+      );
+      const bKey = (
+        accountId: 'account-b',
+        allowanceId: 'window-b',
+        historyOwner: null,
+      );
       Map<String, dynamic> account(
         WindowKey key,
         String connection, [
@@ -232,6 +243,7 @@ void main() {
           return [
             (
               accountId: bKey.accountId,
+              historyOwner: null,
               provider: 'claude',
               allowanceId: bKey.allowanceId,
               label: 'Window B',
@@ -339,7 +351,11 @@ void main() {
   test('demo data is remembered as nothing at all', () async {
     final store = _MemoryRecoveryWatchlistStore();
     await store.write(const [
-      (accountId: 'claude-local', allowanceId: 'claude-weekly'),
+      (
+        accountId: 'claude-local',
+        allowanceId: 'claude-weekly',
+        historyOwner: null,
+      ),
     ]);
 
     // Demo windows are invented: left in the list, they would make the first
@@ -360,7 +376,11 @@ void main() {
   test('a later look replaces the list rather than adding to it', () async {
     final store = _MemoryRecoveryWatchlistStore();
     await store.write(const [
-      (accountId: 'claude-local', allowanceId: 'claude-weekly'),
+      (
+        accountId: 'claude-local',
+        allowanceId: 'claude-weekly',
+        historyOwner: null,
+      ),
     ]);
 
     // The weekly window refilled and the session one ran out. What is spent now
@@ -373,19 +393,31 @@ void main() {
       readRecoveries: (_, _) => const [],
       readWindows:
           (_) => const [
-            (accountId: 'claude-local', allowanceId: 'claude-session'),
+            (
+              accountId: 'claude-local',
+              allowanceId: 'claude-session',
+              historyOwner: null,
+            ),
           ],
     );
 
     expect(await store.read(), const [
-      (accountId: 'claude-local', allowanceId: 'claude-session'),
+      (
+        accountId: 'claude-local',
+        allowanceId: 'claude-session',
+        historyOwner: null,
+      ),
     ]);
   });
 
   test('a window that came back is reported, then forgotten', () async {
     final store = _MemoryRecoveryWatchlistStore();
     await store.write(const [
-      (accountId: 'claude-local', allowanceId: 'claude-weekly'),
+      (
+        accountId: 'claude-local',
+        allowanceId: 'claude-weekly',
+        historyOwner: null,
+      ),
     ]);
     final notifier = _RecordingRecoveryNotifier();
     final wake = _RecordingWake();
@@ -400,6 +432,7 @@ void main() {
             for (final key in exhausted)
               (
                 accountId: key.accountId,
+                historyOwner: null,
                 provider: 'claude',
                 allowanceId: key.allowanceId,
                 label: 'Weekly plan',
@@ -417,8 +450,16 @@ void main() {
   test('a notifier that refuses one window does not stop the rest', () async {
     final store = _MemoryRecoveryWatchlistStore();
     await store.write(const [
-      (accountId: 'claude-local', allowanceId: 'claude-weekly'),
-      (accountId: 'claude-local', allowanceId: 'claude-session'),
+      (
+        accountId: 'claude-local',
+        allowanceId: 'claude-weekly',
+        historyOwner: null,
+      ),
+      (
+        accountId: 'claude-local',
+        allowanceId: 'claude-session',
+        historyOwner: null,
+      ),
     ]);
     final notifier = _RecordingRecoveryNotifier(refuse: 'claude-weekly');
     final wake = _RecordingWake();
@@ -433,6 +474,7 @@ void main() {
             for (final key in exhausted)
               (
                 accountId: key.accountId,
+                historyOwner: null,
                 provider: 'claude',
                 allowanceId: key.allowanceId,
                 label: key.allowanceId,
@@ -467,8 +509,16 @@ void main() {
       readRecoveries: (_, _) => const [],
       readWindows:
           (_) => const [
-            (accountId: 'claude-local', allowanceId: 'weekly'),
-            (accountId: 'claude-local', allowanceId: 'session'),
+            (
+              accountId: 'claude-local',
+              allowanceId: 'weekly',
+              historyOwner: null,
+            ),
+            (
+              accountId: 'claude-local',
+              allowanceId: 'session',
+              historyOwner: null,
+            ),
           ],
       // Pinned, or the wall clock decides the answer: both instants have to be
       // ahead for "the soonest" to mean anything.
@@ -487,7 +537,9 @@ void main() {
     );
     final store = _MemoryRecoveryWatchlistStore();
     final wake = _RecordingWake();
-    const spent = [(accountId: 'claude-local', allowanceId: 'weekly')];
+    const spent = [
+      (accountId: 'claude-local', allowanceId: 'weekly', historyOwner: null),
+    ];
 
     // Pinned: these instants are only "ahead" until the day they are not, and
     // a test that rots with the calendar is a test nobody trusts.
@@ -531,7 +583,13 @@ void main() {
       wake,
       readRecoveries: (_, _) => const [],
       readWindows:
-          (_) => const [(accountId: 'claude-local', allowanceId: 'weekly')],
+          (_) => const [
+            (
+              accountId: 'claude-local',
+              allowanceId: 'weekly',
+              historyOwner: null,
+            ),
+          ],
       now: () => rightNow,
     );
 
@@ -560,7 +618,13 @@ void main() {
       wake,
       readRecoveries: (_, _) => const [],
       readWindows:
-          (_) => const [(accountId: 'claude-local', allowanceId: 'weekly')],
+          (_) => const [
+            (
+              accountId: 'claude-local',
+              allowanceId: 'weekly',
+              historyOwner: null,
+            ),
+          ],
       now: () => rightNow,
     );
 
@@ -588,7 +652,13 @@ void main() {
       wake,
       readRecoveries: (_, _) => const [],
       readWindows:
-          (_) => const [(accountId: 'claude-local', allowanceId: 'weekly')],
+          (_) => const [
+            (
+              accountId: 'claude-local',
+              allowanceId: 'weekly',
+              historyOwner: null,
+            ),
+          ],
       now: () => rightNow,
     );
 
@@ -604,7 +674,7 @@ void main() {
     );
     final store = _MemoryRecoveryWatchlistStore();
     await store.write(const [
-      (accountId: 'claude-local', allowanceId: 'weekly'),
+      (accountId: 'claude-local', allowanceId: 'weekly', historyOwner: null),
     ]);
     final notifier = _RecordingRecoveryNotifier();
     final wake = _RecordingWake();
@@ -621,6 +691,7 @@ void main() {
           (_, _) => const [
             (
               accountId: 'claude-local',
+              historyOwner: null,
               provider: 'claude',
               allowanceId: 'weekly',
               label: 'Weekly plan',
@@ -628,7 +699,13 @@ void main() {
             ),
           ],
       readWindows:
-          (_) => const [(accountId: 'claude-local', allowanceId: 'weekly')],
+          (_) => const [
+            (
+              accountId: 'claude-local',
+              allowanceId: 'weekly',
+              historyOwner: null,
+            ),
+          ],
       now: () => rightNow,
     );
 
@@ -665,7 +742,7 @@ void main() {
     });
     final store = _MemoryRecoveryWatchlistStore();
     await store.write(const [
-      (accountId: 'claude-local', allowanceId: 'weekly'),
+      (accountId: 'claude-local', allowanceId: 'weekly', historyOwner: null),
     ]);
     final notifier = _RecordingRecoveryNotifier();
 
@@ -678,6 +755,7 @@ void main() {
           (_, _) => const [
             (
               accountId: 'claude-local',
+              historyOwner: null,
               provider: 'claude',
               allowanceId: 'weekly',
               label: 'Weekly plan',

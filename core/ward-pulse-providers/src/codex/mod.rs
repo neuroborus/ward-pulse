@@ -124,6 +124,7 @@ pub fn codex_provider_snapshot_from_report_json(
         account_id: "codex-local".to_string(),
         provider: ProviderKind::Codex,
         connection: Some(connection::CODEX_PLAN.to_string()),
+        history_owner: None,
         status,
         today: unknown_budget(BudgetPeriod::Today),
         week: unknown_budget(BudgetPeriod::Week),

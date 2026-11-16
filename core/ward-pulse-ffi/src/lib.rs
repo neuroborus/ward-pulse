@@ -535,6 +535,7 @@ mod tests {
             account_id: "openai-platform-local".to_owned(),
             provider: ProviderKind::OpenAi,
             connection: Some(connection::OPENAI_PLATFORM.to_owned()),
+            history_owner: None,
             status: today.status,
             today,
             week: calculate_budget_state(BudgetPeriod::Week, None, None, None),
@@ -611,6 +612,53 @@ mod tests {
         let recoveries = plan_recoveries_json(&request.to_string()).expect("list recoveries");
 
         assert_eq!(recoveries, "[]");
+    }
+
+    #[test]
+    fn normalized_json_transforms_preserve_private_history_owners() {
+        let owner = serde_json::json!({
+            "connection": "anthropic.plan",
+            "identity": "a".repeat(64),
+        });
+        let mut snapshot: serde_json::Value =
+            serde_json::from_str(&snapshot_with_weekly_percent(100.0)).unwrap();
+        snapshot["accounts"][0]["connection"] = owner["connection"].clone();
+        snapshot["accounts"][0]["historyOwner"] = owner.clone();
+        let merged: serde_json::Value = serde_json::from_str(
+            &merge_dashboard_snapshots_json(&serde_json::json!([snapshot]).to_string()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(merged["accounts"][0]["historyOwner"], owner);
+
+        let request = serde_json::json!({
+            "snapshot": merged,
+            "settings": {"connections": {"anthropic.plan": {"plan": {"at": 80}}}},
+        });
+        let mut applied: serde_json::Value =
+            serde_json::from_str(&apply_alert_settings_json(&request.to_string()).unwrap())
+                .unwrap();
+        assert_eq!(applied["accounts"][0]["historyOwner"], owner);
+        assert_eq!(applied["alertConditions"].as_array().unwrap().len(), 2);
+        for condition in applied["alertConditions"].as_array().unwrap() {
+            assert_eq!(condition["key"]["historyOwner"], owner);
+        }
+        assert!(applied["watchSummary"].get("historyOwner").is_none());
+        assert!(!applied["alerts"]
+            .to_string()
+            .contains(owner["identity"].as_str().unwrap()));
+
+        let exhausted: serde_json::Value =
+            serde_json::from_str(&exhausted_windows_json(&applied.to_string()).unwrap()).unwrap();
+        assert_eq!(exhausted.as_array().unwrap().len(), 2);
+        for key in exhausted.as_array().unwrap() {
+            assert_eq!(key["historyOwner"], owner);
+        }
+        applied["accounts"][0]["allowances"][0]["usedPercent"] = serde_json::json!(20.0);
+        let request = serde_json::json!({"snapshot": applied, "exhausted": exhausted});
+        let recoveries: serde_json::Value =
+            serde_json::from_str(&plan_recoveries_json(&request.to_string()).unwrap()).unwrap();
+        assert_eq!(recoveries.as_array().unwrap().len(), 1);
+        assert_eq!(recoveries[0]["historyOwner"], owner);
     }
 
     /// A one-account dashboard whose weekly window sits at `used_percent`.

@@ -12,26 +12,32 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::model::{AccountId, AllowanceSource, AllowanceState, DashboardSnapshot, ProviderKind};
+use crate::model::{
+    AccountId, AllowanceSource, AllowanceState, DashboardSnapshot, HistoryOwner, ProviderKind,
+};
 use crate::time::DateTimeUtc;
 
 /// One plan window, named the only way it is unique: allowance ids repeat
-/// across accounts, so an account has to carry its own.
+/// across accounts and accepted connection owners.
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowKey {
     pub account_id: AccountId,
     pub allowance_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_owner: Option<HistoryOwner>,
 }
 
 /// A plan window that was exhausted and has room again.
 ///
-/// Carries only what delivery needs to name and time the notification: no
-/// money, no raw provider fields, no credentials.
+/// Carries delivery identity and timing, including private history ownership:
+/// no money, raw provider fields or credentials.
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlanRecovery {
     pub account_id: AccountId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_owner: Option<HistoryOwner>,
     /// Which family the window belongs to. Two subscriptions can both call a
     /// window "Weekly plan", so the family is what tells a reader which one is
     /// back.
@@ -55,6 +61,7 @@ pub fn exhausted_windows(snapshot: &DashboardSnapshot) -> Vec<WindowKey> {
                 .map(|allowance| WindowKey {
                     account_id: account.account_id.clone(),
                     allowance_id: allowance.id.clone(),
+                    history_owner: account.history_owner.clone(),
                 })
         })
         .collect()
@@ -70,11 +77,14 @@ pub fn plan_recoveries(exhausted: &[WindowKey], next: &DashboardSnapshot) -> Vec
     for account in &next.accounts {
         for allowance in &account.allowances {
             let was_exhausted = exhausted.iter().any(|key| {
-                key.account_id == account.account_id && key.allowance_id == allowance.id
+                key.account_id == account.account_id
+                    && key.allowance_id == allowance.id
+                    && key.history_owner == account.history_owner
             });
             if was_exhausted && has_room(allowance) {
                 recoveries.push(PlanRecovery {
                     account_id: account.account_id.clone(),
+                    history_owner: account.history_owner.clone(),
                     provider: account.provider,
                     allowance_id: allowance.id.clone(),
                     label: allowance.label.clone(),
@@ -134,6 +144,7 @@ mod tests {
             account_id: id.to_string(),
             provider: ProviderKind::Claude,
             connection: None,
+            history_owner: None,
             status: ProviderStatus::Ok,
             today: budget(BudgetPeriod::Today),
             week: budget(BudgetPeriod::Week),
@@ -158,6 +169,7 @@ mod tests {
         WindowKey {
             account_id: account_id.to_string(),
             allowance_id: allowance_id.to_string(),
+            history_owner: None,
         }
     }
 
@@ -223,6 +235,43 @@ mod tests {
     }
 
     #[test]
+    fn recovery_history_requires_the_same_accepted_owner() {
+        let owner = HistoryOwner {
+            connection: "connection-a".into(),
+            identity: "a".repeat(64),
+        };
+        let mut previous = account("fixed-id", vec![allowance("weekly", Some(100.0))]);
+        previous.history_owner = Some(owner.clone());
+        let exhausted = exhausted_windows(&snapshot(vec![previous.clone()]));
+        let mut next = previous;
+        next.allowances[0].used_percent = Some(20.0);
+
+        let recoveries = plan_recoveries(&exhausted, &snapshot(vec![next.clone()]));
+        assert_eq!(recoveries.len(), 1);
+        assert_eq!(recoveries[0].history_owner, Some(owner.clone()));
+        assert_eq!(exhausted[0].history_owner, Some(owner.clone()));
+
+        for other in [
+            None,
+            Some(HistoryOwner {
+                identity: "b".repeat(64),
+                ..owner.clone()
+            }),
+            Some(HistoryOwner {
+                connection: "connection-b".into(),
+                ..owner.clone()
+            }),
+        ] {
+            next.history_owner = other;
+            assert!(plan_recoveries(&exhausted, &snapshot(vec![next.clone()])).is_empty());
+        }
+
+        // Legacy history stays unbound rather than being adopted on first sync.
+        next.history_owner = Some(owner);
+        assert!(plan_recoveries(&[key("fixed-id", "weekly")], &snapshot(vec![next])).is_empty());
+    }
+
+    #[test]
     fn remembered_purchased_windows_do_not_recover_after_reset() {
         let mut plan = allowance("weekly", Some(0.0));
         plan.label = "Weekly plan".to_string();
@@ -236,6 +285,7 @@ mod tests {
             plan_recoveries(&[key("claude", "weekly"), key("claude", "extra")], &next),
             vec![PlanRecovery {
                 account_id: "claude".to_string(),
+                history_owner: None,
                 provider: ProviderKind::Claude,
                 allowance_id: "weekly".to_string(),
                 label: "Weekly plan".to_string(),

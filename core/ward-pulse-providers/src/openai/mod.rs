@@ -162,6 +162,7 @@ pub fn openai_provider_snapshot_from_report_json(
         account_id: report.account_id,
         provider: ProviderKind::OpenAi,
         connection: Some(connection::OPENAI_PLATFORM.to_string()),
+        history_owner: None,
         status: ProviderStatus::Ok,
         today,
         week,

@@ -157,6 +157,7 @@ void main() {
       ); // Readiness never consumes a foreground attempt.
       const recovery = (
         accountId: 'account',
+        historyOwner: null,
         provider: 'claude',
         allowanceId: 'weekly',
         label: 'Weekly plan',
@@ -233,6 +234,7 @@ void main() {
 
   int idOf(String accountId, String allowanceId) => recoveryNotificationId((
     accountId: accountId,
+    historyOwner: null,
     provider: 'claude',
     allowanceId: allowanceId,
     label: 'Weekly plan',
@@ -249,6 +251,7 @@ void main() {
   test('what it says is the family and the window, and nothing else', () {
     const recovery = (
       accountId: 'claude-local',
+      historyOwner: null,
       provider: 'claude',
       allowanceId: 'claude-weekly',
       label: 'Weekly plan',

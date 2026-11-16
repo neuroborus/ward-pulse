@@ -110,6 +110,7 @@ pub fn cursor_platform_snapshot_from_report_json(
             account_id: report.account_id,
             provider: ProviderKind::Cursor,
             connection: Some(connection::CURSOR_PLATFORM.to_string()),
+            history_owner: None,
             status: ProviderStatus::Ok,
             today: calculate_budget_state(BudgetPeriod::Today, spend[0].clone(), None, None),
             week: calculate_budget_state(BudgetPeriod::Week, spend[1].clone(), None, None),

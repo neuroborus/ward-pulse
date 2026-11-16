@@ -25,9 +25,10 @@
       "required": ["accountId", "allowanceId"],
       "properties": {
         "accountId": { "type": "string" },
+        "historyOwner": { "$ref": "dashboard_snapshot.schema.json#/$defs/historyOwner" },
         "allowanceId": {
           "type": "string",
-          "description": "Unique inside its account, not across accounts, which is why the pair is the key."
+          "description": "The window key combines this ID, accountId and optional historyOwner; owned and unbound history remain distinct."
         }
       }
     },
@@ -40,6 +41,7 @@
           "type": "string",
           "description": "Keys the notification so a repeat replaces it. Never shown to the reader."
         },
+        "historyOwner": { "$ref": "dashboard_snapshot.schema.json#/$defs/historyOwner" },
         "provider": {
           "$ref": "dashboard_snapshot.schema.json#/$defs/providerKind",
           "description": "Which family the window belongs to: two subscriptions can both call a window \"Weekly plan\"."

@@ -166,6 +166,7 @@ pub fn cursor_plan_snapshot_from_report_json(
                 .unwrap_or_else(|| "cursor-local".to_string()),
             provider: ProviderKind::Cursor,
             connection: Some(connection::CURSOR_PLAN.to_string()),
+            history_owner: None,
             status,
             today: unknown_budget(BudgetPeriod::Today),
             week: unknown_budget(BudgetPeriod::Week),

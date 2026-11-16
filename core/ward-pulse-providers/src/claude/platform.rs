@@ -164,6 +164,7 @@ pub fn anthropic_provider_snapshot_from_report_json(
             account_id: report.account_id,
             provider: ProviderKind::Claude,
             connection: Some(connection::ANTHROPIC_PLATFORM.to_string()),
+            history_owner: None,
             status: ProviderStatus::Ok,
             today,
             week,

@@ -154,6 +154,7 @@ pub fn claude_provider_snapshot_from_report_json(
                 .unwrap_or_else(|| "claude-local".to_string()),
             provider: ProviderKind::Claude,
             connection: Some(connection::CLAUDE_PLAN.to_string()),
+            history_owner: None,
             status,
             today: unknown_budget(BudgetPeriod::Today),
             week: unknown_budget(BudgetPeriod::Week),
