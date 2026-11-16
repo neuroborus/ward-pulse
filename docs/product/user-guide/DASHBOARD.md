@@ -75,7 +75,8 @@ windows remain separate.
 Personal plan activity and API organization/team usage keep separate histories and balances
 within a family. Use the source label when more than one connection is listed. Read each
 chart's unit: cost, tokens or requests. Known bars can remain visible when **No totals**
-means the provider did not supply a complete total.
+means some intervals lack counts for that unit. Known token bars remain visible without
+presenting their partial sum as a complete total. An unknown interval is not measured zero.
 
 Some reporting services publish totals less frequently than WardPulse refreshes. A successful
 refresh can therefore return unchanged figures. See [Sync](/guide/sync).

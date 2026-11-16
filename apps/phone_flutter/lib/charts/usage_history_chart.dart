@@ -23,15 +23,19 @@ class UsageHistoryChart extends StatelessWidget {
     final totalCost = _totalCost(buckets);
     final totalTokens = _totalTokens(buckets);
     final totalRequests = _totalRequests(buckets);
-    // Prefer money, then tokens, then request counts (Cursor Admin is request-only).
-    final values = [
+    // Prefer complete money, tokens or requests before partial counts.
+    final useTokens =
+        totalTokens != null ||
+        (totalRequests == null &&
+            buckets.any((bucket) => bucket.totalTokens != null));
+    final values = <int?>[
       for (final bucket in buckets)
         if (totalCost != null)
-          bucket.cost?.minorUnits ?? 0
-        else if (totalTokens != null)
-          bucket.totalTokens ?? 0
+          bucket.cost!.minorUnits
+        else if (useTokens)
+          bucket.totalTokens
         else
-          bucket.requests ?? 0,
+          bucket.requests,
     ];
     final totalLabel =
         totalCost?.label ??
@@ -106,7 +110,7 @@ class _UsageHistoryPainter extends CustomPainter {
     required this.baselineColor,
   });
 
-  final List<int> values;
+  final List<int?> values;
   final Color color;
   final Color baselineColor;
 
@@ -123,7 +127,7 @@ class _UsageHistoryPainter extends CustomPainter {
     final barPaint = Paint()..color = color;
     final maxValue = values.fold<int>(
       0,
-      (current, value) => value > current ? value : current,
+      (current, value) => value != null && value > current ? value : current,
     );
     final barGap =
         values.length > 1
@@ -147,10 +151,11 @@ class _UsageHistoryPainter extends CustomPainter {
     }
 
     for (var index = 0; index < values.length; index += 1) {
-      if (values[index] <= 0) {
+      final value = values[index];
+      if (value == null || value <= 0) {
         continue;
       }
-      final fraction = values[index] / maxValue;
+      final fraction = value / maxValue;
       final height =
           (size.height * fraction).clamp(2.0, size.height).toDouble();
       final left = index * (barWidth + barGap);
@@ -193,15 +198,11 @@ Money? _totalCost(List<UsageBucket> buckets) {
 }
 
 int? _totalTokens(List<UsageBucket> buckets) {
-  if (buckets.isEmpty ||
-      buckets.every((bucket) => bucket.totalTokens == null)) {
+  if (buckets.isEmpty || buckets.any((bucket) => bucket.totalTokens == null)) {
     return null;
   }
 
-  return buckets.fold<int>(
-    0,
-    (total, bucket) => total + (bucket.totalTokens ?? 0),
-  );
+  return buckets.fold<int>(0, (total, bucket) => total + bucket.totalTokens!);
 }
 
 int? _totalRequests(List<UsageBucket> buckets) {

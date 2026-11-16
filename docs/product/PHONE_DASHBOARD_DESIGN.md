@@ -144,6 +144,14 @@ same provider kind. Periods, units and unknown values remain source-owned.
 Nonempty requests-only histories render; empty histories do not. A source without
 allowance or activity detail remains represented, including its unhealthy state
 when applicable.
+
+**History completeness clarification 2026-11-16.** Prefer complete comparable cost,
+then complete tokens, then complete requests. Without a complete alternative, retain
+known token bars before request bars and show `No totals`. Every reported interval
+keeps its position; an unknown count remains distinct from measured zero and supplies
+neither a bar nor a complete range total. Token counts retain reported-total authority
+and the existing component/cached-token conventions. Native acceptance remains pending.
+
 **Local-source heading revision 2026-11-05.** Source captions and independently readable
 history, Model usage and allowance headings use existing provider or connection catalog
 metadata. Canonical plan titles remain Codex plan, Claude plan and Cursor plan; reporting
