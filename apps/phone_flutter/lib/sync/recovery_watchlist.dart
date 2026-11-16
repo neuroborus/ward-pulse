@@ -389,9 +389,9 @@ Future<void> syncPlanRecoveries(
     // start, such as a manual one, counts the floor from itself.
     final instant = now();
     DateTime? soonest;
+    var protectedWakePending = false;
     for (final key in spent) {
       final reset = resets[key];
-      if (reset == null) continue;
       final account =
           snapshot.accounts
               .where(
@@ -415,6 +415,14 @@ Future<void> syncPlanRecoveries(
       // served it.
       final anchor = connection == null ? null : poll?.automaticAt[connection];
       final seen = account?.lastSuccessfulSyncAt;
+      if (key.historyOwner != null &&
+          protected.contains(key) &&
+          (reset == null ||
+              reset.isAfter(instant) ||
+              ((anchor == null || anchor.isBefore(reset)) &&
+                  (seen == null || seen.isBefore(reset)))))
+        protectedWakePending = true;
+      if (reset == null) continue;
       final overdue =
           anchor != null &&
           !observedAccounts.contains((
@@ -462,11 +470,11 @@ Future<void> syncPlanRecoveries(
     }
     if (isCurrent != null && !await isCurrent()) return;
     if (soonest == null) {
-      // Without a new reset instant, an unresolved owned edge cannot justify
-      // cancelling a wake booked from an earlier complete observation.
+      // Unresolved or unserved owned history still protects its earlier wake.
+      // Serving a known reset removes wake protection, not recovery history.
       if (poll?.whollySkipped != true &&
           unresolved.isEmpty &&
-          !protected.any((key) => key.historyOwner != null))
+          !protectedWakePending)
         await wake.cancel();
     } else {
       // Natural resets use the floor above; denied work keeps its native due

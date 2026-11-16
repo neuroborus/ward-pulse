@@ -12,6 +12,8 @@ import 'package:ward_pulse_phone/sync/recovery_watchlist.dart';
 import 'package:ward_pulse_phone/sync/automatic_poll.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 
+import 'connection_cache_test_support.dart' show FakeSecureStorage;
+
 void main() {
   test(
     'partial skips preserve remembered windows and denied reset rebooks its exact eligibility',
@@ -342,6 +344,145 @@ void main() {
       expect(wake.cancelled, ++cancels);
     },
   );
+  for (final (name, startMinutes, successMinutes) in [
+    (
+      'own native start cancels a served qualified wake and retains history',
+      12,
+      0,
+    ),
+    (
+      'own success cancels a served qualified wake and retains history',
+      0,
+      11,
+    ),
+  ]) {
+    test(name, () async {
+      final start = DateTime.utc(2026, 11, 6);
+      final reset = start.add(const Duration(minutes: 10));
+      const a = HistoryOwner(
+        connection: 'anthropic.plan',
+        identity: 'owner-a',
+      );
+      const b = HistoryOwner(
+        connection: 'anthropic.platform',
+        identity: 'owner-b',
+      );
+      final versions = {
+        for (final owner in [a, b])
+          owner.connection: CredentialVersion({
+            'generation': '1',
+            'revision': '1',
+            'epoch': '0',
+            'identity': owner.identity,
+            'committedConnection': 'accepted-${owner.identity}',
+          }),
+      };
+      const key = (
+        accountId: 'account-a',
+        historyOwner: a,
+        allowanceId: 'window-a',
+      );
+      final source = DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      );
+      final retainedA = {
+        ..._withAllowances(source, {'window-a': reset}).accounts.single.toJson(),
+        'accountId': key.accountId,
+        'connection': a.connection,
+        'historyOwner': a.toJson(),
+        'lastSuccessfulSyncAt': start.toIso8601String(),
+      };
+      final secure = FakeSecureStorage();
+      final store = SecureRecoveryWatchlistStore(storage: secure);
+      final notifier = _RecordingRecoveryNotifier(), wake = _RecordingWake();
+      await syncPlanRecoveries(
+        DashboardSnapshot.fromJson({
+          ...source.toJson(),
+          'accounts': [retainedA],
+        }).withConnectionVersions({a.connection: versions[a.connection]!.values}),
+        store,
+        notifier,
+        wake,
+        poll:
+            AutomaticPollContext()
+              ..attempted.add(a.connection)
+              ..admittedVersions[a.connection] = versions[a.connection]!
+              ..automaticAt[a.connection] = start,
+        now: () => start,
+        rethrowFailures: true,
+      );
+      final initialBookings = List<DateTime>.of(wake.booked);
+      final initialHistory = await store.readOwners({a});
+      await syncPlanRecoveries(
+        DashboardSnapshot.fromJson({
+          ...source.toJson(),
+          'accounts': [
+            {
+              ...retainedA,
+              'lastSuccessfulSyncAt':
+                  start
+                      .add(Duration(minutes: successMinutes))
+                      .toIso8601String(),
+            },
+            {
+              ..._withAllowances(source, {}).accounts.single.toJson(),
+              'accountId': 'account-b',
+              'connection': b.connection,
+              'historyOwner': b.toJson(),
+              'lastSuccessfulSyncAt':
+                  start.add(const Duration(minutes: 14)).toIso8601String(),
+            },
+          ],
+        }).withConnectionVersions({
+          for (final entry in versions.entries) entry.key: entry.value.values,
+        }),
+        store,
+        notifier,
+        wake,
+        poll:
+            AutomaticPollContext()
+              ..skipped[a.connection] = AutomaticPollSkipped(
+                a.connection,
+                versions[a.connection]!,
+                start.add(Duration(minutes: startMinutes + 60)),
+              )
+              ..retainedAccountIds[a.connection] = {key.accountId}
+              ..automaticAt[a.connection] = start.add(
+                Duration(minutes: startMinutes),
+              )
+              ..attempted.add(b.connection)
+              ..admittedVersions[b.connection] = versions[b.connection]!
+              ..automaticAt[b.connection] = start.add(
+                const Duration(minutes: 12),
+              ),
+        now: () => start.add(const Duration(minutes: 14)),
+        rethrowFailures: true,
+      );
+      final cancellations = wake.cancelled;
+      final bookings = List<DateTime>.of(wake.booked);
+      final notifications = List<PlanRecovery>.of(notifier.reported);
+      final persistedKeys = await store.read();
+      final persistedHistory = await store.readOwners({a, b});
+      final restarted = SecureRecoveryWatchlistStore(storage: secure);
+      final restartedKeys = await restarted.read();
+      final restartedHistory = await restarted.readOwners({a, b});
+
+      expect(initialBookings, [reset]);
+      expect(initialHistory.keys, [key]);
+      expect(initialHistory.resets, {key: reset});
+      expect(cancellations, 1, reason: 'The obsolete reset wake must be cancelled');
+      expect(bookings, initialBookings);
+      expect(notifications, isEmpty);
+      expect(persistedKeys, [key]);
+      expect(persistedHistory.keys, [key]);
+      expect(persistedHistory.resets, {key: reset});
+      expect(restartedKeys, [key]);
+      expect(restartedHistory.keys, [key]);
+      expect(restartedHistory.resets, {key: reset});
+    });
+  }
   test('a phone that has never looked remembers nothing', () async {
     // Not an error state: the first poll is what fills the list, and until then
     // there is no past for an edge to be measured against.

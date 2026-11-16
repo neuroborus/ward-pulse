@@ -163,8 +163,12 @@ Before enabling Mock, freshly qualify the established ordinary-Mock custody/rest
 route: actual normal package/preferences, secure/core recovery watchlist and future wake,
 notification bookkeeping, no eligible or in-flight background work, temporary polling cadence
 **15→60 minutes**, a hard Mock cutoff and a restoration reserve. HOLD if custody is unproved.
-Mock clears recovery history and cancels its wake; Mock-off alone cannot restore them.
-Debug headless runs skip while Mock is saved, so they neither restore that history nor
+Ordinary Mock clears unbound recovery history. It cancels the wake only when no qualified
+live history remains. Qualified live recovery partitions, stored reset evidence and their
+pending wake survive Mock cleanup. Mock-off alone cannot restore discarded unbound history
+or a cancelled wake. Persistent connection snapshot cleanup is separate: changing Mock mode
+clears those snapshots, and Mock-off does not restore them.
+Debug headless runs skip while Mock is saved, so they neither restore discarded history nor
 overwrite Mock frames; an already-dispatched background write still needs custody.
 Restore the actual normal package/preferences, cadence **15 minutes**, selections, OS/bridge
 state and genuine newer Live data, including derived widget/watch frames. Preserve newer
@@ -308,10 +312,15 @@ including empty observed partitions, so a delayed old-owner write or clear canno
 sibling's history. Alert consumed markers use the complete typed condition key; recovery
 notification addressing includes the owner too. Owner metadata stays in local normalized
 data and bookkeeping, outside watch/widget payloads and notification text. Mock cleanup is
-currentness guarded and clears only unbound history, preserving qualified live partitions
-and their pending wake.
+currentness guarded and clears only unbound history, preserving qualified live partitions,
+stored reset evidence and their pending wake; cancellation during cleanup requires no
+qualified live history to remain.
 Each partition also retains the last known reset for its spent windows, so an incomplete
 or skipped report cannot postpone an earlier wake when a sibling supplies a later reset.
+When that window's own captured native start or matching owner/account success is at or after
+a known reset that is now due, its history no longer prevents cancellation of the obsolete
+wake if no other work is due. Serving the reset does not clear recovery history or stored
+reset evidence; unknown or unserved resets remain protected.
 Legacy ownerless recovery keys and consumed markers are never adopted by a qualified owner:
 each unbound window can lose its pending recovery edge, and each unbound condition can become
 eligible on its first qualified crossed observation. Delivery remains best effort, including
