@@ -115,6 +115,19 @@ final class FakeSecureStorage extends FlutterSecureStorage {
   bool failWrite = false;
   Future<void> Function(String)? beforeWrite;
   @override
+  Future<Map<String, String>> readAll({
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    if (failRead) throw StateError('Sanitized storage read failure.');
+    return Map.of(values);
+  }
+
+  @override
   Future<String?> read({
     required String key,
     AppleOptions? iOptions,

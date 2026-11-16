@@ -32,6 +32,15 @@ import 'package:ward_pulse_phone/sync/openai_reporting_client.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting_clients.dart';
 
+import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
+import 'package:ward_pulse_phone/providers/codex_account_store.dart';
+import 'package:ward_pulse_phone/settings/alert_notification_preferences.dart';
+import 'package:ward_pulse_phone/sync/alert_notifications.dart';
+import 'package:ward_pulse_phone/sync/codex_account_client.dart';
+import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
+import 'package:ward_pulse_phone/sync/recovery_watchlist.dart';
+import 'package:ward_pulse_phone/sync/recovery_wake.dart';
+
 import 'connection_cache_test_support.dart';
 
 void main() {
@@ -125,6 +134,634 @@ void main() {
     mergeSnapshots: mergeDashboardSnapshotsJson,
     logger: const _SilentLogger(),
   );
+
+  group('accepted connection history', () {
+    final at = DateTime.utc(2026, 11, 14, 12);
+    SecureCodexAccountStore codexStore(String engine) =>
+        SecureCodexAccountStore(
+          storage: secure,
+          platform: bridge.platform(engine),
+        );
+    DashboardRepository codexHistory(
+      String engine,
+      _HistoryCodexTransport transport,
+    ) {
+      final sessions = codexStore(engine);
+      return codexDashboardRepository(
+        accountService: MobileCodexAccountService(
+          store: sessions,
+          client: CodexAccountClient(transport: transport, clock: () => at),
+        ),
+        cache: ConnectionSnapshotCache(
+          connection: 'openai.plan',
+          platform: bridge.platform(engine),
+          readCredentialVersion:
+              () async => (await sessions.readVersioned())?.version,
+        ),
+        fallback: const NoProvidersDashboardRepository(),
+        logger: const _SilentLogger(),
+      );
+    }
+
+    SecureProviderCredentialStore keys(String engine) =>
+        SecureProviderCredentialStore(
+          storage: secure,
+          platform: bridge.platform(engine),
+        );
+    ConnectionSnapshotCache keyCache(String engine, ProviderConnectionId id) =>
+        ConnectionSnapshotCache(
+          connection: id.storageKey,
+          platform: bridge.platform(engine),
+          readCredentialVersion: () => keys(engine).readVersion(id),
+        );
+    DashboardRepository cursorHistory(
+      String engine,
+      _HistoryReportingTransport transport,
+    ) => buildLiveProviderStack(
+      credentialStore: keys(engine),
+      claudeAccountService: const EmptyClaudeAccountService(),
+      openAiAndCodex: const NoProvidersDashboardRepository(),
+      caches: {'cursor.plan': keyCache(engine, ProviderConnections.cursorPlan)},
+      cursorSessionClient: CursorPlanClient(
+        http: ProviderReportingHttp(transport: transport),
+      ),
+      clock: () => at,
+      logger: const _SilentLogger(),
+    );
+    DashboardRepository reportingHistory(
+      String engine,
+      _HistoryReportingTransport transport,
+    ) => openAiDashboardRepository(
+      credentialStore: keys(engine),
+      cache: keyCache(engine, ProviderConnections.openAiPlatform),
+      client: OpenAiReportingClient(
+        http: ProviderReportingHttp(transport: transport),
+      ),
+      clock: () => at,
+      logger: const _SilentLogger(),
+    );
+    Future<void> recover(
+      DashboardSnapshot snapshot,
+      _HistoryRecoveryNotifier notifier,
+    ) => syncPlanRecoveries(
+      snapshot,
+      SecureRecoveryWatchlistStore(storage: secure),
+      notifier,
+      const DisabledRecoveryWakeScheduler(),
+      now: () => at,
+      rethrowFailures: true,
+    );
+    AlertNotificationDelivery alerts(_HistoryAlertNotifier notifier) =>
+        AlertNotificationDelivery(
+          preferences: const DefaultAlertNotificationPreferenceStore(),
+          conditions: SecureAlertConditionStore(storage: secure),
+          notifier: notifier,
+        );
+    final planRules = AlertThresholdPreferences(
+      connections: const {
+        'openai.plan': ConnectionAlertThresholds(
+          planWindows: {'codex-secondary': AlertPercentThreshold(at: 80)},
+        ),
+      },
+    );
+    final reportingRules = AlertThresholdPreferences(
+      connections: const {
+        'openai.platform': ConnectionAlertThresholds(
+          today: AlertPercentThreshold(at: 80),
+          budget: ConnectionBudget(today: 1000),
+        ),
+      },
+    );
+
+    test(
+      'Codex replacement cannot inherit recovery; same owner still recovers',
+      () async {
+        final sessions = codexStore('history-a');
+        await sessions.write(_historySession('principal-a', at));
+        final transport = _HistoryCodexTransport(at)..used = 100;
+        final first = await codexHistory('history-a', transport).load();
+        final notifier = _HistoryRecoveryNotifier();
+        await recover(first, notifier);
+        final history = SecureRecoveryWatchlistStore(storage: secure);
+        final oldKeys = await history.read();
+        expect(oldKeys.single.allowanceId, 'codex-secondary');
+        await sessions.write(_historySession('principal-b', at));
+        transport.used = 20;
+        // No recovery observation occurs between accepting B and its usable report.
+        final replacement = await codexHistory('history-b', transport).load();
+        await recover(replacement, notifier);
+        expect(
+          notifier.reported,
+          isEmpty,
+          reason: 'B must not inherit A recovery',
+        );
+        expect(
+          replacement.accounts.single.accountId,
+          first.accounts.single.accountId,
+        );
+        final firstOwner = first.accounts.single.toJson()['historyOwner'];
+        expect(firstOwner, isNotNull);
+        expect(
+          replacement.accounts.single.toJson()['historyOwner'],
+          isNot(equals(firstOwner)),
+        );
+        expect(
+          encodeWindowKeys(await history.read()),
+          encodeWindowKeys(oldKeys),
+        );
+
+        transport.used = 100;
+        final exhausted = await codexHistory('history-b', transport).load();
+        await recover(exhausted, notifier);
+        // A delayed A write has no authority over B's partition.
+        await history.write(oldKeys);
+        expect(await history.read(), hasLength(2));
+        await bridge.invoke('test', 'restart', {});
+        transport.used = 20;
+        final usable =
+            await codexHistory('history-restarted', transport).load();
+        await recover(usable, notifier);
+        expect(notifier.reported.map((r) => r.allowanceId), [
+          'codex-secondary',
+        ]);
+        expect(
+          encodeWindowKeys(await history.read()),
+          encodeWindowKeys(oldKeys),
+        );
+        // An obsolete owner's work cannot post, clear, or cancel a current wake.
+        await syncPlanRecoveries(
+          first,
+          history,
+          notifier,
+          const DisabledRecoveryWakeScheduler(),
+          isCurrent: () async => false,
+          rethrowFailures: true,
+        );
+        expect(notifier.reported, hasLength(1));
+        expect(
+          encodeWindowKeys(await history.read()),
+          encodeWindowKeys(oldKeys),
+        );
+      },
+    );
+
+    test(
+      'Cursor opaque replacement cannot inherit fixed-ID plan recovery',
+      () async {
+        const id = ProviderConnections.cursorPlan;
+        final credentials = keys('cursor-a');
+        await credentials.writeSecret(id, 'synthetic-cursor-a');
+        final transport = _HistoryReportingTransport(at)..used = 100;
+        final first = await cursorHistory('cursor-a', transport).load();
+        final notifier = _HistoryRecoveryNotifier();
+        await recover(first, notifier);
+        final store = SecureRecoveryWatchlistStore(storage: secure);
+        final oldKeys = await store.read();
+        expect(oldKeys, isNotEmpty);
+        await credentials.writeSecret(id, 'synthetic-cursor-b');
+        transport.used = 20;
+        final replacement = await cursorHistory('cursor-b', transport).load();
+        await recover(replacement, notifier);
+        expect(
+          notifier.reported,
+          isEmpty,
+          reason: 'B must not inherit A recovery',
+        );
+        expect(first.accounts.single.accountId, 'cursor-local');
+        expect(replacement.accounts.single.accountId, 'cursor-local');
+        expect(
+          replacement.accounts.single.toJson()['historyOwner'],
+          isNot(equals(first.accounts.single.toJson()['historyOwner'])),
+        );
+        expect(encodeWindowKeys(await store.read()), encodeWindowKeys(oldKeys));
+        // Labels, whitespace and an accepted identical token preserve the scope.
+        await credentials.writeLabel(id, 'Renamed plan');
+        await credentials.writeSecret(id, '  synthetic-cursor-b  ');
+        transport.used = 100;
+        await recover(
+          await cursorHistory('cursor-b', transport).load(),
+          notifier,
+        );
+        transport.used = 20;
+        await recover(
+          await cursorHistory('cursor-b', transport).load(),
+          notifier,
+        );
+        expect(notifier.reported, hasLength(1));
+        expect(encodeWindowKeys(await store.read()), encodeWindowKeys(oldKeys));
+      },
+    );
+
+    test(
+      'Codex replacement is eligible after A consumed the 80 percent boundary',
+      () async {
+        final sessions = codexStore('threshold-a');
+        await sessions.write(_historySession('principal-a', at));
+        final transport = _HistoryCodexTransport(at)..used = 90;
+        final notifier = _HistoryAlertNotifier();
+        final delivery = alerts(notifier);
+        Future<DashboardSnapshot> observe(String engine) async {
+          final snapshot = applyUserAlertSettings(
+            await codexHistory(engine, transport).load(),
+            planRules,
+          );
+          await delivery.sync(snapshot, alertThresholds: planRules);
+          return snapshot;
+        }
+
+        final first = await observe('threshold-a');
+        expect(notifier.posts, hasLength(1));
+        await observe('threshold-a');
+        expect(notifier.posts, hasLength(1));
+        // Actual same-principal token rotation changes revision, not history.
+        final captured = (await sessions.readVersioned())!;
+        expect(
+          await sessions.refresh(
+            _historySession('principal-a', at, token: 'rotated'),
+            captured.version,
+          ),
+          isNotNull,
+        );
+        await observe('threshold-rotated');
+        expect(notifier.posts, hasLength(1));
+        await sessions.write(
+          _historySession('principal-a', at, token: 'reconnected'),
+        );
+        await observe('threshold-reconnected');
+        expect(notifier.posts, hasLength(1));
+        await sessions.write(_historySession('principal-b', at));
+        final replacement = await observe('threshold-b');
+        expect(
+          notifier.posts,
+          hasLength(2),
+          reason: 'B must not inherit A threshold suppression',
+        );
+        expect(
+          replacement.accounts.single.accountId,
+          first.accounts.single.accountId,
+        );
+        final oldKey = first.alertConditions.single.key;
+        final newKey = replacement.alertConditions.single.key;
+        final persisted = SecureAlertConditionStore(storage: secure);
+        expect(await persisted.read(oldKey), isTrue);
+        expect(await persisted.read(newKey), isTrue);
+        expect(
+          newKey.toJson()['historyOwner'],
+          isNot(equals(oldKey.toJson()['historyOwner'])),
+        );
+        // A delayed clear cannot rearm the replacement's condition.
+        await persisted.write(oldKey, false);
+        await bridge.invoke('test', 'restart', {});
+        await alerts(notifier).sync(
+          applyUserAlertSettings(
+            await codexHistory('threshold-restarted', transport).load(),
+            planRules,
+          ),
+        );
+        expect(notifier.posts, hasLength(2));
+        expect(await persisted.read(newKey), isTrue);
+      },
+    );
+
+    test(
+      'OpenAI reporting replacement is eligible at the same USD 9 of 10 crossing',
+      () async {
+        const id = ProviderConnections.openAiPlatform;
+        final credentials = keys('report-a');
+        await credentials.writeSecret(id, 'synthetic-report-a');
+        final transport = _HistoryReportingTransport(at);
+        final notifier = _HistoryAlertNotifier();
+        final delivery = alerts(notifier);
+        Future<DashboardSnapshot> observe(String engine) async {
+          final snapshot = applyUserAlertSettings(
+            await reportingHistory(engine, transport).load(),
+            reportingRules,
+          );
+          await delivery.sync(snapshot, alertThresholds: reportingRules);
+          return snapshot;
+        }
+
+        final first = await observe('report-a');
+        expect(first.accounts.single.today.spent?.minorUnits, 900);
+        expect(notifier.posts, hasLength(1));
+        await credentials.writeLabel(id, 'Renamed reporting');
+        final cancelled = await credentials.beginReconnect(id);
+        await credentials.cancelReconnect(id, cancelled);
+        await credentials.writeSecret(id, 'synthetic-report-a');
+        await observe('report-same');
+        expect(notifier.posts, hasLength(1));
+        await credentials.writeSecret(id, 'synthetic-report-b');
+        final replacement = await observe('report-b');
+        expect(
+          notifier.posts,
+          hasLength(2),
+          reason: 'B must not inherit A threshold suppression',
+        );
+        expect(replacement.accounts.single.today.spent?.minorUnits, 900);
+        expect(
+          replacement.accounts.single.accountId,
+          first.accounts.single.accountId,
+        );
+        expect(
+          replacement.accounts.single.toJson()['historyOwner'],
+          isNot(equals(first.accounts.single.toJson()['historyOwner'])),
+        );
+        final persisted = SecureAlertConditionStore(storage: secure);
+        expect(await persisted.read(first.alertConditions.single.key), isTrue);
+        expect(
+          await persisted.read(replacement.alertConditions.single.key),
+          isTrue,
+        );
+        await bridge.invoke('test', 'restart', {});
+        await observe('report-restarted');
+        expect(notifier.posts, hasLength(2));
+      },
+    );
+
+    test(
+      'owned incomplete and skipped observations retain sibling history and wakes',
+      () async {
+        final sessions = codexStore('partial');
+        await sessions.write(_historySession('principal-a', at));
+        const cursor = ProviderConnections.cursorPlan;
+        await keys('partial').writeSecret(cursor, 'synthetic-cursor');
+        final codexTransport = _HistoryCodexTransport(at)..used = 100;
+        final cursorTransport = _HistoryReportingTransport(at)..used = 100;
+        final firstCodex = await codexHistory('partial', codexTransport).load();
+        final firstCursor =
+            await cursorHistory('partial', cursorTransport).load();
+        final notifier = _HistoryRecoveryNotifier();
+        DashboardSnapshot together(
+          DashboardSnapshot codex,
+          DashboardSnapshot cursor,
+        ) => DashboardSnapshot.fromJsonString(
+          mergeDashboardSnapshotsJson([
+            codex.toJsonString(),
+            cursor.toJsonString(),
+          ]),
+        ).withConnectionVersions({
+          ...codex.connectionVersions,
+          ...cursor.connectionVersions,
+        });
+        final store = SecureRecoveryWatchlistStore(storage: secure);
+        final wake = _HistoryWake();
+        await syncPlanRecoveries(
+          together(firstCodex, firstCursor),
+          store,
+          notifier,
+          wake,
+          now: () => at,
+          rethrowFailures: true,
+        );
+        final earlyReset = at.add(const Duration(days: 1));
+        expect(wake.booked, [earlyReset]);
+        final before = encodeWindowKeys(await store.read());
+        expect(await store.read(), hasLength(2));
+        await bridge.invoke('test', 'restart', {});
+        // A missing secondary window is no positive recovery evidence.
+        codexTransport.used = null;
+        final unknown = await codexHistory('partial', codexTransport).load();
+        expect(
+          unknown.accounts.single.allowances.map((window) => window.id),
+          isNot(contains('codex-secondary')),
+        );
+        await syncPlanRecoveries(
+          together(unknown, firstCursor),
+          SecureRecoveryWatchlistStore(storage: secure),
+          notifier,
+          wake,
+          now: () => at,
+          rethrowFailures: true,
+        );
+        expect(notifier.reported, isEmpty);
+        expect(encodeWindowKeys(await store.read()), before);
+        expect(wake.cancelled, 0);
+        expect(
+          wake.booked.last,
+          earlyReset,
+          reason:
+              'The later Cursor reset must not postpone the missing Codex window',
+        );
+        final version = (await sessions.readVersioned())!.version;
+        final poll =
+            AutomaticPollContext(origin: AutomaticPollOrigin.resetWake)
+              ..attempted.add(cursor.storageKey)
+              ..skipped['openai.plan'] = AutomaticPollSkipped(
+                'openai.plan',
+                version,
+                at.add(const Duration(minutes: 5)),
+              )
+              ..retainedAccountIds['openai.plan'] = {
+                firstCodex.accounts.single.accountId,
+              };
+        await syncPlanRecoveries(
+          together(unknown, firstCursor),
+          store,
+          notifier,
+          wake,
+          now: () => at,
+          poll: poll,
+          rethrowFailures: true,
+        );
+        expect(wake.booked.last, earlyReset);
+        cursorTransport.used = 20;
+        final usableCursor =
+            await cursorHistory('partial', cursorTransport).load();
+        final aggregate = together(unknown, usableCursor);
+        await syncPlanRecoveries(
+          aggregate,
+          store,
+          notifier,
+          wake,
+          now: () => at,
+          poll: poll,
+          rethrowFailures: true,
+        );
+        expect(notifier.reported.map((r) => r.provider), ['cursor']);
+        expect(
+          (await store.read()).single.accountId,
+          firstCodex.accounts.single.accountId,
+        );
+        expect(wake.booked.last, earlyReset);
+        // Demo cleanup preserves the qualified sibling and cannot establish live history.
+        final bookings = List<DateTime>.of(wake.booked);
+        await syncPlanRecoveries(
+          DashboardSnapshot.empty(generatedAt: at),
+          store,
+          notifier,
+          wake,
+          mockData: true,
+          isCurrent: () async => true,
+          rethrowFailures: true,
+        );
+        expect(
+          (await store.read()).single.accountId,
+          firstCodex.accounts.single.accountId,
+        );
+        expect(wake.cancelled, 0);
+        expect(wake.booked, bookings);
+        codexTransport.used = 20;
+        await recover(
+          await codexHistory('partial', codexTransport).load(),
+          notifier,
+        );
+        expect(notifier.reported.map((r) => r.provider), ['cursor', 'codex']);
+        expect(await store.read(), isEmpty);
+      },
+    );
+
+    test(
+      'unbound legacy history is not adopted by qualified observations',
+      () async {
+        final sessions = codexStore('legacy');
+        await sessions.write(_historySession('principal-a', at));
+        final transport = _HistoryCodexTransport(at)..used = 20;
+        secure.values['wardpulse.recovery.exhaustedWindows'] = jsonEncode([
+          {'accountId': 'codex-local', 'allowanceId': 'codex-secondary'},
+        ]);
+        final notifier = _HistoryRecoveryNotifier();
+        await recover(await codexHistory('legacy', transport).load(), notifier);
+        expect(notifier.reported, isEmpty);
+        final store = SecureRecoveryWatchlistStore(storage: secure);
+        expect(await store.read(), hasLength(1));
+        transport.used = 90;
+        final qualified = applyUserAlertSettings(
+          await codexHistory('legacy', transport).load(),
+          planRules,
+        );
+        final legacyKey = AlertConditionKey.fromJson({
+          ...qualified.alertConditions.single.key.toJson(),
+          'historyOwner': null,
+        });
+        final conditions = SecureAlertConditionStore(storage: secure);
+        await conditions.write(legacyKey, true);
+        final alertNotifier = _HistoryAlertNotifier();
+        await alerts(alertNotifier).sync(qualified);
+        expect(alertNotifier.posts, hasLength(1));
+        expect(await conditions.read(legacyKey), isTrue);
+        expect(
+          await conditions.read(qualified.alertConditions.single.key),
+          isTrue,
+        );
+        transport.used = 100;
+        await recover(await codexHistory('legacy', transport).load(), notifier);
+        transport.used = 20;
+        await recover(await codexHistory('legacy', transport).load(), notifier);
+        expect(notifier.reported, hasLength(1));
+        expect(
+          await store.read(),
+          hasLength(1),
+        ); // The separate legacy list remains unbound.
+      },
+    );
+
+    test(
+      'native cache provenance binds legacy payloads and rejects conflicting owners',
+      () async {
+        const id = ProviderConnections.openAiPlatform;
+        final credentials = keys('cache-owner');
+        await credentials.writeSecret(id, 'synthetic-cache-owner');
+        final version = (await credentials.readVersion(id))!;
+        final snapshots = keyCache('cache-owner', id);
+        final legacy = _snapshot('openai', id.storageKey, at, 900);
+        // Old normalized payloads are qualified by the native versioned cache,
+        // independently of the unbound recovery list.
+        expect(
+          await bridge.invoke('test', 'writeSnapshot', {
+            'connection': id.storageKey,
+            'expected': version.values,
+            'snapshot': legacy.toJsonString(),
+            'generatedAt': at.microsecondsSinceEpoch,
+          }),
+          isTrue,
+        );
+        final bound = (await snapshots.capture(expected: version)).snapshot!;
+        expect(bound.accounts.single.today.spent?.minorUnits, 900);
+        expect(bound.accounts.single.toJson()['historyOwner'], isNotNull);
+        final corrupted = bound.toJson();
+        (corrupted['accounts'] as List).single['historyOwner'] = {
+          'connection': id.storageKey,
+          'identity': 'synthetic-conflicting-owner',
+        };
+        expect(
+          await bridge.invoke('test', 'writeSnapshot', {
+            'connection': id.storageKey,
+            'expected': version.values,
+            'snapshot': jsonEncode(corrupted),
+            'generatedAt': at.microsecondsSinceEpoch,
+          }),
+          isTrue,
+        );
+        expect((await snapshots.capture(expected: version)).snapshot, isNull);
+        expect(await snapshots.valid(version), isTrue);
+        expect(
+          await snapshots.validSnapshot(
+            DashboardSnapshot.fromJson(
+              corrupted,
+            ).withConnectionVersions({id.storageKey: version.values}),
+          ),
+          isFalse,
+        );
+        expect(
+          () => snapshots.stamp(DashboardSnapshot.fromJson(corrupted), version),
+          throwsFormatException,
+        );
+      },
+    );
+
+    test(
+      'Anthropic and Cursor Team wrappers preserve accepted reporting ownership',
+      () async {
+        final credentials = keys('mapping');
+        const ids = [
+          ProviderConnections.anthropicPlatform,
+          ProviderConnections.cursorPlatform,
+        ];
+        for (final id in ids)
+          await credentials.writeSecret(id, 'synthetic-${id.storageKey}-a');
+        final transport = _EmptyReportingTransport();
+        DashboardRepository repository() => buildLiveProviderStack(
+          credentialStore: credentials,
+          claudeAccountService: const EmptyClaudeAccountService(),
+          openAiAndCodex: const NoProvidersDashboardRepository(),
+          caches: {
+            for (final id in ids) id.storageKey: keyCache('mapping', id),
+          },
+          anthropicReportingClient: AnthropicReportingClient(
+            http: ProviderReportingHttp(transport: transport),
+          ),
+          cursorReportingClient: CursorPlatformClient(
+            http: ProviderReportingHttp(transport: transport),
+          ),
+          clock: () => at,
+          logger: const _SilentLogger(),
+        );
+        final first = await repository().load();
+        expect(
+          first.accounts.map((a) => a.accountId),
+          containsAll(['anthropic-local', 'cursor-team-local']),
+        );
+        for (final account in first.accounts)
+          expect(account.toJson()['historyOwner'], isNotNull);
+        await credentials.writeSecret(
+          ids.first,
+          'synthetic-anthropic-replacement',
+        );
+        final replacement = await repository().load();
+        for (final account in replacement.accounts) {
+          final previous = first.accounts.singleWhere(
+            (a) => a.connection == account.connection,
+          );
+          expect(
+            account.toJson()['historyOwner'],
+            account.connection == ids.first.storageKey
+                ? isNot(equals(previous.toJson()['historyOwner']))
+                : equals(previous.toJson()['historyOwner']),
+          );
+        }
+      },
+    );
+  });
 
   test('late older Codex report retains newer normalized cache', () async {
     const id = 'openai.plan';
@@ -2286,4 +2923,166 @@ void _expectSelectedBudgetFreshness(
   );
   expect(widget.rows.single.spent, isNotNull);
   expect(widget.stale, stale);
+}
+
+CodexAccountSession _historySession(
+  String principal,
+  DateTime at, {
+  String token = 'initial',
+}) => CodexAccountSession(
+  accountId: principal,
+  accessToken:
+      'header.${base64Url.encode(utf8.encode(jsonEncode({'exp': at.add(const Duration(days: 1)).millisecondsSinceEpoch ~/ 1000})))}.$token',
+  refreshToken: 'synthetic-refresh-$token',
+  refreshedAt: at,
+);
+
+final class _HistoryCodexTransport implements CodexHttpTransport {
+  _HistoryCodexTransport(this.at);
+  final DateTime at;
+  int? used = 20;
+  @override
+  Future<CodexHttpResponse> send(
+    String method,
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+  }) async {
+    final Object response;
+    if (uri.path.endsWith('/usage')) {
+      response = {
+        'plan_type': 'plus',
+        'rate_limit': {
+          'primary_window': {
+            'used_percent': 20,
+            'limit_window_seconds': 18000,
+            'reset_at':
+                at.add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000,
+          },
+          if (used != null)
+            'secondary_window': {
+              'used_percent': used,
+              'limit_window_seconds': 604800,
+              'reset_at':
+                  at.add(const Duration(days: 1)).millisecondsSinceEpoch ~/
+                  1000,
+            },
+        },
+      };
+    } else if (uri.path.endsWith('/profiles/me')) {
+      response = {
+        'stats': {'daily_usage_buckets': <Object>[]},
+      };
+    } else {
+      throw StateError('Unexpected synthetic Codex request.');
+    }
+    return CodexHttpResponse(statusCode: 200, body: jsonEncode(response));
+  }
+}
+
+final class _HistoryReportingTransport implements ProviderHttpTransport {
+  _HistoryReportingTransport(this.at);
+  final DateTime at;
+  int used = 20;
+  @override
+  Future<ProviderHttpResponse> get(
+    Uri uri, {
+    required Map<String, String> headers,
+  }) async {
+    final Object response;
+    if (uri.path == '/api/usage-summary') {
+      response = {
+        'billingCycleStart':
+            at.subtract(const Duration(days: 1)).toIso8601String(),
+        'billingCycleEnd': at.add(const Duration(days: 29)).toIso8601String(),
+        'membershipType': 'pro',
+        'isUnlimited': false,
+        'individualUsage': {
+          'plan': {
+            'enabled': true,
+            'used': used,
+            'limit': 100,
+            'remaining': 100 - used,
+            'totalPercentUsed': used,
+          },
+        },
+      };
+    } else if (uri.path.endsWith('/costs')) {
+      final start = DateTime.utc(at.year, at.month, at.day);
+      response = {
+        'object': 'page',
+        'has_more': false,
+        'data': [
+          {
+            'object': 'bucket',
+            'start_time': start.millisecondsSinceEpoch ~/ 1000,
+            'end_time':
+                start.add(const Duration(days: 1)).millisecondsSinceEpoch ~/
+                1000,
+            'results': [
+              {
+                'object': 'organization.costs.result',
+                'amount': {'value': '9.00', 'currency': 'usd'},
+              },
+            ],
+          },
+        ],
+      };
+    } else {
+      response = {'object': 'page', 'has_more': false, 'data': <Object>[]};
+    }
+    return ProviderHttpResponse(
+      statusCode: 200,
+      headers: const {},
+      body: jsonEncode(response),
+    );
+  }
+
+  @override
+  Future<ProviderHttpResponse> post(
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+  }) async => throw StateError('Unexpected synthetic reporting request.');
+}
+
+final class _HistoryRecoveryNotifier implements RecoveryNotifier {
+  final reported = <PlanRecovery>[];
+  @override
+  Future<void> notify(PlanRecovery recovery) async {
+    reported.add(recovery);
+  }
+
+  @override
+  Future<bool> requestPermission() async => true;
+}
+
+final class _HistoryAlertNotifier implements AlertNotifier {
+  final posts = <AlertConditionKey>[];
+  @override
+  Future<bool> canPost() async => true;
+  @override
+  Future<bool> requestPermission() async => true;
+  @override
+  Future<void> notify(
+    AlertConditionKey key, {
+    required String title,
+    required String body,
+  }) async {
+    posts.add(key);
+  }
+}
+
+final class _HistoryWake implements RecoveryWakeScheduler {
+  final booked = <DateTime>[];
+  int cancelled = 0;
+  @override
+  Future<void> scheduleAt(DateTime instant) async {
+    booked.add(instant);
+  }
+
+  @override
+  Future<void> cancel() async {
+    cancelled++;
+  }
 }

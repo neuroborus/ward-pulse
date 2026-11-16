@@ -294,6 +294,37 @@ native service coordinates concurrent Flutter engines in the application's singl
 process, including WorkManager; separate OS processes are unsupported. Foreground and
 headless callers validate ownership before publication.
 
+`ConnectionSnapshotCache.stamp` binds each normalized account's private `historyOwner` to
+the captured committed credential's connection and accepted identity digest. Native cache
+provenance can qualify an ownerless cached snapshot; conflicting persisted owners are rejected.
+Generation, revision, epoch and committed activation still fence currentness, not history
+identity. Session account evidence preserves same-principal rotation and unchanged reconnects;
+changed opaque credential bytes start a new local scope without identifying another organization.
+No additional identity request or native lifecycle field is used.
+
+`syncPlanRecoveries` reconciles captured snapshot, reporting, retained and skipped provenance
+without rereading credentials. `SecureRecoveryWatchlistStore` writes separate owner partitions,
+including empty observed partitions, so a delayed old-owner write or clear cannot replace a
+sibling's history. Alert consumed markers use the complete typed condition key; recovery
+notification addressing includes the owner too. Owner metadata stays in local normalized
+data and bookkeeping, outside watch/widget payloads and notification text. Mock cleanup is
+currentness guarded and clears only unbound history, preserving qualified live partitions
+and their pending wake.
+Each partition also retains the last known reset for its spent windows, so an incomplete
+or skipped report cannot postpone an earlier wake when a sibling supplies a later reset.
+Legacy ownerless recovery keys and consumed markers are never adopted by a qualified owner:
+each unbound window can lose its pending recovery edge, and each unbound condition can become
+eligible on its first qualified crossed observation. Delivery remains best effort, including
+possible repeats from overlapping isolates and losses after failed notification attempts.
+
+The `accepted connection history` group in `test/connection_snapshot_cache_test.dart` exercises
+real client wrappers, Rust normalization, native lifecycle/cache machinery and secure history
+stores with synthetic transports. It covers Codex and fixed-ID Cursor recovery replacement,
+Codex and OpenAI reporting threshold replacement, same-owner continuity and persisted isolation.
+Its runtime replay, unchanged full phone checks, Android rebuild and startup/FFI/storage
+acceptance remain HOST work after the whole owning run completes and its scoped processes
+retire, with a separate fresh idle observation (and owning foreground CLI exit if used).
+
 Automatic attempt admission is durable and separate from ephemeral fetch exclusion.
 Startup, foreground timer and headless periodic loads share a per-generation/principal
 start anchor; token revisions, cache invalidation, failed work and engine detach retain it.

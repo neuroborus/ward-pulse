@@ -11,8 +11,8 @@ typedef WindowKey =
 
 /// A window that was spent and has room again.
 ///
-/// `accountId` keys the notification so a repeat replaces it; it is never part
-/// of what a reader sees. `provider` is: two subscriptions can both call a
+/// `accountId` and ownership key the notification so a repeat replaces it;
+/// neither is part of what a reader sees. `provider` is: two subscriptions can both call a
 /// window "Weekly plan", and the family is what tells them apart.
 typedef PlanRecovery =
     ({
@@ -81,6 +81,7 @@ DateTime? nextResetAmong(
       final isExhausted = exhausted.any(
         (key) =>
             key.accountId == account.accountId &&
+            key.historyOwner == account.historyOwner &&
             key.allowanceId == allowance.id,
       );
       final resetsAt = allowance.resetsAt;

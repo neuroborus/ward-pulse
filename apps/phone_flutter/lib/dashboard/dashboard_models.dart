@@ -369,6 +369,24 @@ class DashboardSnapshot {
     reportingOutcomes: reportingOutcomes,
   );
 
+  DashboardSnapshot withAccounts(List<ProviderSnapshot> values) =>
+      DashboardSnapshot(
+        generatedAt: generatedAt,
+        overallStatus: overallStatus,
+        accounts: values,
+        todayTotal: todayTotal,
+        weekTotal: weekTotal,
+        monthTotal: monthTotal,
+        alerts: alerts,
+        alertConditions: alertConditions,
+        watchSummary: watchSummary,
+        syncIssue: syncIssue,
+        syncDetails: syncDetails,
+        syncRejection: syncRejection,
+        connectionVersions: connectionVersions,
+        reportingOutcomes: reportingOutcomes,
+      );
+
   DashboardSnapshot withReportingOutcomes(
     Iterable<ConnectionReportingOutcome> outcomes,
   ) => DashboardSnapshot(
@@ -396,6 +414,21 @@ final class HistoryOwner {
 
   final String connection;
   final String identity;
+
+  /// Only successfully committed, captured credentials can own history.
+  static HistoryOwner? fromVersion(
+    String connection,
+    CredentialVersion version,
+  ) {
+    final identity = version.values['identity'];
+    final committed = version.values['committedConnection'];
+    if (identity == null ||
+        identity.isEmpty ||
+        committed == null ||
+        committed.isEmpty)
+      return null;
+    return HistoryOwner(connection: connection, identity: identity);
+  }
 
   factory HistoryOwner.fromJson(Map<String, dynamic> json) => HistoryOwner(
     connection: json['connection'] as String,

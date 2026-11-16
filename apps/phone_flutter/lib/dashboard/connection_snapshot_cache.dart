@@ -43,6 +43,17 @@ final class ConnectionSnapshotCache {
         return false;
       versions[outcome.connection.storageKey] = version.values;
     }
+    for (final account in snapshot.accounts) {
+      final values = versions[account.connection];
+      final owner =
+          values == null || account.connection == null
+              ? null
+              : HistoryOwner.fromVersion(
+                account.connection!,
+                CredentialVersion(values),
+              );
+      if (account.historyOwner != owner) return false;
+    }
     return await _platform.invoke('validAll', {'versions': versions}) == true;
   }
 
@@ -127,7 +138,24 @@ final class ConnectionSnapshotCache {
   DashboardSnapshot stamp(
     DashboardSnapshot snapshot,
     CredentialVersion version,
-  ) => snapshot.withConnectionVersions({connection: version.values});
+  ) {
+    final owner = HistoryOwner.fromVersion(connection, version);
+    if (!owns(snapshot) ||
+        snapshot.accounts.any(
+          (account) =>
+              account.historyOwner != null && account.historyOwner != owner,
+        ))
+      throw const FormatException('Invalid connection history owner.');
+    return snapshot
+        .withAccounts([
+          for (final account in snapshot.accounts)
+            ProviderSnapshot.fromJson({
+              ...account.toJson(),
+              if (owner != null) 'historyOwner': owner.toJson(),
+            }),
+        ])
+        .withConnectionVersions({connection: version.values});
+  }
 
   Future<CapturedConnectionCache> capture({CredentialVersion? expected}) async {
     var version = expected ?? await _readCredentialVersion();
@@ -192,6 +220,7 @@ final class ConnectionSnapshotCache {
   ) async {
     if (!owns(snapshot))
       throw const FormatException('Invalid connection snapshot.');
+    snapshot = stamp(snapshot, version);
     try {
       return await _invoke('writeSnapshot', version, {
             'snapshot':

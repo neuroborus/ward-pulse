@@ -171,7 +171,8 @@ String alertNotificationTitle(
     ProviderSnapshot? account;
     for (final candidate in snapshot.accounts) {
       if (candidate.provider != key.provider ||
-          candidate.accountId != key.accountId)
+          candidate.accountId != key.accountId ||
+          candidate.historyOwner != key.historyOwner)
         continue;
       if (candidate.connection == key.connection) {
         account = candidate;

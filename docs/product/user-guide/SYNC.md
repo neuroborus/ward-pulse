@@ -92,6 +92,20 @@ replay the notification. Crossings seen while muted or denied are not queued for
 Provider errors alone do not trigger these notifications. Delivery is best effort: a failed
 attempt can be lost, and overlapping background/foreground work can repeat an attempt.
 
+Notification history follows the accepted connection. An unchanged credential, routine refresh,
+or sign-in that identifies the same account keeps its history, including after a restart or
+label edit. An accepted replacement with different account evidence starts separate history.
+Changing a pasted key or session token also starts separate local history: WardPulse cannot
+tell whether different opaque credentials mean another organization or a key rotation for
+the same one. That connection's first observed crossed condition can therefore notify without
+an earlier clear report. Cancelling or failing a reconnect does not adopt replacement history.
+
+Older saved notification history may lack enough evidence to associate it with an accepted
+connection. Each such condition can become eligible on its first qualified crossed observation;
+each such plan window can lose its pending recovery notification. Subsequent reports establish
+history for that connection. These limits apply independently to each condition and window;
+they do not imply a single extra notification or guaranteed delivery.
+
 Turning either delivery switch off leaves reporting, in-app alerts, watch/widget updates and
 recovery tracking active. Notification text contains only the provider family, window or budget
 name, and the configured alert boundary in **% left** or recovery copy. An alert set to 20% left

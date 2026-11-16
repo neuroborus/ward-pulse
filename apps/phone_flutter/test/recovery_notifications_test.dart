@@ -241,6 +241,60 @@ void main() {
     resetsAt: null,
   ));
 
+  testWidgets(
+    'recovery retired during initialization cannot submit a post',
+    (tester) async {
+      const channel = MethodChannel(
+        'dexterous.com/flutter/local_notifications',
+      );
+      final messenger = tester.binding.defaultBinaryMessenger;
+      final calls = <String>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call.method);
+        return null;
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      var current = true;
+      final coordinator = PhoneNotificationCoordinator(
+        initialize: () async {
+          current = false;
+        },
+      );
+      await LocalRecoveryNotifier(coordinator: coordinator).notifyIfCurrent((
+        accountId: 'local-account',
+        historyOwner: const HistoryOwner(
+          connection: 'openai.plan',
+          identity: 'synthetic-owner',
+        ),
+        provider: 'codex',
+        allowanceId: 'weekly',
+        label: 'Weekly plan',
+        resetsAt: null,
+      ), () async => current);
+      expect(calls, isNot(contains('show')));
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  test('recovery addressing separates owners without changing public copy', () {
+    recovery(String identity) => (
+      accountId: 'local-account',
+      historyOwner: HistoryOwner(connection: 'openai.plan', identity: identity),
+      provider: 'codex',
+      allowanceId: 'weekly',
+      label: 'Weekly plan',
+      resetsAt: null,
+    );
+    expect(
+      recoveryNotificationId(recovery('a')),
+      isNot(recoveryNotificationId(recovery('b'))),
+    );
+    expect(
+      recoveryNotificationTitle(recovery('a')),
+      recoveryNotificationTitle(recovery('b')),
+    );
+  });
+
   test('a window keeps its id, so a second telling replaces the first', () {
     // The reporting order risks a repeat on purpose, and that is only harmless
     // while the id stays the same one — run after run, not just call after

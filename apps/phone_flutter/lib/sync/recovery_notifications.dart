@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../dashboard/dashboard_models.dart';
@@ -48,7 +50,16 @@ final class LocalRecoveryNotifier implements RecoveryNotifier {
 
   @override
   Future<void> notify(PlanRecovery recovery) async {
+    await notifyIfCurrent(recovery, () async => true);
+  }
+
+  /// Initialization can await platform work; validate again before submitting.
+  Future<void> notifyIfCurrent(
+    PlanRecovery recovery,
+    Future<bool> Function() isCurrent,
+  ) async {
     await _coordinator.ensureReady();
+    if (!await isCurrent()) return;
     await _coordinator.plugin.show(
       id: recoveryNotificationId(recovery),
       title: recoveryNotificationTitle(recovery),
@@ -105,7 +116,15 @@ const recoveryNotificationBody = 'Usable again.';
 int recoveryNotificationId(PlanRecovery recovery) {
   // FNV-1a, folded into the positive 31 bits an Android notification id uses.
   var hash = 0x811c9dc5;
-  final key = '${recovery.accountId}|${recovery.allowanceId}';
+  final owner = recovery.historyOwner;
+  final key =
+      owner == null
+          ? '${recovery.accountId}|${recovery.allowanceId}'
+          : jsonEncode([
+            owner.toJson(),
+            recovery.accountId,
+            recovery.allowanceId,
+          ]);
   for (final unit in key.codeUnits) {
     hash = ((hash ^ unit) * 0x01000193) & 0xffffffff;
   }
