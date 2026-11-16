@@ -22,7 +22,8 @@ abstract interface class RecoveryWatchlistStore {
 }
 
 /// Writes only the captured observations' partitions, including empty ones.
-abstract interface class PartitionedRecoveryWatchlistStore {
+abstract interface class PartitionedRecoveryWatchlistStore
+    implements RecoveryWatchlistStore {
   Future<({List<WindowKey> keys, Map<WindowKey, DateTime> resets})> readOwners(
     Set<HistoryOwner?> owners,
   );

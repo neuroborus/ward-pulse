@@ -350,19 +350,12 @@ void main() {
       12,
       0,
     ),
-    (
-      'own success cancels a served qualified wake and retains history',
-      0,
-      11,
-    ),
+    ('own success cancels a served qualified wake and retains history', 0, 11),
   ]) {
     test(name, () async {
       final start = DateTime.utc(2026, 11, 6);
       final reset = start.add(const Duration(minutes: 10));
-      const a = HistoryOwner(
-        connection: 'anthropic.plan',
-        identity: 'owner-a',
-      );
+      const a = HistoryOwner(connection: 'anthropic.plan', identity: 'owner-a');
       const b = HistoryOwner(
         connection: 'anthropic.platform',
         identity: 'owner-b',
@@ -388,7 +381,9 @@ void main() {
         ).readAsStringSync(),
       );
       final retainedA = {
-        ..._withAllowances(source, {'window-a': reset}).accounts.single.toJson(),
+        ..._withAllowances(source, {
+          'window-a': reset,
+        }).accounts.single.toJson(),
         'accountId': key.accountId,
         'connection': a.connection,
         'historyOwner': a.toJson(),
@@ -401,7 +396,9 @@ void main() {
         DashboardSnapshot.fromJson({
           ...source.toJson(),
           'accounts': [retainedA],
-        }).withConnectionVersions({a.connection: versions[a.connection]!.values}),
+        }).withConnectionVersions({
+          a.connection: versions[a.connection]!.values,
+        }),
         store,
         notifier,
         wake,
@@ -472,7 +469,11 @@ void main() {
       expect(initialBookings, [reset]);
       expect(initialHistory.keys, [key]);
       expect(initialHistory.resets, {key: reset});
-      expect(cancellations, 1, reason: 'The obsolete reset wake must be cancelled');
+      expect(
+        cancellations,
+        1,
+        reason: 'The obsolete reset wake must be cancelled',
+      );
       expect(bookings, initialBookings);
       expect(notifications, isEmpty);
       expect(persistedKeys, [key]);
