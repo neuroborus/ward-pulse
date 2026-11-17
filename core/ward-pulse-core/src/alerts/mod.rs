@@ -137,10 +137,18 @@ fn crossed_alerts(conditions: &[AlertCondition]) -> Vec<Alert> {
 /// Limits arrive from the shell because providers do not report them. Rebuilding
 /// the snapshot keeps totals, watch summary, and per-account percentages in step
 /// with the limits the user just set.
+/// With no accounts to evaluate, only alerts and observations are cleared;
+/// the supplied status and reporting data are retained.
 pub fn apply_alert_settings(
-    snapshot: DashboardSnapshot,
+    mut snapshot: DashboardSnapshot,
     settings: &AlertSettings,
 ) -> DashboardSnapshot {
+    if snapshot.accounts.is_empty() {
+        snapshot.alerts.clear();
+        snapshot.alert_conditions.clear();
+        return snapshot;
+    }
+
     let accounts = snapshot
         .accounts
         .into_iter()
@@ -463,6 +471,91 @@ mod tests {
         let snapshot = snapshot_with(claude_account(purchased(84.0)), budget(90.0));
         assert!(calculate_alerts(&snapshot, &AlertSettings::default()).is_empty());
         assert!(calculate_alert_conditions(&snapshot, &AlertSettings::default()).is_empty());
+    }
+
+    fn healthy_empty_snapshot() -> DashboardSnapshot {
+        let mut snapshot =
+            build_dashboard_snapshot(DateTimeUtc::from("2026-11-06T12:00:00Z"), Vec::new());
+        snapshot.overall_status = ProviderStatus::Ok;
+        snapshot.watch_summary.status = ProviderStatus::Ok;
+        snapshot
+    }
+
+    #[test]
+    fn configured_percentage_preserves_complete_healthy_empty_snapshot() {
+        let snapshot = healthy_empty_snapshot();
+        let settings = AlertSettings {
+            connections: HashMap::from([(
+                connection::CODEX_PLAN.into(),
+                ConnectionAlertThresholds {
+                    plan: PercentThreshold { at: Some(80) },
+                    ..ConnectionAlertThresholds::default()
+                },
+            )]),
+        };
+        assert_eq!(apply_alert_settings(snapshot.clone(), &settings), snapshot);
+    }
+
+    #[test]
+    fn bare_budget_preserves_complete_healthy_empty_snapshot() {
+        let snapshot = healthy_empty_snapshot();
+        let settings = AlertSettings {
+            connections: HashMap::from([(
+                connection::OPENAI_PLATFORM.into(),
+                ConnectionAlertThresholds {
+                    budget: ConnectionBudget {
+                        today: Some(2500),
+                        ..ConnectionBudget::default()
+                    },
+                    ..ConnectionAlertThresholds::default()
+                },
+            )]),
+        };
+        assert_eq!(apply_alert_settings(snapshot.clone(), &settings), snapshot);
+    }
+
+    #[test]
+    fn configured_settings_preserve_genuine_unknown_snapshot() {
+        let snapshot =
+            build_dashboard_snapshot(DateTimeUtc::from("2026-11-06T12:00:00Z"), Vec::new());
+        let settings = AlertSettings {
+            connections: HashMap::from([(
+                connection::CODEX_PLAN.into(),
+                ConnectionAlertThresholds {
+                    plan: PercentThreshold { at: Some(80) },
+                    ..ConnectionAlertThresholds::default()
+                },
+            )]),
+        };
+        assert_eq!(apply_alert_settings(snapshot.clone(), &settings), snapshot);
+    }
+
+    #[test]
+    fn empty_snapshot_clears_observations_and_preserves_nonhealthy_statuses() {
+        let settings = AlertSettings {
+            connections: HashMap::from([(
+                connection::CLAUDE_PLAN.into(),
+                ConnectionAlertThresholds {
+                    plan: PercentThreshold { at: Some(80) },
+                    ..ConnectionAlertThresholds::default()
+                },
+            )]),
+        };
+        let mut expected = healthy_empty_snapshot();
+        expected.overall_status = ProviderStatus::Stale;
+        expected.watch_summary.status = ProviderStatus::Error;
+        let mut snapshot = expected.clone();
+        snapshot.alert_conditions = calculate_alert_conditions(
+            &snapshot_with(
+                claude_account(plan_window("weekly", Some(90.0))),
+                budget(0.0),
+            ),
+            &settings,
+        );
+        snapshot.alerts = crossed_alerts(&snapshot.alert_conditions);
+        assert_eq!(snapshot.alerts.len(), 1);
+        assert_eq!(snapshot.alert_conditions.len(), 1);
+        assert_eq!(apply_alert_settings(snapshot, &settings), expected);
     }
 
     #[test]

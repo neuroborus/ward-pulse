@@ -5,6 +5,10 @@ and API connections appear together under their provider family: OpenAI, Anthrop
 Each connection keeps its own data and status. Not every account provides spend, model detail,
 purchased usage or a history chart.
 
+With no connected providers, Dashboard shows **Connect a provider**. Saved alert rules or
+budget limits leave this idle state healthy. They do not supply usage reports or prove a
+successful sync.
+
 ## Display order
 
 Provider families with the most urgent status appear first: **Error**, **Auth required**,

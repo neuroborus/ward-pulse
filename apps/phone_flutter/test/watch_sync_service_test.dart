@@ -3,7 +3,11 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/dashboard/apply_alert_settings.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
+import 'package:ward_pulse_phone/providers/provider_connection.dart';
+import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/manual_refresh_window.dart';
@@ -15,6 +19,158 @@ import 'selected_data_freshness_test_support.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  for (final (label, settings) in [
+    (
+      'Plan threshold',
+      const AlertThresholdPreferences(
+        connections: {
+          'openai.plan': ConnectionAlertThresholds(
+            plan: AlertPercentThreshold(at: 80),
+          ),
+        },
+      ),
+    ),
+    (
+      'bare Today budget',
+      const AlertThresholdPreferences(
+        connections: {
+          'openai.platform': ConnectionAlertThresholds(
+            budget: ConnectionBudget(today: 2500),
+          ),
+        },
+      ),
+    ),
+  ]) {
+    test('configured empty settings preserve health: $label', () async {
+      final published = _captureWatchPublications();
+      final source = DashboardSnapshot.empty(
+        generatedAt: DateTime.utc(2026, 11, 6, 12),
+      );
+      // No injected transform: the default effect loads the production FFI.
+      final applied = applyUserAlertSettings(source, settings);
+      final disabled = applyUserAlertSettings(
+        source,
+        const AlertThresholdPreferences(),
+      );
+      const service = MethodChannelWatchSyncService();
+      const selection = WatchRingPreferences();
+      await service.sync(applied, selection);
+      await service.sync(disabled, selection);
+      final emitted = jsonDecode(published.first.arguments as String);
+      final disabledEmission = jsonDecode(published.last.arguments as String);
+      // Synthetic inputs and actual outputs are collected before the joint
+      // assertion so OLD's Unknown result remains a semantic replay witness.
+      print(
+        jsonEncode({
+          'case': label,
+          'input': source.toJson(),
+          'settings': settings.toJson(),
+          'result': applied.toJson(),
+          'emitted': emitted,
+          'disabledResult': disabled.toJson(),
+          'disabledEmission': disabledEmission,
+        }),
+      );
+      expect(published.map((call) => call.method), [
+        'syncWatchSummary',
+        'syncWatchSummary',
+      ]);
+      expect([
+        applied.overallStatus.name,
+        applied.watchSummary.status.name,
+        emitted['overallStatus'],
+      ], ['ok', 'ok', 'ok']);
+      expect(settings.hasEnabledRules, isTrue);
+      expect(applied.toJson(), source.toJson());
+      expect(applied.generatedAt, source.generatedAt);
+      expect(applied.accounts, isEmpty);
+      expect(applied.alertConditions, isEmpty);
+      expect(applied.alerts, isEmpty);
+      expect(applied.watchSummary.todayUsedPercent, isNull);
+      expect(applied.watchSummary.weekUsedPercent, isNull);
+      for (final budget in [
+        applied.todayTotal,
+        applied.weekTotal,
+        applied.monthTotal,
+      ]) {
+        expect(
+          budget.toJson(),
+          BudgetState.unknownPeriod(budget.period).toJson(),
+        );
+      }
+      for (final payload in [emitted, disabledEmission]) {
+        expect(payload['overallStatus'], 'ok');
+        expect(payload['generatedAt'], source.generatedAt.toIso8601String());
+        for (final key in ['providers', 'allowances', 'rings', 'alerts']) {
+          expect(payload[key], isEmpty, reason: key);
+        }
+        expect(payload['creditsGlance'], isNull);
+        expect(payload['today'], source.todayTotal.toJson());
+        expect(payload['week'], source.weekTotal.toJson());
+        expect(payload['isStale'], isFalse);
+      }
+      expect(disabled, same(source));
+    });
+  }
+
+  test('nonhealthy empty native result retains phone-only metadata', () async {
+    final published = _captureWatchPublications();
+    final version = CredentialVersion({
+      'generation': 'g1',
+      'revision': 'r1',
+      'epoch': 'e1',
+      'identity': 'digest1',
+    });
+    final outcome = ConnectionReportingOutcome(
+      connection: ProviderConnections.openAiPlatform,
+      category: ReportingOutcomeCategory.authenticationRejected,
+      source: ReportingOutcomeSource.live,
+      credentialVersion: version,
+    );
+    final source = DashboardSnapshot.empty(
+          generatedAt: DateTime.utc(2026, 11, 6, 12),
+        )
+        .withStaleStatus(
+          syncIssue: DashboardSyncIssue.authentication,
+          syncDetails: 'sanitized reporting rejection',
+          syncRejection: (connection: 'openai.platform', eventId: 'event-1'),
+        )
+        .withConnectionVersions({'openai.platform': version.values})
+        .withReportingOutcomes([outcome]);
+    final applied = applyUserAlertSettings(
+      source,
+      const AlertThresholdPreferences(
+        connections: {
+          'openai.platform': ConnectionAlertThresholds(
+            budget: ConnectionBudget(today: 2500),
+          ),
+        },
+      ),
+    );
+    await const MethodChannelWatchSyncService().sync(
+      applied,
+      const WatchRingPreferences(),
+    );
+    final emitted = jsonDecode(published.single.arguments as String);
+    expect(published.single.method, 'syncWatchSummary');
+    expect(applied.toJson(), source.toJson());
+    expect(applied.overallStatus, ProviderStatus.stale);
+    expect(applied.watchSummary.status, ProviderStatus.stale);
+    expect(applied.syncIssue, source.syncIssue);
+    expect(applied.syncDetails, source.syncDetails);
+    expect(applied.syncRejection, source.syncRejection);
+    expect(applied.connectionVersions, source.connectionVersions);
+    expect(applied.reportingOutcomes, [outcome]);
+    expect(applied.reportingOutcomes.single.credentialVersion, same(version));
+    expect(emitted['overallStatus'], 'stale');
+    expect(emitted['isStale'], isTrue);
+    expect(emitted['generatedAt'], source.generatedAt.toIso8601String());
+    for (final key in ['providers', 'allowances', 'rings', 'alerts']) {
+      expect(emitted[key], isEmpty, reason: key);
+    }
+    expect(emitted['creditsGlance'], isNull);
+  });
 
   test('retained selection stays stale through mixed warning refreshes', () {
     final codex = freshnessAccount(
@@ -976,6 +1132,19 @@ void main() {
       lastSync.add(ManualRefreshWindow.floor).toUtc().toIso8601String(),
     );
   });
+}
+
+List<MethodCall> _captureWatchPublications() {
+  final published = <MethodCall>[];
+  const channel = MethodChannel('app.wardpulse/watch_sync');
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  messenger.setMockMethodCallHandler(channel, (call) async {
+    published.add(call);
+    return null;
+  });
+  addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+  return published;
 }
 
 /// Synthetic values exercise three pair identities without provider calls.

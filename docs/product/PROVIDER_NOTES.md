@@ -133,6 +133,9 @@ per-provider capability tables below are the source of truth for what each conne
 - `Unknown` is reserved for transient provider state: a connection that has not synced yet or whose
   last sync failed. It stays on the status indicator rather than on values.
 - With no connections configured, the dashboard shows a single "Connect a provider" call to action.
+  Saved alert rules or local limits leave this deliberately idle dashboard and its watch summary
+  healthy. They supply neither reporting data nor evidence of successful sync; genuinely Unknown,
+  stale or error input keeps its status when settings are applied.
 - Debug **Mock data** loads a seeded multi-provider demo (OpenAI, Codex, Claude plan + platform,
   Cursor plan + platform) so the full dashboard stays reviewable without live credentials.
   Utilization reshuffles on toggle/refresh (not on automatic sync ticks); the Phase 1 single

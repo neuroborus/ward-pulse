@@ -399,6 +399,117 @@ Claude and Cursor), a production periodic WorkManager task in a fresh background
 offline cold-start recovery with unchanged cached data/success times, and restored live
 phone-to-watch delivery. Hardware and whole-phase release acceptance remain separate gates.
 
+## Configured empty dashboard (HOST only)
+
+Saved rules and bare local budgets pass through `applyUserAlertSettings` to the Rust
+`apply_alert_settings` transform. With no accounts, settings clear alerts and conditions while
+preserving the supplied snapshot, including healthy idle status or genuine nonhealthy status.
+They do not manufacture reporting data or successful-sync evidence. The configured regressions
+in `test/watch_sync_service_test.dart` use the default production effect and the real
+`MethodChannelWatchSyncService`, capturing its `syncWatchSummary` argument at the existing
+messenger boundary. They collect the result and emitted payload before the joint health
+assertion. Separate Plan `at: 80` and bare Today-budget cases contrast disabled settings; a
+nonhealthy control protects phone-only issue, rejection, credential-version and reporting metadata.
+
+All execution here is Root/operator HOST work after WHOLE code DONE, known/scoped process
+retirement and a separate fresh public idle observation. Require actual owning foreground CLI
+exit only if one was used. Native source review supplies no runtime PASS and does not wait for
+HOST acceptance. Keep the unchanged full `just check-phone`, final documentation/contracts/
+release-status gates, Android Rust build, normal debug APK and device acceptance pending until
+their owning HOST checkpoint.
+
+Use the same final focused tests for both replay legs. Before any Source transition, qualify
+the final closure and record test/input hashes, Source hashes/modes, HEAD, index and logical
+refs. Pin the actual final commit and alerts-module blob as immutable Git identities; retain
+no Source backup, private export, clone or worktree. Register a durable restoration journal
+and unconditional final restoration for every exit, including partial operations, cancellation
+and timeouts, before mutation. Retire owned readers before each transition. Materialize only
+`core/ward-pulse-core/src/alerts/mod.rs` from baseline
+`6c074d279a05cf1e8395a530d750f6b021b18ff7`, verifying exact historical blob
+`1cd9af1bf05db8368f1f75ea242c7264d39ee61e`. From `core/`, build OLD into an absolute,
+task-owned output directory:
+
+```sh
+CARGO_TARGET_DIR="$WARDPULSE_EMPTY_OLD_TARGET" cargo build --locked -p ward-pulse-ffi
+```
+
+Restore the pinned final module through stock Git worktree operations, including its mode,
+and verify complete Source/index/ref restoration before the FINAL build or other ordinary
+work. Use a separate absolute, task-owned output directory for FINAL:
+
+```sh
+CARGO_TARGET_DIR="$WARDPULSE_EMPTY_FINAL_TARGET" cargo build --locked -p ward-pulse-ffi
+```
+
+Library builds exclude the historical unit tests. Keep every other production input and the
+final Dart tests identical. From `apps/phone_flutter/`, select each leg's verified `debug`
+directory through `LD_LIBRARY_PATH` and run the identical command in separate fresh processes:
+
+```sh
+LD_LIBRARY_PATH="$WARDPULSE_EMPTY_TARGET/debug${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  flutter test test/watch_sync_service_test.dart --plain-name 'configured empty settings preserve health' --timeout 60s
+```
+
+Fresh processes prevent the binding singleton from retaining the other library. Qualify the
+existing owned 60-second invocation budget before each launch; `--timeout 60s` is only the
+framework timeout. Builds/setup have separate qualified bounds. Capture `LD_DEBUG=files,libs`
+diagnostics in memory and project only the loaded library path/hash and owned PID before any
+output or storage, including Flutter-forwarded stdout, JSON print events and failure tails.
+Never save raw traces and sanitize later. Retain the allowlisted projection, build inputs,
+identical test/input hashes and the synthetic result/emitted-payload records from both legs.
+OLD must load, invoke the public Rust settings transform and emit its result before failing
+the joint health assertion with Unknown statuses. FINAL must pass both configured cases.
+Compilation, setup, loading, empty selection and timeout failures are infrastructure failures.
+The historical semantic failure is an external negative witness, not a Native pipeline gate.
+
+### Native idle integration case
+
+`integration_test/configured_empty_test.dart` mounts the public `WardPulseApp` with a fixed
+empty repository and in-memory saved rules. Its default shared settings evaluation stays real.
+Default credential/account/settings stores are inert; scheduling, widget publication,
+notification/recovery delivery and wakes are disabled. The real watch sender is intercepted
+only at its messenger publication boundary, and its refresh listener and widget navigation
+are inert, so the case neither publishes to other devices nor consumes ordinary queued intents.
+It does not call production `main`, retire credentials, clear data or mutate persisted settings.
+Existing OS-scheduled writers still require HOST custody; the constructor does not retire them.
+
+The case asserts the accepted snapshot and captured publication, the saved Today-cap scope,
+the idle **Connect a provider** prompt and absence of problem badges. Stock Android integration
+capture retains the original `configured-empty-idle` frame in the `screenshots` entry of
+`reportData`; the SDK restores its temporary image surface during teardown. The small
+`test_driver/configured_empty.dart` adapter uses the existing SDK driver and writes that report,
+including failure data. No manual barrier, selector or alternate harness is used.
+
+After qualifying final JNI inputs and retaining the verified normal APK, build this separate
+test target from `apps/phone_flutter/`:
+
+```sh
+flutter build apk --debug --target=integration_test/configured_empty_test.dart --dart-define=INTEGRATION_TEST_SHOULD_REPORT_RESULTS_TO_NATIVE=false
+```
+
+Reuse only the artifact identity, data-preserving `install -t -r`, fresh PID/VM qualification,
+owned port forwarding and existing-app attachment steps in
+[Android notification integration case](#android-notification-integration-case-host-only).
+No notification-policy changes or notification-case prerequisites apply here. Set
+`FLUTTER_TEST_OUTPUTS_DIR` to a fresh task-owned evidence directory and attach with the qualified
+case VM URI, without automatic install/uninstall cleanup:
+
+```sh
+flutter drive -d "$PHONE_SERIAL" --target=integration_test/configured_empty_test.dart --driver=test_driver/configured_empty.dart --use-existing-app="$WARDPULSE_EMPTY_VM_URI" --keep-app-running
+```
+
+Qualify the effective 60-second case deadline, driver request limit and separate owned-process
+bound before launch; setup has its own bound. Require actual framework success and the
+non-null case-bound report with `completed: true`, matching input/settings/result/emitted data,
+and one nonempty named native frame. Inspect that original frame before visual acceptance;
+serialized values or a connected normal-main frame cannot substitute for it. Identify this
+test-target APK/runtime/frame separately from normal-main startup. Retire owned case/driver
+processes, remove only its forwarding, restore the retained normal APK with data preserved,
+and verify normal artifact, state, derived surfaces and library identity. Do not uninstall or
+clear storage on restoration failure. All replay, device and restoration evidence remains
+Pending until HOST performs it; item acceptance also requires Root's complete independent ZERO
+after the last correction.
+
 ## Cursor Sign-in Request Guard
 
 `WebViewCursorSignInBrowser` wires `CursorSignInPlugin` to the existing plugin's WebView
