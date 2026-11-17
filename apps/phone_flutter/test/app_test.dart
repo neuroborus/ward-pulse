@@ -107,6 +107,14 @@ void main() {
               });
               Future<void>? editing;
               var removalCompleted = false;
+              final replies = <Future<Object?>>[];
+              final readLabels = <String>{};
+              var joinedReplies = 0;
+              bridge.onInvoke = replies.add;
+              secure.onRead = (key, completion) {
+                replies.add(completion);
+                if (key.endsWith('.label')) readLabels.add(key);
+              };
               try {
                 await tester.pumpWidget(
                   WardPulseApp(
@@ -138,28 +146,52 @@ void main() {
                   }),
                   isNotNull,
                 );
+                readLabels.clear();
                 await tester.tap(find.text('Providers'));
-                await tester.pumpAndSettle();
+                await tester.pump();
+                // Join real acquire/finish/currentness replies and store reads,
+                // including serial successors from credential discovery and all
+                // mounted plan rows. Drain real microtask continuations too:
+                // serialized service completions can follow their last reply.
+                do {
+                  final batch = replies.sublist(joinedReplies);
+                  joinedReplies = replies.length;
+                  await Future.wait(batch);
+                  await tester.idle();
+                  await tester.pump();
+                  await tester.idle();
+                } while (joinedReplies != replies.length);
+                expect(
+                  readLabels,
+                  containsAll(
+                    providerConnectionCatalog()
+                        .where((connection) => connection.secretHint != null)
+                        .map(
+                          (connection) =>
+                              connection.id == ProviderConnections.openAiPlatform
+                                  ? 'wardpulse.openai.admin-api-key.label'
+                                  : 'wardpulse.${connection.id.storageKey}.label',
+                        ),
+                  ),
+                );
+                expect(find.byType(RowProgress), findsNothing);
                 await tester.scrollUntilVisible(
                   find.text('Cursor plan'),
                   300,
                   scrollable: find.byType(Scrollable).first,
                 );
-                await tester.pumpAndSettle();
-                // Drain the row's already-started native read through the existing
-                // lease queue, without another secure-session read or refresh.
-                final ready =
-                    (await bridge.invoke('proof', 'acquire', {
-                          'connection': id.storageKey,
-                          'action': 'read',
-                        }))!
-                        as Map;
-                await bridge.invoke('proof', 'finish', {
-                  'connection': id.storageKey,
-                  'lease': ready['lease'],
-                  'operation': 'release',
-                });
                 await tester.pump();
+                // Scrolling may mount any plan row; join its complete read chain
+                // before publishing, then collect reads started by that frame.
+                do {
+                  final batch = replies.sublist(joinedReplies);
+                  joinedReplies = replies.length;
+                  await Future.wait(batch);
+                  await tester.idle();
+                  await tester.pump();
+                  await tester.idle();
+                } while (joinedReplies != replies.length);
+                expect(find.byType(RowProgress), findsNothing);
                 final rowFinder = find.widgetWithText(
                   ProviderConnectionRow,
                   'Cursor plan',
@@ -323,13 +355,31 @@ void main() {
                   reason: 'Cleanup must not request a second app reload.',
                 );
               } finally {
-                if (!releaseCleanup.isCompleted) releaseCleanup.complete();
-                if (find.byType(AlertDialog).evaluate().isNotEmpty) {
-                  Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+                try {
+                  if (!releaseCleanup.isCompleted) releaseCleanup.complete();
+                  if (find.byType(AlertDialog).evaluate().isNotEmpty) {
+                    Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+                  }
+                  await tester.pumpWidget(const SizedBox());
+                  if (editing != null) await editing;
+                } finally {
+                  try {
+                    // Unmounted continuations may still release leases or start
+                    // successor reads. Drain them before closing the native bridge.
+                    do {
+                      final batch = replies.sublist(joinedReplies);
+                      joinedReplies = replies.length;
+                      await Future.wait(batch);
+                      await tester.idle();
+                      await tester.pump();
+                      await tester.idle();
+                    } while (joinedReplies != replies.length);
+                  } finally {
+                    bridge.onInvoke = null;
+                    secure.onRead = null;
+                    messenger.setMockMethodCallHandler(channel, null);
+                  }
                 }
-                await tester.pumpWidget(const SizedBox());
-                if (editing != null) await editing;
-                messenger.setMockMethodCallHandler(channel, null);
               }
             });
           },

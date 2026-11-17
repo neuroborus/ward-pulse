@@ -30,6 +30,7 @@ final class NativeCacheTestBridge {
   final Directory _directory;
   final _pending = <int, Completer<Object?>>{};
   final _stderr = StringBuffer();
+  void Function(Future<Object?>)? onInvoke;
   var _next = 0;
   static Future<NativeCacheTestBridge> start() async {
     final root = Directory('../..').absolute.path;
@@ -83,6 +84,7 @@ final class NativeCacheTestBridge {
 
     arguments.forEach(flatten);
     _process.stdin.writeln(fields.join('\t'));
+    onInvoke?.call(result.future);
     return result.future;
   }
 
@@ -115,6 +117,7 @@ final class FakeSecureStorage extends FlutterSecureStorage {
   bool failWrite = false;
   Future<void> Function(String)? beforeWrite;
   Future<void> Function(String)? beforeDelete;
+  void Function(String, Future<String?>)? onRead;
   @override
   Future<Map<String, String>> readAll({
     AppleOptions? iOptions,
@@ -137,9 +140,13 @@ final class FakeSecureStorage extends FlutterSecureStorage {
     WebOptions? webOptions,
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
-  }) async {
-    if (failRead) throw StateError('Sanitized storage read failure.');
-    return values[key];
+  }) {
+    final result = Future<String?>.sync(() {
+      if (failRead) throw StateError('Sanitized storage read failure.');
+      return values[key];
+    });
+    onRead?.call(key, result);
+    return result;
   }
 
   @override

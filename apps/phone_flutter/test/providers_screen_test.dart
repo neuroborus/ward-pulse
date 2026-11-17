@@ -1706,7 +1706,14 @@ void main() {
           Future<void>? editing;
           Future<void>? submitting;
           Future<void>? currentEditing;
+          // The widget binding prints synchronously. Keep the unknown wait's
+          // diagnostics limited to phase labels and completion flags.
+          final phase = 'HOST16-T2 $window';
+          var editingCompleted = false;
+          var submittingCompleted = false;
+          var currentEditingCompleted = false;
           try {
+            debugPrint('$phase mount enter');
             await tester.pumpWidget(
               MaterialApp(
                 home: Scaffold(
@@ -1725,8 +1732,12 @@ void main() {
                 ),
               ),
             );
+            debugPrint('$phase mount complete');
+            debugPrint('$phase initial settle enter');
             await tester.pumpAndSettle();
+            debugPrint('$phase initial settle complete');
             final state = tester.state(find.byType(ClaudeAccountRow));
+            debugPrint('$phase editing enter');
             editing =
                 (tester
                             .widget<ProviderConnectionRow>(
@@ -1735,18 +1746,33 @@ void main() {
                             .onTap
                         as dynamic)()
                     as Future<void>;
+            editing = editing.then((_) {
+              editingCompleted = true;
+              debugPrint('$phase editing complete');
+            });
+            debugPrint('$phase editing pump enter');
             await tester.pump();
+            debugPrint('$phase editing pump complete');
             expect(events, ['start']);
             if (window == 'start') {
               stores.value = replacement;
+              debugPrint('$phase start replacement pump enter');
               await tester.pump();
+              debugPrint('$phase start replacement pump complete');
             }
             start.complete(oldAttempt);
+            debugPrint('$phase start completion pump enter');
             await tester.pump();
+            debugPrint('$phase start completion pump complete');
+            debugPrint('$phase start transition pump enter');
             await tester.pump(const Duration(seconds: 1));
+            debugPrint('$phase start transition pump complete');
             if (window != 'start') {
               expect(find.text('Connect Claude plan'), findsOneWidget);
+              debugPrint('$phase code entry enter');
               await tester.enterText(field, 'synthetic-code#old');
+              debugPrint('$phase code entry complete');
+              debugPrint('$phase submission enter');
               submitting =
                   (tester
                               .widget<FilledButton>(
@@ -1755,28 +1781,50 @@ void main() {
                               .onPressed
                           as dynamic)()
                       as Future<void>;
+              submitting = submitting.then((_) {
+                submittingCompleted = true;
+                debugPrint('$phase submission complete');
+              });
+              debugPrint('$phase submission pump enter');
               await tester.pump();
+              debugPrint('$phase submission pump complete');
               expect(events, contains('old submit synthetic-code#old'));
               if (window == 'code') {
                 stores.value = replacement;
+                debugPrint('$phase code replacement pump enter');
                 await tester.pump();
+                debugPrint('$phase code replacement pump complete');
               }
               code.complete();
+              debugPrint('$phase code completion pump enter');
               await tester.pump();
+              debugPrint('$phase code completion pump complete');
+              debugPrint('$phase submission await enter');
               await submitting;
+              debugPrint('$phase submission await complete');
               if (window == 'cleanup' || window == 'unchanged') {
+                debugPrint('$phase cleanupStarted await enter');
                 await cleanupStarted.future;
+                debugPrint('$phase cleanupStarted await complete');
                 expect(changes, 0);
                 expect(cleared, 0);
                 if (window == 'cleanup') {
                   stores.value = replacement;
+                  debugPrint('$phase cleanup replacement pump enter');
                   await tester.pump();
+                  debugPrint('$phase cleanup replacement pump complete');
                 }
                 cleanup.complete();
+                debugPrint('$phase cleanup release pump enter');
                 await tester.pump();
+                debugPrint('$phase cleanup release pump complete');
               }
+              debugPrint('$phase editing await enter');
               await editing;
+              debugPrint('$phase editing await complete');
+              debugPrint('$phase editing settle enter');
               await tester.pumpAndSettle();
+              debugPrint('$phase editing settle complete');
             }
             // Check the obsolete-start oracle before awaiting the row: OLD opens
             // a dialog here, which must be dismissed only by failure-safe teardown.
@@ -1820,10 +1868,13 @@ void main() {
             );
             expect(find.byType(SnackBar), findsNothing);
             if (window == 'start') expect(events, ['start', 'old cancel']);
+            debugPrint('$phase final editing await enter');
             await editing;
+            debugPrint('$phase final editing await complete');
 
             if (window != 'unchanged') {
               // The replacement row can start and cancel its own real dialog.
+              debugPrint('$phase replacement editing enter');
               currentEditing =
                   (tester
                               .widget<ProviderConnectionRow>(
@@ -1832,12 +1883,26 @@ void main() {
                               .onTap
                           as dynamic)()
                       as Future<void>;
+              currentEditing = currentEditing.then((_) {
+                currentEditingCompleted = true;
+                debugPrint('$phase replacement editing complete');
+              });
+              debugPrint('$phase replacement editing pump enter');
               await tester.pump();
+              debugPrint('$phase replacement editing pump complete');
+              debugPrint('$phase replacement transition pump enter');
               await tester.pump(const Duration(seconds: 1));
+              debugPrint('$phase replacement transition pump complete');
               expect(find.text('Connect Claude plan'), findsOneWidget);
+              debugPrint('$phase replacement cancel enter');
               await tester.tap(find.text('Cancel'));
+              debugPrint('$phase replacement cancel complete');
+              debugPrint('$phase replacement settle enter');
               await tester.pumpAndSettle();
+              debugPrint('$phase replacement settle complete');
+              debugPrint('$phase replacement editing await enter');
               await currentEditing;
+              debugPrint('$phase replacement editing await complete');
               expect(events.last, 'current cancel');
               expect(changes, 0);
               expect(cleared, 0);
@@ -1852,18 +1917,52 @@ void main() {
               );
             }
           } finally {
-            if (find.byType(AlertDialog).evaluate().isNotEmpty) {
-              Navigator.of(tester.element(find.byType(AlertDialog))).pop(false);
+            debugPrint(
+              '$phase teardown enter '
+              'submission=$submittingCompleted editing=$editingCompleted '
+              'replacement=$currentEditingCompleted '
+              'cleanupStarted=${cleanupStarted.isCompleted} '
+              'cleanupReleased=${cleanup.isCompleted}',
+            );
+            try {
+              if (find.byType(AlertDialog).evaluate().isNotEmpty) {
+                debugPrint('$phase teardown dialog dismissal enter');
+                Navigator.of(tester.element(find.byType(AlertDialog))).pop(false);
+                debugPrint('$phase teardown dialog dismissal complete');
+              }
+            } finally {
+              try {
+                debugPrint('$phase teardown unmount enter');
+                await tester.pumpWidget(const SizedBox());
+                debugPrint('$phase teardown unmount complete');
+              } finally {
+                if (!start.isCompleted) start.complete(oldAttempt);
+                if (!code.isCompleted) code.complete();
+                if (!cleanup.isCompleted) cleanup.complete();
+                stores.dispose();
+                debugPrint('$phase teardown release pump enter');
+                await tester.pump();
+                debugPrint('$phase teardown release pump complete');
+                if (submitting != null) {
+                  debugPrint('$phase teardown submission await enter');
+                  await submitting;
+                  debugPrint('$phase teardown submission await complete');
+                }
+                if (editing != null) {
+                  debugPrint('$phase teardown editing await enter');
+                  await editing;
+                  debugPrint('$phase teardown editing await complete');
+                }
+                if (currentEditing != null) {
+                  debugPrint('$phase teardown replacement editing await enter');
+                  await currentEditing;
+                  debugPrint(
+                    '$phase teardown replacement editing await complete',
+                  );
+                }
+              }
             }
-            await tester.pumpWidget(const SizedBox());
-            stores.dispose();
-            if (!start.isCompleted) start.complete(oldAttempt);
-            if (!code.isCompleted) code.complete();
-            if (!cleanup.isCompleted) cleanup.complete();
-            await tester.pump();
-            if (submitting != null) await submitting;
-            if (editing != null) await editing;
-            if (currentEditing != null) await currentEditing;
+            debugPrint('$phase teardown complete');
           }
         },
         timeout: const Timeout(Duration(seconds: 60)),

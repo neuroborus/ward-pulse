@@ -321,6 +321,17 @@ code completion and already-started pasted cleanup. They use the real login dial
 replacement credentials, reject obsolete callbacks and allow a current login; the unchanged
 store case proves successful cleanup and callbacks. Owned operations are released and awaited
 even on test failure. Source review is not PASS.
+
+Providers navigation and scrolling join actual native request/reply and secure-store read
+completions, including sequential discovery, currentness checks, mounted plan-row reads and
+their serial successors, before publishing the final frame. Rows mounted during scrolling
+use the same boundary; no Cursor-only lease barrier or request-count assumption establishes
+readiness. Finite dialog transitions retain animation settlement. The Claude cases emit only
+bounded `HOST16-T2` phase labels and completion flags around submission, cleanup-start,
+editing, framework frames and teardown. Submission/dialog pop and row cleanup are separate
+operations; the exact blocked await and its cause remain UNKNOWN pending HOST observation.
+No await-order or route-advancement correction is inferred from Source.
+
 Root runs these on HOST after WHOLE code DONE, owning foreground CLI exit if used, known/scoped
 process retirement and a separate fresh public idle observation, alongside mandatory
 `just release-status`, affected Flutter/JVM, the unchanged full phone check, supplemental
