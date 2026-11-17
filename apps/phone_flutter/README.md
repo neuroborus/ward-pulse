@@ -310,27 +310,40 @@ existing disconnect read ordering, malformed-session cleanup and best-effort rev
 
 The `plan retirement reconciliation` group in `test/app_test.dart` exercises the production
 `PhoneLiveBindings.create` factory, real Java lifecycle/cache engine, synthetic reports and
-`FakeSecureStorage`. Both Disconnect and help → Advanced paste → Remove hold label cleanup
-after retirement. Before releasing that cleanup to fail, the joint oracle collects the
-still-open row, accepted app and Providers snapshots and actual watch-summary payload with
-a healthy sibling. Each entrypoint also covers downstream sync failure; cleanup feedback
-remains separate. The `Claude credential-store ownership` cases in the
-`Claude plan sign-in recovery` group in `test/providers_screen_test.dart` keep the same row
-State and account service while replacing only the credential store during login start,
+`FakeSecureStorage`. A scoped tall test view retains the existing logical width and keeps
+the complete Providers catalogue laid out through removal publication. Both Disconnect and
+help → Advanced paste → Remove hold label cleanup after retirement; Advanced Remove invokes
+the actual row-scoped help `IconButton`, selected by its tooltip property, and retains the
+callback Future. Before releasing cleanup to fail, the unchanged joint oracle requires the
+original mounted `CursorPlanRow` State with visible `Not connected` content, accepted app and
+Providers snapshots and actual watch-summary payload with a healthy sibling. Failure details
+distinguish default-finder absence from offstage retention; absence or a replacement row
+cannot satisfy the oracle. The earlier disappearance does not establish a sorting, lazy-layout
+or product-staleness cause. Each entrypoint also covers downstream sync failure; cleanup
+feedback remains separate and requests no second reload. The `Claude credential-store ownership`
+cases in the `Claude plan sign-in recovery` group in `test/providers_screen_test.dart` keep the
+same row State and account service while replacing only the credential store during login start,
 code completion and already-started pasted cleanup. They use the real login dialog, retain
 replacement credentials, reject obsolete callbacks and allow a current login; the unchanged
 store case proves successful cleanup and callbacks. Owned operations are released and awaited
-even on test failure. Source review is not PASS.
+even on test failure, including test-view restoration and native bridge closure. Source review
+is not PASS.
 
 Providers navigation and scrolling join actual native request/reply and secure-store read
 completions, including sequential discovery, currentness checks, mounted plan-row reads and
-their serial successors, before publishing the final frame. Rows mounted during scrolling
-use the same boundary; no Cursor-only lease barrier or request-count assumption establishes
-readiness. Finite dialog transitions retain animation settlement. The Claude cases emit only
-bounded `HOST16-T2` phase labels and completion flags around submission, cleanup-start,
-editing, framework frames and teardown. Submission/dialog pop and row cleanup are separate
-operations; the exact blocked await and its cause remain UNKNOWN pending HOST observation.
-No await-order or route-advancement correction is inferred from Source.
+their serial successors, after navigation and removal publication. Frames then render completed
+work; animation settlement alone does not establish I/O readiness. Rows mounted during
+scrolling use the same boundary; no Cursor-only lease barrier or request-count assumption
+establishes readiness. Proof leases are released in `finally` before awaiting app loads, sync,
+readiness or editing. Finite dialog transitions retain animation settlement. The Claude cases
+emit only bounded `HOST16-T2` phase labels and completion flags around submission, cleanup-start,
+editing, framework frames and teardown. Their shared deletion hook records the connection,
+signals cleanup entry and awaits the held cleanup Future without framework assertions. The
+test body asserts that argument after observing entry and before releasing cleanup; the
+observed unchanged-store case showed the earlier hook assertion preventing the signal under
+`tester.pump`. The other cleanup window shares that hook by Source, without retrospective
+runtime proof. Submission/dialog pop and row cleanup remain separate operations; no await-order
+or route-advancement correction is inferred from Source.
 
 Root runs these on HOST after WHOLE code DONE, owning foreground CLI exit if used, known/scoped
 process retirement and a separate fresh public idle observation, alongside mandatory

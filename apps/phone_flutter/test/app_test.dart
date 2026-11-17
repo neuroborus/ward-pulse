@@ -14,6 +14,7 @@ import 'package:ward_pulse_phone/sync/openai_reporting_client.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting_clients.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/providers/connection_rejection_notice.dart';
+import 'package:ward_pulse_phone/providers/cursor_plan_row.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting.dart';
 import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
 import 'package:ward_pulse_phone/dashboard/provider_status_color.dart';
@@ -116,6 +117,10 @@ void main() {
                 if (key.endsWith('.label')) readLabels.add(key);
               };
               try {
+                tester.view.physicalSize = Size(
+                  tester.view.physicalSize.width,
+                  2400 * tester.view.devicePixelRatio,
+                );
                 await tester.pumpWidget(
                   WardPulseApp(
                     repository: live.repository,
@@ -168,7 +173,8 @@ void main() {
                         .where((connection) => connection.secretHint != null)
                         .map(
                           (connection) =>
-                              connection.id == ProviderConnections.openAiPlatform
+                              connection.id ==
+                                      ProviderConnections.openAiPlatform
                                   ? 'wardpulse.openai.admin-api-key.label'
                                   : 'wardpulse.${connection.id.storageKey}.label',
                         ),
@@ -196,6 +202,16 @@ void main() {
                   ProviderConnectionRow,
                   'Cursor plan',
                 );
+                final cursorRow = find.byType(CursorPlanRow);
+                final rowState = tester.state(cursorRow);
+                expect(rowState.mounted, isTrue);
+                expect(
+                  find.descendant(
+                    of: rowFinder,
+                    matching: find.text('Connected'),
+                  ),
+                  findsOneWidget,
+                );
                 final beforeLoad =
                     tester
                         .widget<FutureBuilder<DashboardSnapshot>>(
@@ -215,12 +231,16 @@ void main() {
                 // OLD can reach the stale-surface oracle without awaiting a reload
                 // that it never requests. No new lifecycle Dart API is used here.
                 if (advancedRemove) {
+                  final helpButton = find.descendant(
+                    of: rowFinder,
+                    matching: find.byWidgetPredicate(
+                      (widget) =>
+                          widget is IconButton &&
+                          widget.tooltip == 'About Cursor plan sign-in',
+                    ),
+                  );
                   editing =
-                      (tester
-                                  .widget<IconButton>(
-                                    find.byTooltip('About Cursor plan sign-in'),
-                                  )
-                                  .onPressed
+                      (tester.widget<IconButton>(helpButton).onPressed
                               as dynamic)()
                           as Future<void>;
                   await tester.pumpAndSettle();
@@ -248,6 +268,16 @@ void main() {
                         .future!;
                 final accepted = await load;
                 if (!identical(beforeLoad, load)) await removalSync.future;
+                // Join publication reads and their serial successors before
+                // rendering the completed work; animation is not I/O readiness.
+                do {
+                  final batch = replies.sublist(joinedReplies);
+                  joinedReplies = replies.length;
+                  await Future.wait(batch);
+                  await tester.idle();
+                  await tester.pump();
+                  await tester.idle();
+                } while (joinedReplies != replies.length);
                 // OLD retains an animating busy row until cleanup is released;
                 // finish the dialog transition without waiting for that spinner.
                 await tester.pump();
@@ -289,14 +319,23 @@ void main() {
                   ).readSecret(id),
                   isNull,
                 );
-                final rowRemoved =
-                    find
-                        .descendant(
-                          of: rowFinder,
-                          matching: find.text('Not connected'),
-                        )
-                        .evaluate()
-                        .isNotEmpty;
+                final defaultRows = cursorRow.evaluate().length;
+                final allCursorRows = find.byType(
+                  CursorPlanRow,
+                  skipOffstage: false,
+                );
+                final retainedRows = allCursorRows.evaluate().length;
+                final sameOwner =
+                    rowState.mounted &&
+                    defaultRows == 1 &&
+                    identical(tester.state(cursorRow), rowState);
+                final disconnectedContent = find.descendant(
+                  of: rowFinder,
+                  matching: find.text('Not connected'),
+                );
+                final disconnectedVisible =
+                    disconnectedContent.hitTestable().evaluate().length == 1;
+                final rowRemoved = sameOwner && disconnectedVisible;
                 final visible =
                     tester
                         .widget<ProvidersScreen>(find.byType(ProvidersScreen))
@@ -332,7 +371,10 @@ void main() {
                   reason:
                       'Retirement must reconcile the open row, accepted data '
                       'and watch summary before cleanup finishes, retaining the '
-                      'healthy sibling.',
+                      'healthy sibling. Cursor rows: default=$defaultRows, '
+                      'including offstage=$retainedRows, '
+                      'original mounted=${rowState.mounted}, '
+                      'same owner=$sameOwner.',
                 );
                 expect(
                   find.text('Disconnected, but local cleanup remains'),
@@ -357,11 +399,19 @@ void main() {
               } finally {
                 try {
                   if (!releaseCleanup.isCompleted) releaseCleanup.complete();
-                  if (find.byType(AlertDialog).evaluate().isNotEmpty) {
-                    Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+                  try {
+                    if (find.byType(AlertDialog).evaluate().isNotEmpty) {
+                      Navigator.of(
+                        tester.element(find.byType(AlertDialog)),
+                      ).pop();
+                    }
+                  } finally {
+                    try {
+                      await tester.pumpWidget(const SizedBox());
+                    } finally {
+                      if (editing != null) await editing;
+                    }
                   }
-                  await tester.pumpWidget(const SizedBox());
-                  if (editing != null) await editing;
                 } finally {
                   try {
                     // Unmounted continuations may still release leases or start
@@ -378,6 +428,7 @@ void main() {
                     bridge.onInvoke = null;
                     secure.onRead = null;
                     messenger.setMockMethodCallHandler(channel, null);
+                    tester.view.resetPhysicalSize();
                   }
                 }
               }

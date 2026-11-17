@@ -1673,6 +1673,7 @@ void main() {
           final code = Completer<void>();
           final cleanupStarted = Completer<void>();
           final cleanup = Completer<void>();
+          ProviderConnectionId? cleanupConnection;
           final oldAttempt = _claudeAttempt('old', events, () => code.future);
           final currentAttempt = _claudeAttempt('current', events, () async {});
           final service = _QueuedClaudeAccountService(events, [
@@ -1685,7 +1686,7 @@ void main() {
           await replacement.writeSecret(id, 'synthetic-replacement-paste');
           if (window == 'cleanup' || window == 'unchanged') {
             oldStore.beforeDeleteSecret = (connection) async {
-              expect(connection, id);
+              cleanupConnection = connection;
               cleanupStarted.complete();
               await cleanup.future;
             };
@@ -1806,6 +1807,7 @@ void main() {
                 debugPrint('$phase cleanupStarted await enter');
                 await cleanupStarted.future;
                 debugPrint('$phase cleanupStarted await complete');
+                expect(cleanupConnection, id);
                 expect(changes, 0);
                 expect(cleared, 0);
                 if (window == 'cleanup') {
@@ -1927,7 +1929,9 @@ void main() {
             try {
               if (find.byType(AlertDialog).evaluate().isNotEmpty) {
                 debugPrint('$phase teardown dialog dismissal enter');
-                Navigator.of(tester.element(find.byType(AlertDialog))).pop(false);
+                Navigator.of(
+                  tester.element(find.byType(AlertDialog)),
+                ).pop(false);
                 debugPrint('$phase teardown dialog dismissal complete');
               }
             } finally {
