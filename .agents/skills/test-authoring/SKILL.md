@@ -32,6 +32,9 @@ and `justfile`; do not add a framework or dependency for this workflow.
 - Tests MUST be deterministic. Synchronize with events, awaited operations or controlled
   clocks. Artificial sleeps, timing-based ordering, retry-until-green and unnecessary polling
   are prohibited. Await teardown of every owned resource.
+  For injected widget-effect callbacks that may execute under another guarded tester scope, record/signal actual observations there.
+  Keep the assertions in the awaited test body outside the conflicting guard, preserving callback arguments and entry/hold ordering.
+  Keep normal guarded calls and failure-safe teardown; never suppress guard errors, weaken assertions or replace synchronization with sleeps.
 - Prefer framework-owned default resources, such as enabled `testWidgets` semantics,
   when they already provide the required coverage. Before adding a manual handle,
   check the framework's actual verification lifetime: generic teardown may run after
@@ -44,6 +47,8 @@ and `justfile`; do not add a framework or dependency for this workflow.
   After catalogue changes, trace affected app integration callers beyond edited files,
   including shared helper default identities and positional row/action selectors; preserve
   their distinct guarantees rather than blindly rewriting expectations.
+  For typed widget reads, confirm the actual target type; tooltip finders may resolve a framework wrapper.
+  After such a cast failure, trace equivalent typed selectors across affected tests while preserving their distinct state/callback assertions.
 - Affected ordinary host test execution with warm dependencies has a 60-second development
   budget. Measure it and remove avoidable cost; report build, toolchain and emulator setup
   separately. This is not a budget for `just test-all` or a reason to omit required gates.
