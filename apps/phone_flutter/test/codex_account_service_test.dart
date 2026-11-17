@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/providers/codex_account_service.dart';
 import 'package:ward_pulse_phone/providers/codex_account_store.dart';
 import 'package:ward_pulse_phone/sync/codex_account_client.dart';
@@ -114,6 +115,15 @@ void main() {
     );
   });
 
+  test('disconnect forwards retirement reached during malformed-session cleanup', () async {
+    final store = _MalformedStore();
+    final service = MobileCodexAccountService(store: store);
+    final receipts = <CredentialVersion>[];
+    await service.disconnect(onRetired: receipts.add);
+    expect(store.deleted, isTrue);
+    expect(receipts, hasLength(1));
+  });
+
   test('removes a malformed stored session', () async {
     final store = _MalformedStore();
     final service = MobileCodexAccountService(
@@ -140,7 +150,7 @@ final class _MemoryStore implements CodexAccountStore {
   }
 
   @override
-  Future<void> delete() async {
+  Future<void> delete({void Function(CredentialVersion)? onRetired}) async {
     value = null;
   }
 }
@@ -154,7 +164,8 @@ final class _FailingStore implements CodexAccountStore {
       Future.error(StateError('storage'));
 
   @override
-  Future<void> delete() => Future.error(StateError('storage'));
+  Future<void> delete({void Function(CredentialVersion)? onRetired}) =>
+      Future.error(StateError('storage'));
 }
 
 final class _MalformedStore implements CodexAccountStore {
@@ -169,8 +180,13 @@ final class _MalformedStore implements CodexAccountStore {
   Future<void> write(CodexAccountSession value) async {}
 
   @override
-  Future<void> delete() async {
+  Future<void> delete({void Function(CredentialVersion)? onRetired}) async {
     deleted = true;
+    onRetired?.call(CredentialVersion({
+      'generation': 'retired',
+      'revision': 'retired',
+      'epoch': 'retired',
+    }));
   }
 }
 

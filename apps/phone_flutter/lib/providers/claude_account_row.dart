@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../sync/claude_account_client.dart';
 import 'claude_account_service.dart';
 import 'connected_account_dialog.dart';
+import 'connection_lifecycle.dart';
 import 'provider_connection.dart';
 import 'provider_connection_row.dart';
 import 'provider_credential_store.dart';
@@ -39,10 +40,9 @@ class ClaudeAccountRow extends StatefulWidget {
   State<ClaudeAccountRow> createState() => _ClaudeAccountRowState();
 }
 
-class _ClaudeAccountRowState extends State<ClaudeAccountRow> {
-  bool? _hasAccount;
+class _ClaudeAccountRowState extends State<ClaudeAccountRow>
+    with PlanConnectionState<ClaudeAccountRow> {
   VoidCallback? _finishInitialRead;
-  bool _isConnecting = false;
 
   @override
   void initState() {
@@ -51,20 +51,22 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow> {
     _loadState();
   }
 
+  @override
+  Object ownerOf(ClaudeAccountRow widget) => widget.accountService;
+
+  @override
+  Future<bool> readConnected() => widget.accountService.isConnected();
+
+  @override
+  Future<void> observeConnection(CredentialLifecycleObserver observer) =>
+      widget.accountService.observeLifecycle(observer);
+
+  @override
+  void credentialsChanged() => widget.onCredentialsChanged();
+
   Future<void> _loadState() async {
     try {
-      final value = await widget.accountService.isConnected();
-      if (mounted) {
-        setState(() {
-          _hasAccount = value;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _hasAccount = false;
-        });
-      }
+      await loadConnectionState();
     } finally {
       _finishInitialRead?.call();
       _finishInitialRead = null;
@@ -79,7 +81,8 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow> {
   }
 
   Future<void> _editAccount() async {
-    if (_hasAccount == true) {
+    final owner = widget.accountService;
+    if (hasAccount == true) {
       final action = await showDialog<AccountAction>(
         context: context,
         builder:
@@ -91,25 +94,10 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow> {
             ),
       );
       if (action == AccountAction.disconnect) {
-        try {
-          await widget.accountService.disconnect();
-        } on ClaudeAccountException catch (error) {
-          if (mounted) {
-            _showMessage(error.details ?? 'Could not disconnect Claude');
-          }
-          return;
-        } catch (_) {
-          if (mounted) {
-            _showMessage('Could not disconnect Claude');
-          }
-          return;
-        }
-        if (mounted) {
-          setState(() {
-            _hasAccount = false;
-          });
-          widget.onCredentialsChanged();
-        }
+        await disconnectConnection(
+          owner: owner,
+          remove: (onRetired) => owner.disconnect(onRetired: onRetired),
+        );
         return;
       }
       if (action != AccountAction.reconnect) {
@@ -117,12 +105,14 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow> {
       }
     }
 
+    if (!mounted || !identical(owner, widget.accountService)) return;
+    final revision = beginConnectionOperation();
     setState(() {
-      _isConnecting = true;
+      connecting = true;
     });
     try {
-      final attempt = await widget.accountService.startLogin();
-      if (!mounted) {
+      final attempt = await owner.startLogin();
+      if (!ownsConnectionOperation(revision, owner)) {
         attempt.cancel();
         return;
       }
@@ -132,10 +122,10 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow> {
         builder:
             (context) => _ClaudeLoginDialog(
               attempt: attempt,
-              startLogin: widget.accountService.startLogin,
+              startLogin: owner.startLogin,
             ),
       );
-      if (connected == true && mounted) {
+      if (connected == true && ownsConnectionOperation(revision, owner)) {
         // Drop any pre-OAuth pasted access token for this connection.
         try {
           final store = widget.credentialStore;
@@ -149,27 +139,29 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow> {
         } catch (_) {
           // Session is already saved; orphaned paste is non-fatal.
         }
-        if (!mounted) {
+        if (!ownsConnectionOperation(revision, owner)) {
           return;
         }
         setState(() {
-          _hasAccount = true;
+          hasAccount = true;
         });
         widget.onPastedSecretCleared();
         widget.onCredentialsChanged();
       }
     } on ClaudeAccountException catch (error) {
-      if (mounted && error.failure != ClaudeAccountFailure.cancelled) {
+      if (ownsConnectionOperation(revision, owner) &&
+          error.failure != ClaudeAccountFailure.cancelled) {
         _showMessage(error.details ?? 'Could not start Claude sign-in');
       }
     } catch (_) {
-      if (mounted) {
+      if (ownsConnectionOperation(revision, owner)) {
         _showMessage('Could not start Claude sign-in');
       }
     } finally {
-      if (mounted) {
+      if (ownsConnectionOperation(revision, owner)) {
         setState(() {
-          _isConnecting = false;
+          connecting = false;
+          if (hasAccount == null) connectionUnavailable = true;
         });
       }
     }
@@ -177,20 +169,19 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow> {
 
   @override
   Widget build(BuildContext context) {
-    final controls = widget.buildControls(
-      status: switch ((_hasAccount, _isConnecting)) {
-        (_, true) || (null, _) => const RowProgress(),
-        (true, _) => const Text('Connected'),
-        (false, _) => const Text('Not connected'),
-      },
-    );
+    final controls = widget.buildControls(status: connectionStatus());
     return ProviderConnectionRow(
       icon: Icons.account_circle_outlined,
       title: widget.connection.listTitle,
       subtitle: widget.connection.listSubtitle,
       status: controls.status,
       actions: controls.actions,
-      onTap: _hasAccount == null || _isConnecting ? null : _editAccount,
+      onTap:
+          (hasAccount == null && !connectionUnavailable) ||
+                  connecting ||
+                  disconnecting
+              ? null
+              : _editAccount,
     );
   }
 

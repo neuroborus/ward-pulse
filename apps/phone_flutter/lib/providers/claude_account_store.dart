@@ -39,7 +39,7 @@ abstract interface class ClaudeAccountStore {
 
   Future<void> write(ClaudeAccountSession value);
 
-  Future<void> delete();
+  Future<void> delete({void Function(CredentialVersion)? onRetired});
 }
 
 final class SecureClaudeAccountStore
@@ -68,6 +68,9 @@ final class SecureClaudeAccountStore
                 ).accountId.trim(),
       );
   @override
+  Future<void> observeLifecycle(CredentialLifecycleObserver observer) =>
+      _credentials.observeLifecycle(observer);
+  @override
   Future<bool> isCurrent(CredentialVersion expected) =>
       _credentials.isCurrent(expected);
   @override
@@ -95,8 +98,8 @@ final class SecureClaudeAccountStore
   Future<void> write(ClaudeAccountSession value) =>
       _credentials.write(jsonEncode(value.toJson()));
   @override
-  Future<void> delete() async {
-    await _credentials.delete();
+  Future<void> delete({void Function(CredentialVersion)? onRetired}) async {
+    await _credentials.delete(onRetired: onRetired);
   }
 
   @override
@@ -105,7 +108,7 @@ final class SecureClaudeAccountStore
 
   @override
   Future<void> deleteIfCurrent(CredentialVersion expected) =>
-      _credentials.delete(expected);
+      _credentials.delete(expected: expected);
   @override
   Future<CredentialVersion?> refresh(
     ClaudeAccountSession value,

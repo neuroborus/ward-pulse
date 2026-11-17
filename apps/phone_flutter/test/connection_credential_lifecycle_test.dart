@@ -3,6 +3,9 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
+import 'package:ward_pulse_phone/providers/cursor_plan_row.dart';
+import 'package:ward_pulse_phone/providers/provider_connection_row.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_load.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
@@ -50,6 +53,292 @@ void main() {
         storage: secure,
         platform: bridge.platform(owner),
       );
+
+  for (final outcome in [
+    'pending',
+    'reconnected',
+    'unreadable',
+    'cancelled',
+    'pasted',
+    'barrier',
+    'invalid-paste',
+  ]) {
+    testWidgets(
+      'late disconnect settlement respects $outcome evidence',
+      (tester) async {
+        await tester.runAsync(() async {
+          const id = ProviderConnections.cursorPlan;
+          final observed = Completer<void>();
+          final release = Completer<void>();
+          final deleting = Completer<void>();
+          final resumeDeletion = Completer<void>();
+          final platform = _RecordingPlatform(bridge.platform('row'));
+          final credentials = SecureProviderCredentialStore(
+            storage: secure,
+            platform: platform,
+          );
+          await credentials.writeSecret(id, 'synthetic-old');
+          var changed = 0;
+          final ready = Completer<void>();
+          secure.beforeDelete = (key) async {
+            if (key == 'wardpulse.cursor.plan.label') {
+              observed.complete();
+              await release.future;
+            }
+          };
+          secure.failDeleteKey = 'wardpulse.cursor.plan.label';
+          Future<void>? editing;
+          Future<void>? recovery;
+          try {
+            await tester.pumpWidget(
+              MaterialApp(
+                home: Scaffold(
+                  body: CursorPlanRow(
+                    connection: providerConnectionCatalog().firstWhere(
+                      (row) => row.id == id,
+                    ),
+                    credentialStore: credentials,
+                    signIn: (_) async => null,
+                    onInitialRead: () => () => ready.complete(),
+                    onCredentialsChanged: () => changed++,
+                    buildControls: ({leading = const [], required status}) =>
+                        (actions: leading, status: status),
+                  ),
+                ),
+              ),
+            );
+            await ready.future;
+            await tester.pumpAndSettle();
+            final help = tester.widget<IconButton>(
+              find.byTooltip('About Cursor plan sign-in'),
+            ).onPressed!;
+            if (outcome == 'barrier') {
+              await bridge.invoke('test', 'failCommit', {'value': true});
+            } else if (outcome == 'invalid-paste') {
+              platform.onInvoke = (method, args) async {
+                if (method == 'acquire' && args['action'] == 'delete') {
+                  deleting.complete();
+                  await resumeDeletion.future;
+                }
+              };
+            }
+            editing =
+                (tester.widget<ProviderConnectionRow>(
+                      find.byType(ProviderConnectionRow),
+                    ).onTap as dynamic)()
+                as Future<void>;
+            await tester.pumpAndSettle();
+            await tester.tap(find.text('Disconnect'));
+            if (outcome == 'invalid-paste') {
+              await deleting.future;
+              await tester.pump();
+              expect(
+                tester.widget<IconButton>(
+                  find.byTooltip('About Cursor plan sign-in'),
+                ).onPressed,
+                isNull,
+              );
+              // A callback retained from the previous frame is guarded too.
+              await (help as dynamic)();
+              await tester.pump();
+              expect(find.text('Advanced paste'), findsNothing);
+              expect(changed, 0);
+              resumeDeletion.complete();
+            }
+            if (outcome != 'barrier') {
+              await observed.future;
+              expect(changed, 1);
+              if (outcome == 'invalid-paste') {
+                await tester.pumpAndSettle();
+                recovery = (help as dynamic)() as Future<void>;
+                await tester.pumpAndSettle();
+                await tester.tap(find.text('Advanced paste'));
+                await tester.pumpAndSettle();
+                await tester.enterText(find.byType(TextFormField), 'invalid');
+                await tester.tap(find.text('Save'));
+                await recovery;
+                await tester.pumpAndSettle();
+                expect(
+                  find.text('That does not look like a Cursor session token'),
+                  findsOneWidget,
+                );
+                ScaffoldMessenger.of(
+                  tester.element(find.byType(CursorPlanRow)),
+                ).removeCurrentSnackBar();
+              } else if (['unreadable', 'cancelled', 'pasted'].contains(outcome)) {
+                platform.onInvoke = (method, args) {
+                  if (method == 'acquire' && args['action'] == 'read') {
+                    throw StateError('Synthetic lifecycle observation failure');
+                  }
+                };
+              } else {
+                final newer = reportingStore('new-owner');
+                final ticket = await newer.beginReconnect(id);
+                if (outcome == 'reconnected') {
+                  expect(
+                    await newer.completeReconnect(id, 'synthetic-new', ticket),
+                    isTrue,
+                  );
+                }
+              }
+            }
+            release.complete();
+            await editing;
+            await tester.pumpAndSettle();
+            expect(changed, outcome == 'barrier' ? 0 : 1);
+            expect(
+              find.textContaining('Disconnected, but'),
+              outcome == 'invalid-paste' ? findsOneWidget : findsNothing,
+            );
+            expect(
+              find.text(
+                outcome == 'invalid-paste'
+                    ? 'Not connected'
+                    : outcome == 'reconnected'
+                    ? 'Connected'
+                    : 'Unavailable · Retry check',
+              ),
+              findsOneWidget,
+            );
+            if (outcome != 'invalid-paste') {
+              expect(find.text('Not connected'), findsNothing);
+            }
+            if (outcome == 'cancelled') {
+              platform.onInvoke = null;
+              recovery =
+                  (tester.widget<ProviderConnectionRow>(
+                        find.byType(ProviderConnectionRow),
+                      ).onTap as dynamic)()
+                  as Future<void>;
+              await recovery;
+              await tester.pumpAndSettle();
+              expect(find.text('Unavailable · Retry check'), findsOneWidget);
+              expect(find.byType(RowProgress), findsNothing);
+              expect(changed, 1);
+            }
+            if (outcome == 'pasted') {
+              platform.onInvoke = null;
+              recovery =
+                  (tester.widget<IconButton>(
+                        find.byTooltip('About Cursor plan sign-in'),
+                      ).onPressed as dynamic)()
+                  as Future<void>;
+              await tester.pumpAndSettle();
+              await tester.tap(find.text('Advanced paste'));
+              await tester.pumpAndSettle();
+              await tester.enterText(
+                find.byType(TextFormField),
+                'synthetic-user::synthetic-session',
+              );
+              await tester.tap(find.text('Save'));
+              await recovery;
+              await tester.pumpAndSettle();
+              expect(find.text('Connected'), findsOneWidget);
+              expect(find.text('Unavailable · Retry check'), findsNothing);
+              expect(changed, 2);
+            }
+            if (!['reconnected', 'pasted', 'invalid-paste'].contains(outcome)) {
+              platform.onInvoke = null;
+              final deletes = secure.deleted.length;
+              final retry = tester.widget<TextButton>(
+                find.widgetWithText(TextButton, 'Unavailable · Retry check'),
+              ).onPressed!;
+              await (retry as dynamic)();
+              await tester.pumpAndSettle();
+              expect(
+                find.text(
+                  outcome == 'unreadable'
+                      ? 'Not connected'
+                      : 'Unavailable · Retry check',
+                ),
+                findsOneWidget,
+              );
+              expect(secure.deleted.length, deletes);
+            }
+          } finally {
+            if (!resumeDeletion.isCompleted) resumeDeletion.complete();
+            if (!release.isCompleted) release.complete();
+            platform.onInvoke = null;
+            if (find.byType(AlertDialog).evaluate().isNotEmpty) {
+              Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+            }
+            await tester.pumpWidget(const SizedBox());
+            if (editing != null) await editing;
+            if (recovery != null) await recovery;
+          }
+        });
+      },
+      timeout: const Timeout(Duration(seconds: 60)),
+    );
+  }
+
+  test('successful retirement is synchronous, exact and releases observation', () async {
+    final access = store('ui');
+    await access.write('synthetic-old');
+    final old = (await access.read())!.version;
+    await access.write('synthetic-current');
+    var notified = 0;
+    await access.delete(expected: old, onRetired: (_) => notified++);
+    expect(notified, 0);
+    CredentialVersion? receipt;
+    await access.delete(onRetired: (stamp) {
+      receipt = stamp;
+      notified++;
+    });
+    expect(notified, 1);
+    await expectLater(access.observeLifecycle((mode, stamp) {
+      expect(mode, 'deleted');
+      expect(stamp!.values, receipt!.values);
+      throw StateError('Synthetic consumer failure');
+    }), throwsStateError);
+    await store('other').observeLifecycle((mode, _) => expect(mode, 'deleted'));
+  });
+
+  test('OAuth removals forward retirement before secure cleanup fails', () async {
+    final codex = SecureCodexAccountStore(
+      storage: secure,
+      platform: bridge.platform('codex'),
+    );
+    final claude = SecureClaudeAccountStore(
+      storage: secure,
+      platform: bridge.platform('claude'),
+    );
+    await codex.write(CodexAccountSession(
+      accessToken: 'synthetic-access',
+      refreshToken: 'synthetic-refresh',
+      accountId: 'synthetic-account',
+      refreshedAt: now,
+    ));
+    await claude.write(ClaudeAccountSession(
+      accessToken: 'synthetic-access',
+      refreshToken: 'synthetic-refresh',
+      accountId: 'synthetic-account',
+      expiresAt: now,
+    ));
+    for (final (remove, observe, key) in [
+      (
+        MobileCodexAccountService(store: codex).disconnect,
+        codex.observeLifecycle,
+        'wardpulse.codex.account-session',
+      ),
+      (
+        MobileClaudeAccountService(store: claude).disconnect,
+        claude.observeLifecycle,
+        'wardpulse.claude.account-session',
+      ),
+    ]) {
+      secure.failDeleteKey = key;
+      CredentialVersion? receipt;
+      await expectLater(
+        remove(onRetired: (stamp) => receipt = stamp),
+        throwsA(anything),
+      );
+      await observe((mode, stamp) {
+        expect(mode, 'deleted');
+        expect(stamp!.values, receipt!.values);
+      });
+    }
+  });
 
   test(
     'retained-session notices survive lifecycle changes and exact dismissal',
@@ -202,7 +491,17 @@ void main() {
                   (key) => key.startsWith('wardpulse.connection.'),
                 );
         secure.failDeleteKey = failedKey;
-        await expectLater(credentials.deleteSecret(id), throwsStateError);
+        CredentialVersion? receipt;
+        final deleting = credentials.deleteSecret(id, onRetired: (stamp) {
+          receipt = stamp;
+          expect(secure.deleted, isNot(contains(failedKey)));
+        });
+        await expectLater(deleting, throwsStateError);
+        expect(receipt, isNotNull);
+        await credentials.credentialAccess(id)!.observeLifecycle((mode, stamp) {
+          expect(mode, 'deleted');
+          expect(stamp!.values, receipt!.values);
+        });
         expect(await reportingStore('cold').readSecret(id), isNull);
         expect(
           await credentials.credentialAccess(id)!.isCurrent(version),
@@ -447,7 +746,10 @@ void main() {
       final before = Map<String, String>.from(secure.values);
       final deleted = secure.deleted.length;
       await bridge.invoke('test', 'failCommit', {'value': true});
-      await expectLater(store('ui').delete(), throwsStateError);
+      var notifications = 0;
+      await expectLater(store('ui').delete(onRetired: (_) => notifications++),
+          throwsStateError);
+      expect(notifications, 0);
       expect(secure.values, before);
       expect(secure.deleted.length, deleted);
       await bridge.invoke('test', 'failCommit', {'value': false});
@@ -1272,11 +1574,11 @@ final class _RecordingPlatform implements ConnectionCachePlatform {
   _RecordingPlatform(this.delegate);
   final ConnectionCachePlatform delegate;
   final calls = <({String method, Map<String, Object?> arguments})>[];
-  void Function(String, Map<String, Object?>)? onInvoke;
+  FutureOr<void> Function(String, Map<String, Object?>)? onInvoke;
   @override
-  Future<Object?> invoke(String method, Map<String, Object?> arguments) {
+  Future<Object?> invoke(String method, Map<String, Object?> arguments) async {
     calls.add((method: method, arguments: Map.of(arguments)));
-    onInvoke?.call(method, arguments);
+    await onInvoke?.call(method, arguments);
     return delegate.invoke(method, arguments);
   }
 }

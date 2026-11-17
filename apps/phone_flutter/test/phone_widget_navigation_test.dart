@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
@@ -347,5 +348,8 @@ class _Credentials implements ProviderCredentialStore {
       mutations++;
 
   @override
-  Future<void> deleteSecret(ProviderConnectionId id) async => mutations++;
+  Future<void> deleteSecret(
+    ProviderConnectionId id, {
+    void Function(CredentialVersion)? onRetired,
+  }) async => mutations++;
 }

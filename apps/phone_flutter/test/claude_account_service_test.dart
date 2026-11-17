@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
 import 'package:ward_pulse_phone/providers/claude_account_store.dart';
 import 'package:ward_pulse_phone/sync/claude_account_client.dart';
@@ -126,7 +127,7 @@ class _MemoryStore implements ClaudeAccountStore {
   }
 
   @override
-  Future<void> delete() async {
+  Future<void> delete({void Function(CredentialVersion)? onRetired}) async {
     value = null;
   }
 }

@@ -2587,6 +2587,13 @@ void _expectCompleteReveal(
 }
 
 class _DelayedCodexAccountService implements CodexAccountService {
+  @override
+  Future<void> observeLifecycle(
+    void Function(String, CredentialVersion?) observer,
+  ) async {
+    observer(await isConnected() ? 'active' : 'deleted', null);
+  }
+
   final read = Completer<bool>();
   var reads = 0;
   @override
@@ -2602,7 +2609,9 @@ class _DelayedCodexAccountService implements CodexAccountService {
   Future<String?> fetchReport() async =>
       throw StateError('Unexpected provider request');
   @override
-  Future<void> disconnect() async => throw StateError('Unexpected disconnect');
+  Future<void> disconnect({
+    void Function(CredentialVersion)? onRetired,
+  }) async => throw StateError('Unexpected disconnect');
 }
 
 /// An ordinary attempt that records each submitted code and its cancellation.
@@ -2625,6 +2634,13 @@ ClaudeLoginAttempt _claudeAttempt(
 
 /// Starts the queued attempts in order for the row and its mounted dialog.
 final class _QueuedClaudeAccountService implements ClaudeAccountService {
+  @override
+  Future<void> observeLifecycle(
+    void Function(String, CredentialVersion?) observer,
+  ) async {
+    observer(await isConnected() ? 'active' : 'deleted', null);
+  }
+
   _QueuedClaudeAccountService(this.events, this.logins);
 
   final List<String> events;
@@ -2644,7 +2660,9 @@ final class _QueuedClaudeAccountService implements ClaudeAccountService {
       throw StateError('Unexpected provider request');
 
   @override
-  Future<void> disconnect() async => throw StateError('Unexpected disconnect');
+  Future<void> disconnect({
+    void Function(CredentialVersion)? onRetired,
+  }) async => throw StateError('Unexpected disconnect');
 }
 
 /// Scopes a finder to the catalog row titled [title].
@@ -2792,9 +2810,13 @@ class _MemoryCredentialStore
   }
 
   @override
-  Future<void> deleteSecret(ProviderConnectionId id) async {
+  Future<void> deleteSecret(
+    ProviderConnectionId id, {
+    void Function(CredentialVersion)? onRetired,
+  }) async {
     _generations[id] = (_generations[id] ?? 0) + 1;
     _secrets.remove(id);
+    onRetired?.call(version(id));
     _labels.remove(id);
   }
 
@@ -2819,6 +2841,13 @@ class _MemoryCredentialStore
 Future<void> _noRefresh() async {}
 
 final class _MemoryCredentialAccess implements ConnectionCredentialAccess {
+  @override
+  Future<void> observeLifecycle(
+    void Function(String, CredentialVersion?) observer,
+  ) async {
+    final value = await store.readSecret(id);
+    observer(value == null ? 'deleted' : 'active', store.version(id));
+  }
   @override
   Future<void> admitAutomatic(CredentialVersion expected) async {}
   const _MemoryCredentialAccess(this.store, this.id);

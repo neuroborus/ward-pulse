@@ -39,7 +39,7 @@ abstract interface class CodexAccountStore {
 
   Future<void> write(CodexAccountSession value);
 
-  Future<void> delete();
+  Future<void> delete({void Function(CredentialVersion)? onRetired});
 }
 
 final class SecureCodexAccountStore
@@ -69,6 +69,9 @@ final class SecureCodexAccountStore
                 ).accountId.trim(),
       );
   @override
+  Future<void> observeLifecycle(CredentialLifecycleObserver observer) =>
+      _credentials.observeLifecycle(observer);
+  @override
   Future<bool> isCurrent(CredentialVersion expected) =>
       _credentials.isCurrent(expected);
   @override
@@ -96,8 +99,8 @@ final class SecureCodexAccountStore
   Future<void> write(CodexAccountSession value) =>
       _credentials.write(jsonEncode(value.toJson()));
   @override
-  Future<void> delete() async {
-    await _credentials.delete();
+  Future<void> delete({void Function(CredentialVersion)? onRetired}) async {
+    await _credentials.delete(onRetired: onRetired);
     await _storage.delete(key: _legacyCompanionKey);
   }
 
@@ -107,7 +110,7 @@ final class SecureCodexAccountStore
 
   @override
   Future<void> deleteIfCurrent(CredentialVersion expected) =>
-      _credentials.delete(expected);
+      _credentials.delete(expected: expected);
   @override
   Future<CredentialVersion?> refresh(
     CodexAccountSession value,

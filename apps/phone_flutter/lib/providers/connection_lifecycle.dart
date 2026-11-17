@@ -56,6 +56,10 @@ final class CredentialVersion {
       values['identity'] == other.values['identity'];
 }
 
+/// Synchronous observation under a native lease; legacy stores can lack a stamp.
+typedef CredentialLifecycleObserver =
+    void Function(String mode, CredentialVersion? version);
+
 typedef ConnectionRejection = ({String connection, String eventId});
 
 /// Records only a classified failure of an owned saved credential/fetch.
@@ -73,6 +77,7 @@ final class VersionedCredential<T> {
 abstract interface class ConnectionCredentialAccess {
   Future<VersionedCredential<String>?> read();
   Future<bool> isCurrent(CredentialVersion expected);
+  Future<void> observeLifecycle(CredentialLifecycleObserver observer);
   Future<R> serializeFetch<R>(Future<R> Function() operation);
   Future<void> admitAutomatic(CredentialVersion expected);
 }
@@ -81,6 +86,7 @@ abstract interface class VersionedAccountStore<T> {
   Future<R> serializeFetch<R>(Future<R> Function() operation);
   Future<void> admitAutomatic(CredentialVersion expected);
   Future<bool> isCurrent(CredentialVersion expected);
+  Future<void> observeLifecycle(CredentialLifecycleObserver observer);
   Future<VersionedCredential<T>?> readVersioned();
   Future<CredentialVersion?> refresh(T value, CredentialVersion expected);
   Future<void> deleteIfCurrent(CredentialVersion expected);
@@ -270,6 +276,36 @@ final class ConnectionCredentialStorage
           }) ==
           true;
 
+  CredentialVersion? _stamp(Map<String, Object?> state) =>
+      ['generation', 'revision', 'epoch'].every(
+            (key) =>
+                state[key] is String &&
+                (state[key]! as String).trim().isNotEmpty,
+          )
+          ? CredentialVersion.fromMap(state)
+          : null;
+
+  @override
+  Future<void> observeLifecycle(CredentialLifecycleObserver observer) async {
+    final lease = await _begin('read');
+    if (lease['accepted'] != true) {
+      throw StateError('Credential lifecycle unavailable.');
+    }
+    try {
+      final mode = lease['mode'];
+      final stamp = _stamp(lease);
+      if (lease['lease'] is! String ||
+          (lease['lease']! as String).isEmpty ||
+          !['active', 'pending', 'deleted', 'legacy', 'migration'].contains(mode) ||
+          (mode != 'legacy' && stamp == null)) {
+        throw StateError('Credential lifecycle unavailable.');
+      }
+      observer(mode! as String, stamp);
+    } finally {
+      await _finish(lease, 'release');
+    }
+  }
+
   @override
   Future<VersionedCredential<String>?> read() async {
     final lease = await _begin('read');
@@ -435,10 +471,23 @@ final class ConnectionCredentialStorage
     return true;
   }
 
-  Future<void> delete([CredentialVersion? expected]) async {
+  Future<void> delete({
+    CredentialVersion? expected,
+    void Function(CredentialVersion)? onRetired,
+  }) async {
     final lease = await _begin('delete', expected);
     if (lease['accepted'] != true) return;
-    await _deleteRetired(lease);
+    try {
+      final stamp = _stamp(lease);
+      if (lease['mode'] == 'deleted' &&
+          stamp != null &&
+          lease['lease'] is String &&
+          (lease['lease']! as String).isNotEmpty) {
+        onRetired?.call(stamp);
+      }
+    } finally {
+      await _deleteRetired(lease);
+    }
   }
 
   Future<void> _deleteRetired(Map<String, Object?> lease) async {

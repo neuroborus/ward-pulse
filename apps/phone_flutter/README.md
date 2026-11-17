@@ -298,6 +298,39 @@ native service coordinates concurrent Flutter engines in the application's singl
 process, including WorkManager; separate OS processes are unsupported. Foreground and
 headless callers validate ownership before publication.
 
+Plan removal returns `Future<void>` and separately forwards an optional synchronous
+`onRetired` receipt through the secure stores and services. Only accepted native `deleted`
+state with a complete generation/revision/epoch stamp notifies, under the deletion lease and
+before cleanup. The owned open row settles and starts normal app invalidation/reload once at
+that checkpoint; cleanup or downstream failure cannot undo retirement. Later feedback uses
+`observeLifecycle` under a read lease to match the exact deleted stamp. A newer active/pending
+owner suppresses old feedback; unreadable evidence releases busy state with Retry check and
+reconnect available. Retry check observes evidence without deleting again. Codex retains its
+existing disconnect read ordering, malformed-session cleanup and best-effort revoke.
+
+The `plan retirement reconciliation` group in `test/app_test.dart` exercises the production
+`PhoneLiveBindings.create` factory, real Java lifecycle/cache engine, synthetic reports and
+`FakeSecureStorage`. Label deletion alone fails after retirement; the joint oracle collects
+the still-open row, accepted app snapshot and normal watch-summary payload with a healthy
+sibling before asserting removal and separate cleanup feedback. Source review is not PASS.
+Root runs it on HOST after WHOLE code DONE, owning foreground CLI exit if used, known/scoped
+process retirement and a separate fresh public idle observation, alongside mandatory
+`just release-status`, affected Flutter/JVM, the unchanged full phone check, supplemental
+formatting, host FFI qualification, Android builds and native/device/active-artifact acceptance.
+
+For SAME-final replay, Root binds OLD to accepted predecessor
+`4f0b3a9061c7706a90522abaf481f55978849f3d`. Keep identical final tests/support/inputs, Java
+engine and FFI library; substitute the complete Dart repair closure, including lifecycle,
+secure account/provider stores, services, shared row settlement and the three plan rows.
+Qualify immutable blobs/modes, final loader/test identities and index/refs before mutation.
+Use journaled in-place Git-blob substitution with unconditional final restoration and reader
+retirement before transitions; retain no Source backup, clone or worktree. Bound setup
+separately and each focused warm leg to 60 seconds with qualified framework/process deadlines
+and awaited Flutter/JVM retirement. OLD must establish retirement and reach the joint stale
+row/accepted-data oracle; compilation, loading, transport and timeout failures are not causal
+RED. Root retains journal/restoration custody and repeats its whole independent ZERO after
+restoration and the last correction. All runtime acceptance remains pending.
+
 `ConnectionSnapshotCache.stamp` binds each normalized account's private `historyOwner` to
 the captured committed credential's connection and accepted identity digest. Native cache
 provenance can qualify an ownerless cached snapshot; conflicting persisted owners are rejected.

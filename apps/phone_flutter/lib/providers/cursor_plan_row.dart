@@ -42,10 +42,9 @@ class CursorPlanRow extends StatefulWidget {
   State<CursorPlanRow> createState() => _CursorPlanRowState();
 }
 
-class _CursorPlanRowState extends State<CursorPlanRow> {
-  bool? _hasAccount;
+class _CursorPlanRowState extends State<CursorPlanRow>
+    with PlanConnectionState<CursorPlanRow> {
   VoidCallback? _finishInitialRead;
-  bool _isConnecting = false;
 
   @override
   void initState() {
@@ -54,24 +53,36 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
     _loadState();
   }
 
+  @override
+  Object ownerOf(CursorPlanRow widget) => widget.credentialStore;
+
+  @override
+  Future<bool> readConnected() async =>
+      await widget.credentialStore.readSecret(ProviderConnections.cursorPlan) !=
+      null;
+
+  @override
+  Future<void> observeConnection(CredentialLifecycleObserver observer) async {
+    final store = widget.credentialStore;
+    final access =
+        store is VersionedProviderCredentialStore
+            ? (store as VersionedProviderCredentialStore).credentialAccess(
+              ProviderConnections.cursorPlan,
+            )
+            : null;
+    if (access != null) {
+      await access.observeLifecycle(observer);
+    } else {
+      observer(await readConnected() ? 'active' : 'deleted', null);
+    }
+  }
+
+  @override
+  void credentialsChanged() => widget.onCredentialsChanged();
+
   Future<void> _loadState() async {
     try {
-      final value =
-          await widget.credentialStore.readSecret(
-            ProviderConnections.cursorPlan,
-          ) !=
-          null;
-      if (mounted) {
-        setState(() {
-          _hasAccount = value;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _hasAccount = false;
-        });
-      }
+      await loadConnectionState();
     } finally {
       _finishInitialRead?.call();
       _finishInitialRead = null;
@@ -86,7 +97,8 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
   }
 
   Future<void> _editAccount() async {
-    if (_hasAccount == true) {
+    final owner = widget.credentialStore;
+    if (hasAccount == true) {
       final action = await showDialog<AccountAction>(
         context: context,
         builder:
@@ -99,28 +111,22 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
             ),
       );
       if (action == AccountAction.disconnect) {
-        try {
-          await widget.credentialStore.deleteSecret(
-            ProviderConnections.cursorPlan,
-          );
-          final wiped = await wipeCursorWebViewSession();
-          if (!wiped && mounted) {
-            _showMessage(
-              'Disconnected, but could not clear the in-app Cursor session',
-            );
-          }
-        } catch (_) {
-          if (mounted) {
-            _showMessage('Could not disconnect Cursor plan');
-          }
-          return;
-        }
-        if (mounted) {
-          setState(() {
-            _hasAccount = false;
-          });
-          widget.onCredentialsChanged();
-        }
+        await disconnectConnection(
+          owner: owner,
+          remove:
+              (onRetired) => owner.deleteSecret(
+                ProviderConnections.cursorPlan,
+                onRetired: onRetired,
+              ),
+          cleanup: () async {
+            try {
+              if (await wipeCursorWebViewSession()) return null;
+            } catch (_) {
+              // Cookie cleanup is separate from saved credential removal.
+            }
+            return 'Disconnected, but could not clear the in-app Cursor session';
+          },
+        );
         return;
       }
       if (action != AccountAction.reconnect) {
@@ -128,13 +134,15 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
       }
     }
 
+    if (!mounted || !identical(owner, widget.credentialStore)) return;
     await _runSignIn();
   }
 
   Future<void> _runSignIn() async {
-    if (_isConnecting) return;
+    if (connecting) return;
+    final revision = beginConnectionOperation();
     setState(() {
-      _isConnecting = true;
+      connecting = true;
     });
     final store = widget.credentialStore;
     final managed =
@@ -145,10 +153,10 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
     var saved = false;
     try {
       ticket = await managed?.beginReconnect(ProviderConnections.cursorPlan);
-      if (!mounted) return;
+      if (!ownsConnectionOperation(revision, store)) return;
       final signIn = widget.signIn ?? CursorPlanSignInScreen.open;
       final token = await signIn(context);
-      if (!mounted) {
+      if (!ownsConnectionOperation(revision, store)) {
         return;
       }
       final normalized =
@@ -166,15 +174,15 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
         throw StateError('Cursor sign-in superseded.');
       }
       saved = true;
-      if (!mounted) {
+      if (!ownsConnectionOperation(revision, store)) {
         return;
       }
       setState(() {
-        _hasAccount = true;
+        hasAccount = true;
       });
       widget.onCredentialsChanged();
     } catch (_) {
-      if (mounted) {
+      if (ownsConnectionOperation(revision, store)) {
         _showMessage('Could not complete Cursor sign-in');
       }
     } finally {
@@ -188,15 +196,17 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
           /* Pending credentials remain unavailable. */
         }
       }
-      if (mounted) {
+      if (ownsConnectionOperation(revision, store)) {
         setState(() {
-          _isConnecting = false;
+          connecting = false;
+          if (hasAccount == null) connectionUnavailable = true;
         });
       }
     }
   }
 
   Future<void> _showHelp() async {
+    if (!mounted || connecting || disconnecting) return;
     final paste = await showDialog<bool>(
       context: context,
       builder: (context) => const _CursorPlanHelpDialog(),
@@ -207,7 +217,9 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
   }
 
   Future<void> _pasteToken() async {
+    if (!mounted || connecting || disconnecting) return;
     const id = ProviderConnections.cursorPlan;
+    final store = widget.credentialStore;
     final change = await showDialog<CredentialChange>(
       context: context,
       builder:
@@ -215,7 +227,7 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
             title: 'Cursor plan · Paste token',
             hint: cursorSessionCookieName,
             allowLabel: false,
-            hasCredential: _hasAccount ?? false,
+            hasCredential: hasAccount ?? false,
             autofocus: false,
             guidance:
                 'Use a desktop browser to get the session cookie for the Cursor account you want to connect.\n\n'
@@ -230,56 +242,64 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
                 'Prefer signing in here? Tap Cancel, then tap Cursor plan.',
           ),
     );
-    if (change == null) {
+    if (change == null ||
+        !mounted ||
+        connecting ||
+        disconnecting ||
+        !identical(store, widget.credentialStore)) {
       return;
     }
+    final token =
+        change.value == null ? null : normalizeCursorSessionToken(change.value!);
+    if (!change.remove && token == null) {
+      if (change.value != null) {
+        _showMessage('That does not look like a Cursor session token');
+      }
+      return;
+    }
+    final revision = beginConnectionOperation();
+    setState(() => connecting = true);
     try {
       if (change.remove) {
-        await widget.credentialStore.deleteSecret(id);
+        await store.deleteSecret(id);
         final wiped = await wipeCursorWebViewSession();
-        if (!wiped && mounted) {
+        if (!wiped && ownsConnectionOperation(revision, store)) {
           _showMessage(
             'Removed, but could not clear the in-app Cursor session',
           );
         }
-      } else if (change.value != null) {
-        final token = normalizeCursorSessionToken(change.value!);
-        if (token == null) {
-          if (mounted) {
-            _showMessage('That does not look like a Cursor session token');
-          }
-          return;
-        }
-        await widget.credentialStore.writeSecret(id, token);
       } else {
-        return;
+        await store.writeSecret(id, token!);
       }
-      if (!mounted) {
+      if (!ownsConnectionOperation(revision, store)) {
         return;
       }
       setState(() {
-        _hasAccount = !change.remove;
+        hasAccount = !change.remove;
       });
       widget.onCredentialsChanged();
     } catch (_) {
-      if (mounted) {
+      if (ownsConnectionOperation(revision, store)) {
         _showMessage('Could not update Cursor plan token');
+      }
+    } finally {
+      if (ownsConnectionOperation(revision, store)) {
+        setState(() {
+          connecting = false;
+          if (hasAccount == null) connectionUnavailable = true;
+        });
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final status = switch ((_hasAccount, _isConnecting)) {
-      (_, true) || (null, _) => const RowProgress(),
-      (true, _) => const Text('Connected'),
-      (false, _) => const Text('Not connected'),
-    };
+    final status = connectionStatus();
     final controls = widget.buildControls(
       leading: [
         IconButton(
           tooltip: 'About Cursor plan sign-in',
-          onPressed: _isConnecting ? null : _showHelp,
+          onPressed: connecting || disconnecting ? null : _showHelp,
           icon: const Icon(Icons.help_outline),
         ),
       ],
@@ -291,7 +311,12 @@ class _CursorPlanRowState extends State<CursorPlanRow> {
       subtitle: widget.connection.listSubtitle,
       status: controls.status,
       actions: controls.actions,
-      onTap: _hasAccount == null || _isConnecting ? null : _editAccount,
+      onTap:
+          (hasAccount == null && !connectionUnavailable) ||
+                  connecting ||
+                  disconnecting
+              ? null
+              : _editAccount,
     );
   }
 

@@ -70,6 +70,14 @@ cleanup references persist until deletion is acknowledged; Claude's old pasted-t
 uses this queue without rotating the active OAuth connection. Detached SDK write candidates
 remain unselectable and are conservatively excluded from cleanup until process restart.
 
+Explicit plan removal reconciles the open Providers row and accepted app data at the
+confirmed native deletion barrier, before remaining secure cleanup. The synchronous observer
+receives only the existing non-secret lifecycle stamp; app reload is started without awaiting
+provider work under the lease. Cleanup feedback requires a read lease confirming the exact
+deleted generation/revision/epoch. Active or pending replacements suppress older feedback;
+unreadable evidence remains unavailable and recoverable. Cleanup and reload failures remain
+separate from committed local removal and cannot reactivate retired credentials.
+
 Snapshots retain their original success times. Cold recovery checks credential presence and
 identity, rejects malformed/foreign/mock records, and does not manufacture unknown accounts or
 zero usage. Snapshot I/O failure permits a fresh live result; credential barrier failure reports

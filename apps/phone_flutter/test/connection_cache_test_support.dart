@@ -114,6 +114,7 @@ final class FakeSecureStorage extends FlutterSecureStorage {
   bool failRead = false;
   bool failWrite = false;
   Future<void> Function(String)? beforeWrite;
+  Future<void> Function(String)? beforeDelete;
   @override
   Future<Map<String, String>> readAll({
     AppleOptions? iOptions,
@@ -171,6 +172,7 @@ final class FakeSecureStorage extends FlutterSecureStorage {
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
+    await beforeDelete?.call(key);
     deleted.add(key);
     if (key == failDeleteKey)
       throw StateError('Sanitized storage delete failure.');

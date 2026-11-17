@@ -28,7 +28,9 @@ abstract interface class CodexAccountService {
 
   Future<String?> fetchReport();
 
-  Future<void> disconnect();
+  Future<void> disconnect({void Function(CredentialVersion)? onRetired});
+
+  Future<void> observeLifecycle(CredentialLifecycleObserver observer);
 }
 
 final class MobileCodexAccountService implements CodexAccountService {
@@ -184,11 +186,29 @@ final class MobileCodexAccountService implements CodexAccountService {
   }
 
   @override
-  Future<void> disconnect() =>
-      _versioned == null ? _serialized(_disconnect) : _disconnect();
-  Future<void> _disconnect() async {
-    final session = await _readSession();
-    await _deleteSession();
+  Future<void> observeLifecycle(CredentialLifecycleObserver observer) async {
+    final managed = _versioned;
+    if (managed != null) {
+      await managed.observeLifecycle(observer);
+    } else {
+      observer(await isConnected() ? 'active' : 'deleted', null);
+    }
+  }
+
+  @override
+  Future<void> disconnect({void Function(CredentialVersion)? onRetired}) =>
+      _versioned == null
+          ? _serialized(() => _disconnect(onRetired))
+          : _disconnect(onRetired);
+  Future<void> _disconnect(void Function(CredentialVersion)? onRetired) async {
+    var retired = false;
+    void observe(CredentialVersion stamp) {
+      if (retired) return;
+      retired = true;
+      onRetired?.call(stamp);
+    }
+    final session = await _readSession(onRetired: observe);
+    if (!retired) await _deleteSession(onRetired: observe);
     if (session != null) {
       try {
         await _client.revoke(session);
@@ -198,11 +218,13 @@ final class MobileCodexAccountService implements CodexAccountService {
     }
   }
 
-  Future<CodexAccountSession?> _readSession() async {
+  Future<CodexAccountSession?> _readSession({
+    void Function(CredentialVersion)? onRetired,
+  }) async {
     try {
       return await _store.read();
     } on FormatException {
-      await _deleteSession();
+      await _deleteSession(onRetired: onRetired);
       return null;
     } catch (_) {
       throw const CodexAccountException(
@@ -223,9 +245,11 @@ final class MobileCodexAccountService implements CodexAccountService {
     }
   }
 
-  Future<void> _deleteSession() async {
+  Future<void> _deleteSession({
+    void Function(CredentialVersion)? onRetired,
+  }) async {
     try {
-      await _store.delete();
+      await _store.delete(onRetired: onRetired);
     } catch (_) {
       throw const CodexAccountException(
         CodexAccountFailure.unavailable,
@@ -262,5 +286,10 @@ final class EmptyCodexAccountService implements CodexAccountService {
   Future<String?> fetchReport() async => null;
 
   @override
-  Future<void> disconnect() async {}
+  Future<void> disconnect({void Function(CredentialVersion)? onRetired}) async {}
+
+  @override
+  Future<void> observeLifecycle(CredentialLifecycleObserver observer) async {
+    observer('deleted', null);
+  }
 }

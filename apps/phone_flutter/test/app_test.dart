@@ -9,6 +9,9 @@ import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
 import 'package:ward_pulse_phone/dashboard/apply_alert_settings.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_load.dart';
+import 'package:ward_pulse_phone/dashboard/phone_live_bindings.dart';
+import 'package:ward_pulse_phone/sync/openai_reporting_client.dart';
+import 'package:ward_pulse_phone/sync/provider_reporting_clients.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/providers/connection_rejection_notice.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting.dart';
@@ -50,6 +53,218 @@ import 'package:ward_pulse_phone/watchface/watchface_screen.dart';
 import 'connection_cache_test_support.dart';
 
 void main() {
+  group('plan retirement reconciliation', () {
+    late NativeCacheTestBridge bridge;
+    setUpAll(() async => bridge = await NativeCacheTestBridge.start());
+    tearDownAll(() => bridge.close());
+    setUp(() => bridge.reset());
+
+    for (final syncFails in [false, true]) {
+      testWidgets(
+        'committed Cursor removal reconciles open surfaces despite '
+        '${syncFails ? 'downstream sync failure' : 'label cleanup failure'}',
+        (tester) async {
+          await tester.runAsync(() async {
+            final secure = FakeSecureStorage();
+            final platform = bridge.platform('foreground');
+            final http = ProviderReportingHttp(
+              transport: _PlanReportingTransport(),
+            );
+            final live = PhoneLiveBindings.create(
+              secureStorage: secure,
+              cachePlatform: platform,
+              cursorClient: CursorPlanClient(http: http),
+              openAiClient: OpenAiReportingClient(http: http),
+            );
+            final credentials = live.credentialStore;
+            const id = ProviderConnections.cursorPlan;
+            await credentials.writeSecret(id, 'synthetic-cursor-session');
+            await credentials.writeLabel(id, 'Synthetic plan');
+            await credentials.writeSecret(
+              ProviderConnections.openAiPlatform,
+              'synthetic-reporting-key',
+            );
+            final initialSync = Completer<void>();
+            final removalSync = Completer<void>();
+            const channel = MethodChannel('app.wardpulse/watch_sync');
+            final messenger = tester.binding.defaultBinaryMessenger;
+            final payloads = <Map>[];
+            var failSync = false;
+            var removing = false;
+            messenger.setMockMethodCallHandler(channel, (call) async {
+              expect(call.method, 'syncWatchSummary');
+              payloads.add(jsonDecode(call.arguments as String) as Map);
+              final signal = removing ? removalSync : initialSync;
+              if (!signal.isCompleted) signal.complete();
+              if (failSync) {
+                throw PlatformException(code: 'synthetic_sync_failure');
+              }
+            });
+            Future<void>? editing;
+            try {
+              await tester.pumpWidget(
+                WardPulseApp(
+                  repository: live.repository,
+                  credentialStore: credentials,
+                  codexAccountService: live.codexAccountService,
+                  claudeAccountService: live.claudeAccountService,
+                  rejectionNotices: live.rejectionNotices,
+                  watchSyncService: const MethodChannelWatchSyncService(),
+                ),
+              );
+              await initialSync.future;
+              await tester.pumpAndSettle();
+              final before =
+                  await tester.widget<FutureBuilder<DashboardSnapshot>>(
+                    find.byType(FutureBuilder<DashboardSnapshot>),
+                  ).future!;
+              expect(
+                before.accounts.map((a) => a.connection),
+                containsAll(['cursor.plan', 'openai.platform']),
+              );
+              final oldVersion = before.connectionVersions[id.storageKey]!;
+              expect(
+                await bridge.invoke('proof', 'readSnapshot', {
+                  'connection': id.storageKey,
+                  'expected': oldVersion,
+                }),
+                isNotNull,
+              );
+              await tester.tap(find.text('Providers'));
+              await tester.pumpAndSettle();
+              await tester.scrollUntilVisible(
+                find.text('Cursor plan'),
+                300,
+                scrollable: find.byType(Scrollable).first,
+              );
+              await tester.pumpAndSettle();
+              // Drain the row's already-started native read through the existing
+              // lease queue, without another secure-session read or refresh.
+              final ready =
+                  (await bridge.invoke('proof', 'acquire', {
+                    'connection': id.storageKey,
+                    'action': 'read',
+                  }))!
+                  as Map;
+              await bridge.invoke('proof', 'finish', {
+                'connection': id.storageKey,
+                'lease': ready['lease'],
+                'operation': 'release',
+              });
+              await tester.pump();
+              final rowFinder = find.widgetWithText(
+                ProviderConnectionRow,
+                'Cursor plan',
+              );
+              final beforeLoad = tester.widget<FutureBuilder<DashboardSnapshot>>(
+                find.byType(FutureBuilder<DashboardSnapshot>),
+              ).future;
+              secure.failDeleteKey = 'wardpulse.cursor.plan.label';
+              failSync = syncFails;
+              removing = true;
+              // Invoke the real open row callback, retaining its completion so
+              // OLD can reach the stale-surface oracle without awaiting a reload
+              // that it never requests. No new lifecycle Dart API is used here.
+              editing =
+                  (tester.widget<ProviderConnectionRow>(rowFinder).onTap
+                      as dynamic)()
+                  as Future<void>;
+              await tester.pumpAndSettle();
+              await tester.tap(find.text('Disconnect'));
+              await editing;
+              await tester.pump();
+              final load = tester.widget<FutureBuilder<DashboardSnapshot>>(
+                find.byType(FutureBuilder<DashboardSnapshot>),
+              ).future!;
+              final accepted = await load;
+              if (!identical(beforeLoad, load)) await removalSync.future;
+              await tester.pumpAndSettle();
+              final lease = Map<String, Object?>.from(
+                (await bridge.invoke('proof', 'acquire', {
+                  'connection': id.storageKey,
+                  'action': 'read',
+                }))! as Map,
+              );
+              try {
+                expect(lease['mode'], 'deleted');
+              } finally {
+                await bridge.invoke('proof', 'finish', {
+                  'connection': id.storageKey,
+                  'lease': lease['lease'],
+                  'operation': 'release',
+                });
+              }
+              expect(
+                await bridge.invoke('proof', 'valid', {
+                  'connection': id.storageKey,
+                  'expected': oldVersion,
+                }),
+                isFalse,
+              );
+              expect(
+                await bridge.invoke('proof', 'readSnapshot', {
+                  'connection': id.storageKey,
+                  'expected': oldVersion,
+                }),
+                isNull,
+              );
+              expect(
+                await SecureProviderCredentialStore(
+                  storage: secure,
+                  platform: bridge.platform('cold'),
+                ).readSecret(id),
+                isNull,
+              );
+              final rowRemoved =
+                  find.descendant(
+                    of: rowFinder,
+                    matching: find.text('Not connected'),
+                  ).evaluate().isNotEmpty;
+              final visible = tester.widget<ProvidersScreen>(
+                find.byType(ProvidersScreen),
+              ).snapshot!;
+              final payload = payloads.last;
+              final feedback =
+                  find.text('Disconnected, but local cleanup remains')
+                      .evaluate().isNotEmpty;
+              // Collect every surface before the joint oracle, including the
+              // accepted app input and the normal watch-summary encoding.
+              expect(
+                [
+                  rowRemoved,
+                  accepted.accounts.any((a) => a.connection == 'cursor.plan'),
+                  visible.accounts.any((a) => a.connection == 'cursor.plan'),
+                  accepted.accounts.any(
+                    (a) => a.connection == 'openai.platform' &&
+                        a.status == ProviderStatus.ok,
+                  ),
+                  (payload['providers'] as List).any(
+                    (p) => p['provider'] == 'cursor',
+                  ),
+                  (payload['providers'] as List).any(
+                    (p) => p['provider'] == 'openai',
+                  ),
+                  feedback,
+                ],
+                [true, false, false, true, false, true, true],
+                reason: 'Retirement must reconcile the open row, accepted data '
+                    'and watch summary while retaining the healthy sibling.',
+              );
+            } finally {
+              if (find.byType(AlertDialog).evaluate().isNotEmpty) {
+                Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+              }
+              await tester.pumpWidget(const SizedBox());
+              if (editing != null) await editing;
+              messenger.setMockMethodCallHandler(channel, null);
+            }
+          });
+        },
+        timeout: const Timeout(Duration(seconds: 60)),
+      );
+    }
+  });
+
   for (final row in providerConnectionCatalog()) {
     testWidgets(
       'historical warning reveals ${row.id.storageKey} without editing or dismissal',
@@ -6212,9 +6427,13 @@ class _MemoryCredentialStore
   }
 
   @override
-  Future<void> deleteSecret(ProviderConnectionId id) async {
+  Future<void> deleteSecret(
+    ProviderConnectionId id, {
+    void Function(CredentialVersion)? onRetired,
+  }) async {
     _generations[id] = (_generations[id] ?? 0) + 1;
     _secrets.remove(id);
+    onRetired?.call(version(id));
     if (failDeleteAfterRetirement)
       throw StateError('Synthetic cleanup failure');
     _labels.remove(id);
@@ -6364,6 +6583,13 @@ MergingConnectionRepository _reportingRepository(
 
 final class _MemoryCredentialAccess implements ConnectionCredentialAccess {
   @override
+  Future<void> observeLifecycle(
+    void Function(String, CredentialVersion?) observer,
+  ) async {
+    final value = await store.readSecret(id);
+    observer(value == null ? 'deleted' : 'active', store.version(id));
+  }
+  @override
   Future<void> admitAutomatic(CredentialVersion expected) async {}
   const _MemoryCredentialAccess(this.store, this.id);
   final _MemoryCredentialStore store;
@@ -6418,4 +6644,41 @@ final class _RejectionNotices implements ConnectionRejectionNoticeStore {
     );
     return true;
   }
+}
+
+final class _PlanReportingTransport implements ProviderHttpTransport {
+  @override
+  Future<ProviderHttpResponse> get(
+    Uri uri, {
+    required Map<String, String> headers,
+  }) async {
+    final now = DateTime.utc(2026, 11, 17, 12);
+    final response = uri.path == '/api/usage-summary' ? {
+      'billingCycleStart': now.subtract(const Duration(days: 1)).toIso8601String(),
+      'billingCycleEnd': now.add(const Duration(days: 29)).toIso8601String(),
+      'membershipType': 'pro',
+      'isUnlimited': false,
+      'individualUsage': {
+        'plan': {
+          'enabled': true,
+          'used': 20,
+          'limit': 100,
+          'remaining': 80,
+          'totalPercentUsed': 20,
+        },
+      },
+    } : {'object': 'page', 'has_more': false, 'data': <Object>[]};
+    return ProviderHttpResponse(
+      statusCode: 200,
+      headers: const {},
+      body: jsonEncode(response),
+    );
+  }
+
+  @override
+  Future<ProviderHttpResponse> post(
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+  }) async => throw StateError('Unexpected synthetic reporting request.');
 }
