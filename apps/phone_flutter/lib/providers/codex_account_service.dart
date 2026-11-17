@@ -207,6 +207,7 @@ final class MobileCodexAccountService implements CodexAccountService {
       retired = true;
       onRetired?.call(stamp);
     }
+
     final session = await _readSession(onRetired: observe);
     if (!retired) await _deleteSession(onRetired: observe);
     if (session != null) {
@@ -286,7 +287,9 @@ final class EmptyCodexAccountService implements CodexAccountService {
   Future<String?> fetchReport() async => null;
 
   @override
-  Future<void> disconnect({void Function(CredentialVersion)? onRetired}) async {}
+  Future<void> disconnect({
+    void Function(CredentialVersion)? onRetired,
+  }) async {}
 
   @override
   Future<void> observeLifecycle(CredentialLifecycleObserver observer) async {

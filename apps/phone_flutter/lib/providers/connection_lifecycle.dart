@@ -296,7 +296,13 @@ final class ConnectionCredentialStorage
       final stamp = _stamp(lease);
       if (lease['lease'] is! String ||
           (lease['lease']! as String).isEmpty ||
-          !['active', 'pending', 'deleted', 'legacy', 'migration'].contains(mode) ||
+          ![
+            'active',
+            'pending',
+            'deleted',
+            'legacy',
+            'migration',
+          ].contains(mode) ||
           (mode != 'legacy' && stamp == null)) {
         throw StateError('Credential lifecycle unavailable.');
       }

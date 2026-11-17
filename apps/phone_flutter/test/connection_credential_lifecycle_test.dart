@@ -101,17 +101,23 @@ void main() {
                     signIn: (_) async => null,
                     onInitialRead: () => () => ready.complete(),
                     onCredentialsChanged: () => changed++,
-                    buildControls: ({leading = const [], required status}) =>
-                        (actions: leading, status: status),
+                    buildControls:
+                        ({leading = const [], required status}) => (
+                          actions: leading,
+                          status: status,
+                        ),
                   ),
                 ),
               ),
             );
             await ready.future;
             await tester.pumpAndSettle();
-            final help = tester.widget<IconButton>(
-              find.byTooltip('About Cursor plan sign-in'),
-            ).onPressed!;
+            final help =
+                tester
+                    .widget<IconButton>(
+                      find.byTooltip('About Cursor plan sign-in'),
+                    )
+                    .onPressed!;
             if (outcome == 'barrier') {
               await bridge.invoke('test', 'failCommit', {'value': true});
             } else if (outcome == 'invalid-paste') {
@@ -123,19 +129,24 @@ void main() {
               };
             }
             editing =
-                (tester.widget<ProviderConnectionRow>(
-                      find.byType(ProviderConnectionRow),
-                    ).onTap as dynamic)()
-                as Future<void>;
+                (tester
+                            .widget<ProviderConnectionRow>(
+                              find.byType(ProviderConnectionRow),
+                            )
+                            .onTap
+                        as dynamic)()
+                    as Future<void>;
             await tester.pumpAndSettle();
             await tester.tap(find.text('Disconnect'));
             if (outcome == 'invalid-paste') {
               await deleting.future;
               await tester.pump();
               expect(
-                tester.widget<IconButton>(
-                  find.byTooltip('About Cursor plan sign-in'),
-                ).onPressed,
+                tester
+                    .widget<IconButton>(
+                      find.byTooltip('About Cursor plan sign-in'),
+                    )
+                    .onPressed,
                 isNull,
               );
               // A callback retained from the previous frame is guarded too.
@@ -165,7 +176,11 @@ void main() {
                 ScaffoldMessenger.of(
                   tester.element(find.byType(CursorPlanRow)),
                 ).removeCurrentSnackBar();
-              } else if (['unreadable', 'cancelled', 'pasted'].contains(outcome)) {
+              } else if ([
+                'unreadable',
+                'cancelled',
+                'pasted',
+              ].contains(outcome)) {
                 platform.onInvoke = (method, args) {
                   if (method == 'acquire' && args['action'] == 'read') {
                     throw StateError('Synthetic lifecycle observation failure');
@@ -206,10 +221,13 @@ void main() {
             if (outcome == 'cancelled') {
               platform.onInvoke = null;
               recovery =
-                  (tester.widget<ProviderConnectionRow>(
-                        find.byType(ProviderConnectionRow),
-                      ).onTap as dynamic)()
-                  as Future<void>;
+                  (tester
+                              .widget<ProviderConnectionRow>(
+                                find.byType(ProviderConnectionRow),
+                              )
+                              .onTap
+                          as dynamic)()
+                      as Future<void>;
               await recovery;
               await tester.pumpAndSettle();
               expect(find.text('Unavailable · Retry check'), findsOneWidget);
@@ -219,10 +237,13 @@ void main() {
             if (outcome == 'pasted') {
               platform.onInvoke = null;
               recovery =
-                  (tester.widget<IconButton>(
-                        find.byTooltip('About Cursor plan sign-in'),
-                      ).onPressed as dynamic)()
-                  as Future<void>;
+                  (tester
+                              .widget<IconButton>(
+                                find.byTooltip('About Cursor plan sign-in'),
+                              )
+                              .onPressed
+                          as dynamic)()
+                      as Future<void>;
               await tester.pumpAndSettle();
               await tester.tap(find.text('Advanced paste'));
               await tester.pumpAndSettle();
@@ -240,9 +261,15 @@ void main() {
             if (!['reconnected', 'pasted', 'invalid-paste'].contains(outcome)) {
               platform.onInvoke = null;
               final deletes = secure.deleted.length;
-              final retry = tester.widget<TextButton>(
-                find.widgetWithText(TextButton, 'Unavailable · Retry check'),
-              ).onPressed!;
+              final retry =
+                  tester
+                      .widget<TextButton>(
+                        find.widgetWithText(
+                          TextButton,
+                          'Unavailable · Retry check',
+                        ),
+                      )
+                      .onPressed!;
               await (retry as dynamic)();
               await tester.pumpAndSettle();
               expect(
@@ -272,73 +299,90 @@ void main() {
     );
   }
 
-  test('successful retirement is synchronous, exact and releases observation', () async {
-    final access = store('ui');
-    await access.write('synthetic-old');
-    final old = (await access.read())!.version;
-    await access.write('synthetic-current');
-    var notified = 0;
-    await access.delete(expected: old, onRetired: (_) => notified++);
-    expect(notified, 0);
-    CredentialVersion? receipt;
-    await access.delete(onRetired: (stamp) {
-      receipt = stamp;
-      notified++;
-    });
-    expect(notified, 1);
-    await expectLater(access.observeLifecycle((mode, stamp) {
-      expect(mode, 'deleted');
-      expect(stamp!.values, receipt!.values);
-      throw StateError('Synthetic consumer failure');
-    }), throwsStateError);
-    await store('other').observeLifecycle((mode, _) => expect(mode, 'deleted'));
-  });
-
-  test('OAuth removals forward retirement before secure cleanup fails', () async {
-    final codex = SecureCodexAccountStore(
-      storage: secure,
-      platform: bridge.platform('codex'),
-    );
-    final claude = SecureClaudeAccountStore(
-      storage: secure,
-      platform: bridge.platform('claude'),
-    );
-    await codex.write(CodexAccountSession(
-      accessToken: 'synthetic-access',
-      refreshToken: 'synthetic-refresh',
-      accountId: 'synthetic-account',
-      refreshedAt: now,
-    ));
-    await claude.write(ClaudeAccountSession(
-      accessToken: 'synthetic-access',
-      refreshToken: 'synthetic-refresh',
-      accountId: 'synthetic-account',
-      expiresAt: now,
-    ));
-    for (final (remove, observe, key) in [
-      (
-        MobileCodexAccountService(store: codex).disconnect,
-        codex.observeLifecycle,
-        'wardpulse.codex.account-session',
-      ),
-      (
-        MobileClaudeAccountService(store: claude).disconnect,
-        claude.observeLifecycle,
-        'wardpulse.claude.account-session',
-      ),
-    ]) {
-      secure.failDeleteKey = key;
+  test(
+    'successful retirement is synchronous, exact and releases observation',
+    () async {
+      final access = store('ui');
+      await access.write('synthetic-old');
+      final old = (await access.read())!.version;
+      await access.write('synthetic-current');
+      var notified = 0;
+      await access.delete(expected: old, onRetired: (_) => notified++);
+      expect(notified, 0);
       CredentialVersion? receipt;
-      await expectLater(
-        remove(onRetired: (stamp) => receipt = stamp),
-        throwsA(anything),
+      await access.delete(
+        onRetired: (stamp) {
+          receipt = stamp;
+          notified++;
+        },
       );
-      await observe((mode, stamp) {
-        expect(mode, 'deleted');
-        expect(stamp!.values, receipt!.values);
-      });
-    }
-  });
+      expect(notified, 1);
+      await expectLater(
+        access.observeLifecycle((mode, stamp) {
+          expect(mode, 'deleted');
+          expect(stamp!.values, receipt!.values);
+          throw StateError('Synthetic consumer failure');
+        }),
+        throwsStateError,
+      );
+      await store(
+        'other',
+      ).observeLifecycle((mode, _) => expect(mode, 'deleted'));
+    },
+  );
+
+  test(
+    'OAuth removals forward retirement before secure cleanup fails',
+    () async {
+      final codex = SecureCodexAccountStore(
+        storage: secure,
+        platform: bridge.platform('codex'),
+      );
+      final claude = SecureClaudeAccountStore(
+        storage: secure,
+        platform: bridge.platform('claude'),
+      );
+      await codex.write(
+        CodexAccountSession(
+          accessToken: 'synthetic-access',
+          refreshToken: 'synthetic-refresh',
+          accountId: 'synthetic-account',
+          refreshedAt: now,
+        ),
+      );
+      await claude.write(
+        ClaudeAccountSession(
+          accessToken: 'synthetic-access',
+          refreshToken: 'synthetic-refresh',
+          accountId: 'synthetic-account',
+          expiresAt: now,
+        ),
+      );
+      for (final (remove, observe, key) in [
+        (
+          MobileCodexAccountService(store: codex).disconnect,
+          codex.observeLifecycle,
+          'wardpulse.codex.account-session',
+        ),
+        (
+          MobileClaudeAccountService(store: claude).disconnect,
+          claude.observeLifecycle,
+          'wardpulse.claude.account-session',
+        ),
+      ]) {
+        secure.failDeleteKey = key;
+        CredentialVersion? receipt;
+        await expectLater(
+          remove(onRetired: (stamp) => receipt = stamp),
+          throwsA(anything),
+        );
+        await observe((mode, stamp) {
+          expect(mode, 'deleted');
+          expect(stamp!.values, receipt!.values);
+        });
+      }
+    },
+  );
 
   test(
     'retained-session notices survive lifecycle changes and exact dismissal',
@@ -492,10 +536,13 @@ void main() {
                 );
         secure.failDeleteKey = failedKey;
         CredentialVersion? receipt;
-        final deleting = credentials.deleteSecret(id, onRetired: (stamp) {
-          receipt = stamp;
-          expect(secure.deleted, isNot(contains(failedKey)));
-        });
+        final deleting = credentials.deleteSecret(
+          id,
+          onRetired: (stamp) {
+            receipt = stamp;
+            expect(secure.deleted, isNot(contains(failedKey)));
+          },
+        );
         await expectLater(deleting, throwsStateError);
         expect(receipt, isNotNull);
         await credentials.credentialAccess(id)!.observeLifecycle((mode, stamp) {
@@ -747,8 +794,10 @@ void main() {
       final deleted = secure.deleted.length;
       await bridge.invoke('test', 'failCommit', {'value': true});
       var notifications = 0;
-      await expectLater(store('ui').delete(onRetired: (_) => notifications++),
-          throwsStateError);
+      await expectLater(
+        store('ui').delete(onRetired: (_) => notifications++),
+        throwsStateError,
+      );
       expect(notifications, 0);
       expect(secure.values, before);
       expect(secure.deleted.length, deleted);

@@ -2821,8 +2821,7 @@ final class _HeldReadFailure implements ConnectionCredentialAccess {
   @override
   Future<void> observeLifecycle(
     void Function(String, CredentialVersion?) observer,
-  ) async =>
-      throw StateError('Synthetic storage read failure');
+  ) async => throw StateError('Synthetic storage read failure');
   @override
   Future<void> admitAutomatic(CredentialVersion expected) async {}
   final started = Completer<void>();
@@ -2866,8 +2865,7 @@ final class _ReadFailureStore
   Future<void> deleteSecret(
     ProviderConnectionId id, {
     void Function(CredentialVersion)? onRetired,
-  }) async =>
-      throw UnsupportedError('Read-only fixture');
+  }) async => throw UnsupportedError('Read-only fixture');
   @override
   Future<void> writeLabel(ProviderConnectionId id, String? value) async =>
       throw UnsupportedError('Read-only fixture');
@@ -2877,8 +2875,7 @@ final class _CurrentReadFailure implements ConnectionCredentialAccess {
   @override
   Future<void> observeLifecycle(
     void Function(String, CredentialVersion?) observer,
-  ) =>
-      access.observeLifecycle(observer);
+  ) => access.observeLifecycle(observer);
   @override
   Future<void> admitAutomatic(CredentialVersion expected) =>
       access.admitAutomatic(expected);

@@ -249,9 +249,26 @@ class _CursorPlanRowState extends State<CursorPlanRow>
         !identical(store, widget.credentialStore)) {
       return;
     }
+    if (change.remove) {
+      await disconnectConnection(
+        owner: store,
+        remove: (onRetired) => store.deleteSecret(id, onRetired: onRetired),
+        cleanup: () async {
+          try {
+            if (await wipeCursorWebViewSession()) return null;
+          } catch (_) {
+            // Cookie cleanup is separate from saved credential removal.
+          }
+          return 'Disconnected, but could not clear the in-app Cursor session';
+        },
+      );
+      return;
+    }
     final token =
-        change.value == null ? null : normalizeCursorSessionToken(change.value!);
-    if (!change.remove && token == null) {
+        change.value == null
+            ? null
+            : normalizeCursorSessionToken(change.value!);
+    if (token == null) {
       if (change.value != null) {
         _showMessage('That does not look like a Cursor session token');
       }
@@ -260,22 +277,12 @@ class _CursorPlanRowState extends State<CursorPlanRow>
     final revision = beginConnectionOperation();
     setState(() => connecting = true);
     try {
-      if (change.remove) {
-        await store.deleteSecret(id);
-        final wiped = await wipeCursorWebViewSession();
-        if (!wiped && ownsConnectionOperation(revision, store)) {
-          _showMessage(
-            'Removed, but could not clear the in-app Cursor session',
-          );
-        }
-      } else {
-        await store.writeSecret(id, token!);
-      }
+      await store.writeSecret(id, token);
       if (!ownsConnectionOperation(revision, store)) {
         return;
       }
       setState(() {
-        hasAccount = !change.remove;
+        hasAccount = true;
       });
       widget.onCredentialsChanged();
     } catch (_) {

@@ -115,14 +115,17 @@ void main() {
     );
   });
 
-  test('disconnect forwards retirement reached during malformed-session cleanup', () async {
-    final store = _MalformedStore();
-    final service = MobileCodexAccountService(store: store);
-    final receipts = <CredentialVersion>[];
-    await service.disconnect(onRetired: receipts.add);
-    expect(store.deleted, isTrue);
-    expect(receipts, hasLength(1));
-  });
+  test(
+    'disconnect forwards retirement reached during malformed-session cleanup',
+    () async {
+      final store = _MalformedStore();
+      final service = MobileCodexAccountService(store: store);
+      final receipts = <CredentialVersion>[];
+      await service.disconnect(onRetired: receipts.add);
+      expect(store.deleted, isTrue);
+      expect(receipts, hasLength(1));
+    },
+  );
 
   test('removes a malformed stored session', () async {
     final store = _MalformedStore();
@@ -182,11 +185,13 @@ final class _MalformedStore implements CodexAccountStore {
   @override
   Future<void> delete({void Function(CredentialVersion)? onRetired}) async {
     deleted = true;
-    onRetired?.call(CredentialVersion({
-      'generation': 'retired',
-      'revision': 'retired',
-      'epoch': 'retired',
-    }));
+    onRetired?.call(
+      CredentialVersion({
+        'generation': 'retired',
+        'revision': 'retired',
+        'epoch': 'retired',
+      }),
+    );
   }
 }
 

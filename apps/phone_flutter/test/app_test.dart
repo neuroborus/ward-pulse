@@ -59,209 +59,283 @@ void main() {
     tearDownAll(() => bridge.close());
     setUp(() => bridge.reset());
 
-    for (final syncFails in [false, true]) {
-      testWidgets(
-        'committed Cursor removal reconciles open surfaces despite '
-        '${syncFails ? 'downstream sync failure' : 'label cleanup failure'}',
-        (tester) async {
-          await tester.runAsync(() async {
-            final secure = FakeSecureStorage();
-            final platform = bridge.platform('foreground');
-            final http = ProviderReportingHttp(
-              transport: _PlanReportingTransport(),
-            );
-            final live = PhoneLiveBindings.create(
-              secureStorage: secure,
-              cachePlatform: platform,
-              cursorClient: CursorPlanClient(http: http),
-              openAiClient: OpenAiReportingClient(http: http),
-            );
-            final credentials = live.credentialStore;
-            const id = ProviderConnections.cursorPlan;
-            await credentials.writeSecret(id, 'synthetic-cursor-session');
-            await credentials.writeLabel(id, 'Synthetic plan');
-            await credentials.writeSecret(
-              ProviderConnections.openAiPlatform,
-              'synthetic-reporting-key',
-            );
-            final initialSync = Completer<void>();
-            final removalSync = Completer<void>();
-            const channel = MethodChannel('app.wardpulse/watch_sync');
-            final messenger = tester.binding.defaultBinaryMessenger;
-            final payloads = <Map>[];
-            var failSync = false;
-            var removing = false;
-            messenger.setMockMethodCallHandler(channel, (call) async {
-              expect(call.method, 'syncWatchSummary');
-              payloads.add(jsonDecode(call.arguments as String) as Map);
-              final signal = removing ? removalSync : initialSync;
-              if (!signal.isCompleted) signal.complete();
-              if (failSync) {
-                throw PlatformException(code: 'synthetic_sync_failure');
-              }
-            });
-            Future<void>? editing;
-            try {
-              await tester.pumpWidget(
-                WardPulseApp(
-                  repository: live.repository,
-                  credentialStore: credentials,
-                  codexAccountService: live.codexAccountService,
-                  claudeAccountService: live.claudeAccountService,
-                  rejectionNotices: live.rejectionNotices,
-                  watchSyncService: const MethodChannelWatchSyncService(),
-                ),
+    for (final advancedRemove in [false, true]) {
+      for (final syncFails in [false, true]) {
+        testWidgets(
+          'committed Cursor ${advancedRemove ? 'Advanced Remove' : 'Disconnect'} '
+          'reconciles open surfaces despite '
+          '${syncFails ? 'downstream sync failure' : 'label cleanup failure'}',
+          (tester) async {
+            await tester.runAsync(() async {
+              final secure = FakeSecureStorage();
+              final platform = bridge.platform('foreground');
+              final http = ProviderReportingHttp(
+                transport: _PlanReportingTransport(),
               );
-              await initialSync.future;
-              await tester.pumpAndSettle();
-              final before =
-                  await tester.widget<FutureBuilder<DashboardSnapshot>>(
-                    find.byType(FutureBuilder<DashboardSnapshot>),
-                  ).future!;
-              expect(
-                before.accounts.map((a) => a.connection),
-                containsAll(['cursor.plan', 'openai.platform']),
+              final live = PhoneLiveBindings.create(
+                secureStorage: secure,
+                cachePlatform: platform,
+                cursorClient: CursorPlanClient(http: http),
+                openAiClient: OpenAiReportingClient(http: http),
               );
-              final oldVersion = before.connectionVersions[id.storageKey]!;
-              expect(
-                await bridge.invoke('proof', 'readSnapshot', {
-                  'connection': id.storageKey,
-                  'expected': oldVersion,
-                }),
-                isNotNull,
+              final credentials = live.credentialStore;
+              const id = ProviderConnections.cursorPlan;
+              await credentials.writeSecret(id, 'synthetic-cursor-session');
+              await credentials.writeLabel(id, 'Synthetic plan');
+              await credentials.writeSecret(
+                ProviderConnections.openAiPlatform,
+                'synthetic-reporting-key',
               );
-              await tester.tap(find.text('Providers'));
-              await tester.pumpAndSettle();
-              await tester.scrollUntilVisible(
-                find.text('Cursor plan'),
-                300,
-                scrollable: find.byType(Scrollable).first,
-              );
-              await tester.pumpAndSettle();
-              // Drain the row's already-started native read through the existing
-              // lease queue, without another secure-session read or refresh.
-              final ready =
-                  (await bridge.invoke('proof', 'acquire', {
-                    'connection': id.storageKey,
-                    'action': 'read',
-                  }))!
-                  as Map;
-              await bridge.invoke('proof', 'finish', {
-                'connection': id.storageKey,
-                'lease': ready['lease'],
-                'operation': 'release',
+              final initialSync = Completer<void>();
+              final removalSync = Completer<void>();
+              final cleanupStarted = Completer<void>();
+              final releaseCleanup = Completer<void>();
+              const channel = MethodChannel('app.wardpulse/watch_sync');
+              final messenger = tester.binding.defaultBinaryMessenger;
+              final payloads = <Map>[];
+              var failSync = false;
+              var removing = false;
+              messenger.setMockMethodCallHandler(channel, (call) async {
+                expect(call.method, 'syncWatchSummary');
+                payloads.add(jsonDecode(call.arguments as String) as Map);
+                final signal = removing ? removalSync : initialSync;
+                if (!signal.isCompleted) signal.complete();
+                if (failSync) {
+                  throw PlatformException(code: 'synthetic_sync_failure');
+                }
+                return null;
               });
-              await tester.pump();
-              final rowFinder = find.widgetWithText(
-                ProviderConnectionRow,
-                'Cursor plan',
-              );
-              final beforeLoad = tester.widget<FutureBuilder<DashboardSnapshot>>(
-                find.byType(FutureBuilder<DashboardSnapshot>),
-              ).future;
-              secure.failDeleteKey = 'wardpulse.cursor.plan.label';
-              failSync = syncFails;
-              removing = true;
-              // Invoke the real open row callback, retaining its completion so
-              // OLD can reach the stale-surface oracle without awaiting a reload
-              // that it never requests. No new lifecycle Dart API is used here.
-              editing =
-                  (tester.widget<ProviderConnectionRow>(rowFinder).onTap
-                      as dynamic)()
-                  as Future<void>;
-              await tester.pumpAndSettle();
-              await tester.tap(find.text('Disconnect'));
-              await editing;
-              await tester.pump();
-              final load = tester.widget<FutureBuilder<DashboardSnapshot>>(
-                find.byType(FutureBuilder<DashboardSnapshot>),
-              ).future!;
-              final accepted = await load;
-              if (!identical(beforeLoad, load)) await removalSync.future;
-              await tester.pumpAndSettle();
-              final lease = Map<String, Object?>.from(
-                (await bridge.invoke('proof', 'acquire', {
-                  'connection': id.storageKey,
-                  'action': 'read',
-                }))! as Map,
-              );
+              Future<void>? editing;
+              var removalCompleted = false;
               try {
-                expect(lease['mode'], 'deleted');
-              } finally {
+                await tester.pumpWidget(
+                  WardPulseApp(
+                    repository: live.repository,
+                    credentialStore: credentials,
+                    codexAccountService: live.codexAccountService,
+                    claudeAccountService: live.claudeAccountService,
+                    rejectionNotices: live.rejectionNotices,
+                    watchSyncService: const MethodChannelWatchSyncService(),
+                  ),
+                );
+                await initialSync.future;
+                await tester.pumpAndSettle();
+                final before =
+                    await tester
+                        .widget<FutureBuilder<DashboardSnapshot>>(
+                          find.byType(FutureBuilder<DashboardSnapshot>),
+                        )
+                        .future!;
+                expect(
+                  before.accounts.map((a) => a.connection),
+                  containsAll(['cursor.plan', 'openai.platform']),
+                );
+                final oldVersion = before.connectionVersions[id.storageKey]!;
+                expect(
+                  await bridge.invoke('proof', 'readSnapshot', {
+                    'connection': id.storageKey,
+                    'expected': oldVersion,
+                  }),
+                  isNotNull,
+                );
+                await tester.tap(find.text('Providers'));
+                await tester.pumpAndSettle();
+                await tester.scrollUntilVisible(
+                  find.text('Cursor plan'),
+                  300,
+                  scrollable: find.byType(Scrollable).first,
+                );
+                await tester.pumpAndSettle();
+                // Drain the row's already-started native read through the existing
+                // lease queue, without another secure-session read or refresh.
+                final ready =
+                    (await bridge.invoke('proof', 'acquire', {
+                          'connection': id.storageKey,
+                          'action': 'read',
+                        }))!
+                        as Map;
                 await bridge.invoke('proof', 'finish', {
                   'connection': id.storageKey,
-                  'lease': lease['lease'],
+                  'lease': ready['lease'],
                   'operation': 'release',
                 });
+                await tester.pump();
+                final rowFinder = find.widgetWithText(
+                  ProviderConnectionRow,
+                  'Cursor plan',
+                );
+                final beforeLoad =
+                    tester
+                        .widget<FutureBuilder<DashboardSnapshot>>(
+                          find.byType(FutureBuilder<DashboardSnapshot>),
+                        )
+                        .future;
+                secure.failDeleteKey = 'wardpulse.cursor.plan.label';
+                secure.beforeDelete = (key) async {
+                  if (key == secure.failDeleteKey) {
+                    cleanupStarted.complete();
+                    await releaseCleanup.future;
+                  }
+                };
+                failSync = syncFails;
+                removing = true;
+                // Invoke the real entrypoint callback, retaining its completion so
+                // OLD can reach the stale-surface oracle without awaiting a reload
+                // that it never requests. No new lifecycle Dart API is used here.
+                if (advancedRemove) {
+                  editing =
+                      (tester
+                                  .widget<IconButton>(
+                                    find.byTooltip('About Cursor plan sign-in'),
+                                  )
+                                  .onPressed
+                              as dynamic)()
+                          as Future<void>;
+                  await tester.pumpAndSettle();
+                  await tester.tap(find.text('Advanced paste'));
+                } else {
+                  editing =
+                      (tester.widget<ProviderConnectionRow>(rowFinder).onTap
+                              as dynamic)()
+                          as Future<void>;
+                }
+                editing = editing.then((_) {
+                  removalCompleted = true;
+                });
+                await tester.pumpAndSettle();
+                await tester.tap(
+                  find.text(advancedRemove ? 'Remove' : 'Disconnect'),
+                );
+                await cleanupStarted.future;
+                await tester.pump();
+                final load =
+                    tester
+                        .widget<FutureBuilder<DashboardSnapshot>>(
+                          find.byType(FutureBuilder<DashboardSnapshot>),
+                        )
+                        .future!;
+                final accepted = await load;
+                if (!identical(beforeLoad, load)) await removalSync.future;
+                // OLD retains an animating busy row until cleanup is released;
+                // finish the dialog transition without waiting for that spinner.
+                await tester.pump();
+                await tester.pump(const Duration(seconds: 1));
+                final lease = Map<String, Object?>.from(
+                  (await bridge.invoke('proof', 'acquire', {
+                        'connection': id.storageKey,
+                        'action': 'read',
+                      }))!
+                      as Map,
+                );
+                try {
+                  expect(lease['mode'], 'deleted');
+                } finally {
+                  await bridge.invoke('proof', 'finish', {
+                    'connection': id.storageKey,
+                    'lease': lease['lease'],
+                    'operation': 'release',
+                  });
+                }
+                expect(
+                  await bridge.invoke('proof', 'valid', {
+                    'connection': id.storageKey,
+                    'expected': oldVersion,
+                  }),
+                  isFalse,
+                );
+                expect(
+                  await bridge.invoke('proof', 'readSnapshot', {
+                    'connection': id.storageKey,
+                    'expected': oldVersion,
+                  }),
+                  isNull,
+                );
+                expect(
+                  await SecureProviderCredentialStore(
+                    storage: secure,
+                    platform: bridge.platform('cold'),
+                  ).readSecret(id),
+                  isNull,
+                );
+                final rowRemoved =
+                    find
+                        .descendant(
+                          of: rowFinder,
+                          matching: find.text('Not connected'),
+                        )
+                        .evaluate()
+                        .isNotEmpty;
+                final visible =
+                    tester
+                        .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+                        .snapshot!;
+                final payload = payloads.last;
+                // Collect every surface before the joint oracle, including the
+                // accepted app input and actual watch-summary encoding, while
+                // label cleanup is still held outside the retirement lease.
+                expect(
+                  [
+                    rowRemoved,
+                    accepted.accounts.any((a) => a.connection == 'cursor.plan'),
+                    visible.accounts.any((a) => a.connection == 'cursor.plan'),
+                    accepted.accounts.any(
+                      (a) =>
+                          a.connection == 'openai.platform' &&
+                          a.status == ProviderStatus.ok,
+                    ),
+                    visible.accounts.any(
+                      (a) =>
+                          a.connection == 'openai.platform' &&
+                          a.status == ProviderStatus.ok,
+                    ),
+                    (payload['providers'] as List).any(
+                      (p) => p['provider'] == 'cursor',
+                    ),
+                    (payload['providers'] as List).any(
+                      (p) => p['provider'] == 'openai',
+                    ),
+                    removalCompleted,
+                  ],
+                  [true, false, false, true, true, false, true, false],
+                  reason:
+                      'Retirement must reconcile the open row, accepted data '
+                      'and watch summary before cleanup finishes, retaining the '
+                      'healthy sibling.',
+                );
+                expect(
+                  find.text('Disconnected, but local cleanup remains'),
+                  findsNothing,
+                );
+                releaseCleanup.complete();
+                await editing;
+                await tester.pump();
+                expect(
+                  find.text('Disconnected, but local cleanup remains'),
+                  findsOneWidget,
+                );
+                expect(
+                  tester
+                      .widget<FutureBuilder<DashboardSnapshot>>(
+                        find.byType(FutureBuilder<DashboardSnapshot>),
+                      )
+                      .future,
+                  same(load),
+                  reason: 'Cleanup must not request a second app reload.',
+                );
+              } finally {
+                if (!releaseCleanup.isCompleted) releaseCleanup.complete();
+                if (find.byType(AlertDialog).evaluate().isNotEmpty) {
+                  Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+                }
+                await tester.pumpWidget(const SizedBox());
+                if (editing != null) await editing;
+                messenger.setMockMethodCallHandler(channel, null);
               }
-              expect(
-                await bridge.invoke('proof', 'valid', {
-                  'connection': id.storageKey,
-                  'expected': oldVersion,
-                }),
-                isFalse,
-              );
-              expect(
-                await bridge.invoke('proof', 'readSnapshot', {
-                  'connection': id.storageKey,
-                  'expected': oldVersion,
-                }),
-                isNull,
-              );
-              expect(
-                await SecureProviderCredentialStore(
-                  storage: secure,
-                  platform: bridge.platform('cold'),
-                ).readSecret(id),
-                isNull,
-              );
-              final rowRemoved =
-                  find.descendant(
-                    of: rowFinder,
-                    matching: find.text('Not connected'),
-                  ).evaluate().isNotEmpty;
-              final visible = tester.widget<ProvidersScreen>(
-                find.byType(ProvidersScreen),
-              ).snapshot!;
-              final payload = payloads.last;
-              final feedback =
-                  find.text('Disconnected, but local cleanup remains')
-                      .evaluate().isNotEmpty;
-              // Collect every surface before the joint oracle, including the
-              // accepted app input and the normal watch-summary encoding.
-              expect(
-                [
-                  rowRemoved,
-                  accepted.accounts.any((a) => a.connection == 'cursor.plan'),
-                  visible.accounts.any((a) => a.connection == 'cursor.plan'),
-                  accepted.accounts.any(
-                    (a) => a.connection == 'openai.platform' &&
-                        a.status == ProviderStatus.ok,
-                  ),
-                  (payload['providers'] as List).any(
-                    (p) => p['provider'] == 'cursor',
-                  ),
-                  (payload['providers'] as List).any(
-                    (p) => p['provider'] == 'openai',
-                  ),
-                  feedback,
-                ],
-                [true, false, false, true, false, true, true],
-                reason: 'Retirement must reconcile the open row, accepted data '
-                    'and watch summary while retaining the healthy sibling.',
-              );
-            } finally {
-              if (find.byType(AlertDialog).evaluate().isNotEmpty) {
-                Navigator.of(tester.element(find.byType(AlertDialog))).pop();
-              }
-              await tester.pumpWidget(const SizedBox());
-              if (editing != null) await editing;
-              messenger.setMockMethodCallHandler(channel, null);
-            }
-          });
-        },
-        timeout: const Timeout(Duration(seconds: 60)),
-      );
+            });
+          },
+          timeout: const Timeout(Duration(seconds: 60)),
+        );
+      }
     }
   });
 
@@ -6589,6 +6663,7 @@ final class _MemoryCredentialAccess implements ConnectionCredentialAccess {
     final value = await store.readSecret(id);
     observer(value == null ? 'deleted' : 'active', store.version(id));
   }
+
   @override
   Future<void> admitAutomatic(CredentialVersion expected) async {}
   const _MemoryCredentialAccess(this.store, this.id);
@@ -6653,21 +6728,26 @@ final class _PlanReportingTransport implements ProviderHttpTransport {
     required Map<String, String> headers,
   }) async {
     final now = DateTime.utc(2026, 11, 17, 12);
-    final response = uri.path == '/api/usage-summary' ? {
-      'billingCycleStart': now.subtract(const Duration(days: 1)).toIso8601String(),
-      'billingCycleEnd': now.add(const Duration(days: 29)).toIso8601String(),
-      'membershipType': 'pro',
-      'isUnlimited': false,
-      'individualUsage': {
-        'plan': {
-          'enabled': true,
-          'used': 20,
-          'limit': 100,
-          'remaining': 80,
-          'totalPercentUsed': 20,
-        },
-      },
-    } : {'object': 'page', 'has_more': false, 'data': <Object>[]};
+    final response =
+        uri.path == '/api/usage-summary'
+            ? {
+              'billingCycleStart':
+                  now.subtract(const Duration(days: 1)).toIso8601String(),
+              'billingCycleEnd':
+                  now.add(const Duration(days: 29)).toIso8601String(),
+              'membershipType': 'pro',
+              'isUnlimited': false,
+              'individualUsage': {
+                'plan': {
+                  'enabled': true,
+                  'used': 20,
+                  'limit': 100,
+                  'remaining': 80,
+                  'totalPercentUsed': 20,
+                },
+              },
+            }
+            : {'object': 'page', 'has_more': false, 'data': <Object>[]};
     return ProviderHttpResponse(
       statusCode: 200,
       headers: const {},

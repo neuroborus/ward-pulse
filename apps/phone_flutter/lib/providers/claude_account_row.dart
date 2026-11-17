@@ -55,6 +55,16 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow>
   Object ownerOf(ClaudeAccountRow widget) => widget.accountService;
 
   @override
+  void didUpdateWidget(ClaudeAccountRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (identical(oldWidget.accountService, widget.accountService) &&
+        !identical(oldWidget.credentialStore, widget.credentialStore)) {
+      beginConnectionOperation();
+      loadConnectionState();
+    }
+  }
+
+  @override
   Future<bool> readConnected() => widget.accountService.isConnected();
 
   @override
@@ -82,6 +92,7 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow>
 
   Future<void> _editAccount() async {
     final owner = widget.accountService;
+    final store = widget.credentialStore;
     if (hasAccount == true) {
       final action = await showDialog<AccountAction>(
         context: context,
@@ -93,6 +104,10 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow>
                   'this phone using Claude Code OAuth.',
             ),
       );
+      if (!mounted ||
+          !identical(owner, widget.accountService) ||
+          !identical(store, widget.credentialStore))
+        return;
       if (action == AccountAction.disconnect) {
         await disconnectConnection(
           owner: owner,
@@ -105,14 +120,18 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow>
       }
     }
 
-    if (!mounted || !identical(owner, widget.accountService)) return;
+    if (!mounted ||
+        !identical(owner, widget.accountService) ||
+        !identical(store, widget.credentialStore))
+      return;
     final revision = beginConnectionOperation();
     setState(() {
       connecting = true;
     });
     try {
       final attempt = await owner.startLogin();
-      if (!ownsConnectionOperation(revision, owner)) {
+      if (!ownsConnectionOperation(revision, owner) ||
+          !identical(store, widget.credentialStore)) {
         attempt.cancel();
         return;
       }
@@ -125,10 +144,11 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow>
               startLogin: owner.startLogin,
             ),
       );
-      if (connected == true && ownsConnectionOperation(revision, owner)) {
+      if (connected == true &&
+          ownsConnectionOperation(revision, owner) &&
+          identical(store, widget.credentialStore)) {
         // Drop any pre-OAuth pasted access token for this connection.
         try {
-          final store = widget.credentialStore;
           if (store is LegacyProviderCredentialCleanup) {
             await (store as LegacyProviderCredentialCleanup).deleteLegacySecret(
               ProviderConnections.claudePlan,
@@ -139,7 +159,8 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow>
         } catch (_) {
           // Session is already saved; orphaned paste is non-fatal.
         }
-        if (!ownsConnectionOperation(revision, owner)) {
+        if (!ownsConnectionOperation(revision, owner) ||
+            !identical(store, widget.credentialStore)) {
           return;
         }
         setState(() {
@@ -150,15 +171,18 @@ class _ClaudeAccountRowState extends State<ClaudeAccountRow>
       }
     } on ClaudeAccountException catch (error) {
       if (ownsConnectionOperation(revision, owner) &&
+          identical(store, widget.credentialStore) &&
           error.failure != ClaudeAccountFailure.cancelled) {
         _showMessage(error.details ?? 'Could not start Claude sign-in');
       }
     } catch (_) {
-      if (ownsConnectionOperation(revision, owner)) {
+      if (ownsConnectionOperation(revision, owner) &&
+          identical(store, widget.credentialStore)) {
         _showMessage('Could not start Claude sign-in');
       }
     } finally {
-      if (ownsConnectionOperation(revision, owner)) {
+      if (ownsConnectionOperation(revision, owner) &&
+          identical(store, widget.credentialStore)) {
         setState(() {
           connecting = false;
           if (hasAccount == null) connectionUnavailable = true;

@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_theme.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
+import 'package:ward_pulse_phone/providers/claude_account_row.dart';
 import 'package:ward_pulse_phone/providers/alert_threshold_dialogs.dart';
 import 'package:ward_pulse_phone/providers/codex_account_service.dart';
 import 'package:ward_pulse_phone/providers/credential_dialog.dart';
@@ -1662,6 +1663,213 @@ void main() {
       return results;
     }
 
+    for (final window in ['start', 'code', 'cleanup', 'unchanged']) {
+      testWidgets(
+        'Claude credential-store ownership during $window',
+        (tester) async {
+          const id = ProviderConnections.claudePlan;
+          final events = <String>[];
+          final start = Completer<ClaudeLoginAttempt>();
+          final code = Completer<void>();
+          final cleanupStarted = Completer<void>();
+          final cleanup = Completer<void>();
+          final oldAttempt = _claudeAttempt('old', events, () => code.future);
+          final currentAttempt = _claudeAttempt('current', events, () async {});
+          final service = _QueuedClaudeAccountService(events, [
+            start.future,
+            Future.value(currentAttempt),
+          ]);
+          final oldStore = _MemoryCredentialStore();
+          final replacement = _MemoryCredentialStore();
+          await oldStore.writeSecret(id, 'synthetic-old-paste');
+          await replacement.writeSecret(id, 'synthetic-replacement-paste');
+          if (window == 'cleanup' || window == 'unchanged') {
+            oldStore.beforeDeleteSecret = (connection) async {
+              expect(connection, id);
+              cleanupStarted.complete();
+              await cleanup.future;
+            };
+          }
+          var changes = 0;
+          var cleared = 0;
+          final VoidCallback onChanged = () => changes++;
+          final VoidCallback onCleared = () => cleared++;
+          final connection = providerConnectionCatalog().singleWhere(
+            (c) => c.id == id,
+          );
+          final ConnectionRowControlsBuilder controls =
+              ({leading = const [], required status}) => (
+                actions: leading,
+                status: status,
+              );
+          final stores = ValueNotifier<ProviderCredentialStore>(oldStore);
+          Future<void>? editing;
+          Future<void>? submitting;
+          Future<void>? currentEditing;
+          try {
+            await tester.pumpWidget(
+              MaterialApp(
+                home: Scaffold(
+                  body: ValueListenableBuilder<ProviderCredentialStore>(
+                    valueListenable: stores,
+                    builder:
+                        (context, store, child) => ClaudeAccountRow(
+                          connection: connection,
+                          accountService: service,
+                          credentialStore: store,
+                          onCredentialsChanged: onChanged,
+                          onPastedSecretCleared: onCleared,
+                          buildControls: controls,
+                        ),
+                  ),
+                ),
+              ),
+            );
+            await tester.pumpAndSettle();
+            final state = tester.state(find.byType(ClaudeAccountRow));
+            editing =
+                (tester
+                            .widget<ProviderConnectionRow>(
+                              find.byType(ProviderConnectionRow),
+                            )
+                            .onTap
+                        as dynamic)()
+                    as Future<void>;
+            await tester.pump();
+            expect(events, ['start']);
+            if (window == 'start') {
+              stores.value = replacement;
+              await tester.pump();
+            }
+            start.complete(oldAttempt);
+            await tester.pump();
+            await tester.pump(const Duration(seconds: 1));
+            if (window != 'start') {
+              expect(find.text('Connect Claude plan'), findsOneWidget);
+              await tester.enterText(field, 'synthetic-code#old');
+              submitting =
+                  (tester
+                              .widget<FilledButton>(
+                                find.widgetWithText(FilledButton, 'Continue'),
+                              )
+                              .onPressed
+                          as dynamic)()
+                      as Future<void>;
+              await tester.pump();
+              expect(events, contains('old submit synthetic-code#old'));
+              if (window == 'code') {
+                stores.value = replacement;
+                await tester.pump();
+              }
+              code.complete();
+              await tester.pump();
+              await submitting;
+              if (window == 'cleanup' || window == 'unchanged') {
+                await cleanupStarted.future;
+                expect(changes, 0);
+                expect(cleared, 0);
+                if (window == 'cleanup') {
+                  stores.value = replacement;
+                  await tester.pump();
+                }
+                cleanup.complete();
+                await tester.pump();
+              }
+              await editing;
+              await tester.pumpAndSettle();
+            }
+            // Check the obsolete-start oracle before awaiting the row: OLD opens
+            // a dialog here, which must be dismissed only by failure-safe teardown.
+            expect(find.byType(AlertDialog), findsNothing);
+            expect(tester.state(find.byType(ClaudeAccountRow)), same(state));
+            expect(
+              tester
+                  .widget<ClaudeAccountRow>(find.byType(ClaudeAccountRow))
+                  .accountService,
+              same(service),
+            );
+            expect(changes, window == 'unchanged' ? 1 : 0);
+            expect(cleared, window == 'unchanged' ? 1 : 0);
+            expect(
+              await replacement.readSecret(id),
+              'synthetic-replacement-paste',
+            );
+            expect(replacement.deleted, isEmpty);
+            expect(
+              oldStore.deleted,
+              window == 'cleanup' || window == 'unchanged' ? [id] : isEmpty,
+            );
+            expect(
+              await oldStore.readSecret(id),
+              window == 'cleanup' || window == 'unchanged'
+                  ? isNull
+                  : 'synthetic-old-paste',
+            );
+            expect(
+              _inRow('Claude plan', find.byType(RowProgress)),
+              findsNothing,
+            );
+            expect(
+              _inRow(
+                'Claude plan',
+                find.text(
+                  window == 'unchanged' ? 'Connected' : 'Not connected',
+                ),
+              ),
+              findsOneWidget,
+            );
+            expect(find.byType(SnackBar), findsNothing);
+            if (window == 'start') expect(events, ['start', 'old cancel']);
+            await editing;
+
+            if (window != 'unchanged') {
+              // The replacement row can start and cancel its own real dialog.
+              currentEditing =
+                  (tester
+                              .widget<ProviderConnectionRow>(
+                                find.byType(ProviderConnectionRow),
+                              )
+                              .onTap
+                          as dynamic)()
+                      as Future<void>;
+              await tester.pump();
+              await tester.pump(const Duration(seconds: 1));
+              expect(find.text('Connect Claude plan'), findsOneWidget);
+              await tester.tap(find.text('Cancel'));
+              await tester.pumpAndSettle();
+              await currentEditing;
+              expect(events.last, 'current cancel');
+              expect(changes, 0);
+              expect(cleared, 0);
+              expect(
+                await replacement.readSecret(id),
+                'synthetic-replacement-paste',
+              );
+              expect(replacement.deleted, isEmpty);
+              expect(
+                _inRow('Claude plan', find.text('Not connected')),
+                findsOneWidget,
+              );
+            }
+          } finally {
+            if (find.byType(AlertDialog).evaluate().isNotEmpty) {
+              Navigator.of(tester.element(find.byType(AlertDialog))).pop(false);
+            }
+            await tester.pumpWidget(const SizedBox());
+            stores.dispose();
+            if (!start.isCompleted) start.complete(oldAttempt);
+            if (!code.isCompleted) code.complete();
+            if (!cleanup.isCompleted) cleanup.complete();
+            await tester.pump();
+            if (submitting != null) await submitting;
+            if (editing != null) await editing;
+            if (currentEditing != null) await currentEditing;
+          }
+        },
+        timeout: const Timeout(Duration(seconds: 60)),
+      );
+    }
+
     testWidgets('failed code entry restarts with a fresh authorization', (
       tester,
     ) async {
@@ -2785,6 +2993,8 @@ class _MemoryCredentialStore
   final _generations = <ProviderConnectionId, int>{};
   ProviderConnectionId? unreadable;
   Future<void> Function(ProviderConnectionId)? beforeReadLabel;
+  Future<void> Function(ProviderConnectionId)? beforeDeleteSecret;
+  final deleted = <ProviderConnectionId>[];
   CredentialVersion version(ProviderConnectionId id) => CredentialVersion({
     'generation': '${_generations[id] ?? 0}',
     'revision': 'revision',
@@ -2814,6 +3024,8 @@ class _MemoryCredentialStore
     ProviderConnectionId id, {
     void Function(CredentialVersion)? onRetired,
   }) async {
+    if (beforeDeleteSecret case final beforeDelete?) await beforeDelete(id);
+    deleted.add(id);
     _generations[id] = (_generations[id] ?? 0) + 1;
     _secrets.remove(id);
     onRetired?.call(version(id));
@@ -2848,6 +3060,7 @@ final class _MemoryCredentialAccess implements ConnectionCredentialAccess {
     final value = await store.readSecret(id);
     observer(value == null ? 'deleted' : 'active', store.version(id));
   }
+
   @override
   Future<void> admitAutomatic(CredentialVersion expected) async {}
   const _MemoryCredentialAccess(this.store, this.id);

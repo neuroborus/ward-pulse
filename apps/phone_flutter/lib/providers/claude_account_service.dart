@@ -295,7 +295,9 @@ final class EmptyClaudeAccountService implements ClaudeAccountService {
   Future<String?> fetchReport() async => null;
 
   @override
-  Future<void> disconnect({void Function(CredentialVersion)? onRetired}) async {}
+  Future<void> disconnect({
+    void Function(CredentialVersion)? onRetired,
+  }) async {}
 
   @override
   Future<void> observeLifecycle(CredentialLifecycleObserver observer) async {

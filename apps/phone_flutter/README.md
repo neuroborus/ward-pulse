@@ -310,26 +310,39 @@ existing disconnect read ordering, malformed-session cleanup and best-effort rev
 
 The `plan retirement reconciliation` group in `test/app_test.dart` exercises the production
 `PhoneLiveBindings.create` factory, real Java lifecycle/cache engine, synthetic reports and
-`FakeSecureStorage`. Label deletion alone fails after retirement; the joint oracle collects
-the still-open row, accepted app snapshot and normal watch-summary payload with a healthy
-sibling before asserting removal and separate cleanup feedback. Source review is not PASS.
-Root runs it on HOST after WHOLE code DONE, owning foreground CLI exit if used, known/scoped
+`FakeSecureStorage`. Both Disconnect and help → Advanced paste → Remove hold label cleanup
+after retirement. Before releasing that cleanup to fail, the joint oracle collects the
+still-open row, accepted app and Providers snapshots and actual watch-summary payload with
+a healthy sibling. Each entrypoint also covers downstream sync failure; cleanup feedback
+remains separate. The `Claude credential-store ownership` cases in the
+`Claude plan sign-in recovery` group in `test/providers_screen_test.dart` keep the same row
+State and account service while replacing only the credential store during login start,
+code completion and already-started pasted cleanup. They use the real login dialog, retain
+replacement credentials, reject obsolete callbacks and allow a current login; the unchanged
+store case proves successful cleanup and callbacks. Owned operations are released and awaited
+even on test failure. Source review is not PASS.
+Root runs these on HOST after WHOLE code DONE, owning foreground CLI exit if used, known/scoped
 process retirement and a separate fresh public idle observation, alongside mandatory
 `just release-status`, affected Flutter/JVM, the unchanged full phone check, supplemental
 formatting, host FFI qualification, Android builds and native/device/active-artifact acceptance.
 
-For SAME-final replay, Root binds OLD to accepted predecessor
-`4f0b3a9061c7706a90522abaf481f55978849f3d`. Keep identical final tests/support/inputs, Java
-engine and FFI library; substitute the complete Dart repair closure, including lifecycle,
+For the original total-item16 SAME-final replay, Root binds OLD to causal predecessor
+`4f0b3a9061c7706a90522abaf481f55978849f3d`. Separately compare Advanced Remove and Claude
+store-ownership regressions against corrective predecessor
+`a3690eb343b4de327f35aa844f2549e6aa3b07d0`. On HOST, focus `test/app_test.dart` with
+`--plain-name 'plan retirement reconciliation'` and `test/providers_screen_test.dart` with
+`--plain-name 'Claude credential-store ownership'`. Keep identical final tests/support/inputs,
+Java engine and FFI library; substitute the complete Dart repair closure, including lifecycle,
 secure account/provider stores, services, shared row settlement and the three plan rows.
 Qualify immutable blobs/modes, final loader/test identities and index/refs before mutation.
 Use journaled in-place Git-blob substitution with unconditional final restoration and reader
 retirement before transitions; retain no Source backup, clone or worktree. Bound setup
 separately and each focused warm leg to 60 seconds with qualified framework/process deadlines
-and awaited Flutter/JVM retirement. OLD must establish retirement and reach the joint stale
-row/accepted-data oracle; compilation, loading, transport and timeout failures are not causal
-RED. Root retains journal/restoration custody and repeats its whole independent ZERO after
-restoration and the last correction. All runtime acceptance remains pending.
+and awaited Flutter/JVM retirement. OLD must reach the substantive stale-surface or obsolete
+completion oracle (including established retirement for removal); compilation, setup, fixture,
+loading, transport and timeout failures are not causal RED. Root retains journal/restoration
+custody and repeats its whole independent ZERO after restoration and the last correction.
+All runtime acceptance remains pending.
 
 `ConnectionSnapshotCache.stamp` binds each normalized account's private `historyOwner` to
 the captured committed credential's connection and accepted identity digest. Native cache

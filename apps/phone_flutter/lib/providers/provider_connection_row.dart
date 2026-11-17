@@ -288,7 +288,8 @@ mixin PlanConnectionState<T extends StatefulWidget> on State<T> {
         }
         if (matching || legacy) {
           if (_cleanupFeedback case final message?) _feedback(message);
-          if (_reloadFailed) _feedback('Disconnected, but could not reload usage');
+          if (_reloadFailed)
+            _feedback('Disconnected, but could not reload usage');
         } else if (receipt == null && reportFailure) {
           _feedback('Could not disconnect. Check again or reconnect');
         }
