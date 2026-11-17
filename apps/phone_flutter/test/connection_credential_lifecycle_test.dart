@@ -115,7 +115,14 @@ void main() {
             final help =
                 tester
                     .widget<IconButton>(
-                      find.byTooltip('About Cursor plan sign-in'),
+                      find.descendant(
+                        of: find.byType(CursorPlanRow),
+                        matching: find.byWidgetPredicate(
+                          (widget) =>
+                              widget is IconButton &&
+                              widget.tooltip == 'About Cursor plan sign-in',
+                        ),
+                      ),
                     )
                     .onPressed!;
             if (outcome == 'barrier') {
@@ -144,7 +151,14 @@ void main() {
               expect(
                 tester
                     .widget<IconButton>(
-                      find.byTooltip('About Cursor plan sign-in'),
+                      find.descendant(
+                        of: find.byType(CursorPlanRow),
+                        matching: find.byWidgetPredicate(
+                          (widget) =>
+                              widget is IconButton &&
+                              widget.tooltip == 'About Cursor plan sign-in',
+                        ),
+                      ),
                     )
                     .onPressed,
                 isNull,
@@ -239,7 +253,15 @@ void main() {
               recovery =
                   (tester
                               .widget<IconButton>(
-                                find.byTooltip('About Cursor plan sign-in'),
+                                find.descendant(
+                                  of: find.byType(CursorPlanRow),
+                                  matching: find.byWidgetPredicate(
+                                    (widget) =>
+                                        widget is IconButton &&
+                                        widget.tooltip ==
+                                            'About Cursor plan sign-in',
+                                  ),
+                                ),
                               )
                               .onPressed
                           as dynamic)()
