@@ -15,7 +15,9 @@ import 'package:ward_pulse_phone/widget/phone_widget_navigation.dart';
 
 const _settings = AlertThresholdPreferences(
   connections: {
-    'openai.plan': ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 80)),
+    'openai.plan': ConnectionAlertThresholds(
+      plan: AlertPercentThreshold(at: 80),
+    ),
     'openai.platform': ConnectionAlertThresholds(
       budget: ConnectionBudget(today: 2500),
     ),
@@ -75,11 +77,14 @@ void main() {
         expect(call.method, 'syncWatchSummary');
         expect(rules.reads, greaterThan(0));
         expect(rules.writes, 0);
-        expect([
-          screen.snapshot.overallStatus.name,
-          screen.snapshot.watchSummary.status.name,
-          emitted['overallStatus'],
-        ], ['ok', 'ok', 'ok']);
+        expect(
+          [
+            screen.snapshot.overallStatus.name,
+            screen.snapshot.watchSummary.status.name,
+            emitted['overallStatus'],
+          ],
+          ['ok', 'ok', 'ok'],
+        );
         expect(screen.snapshot.toJson(), source.toJson());
         expect(screen.snapshot.alertConditions, isEmpty);
         expect(screen.configuredBudgetPeriods['openai.platform'], {'today'});

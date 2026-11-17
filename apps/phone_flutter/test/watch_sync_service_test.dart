@@ -76,11 +76,14 @@ void main() {
         'syncWatchSummary',
         'syncWatchSummary',
       ]);
-      expect([
-        applied.overallStatus.name,
-        applied.watchSummary.status.name,
-        emitted['overallStatus'],
-      ], ['ok', 'ok', 'ok']);
+      expect(
+        [
+          applied.overallStatus.name,
+          applied.watchSummary.status.name,
+          emitted['overallStatus'],
+        ],
+        ['ok', 'ok', 'ok'],
+      );
       expect(settings.hasEnabledRules, isTrue);
       expect(applied.toJson(), source.toJson());
       expect(applied.generatedAt, source.generatedAt);
