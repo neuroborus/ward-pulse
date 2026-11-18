@@ -360,7 +360,10 @@ void main() {
       const id = ProviderConnections.codexPlan;
       const siblingId = ProviderConnections.openAiPlatform;
       final platform = ObservingCachePlatform(bridge.platform('codex'));
-      final codex = SecureCodexAccountStore(storage: secure, platform: platform);
+      final codex = SecureCodexAccountStore(
+        storage: secure,
+        platform: platform,
+      );
       final sibling = reportingStore('sibling');
       final session = CodexAccountSession(
         accessToken: 'synthetic-access',
@@ -463,7 +466,10 @@ void main() {
         storage: secure,
         platform: bridge.platform('cold'),
       );
-      final coldService = MobileCodexAccountService(store: cold, client: client);
+      final coldService = MobileCodexAccountService(
+        store: cold,
+        client: client,
+      );
       final coldRead = await cold.readVersioned();
       final coldConnected = await coldService.isConnected();
       final coldReport = await coldService.fetchReport();
@@ -479,24 +485,7 @@ void main() {
       final siblingSecret = await sibling.readSecret(siblingId);
       final siblingCurrent = await sibling.readVersion(siblingId);
       stdout.writeln(
-        'CODEX-READ-ORACLE ${jsonEncode({
-          'mode': mode,
-          'current': current,
-          'cacheEligible': eligible,
-          'retainedCache': retained != null,
-          'latePublished': latePublished,
-          'coldCurrent': coldCurrent,
-          'coldCacheEligible': coldEligible,
-          'coldCache': coldSnapshot != null,
-          'coldPublished': coldPublished,
-          'encryptedReadFailed': events.contains('encrypted-read-failed'),
-          'receipts': receipts.length,
-          'siblingUnchanged':
-              siblingSecret == 'synthetic-reporting-key' &&
-              siblingAfter?.toJsonString() == siblingBefore.toJsonString() &&
-              jsonEncode(siblingCurrent?.values) ==
-                  jsonEncode(siblingVersion.values),
-        })}',
+        'CODEX-READ-ORACLE ${jsonEncode({'mode': mode, 'current': current, 'cacheEligible': eligible, 'retainedCache': retained != null, 'latePublished': latePublished, 'coldCurrent': coldCurrent, 'coldCacheEligible': coldEligible, 'coldCache': coldSnapshot != null, 'coldPublished': coldPublished, 'encryptedReadFailed': events.contains('encrypted-read-failed'), 'receipts': receipts.length, 'siblingUnchanged': siblingSecret == 'synthetic-reporting-key' && siblingAfter?.toJsonString() == siblingBefore.toJsonString() && jsonEncode(siblingCurrent?.values) == jsonEncode(siblingVersion.values)})}',
       );
 
       // OLD reaches this joint oracle with its owner/cache still eligible.
@@ -541,10 +530,11 @@ void main() {
       expect(events, contains('encrypted-read-failed'));
       expect(receipts, hasLength(1));
       expect(stamp!.values, receipts.single.values);
-      expect(
-        [stamp!.generation, stamp!.revision, stamp!.epoch],
-        everyElement(isNotEmpty),
-      );
+      expect([
+        stamp!.generation,
+        stamp!.revision,
+        stamp!.epoch,
+      ], everyElement(isNotEmpty));
       expect(requests, 0, reason: 'Unreadable material cannot be revoked.');
       expect(siblingSecret, 'synthetic-reporting-key');
       expect(siblingCurrent!.values, siblingVersion.values);
@@ -1826,6 +1816,7 @@ DashboardSnapshot _connectionSnapshot(
     ],
   });
 }
+
 typedef _ResponseHandler =
     Future<_Response> Function(Uri, Map<String, String>, String?);
 

@@ -138,47 +138,49 @@ void main() {
     expect(store.deletions, 1);
   });
 
-  test('malformed-session cleanup failure is not swallowed or retried', () async {
-    final store = _MalformedStore()..failDelete = true;
-    final receipts = <CredentialVersion>[];
-    await expectLater(
-      MobileCodexAccountService(store: store).disconnect(onRetired: receipts.add),
-      throwsA(isA<CodexAccountException>()),
-    );
-    expect(store.deletions, 1);
-    expect(receipts, hasLength(1));
-  });
+  test(
+    'malformed-session cleanup failure is not swallowed or retried',
+    () async {
+      final store = _MalformedStore()..failDelete = true;
+      final receipts = <CredentialVersion>[];
+      await expectLater(
+        MobileCodexAccountService(
+          store: store,
+        ).disconnect(onRetired: receipts.add),
+        throwsA(isA<CodexAccountException>()),
+      );
+      expect(store.deletions, 1);
+      expect(receipts, hasLength(1));
+    },
+  );
 
   for (final revokeFails in [false, true]) {
-    test(
-      'readable disconnect retires locally before revoke '
-      '${revokeFails ? 'failure' : 'success'}',
-      () async {
-        final store = _MemoryStore(_activeSession(now));
-        var requests = 0;
-        final transport = _QueueTransport([
-          const CodexHttpResponse(statusCode: 200, body: '{}'),
-        ]);
-        transport.onSend = (uri, body) {
-          expect(store.value, isNull);
-          expect(store.deletions, 1);
-          expect(uri.path, '/oauth/revoke');
-          expect(jsonDecode(body!)['token'], 'refresh-token');
-          requests++;
-          if (revokeFails) {
-            throw const CodexAccountException(CodexAccountFailure.unavailable);
-          }
-        };
-        final service = MobileCodexAccountService(
-          store: store,
-          client: CodexAccountClient(transport: transport, clock: () => now),
-        );
-        await service.disconnect();
-        expect(store.deletions, 1);
+    test('readable disconnect retires locally before revoke '
+        '${revokeFails ? 'failure' : 'success'}', () async {
+      final store = _MemoryStore(_activeSession(now));
+      var requests = 0;
+      final transport = _QueueTransport([
+        const CodexHttpResponse(statusCode: 200, body: '{}'),
+      ]);
+      transport.onSend = (uri, body) {
         expect(store.value, isNull);
-        expect(requests, 1);
-      },
-    );
+        expect(store.deletions, 1);
+        expect(uri.path, '/oauth/revoke');
+        expect(jsonDecode(body!)['token'], 'refresh-token');
+        requests++;
+        if (revokeFails) {
+          throw const CodexAccountException(CodexAccountFailure.unavailable);
+        }
+      };
+      final service = MobileCodexAccountService(
+        store: store,
+        client: CodexAccountClient(transport: transport, clock: () => now),
+      );
+      await service.disconnect();
+      expect(store.deletions, 1);
+      expect(store.value, isNull);
+      expect(requests, 1);
+    });
   }
 }
 

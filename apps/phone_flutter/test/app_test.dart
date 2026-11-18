@@ -69,7 +69,9 @@ void main() {
         await tester.runAsync(() async {
           const id = ProviderConnections.codexPlan;
           final secure = FakeSecureStorage();
-          final platform = ObservingCachePlatform(bridge.platform('foreground'));
+          final platform = ObservingCachePlatform(
+            bridge.platform('foreground'),
+          );
           final now = DateTime.utc(2026, 11, 18, 12);
           final live = PhoneLiveBindings.create(
             secureStorage: secure,
@@ -122,9 +124,13 @@ void main() {
           final replies = <Future<Object?>>[];
           var joined = 0;
           bridge.onInvoke = replies.add;
-          secure.onRead = (key, completion) => replies.add(
-            completion.then<Object?>((value) => value, onError: (_) => null),
-          );
+          secure.onRead =
+              (key, completion) => replies.add(
+                completion.then<Object?>(
+                  (value) => value,
+                  onError: (_) => null,
+                ),
+              );
           Future<void> drain() async {
             do {
               final batch = replies.sublist(joined);
@@ -178,9 +184,7 @@ void main() {
             await drain();
             final app = find.byType(FutureBuilder<DashboardSnapshot>);
             final beforeLoad =
-                tester
-                    .widget<FutureBuilder<DashboardSnapshot>>(app)
-                    .future!;
+                tester.widget<FutureBuilder<DashboardSnapshot>>(app).future!;
             final before = await beforeLoad;
             expect(
               before.accounts.map((a) => a.connection),
@@ -217,9 +221,7 @@ void main() {
             await cleanupStarted.future;
             await tester.pump();
             final load =
-                tester
-                    .widget<FutureBuilder<DashboardSnapshot>>(app)
-                    .future!;
+                tester.widget<FutureBuilder<DashboardSnapshot>>(app).future!;
             final accepted = await load;
             await removalSync.future;
             await drain();
@@ -262,7 +264,20 @@ void main() {
                 payloads.length,
                 settled,
               ],
-              [true, true, 1, false, false, false, true, true, false, true, 2, false],
+              [
+                true,
+                true,
+                1,
+                false,
+                false,
+                false,
+                true,
+                true,
+                false,
+                true,
+                2,
+                false,
+              ],
               reason:
                   'The owned row, app, Providers and watch must reconcile '
                   'once while only post-lease companion cleanup is held.',
@@ -7085,7 +7100,9 @@ final class _PlanCodexTransport implements CodexHttpTransport {
     statusCode: 200,
     body: jsonEncode(
       uri.path.endsWith('/profiles/me')
-          ? {'stats': {'daily_usage_buckets': <Object>[]}}
+          ? {
+            'stats': {'daily_usage_buckets': <Object>[]},
+          }
           : {
             'plan_type': 'plus',
             'rate_limit': {
@@ -7095,7 +7112,11 @@ final class _PlanCodexTransport implements CodexHttpTransport {
                 'reset_at': 1795006800,
               },
             },
-            'credits': {'has_credits': false, 'unlimited': false, 'balance': '0'},
+            'credits': {
+              'has_credits': false,
+              'unlimited': false,
+              'balance': '0',
+            },
           },
     ),
   );
