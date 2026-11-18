@@ -516,7 +516,10 @@ journal directory must be under `LOCAL_ARTIFACTS/` and must not already exist.
 The controller retains `GIT_OPTIONAL_LOCKS=0` and exclusively creates only the resolved index
 path's `.lock`, without waiting or following a symlink. It retains the descriptor and journals
 its device/inode and controller PID/start time, process group, session and boot identity.
-Acquisition and cleanup defer catchable interrupts. Current custody requires that actual
+Acquisition and cleanup defer catchable interrupts. Admission requires baseline qualification
+and durable custody journaling; rejection retains acquired custody without focused Source
+writes. FINAL restoration is armed immediately before attempted substitution, including
+partial writes. Current custody requires that actual
 owned lease and Root's current owner evidence; it identifies no historical writer. Release
 requires the same descriptor/path/controller identity, retired readers, safe FINAL restoration
 and successful Source/runtime/HEAD/refs/logical-index/raw-index comparisons. Uncertainty retains
@@ -869,6 +872,7 @@ def preserved(expected):
     assert source() == expected and metadata() == meta and runtime() == tools
 
 proc, evidence, results, expected = None, None, [], baseline
+restoration_needed = False
 try:  # Restoration is installed before the first substitution, including partial writes.
     # Fence acquisition until the descriptor and durable owner evidence are retained.
     cleaning = True
@@ -879,10 +883,10 @@ try:  # Restoration is installed before the first substitution, including partia
         lease_owned()
         record('index-lease-acquired', index=str(index_path), lock=str(lock_path), descriptor=lock_fd,
                device=lock_identity[0], inode=lock_identity[1], controller=controller)
-        lease_ready = True
         preserved(baseline)
         record('custody', index=str(index_path), lock=str(lock_path), descriptor=lock_fd,
                device=lock_identity[0], inode=lock_identity[1], controller=controller)
+        lease_ready = True
     finally:
         cleaning = False
     for leg, blob in [('FINAL', final_blob), ('OLD', old_blob), ('RESTORED_FINAL', final_blob)]:
@@ -890,6 +894,7 @@ try:  # Restoration is installed before the first substitution, including partia
             raise InterruptedError('HOST replay interrupted')
         preserved(expected)
         if leg != 'FINAL':
+            restoration_needed = True
             install(blob)
         expected = dict(baseline)
         expected[focus] = [0o664, digest(git('cat-file', 'blob', blob))]
@@ -986,7 +991,8 @@ finally:
     try:
         if lease_ready:
             retire(proc, evidence)
-            install(final_blob)
+            if restoration_needed:
+                install(final_blob)
             preserved(baseline)
             record('restored', source_identity=True, runtime_identity=True, metadata_identity=True,
                    results=results, interrupts=interrupts)
@@ -997,6 +1003,9 @@ finally:
             record('index-lease-released', device=lock_identity[0], inode=lock_identity[1],
                    controller=controller)
         elif lock_fd is not None:
+            record('admission-failed', category='admission-failed', index=str(index_path),
+                   lock=str(lock_path), descriptor=lock_fd, identity=lock_identity,
+                   controller=controller)
             raise RuntimeError('Index lease acquisition uncertain; retain custody.')
     except BaseException:
         record('restoration-failed', category='restoration-failed', results=results, interrupts=interrupts)
