@@ -194,13 +194,13 @@ final class ObservingCachePlatform implements ConnectionCachePlatform {
   ObservingCachePlatform(this.delegate);
   final ConnectionCachePlatform delegate;
   FutureOr<void> Function(String, Map<String, Object?>)? beforeInvoke;
-  void Function(String, Map<String, Object?>, Object?)? onComplete;
+  FutureOr<void> Function(String, Map<String, Object?>, Object?)? onComplete;
 
   @override
   Future<Object?> invoke(String method, Map<String, Object?> arguments) async {
     await beforeInvoke?.call(method, arguments);
     final result = await delegate.invoke(method, arguments);
-    onComplete?.call(method, arguments, result);
+    await onComplete?.call(method, arguments, result);
     return result;
   }
 }

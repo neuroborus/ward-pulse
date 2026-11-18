@@ -36,15 +36,20 @@ final class ConnectionSnapshotCache {
   Future<bool> validSnapshot(DashboardSnapshot snapshot) async {
     final versions = {...snapshot.connectionVersions};
     for (final outcome in snapshot.reportingOutcomes) {
+      final previous = versions[outcome.connection.storageKey];
+      if (previous?.containsKey('absentRead') == true &&
+          outcome.category == ReportingOutcomeCategory.success)
+        return false;
       final version = outcome.credentialVersion;
       if (version == null) continue;
-      final previous = versions[outcome.connection.storageKey];
+      if (version.isAbsent) return false;
       if (previous != null && !version.sameCache(CredentialVersion(previous)))
         return false;
       versions[outcome.connection.storageKey] = version.values;
     }
     for (final account in snapshot.accounts) {
       final values = versions[account.connection];
+      if (values != null && CredentialVersion(values).isAbsent) return false;
       final owner =
           values == null || account.connection == null
               ? null
@@ -139,6 +144,8 @@ final class ConnectionSnapshotCache {
     DashboardSnapshot snapshot,
     CredentialVersion version,
   ) {
+    if (version.isAbsent)
+      throw const FormatException('Invalid connection history owner.');
     final owner = HistoryOwner.fromVersion(connection, version);
     if (!owns(snapshot) ||
         snapshot.accounts.any(

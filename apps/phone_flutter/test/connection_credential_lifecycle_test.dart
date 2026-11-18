@@ -11,6 +11,7 @@ import 'package:ward_pulse_phone/dashboard/dashboard_load.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/dashboard/connection_snapshot_cache.dart';
+import 'package:ward_pulse_phone/dashboard/merging_connection_repository.dart';
 import 'package:ward_pulse_phone/dashboard/codex_dashboard_repository.dart';
 import 'package:ward_pulse_phone/dashboard/claude_dashboard_repository.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
@@ -54,6 +55,149 @@ void main() {
         storage: secure,
         platform: bridge.platform(owner),
       );
+
+  group('connection absence ownership', () {
+    for (final completion in ['missing', 'deleted']) {
+      test('activation retires a held completed $completion reply', () async {
+        if (completion == 'deleted') await store('setup').delete();
+        final completed = Completer<void>();
+        final release = Completer<void>();
+        final platform = ObservingCachePlatform(bridge.platform('reader'));
+        final credentials = ConnectionCredentialStorage(
+          connection: 'cursor.plan',
+          legacyKey: 'wardpulse.cursor.plan.secret',
+          principal: (value) => value,
+          storage: secure,
+          platform: platform,
+        );
+        platform.onComplete = (method, args, result) async {
+          if (method == 'finish' &&
+              result is Map &&
+              result['mode'] == 'deleted') {
+            completed.complete();
+            await release.future;
+          }
+        };
+        final repository = MergingConnectionRepository(
+          cache: ConnectionSnapshotCache(
+            connection: 'cursor.plan',
+            platform: platform,
+            readCredentialVersion: () async => null,
+          ),
+          fallback: const NoProvidersDashboardRepository(),
+          loadReport: () async {
+            await credentials.read();
+            return null;
+          },
+          normalizeReport: (value) => value,
+          mapError: (_) => const DashboardLoadException(),
+          logger: const NullProviderSyncLogger(),
+        );
+        final loading = CapturedDashboardLoad.capture(repository.load);
+        try {
+          await completed.future;
+          await store('activation').write('synthetic-new');
+          release.complete();
+          final result = await loading;
+          DashboardLoadException? failure;
+          try {
+            result.value;
+          } on DashboardLoadException catch (error) {
+            failure = error;
+          }
+          expect(failure, isNotNull);
+          expect(await repository.isFailureCurrent(failure!), isFalse);
+          expect((await store('readback').read())!.value, 'synthetic-new');
+        } finally {
+          if (!release.isCompleted) release.complete();
+          await loading;
+        }
+      });
+    }
+
+    for (final kind in [
+      'parse',
+      'identity',
+      'unavailable',
+      'failed completion',
+      'accountless active',
+      'pending',
+    ]) {
+      test('$kind does not establish absence', () async {
+        var rejectPrincipal = false;
+        final platform = ObservingCachePlatform(bridge.platform('reader'));
+        final credentials = ConnectionCredentialStorage(
+          connection: 'cursor.plan',
+          legacyKey: 'wardpulse.cursor.plan.secret',
+          principal: (value) {
+            if (rejectPrincipal)
+              throw const FormatException('Synthetic invalid session.');
+            return value;
+          },
+          storage: secure,
+          platform: platform,
+        );
+        if (kind == 'parse') {
+          secure.values['wardpulse.cursor.plan.secret'] = 'synthetic-malformed';
+          rejectPrincipal = true;
+        } else if (kind == 'identity' || kind == 'accountless active') {
+          await credentials.write('synthetic-active');
+          if (kind == 'identity') {
+            final read = (await credentials.read())!;
+            final lease =
+                await bridge.invoke('probe', 'acquire', {
+                      'connection': 'cursor.plan',
+                      'action': 'read',
+                    })
+                    as Map;
+            await bridge.invoke('probe', 'finish', {
+              'connection': 'cursor.plan',
+              'lease': lease['lease'],
+              'operation': 'release',
+            });
+            secure.values[lease['slot'] as String] = 'synthetic-other';
+            expect(await credentials.isCurrent(read.version), isTrue);
+          }
+        } else if (kind == 'pending') {
+          await credentials.beginReconnect();
+        }
+        secure.failRead = kind == 'unavailable';
+        var completedMissing = false;
+        platform.onComplete = (method, args, result) {
+          if (method == 'finish' &&
+              result is Map &&
+              result['mode'] == 'deleted')
+            completedMissing = true;
+        };
+        if (kind == 'failed completion') {
+          await bridge.invoke('test', 'failCommit', {'value': true});
+        }
+        final repository = MergingConnectionRepository(
+          cache: ConnectionSnapshotCache(
+            connection: 'cursor.plan',
+            platform: platform,
+            readCredentialVersion: () async => null,
+          ),
+          fallback: const NoProvidersDashboardRepository(),
+          loadReport: () async {
+            await credentials.read();
+            return null;
+          },
+          normalizeReport: (value) => value,
+          mapError: (_) => const DashboardLoadException(),
+          logger: const NullProviderSyncLogger(),
+        );
+        final captured = await CapturedDashboardLoad.capture(repository.load);
+        try {
+          final snapshot = captured.value;
+          expect(snapshot.connectionVersions, isEmpty);
+        } on DashboardLoadException catch (failure) {
+          expect(await repository.isFailureCurrent(failure), isTrue);
+        }
+        expect(completedMissing, kind == 'parse' || kind == 'identity');
+      });
+    }
+  });
 
   for (final outcome in [
     'pending',

@@ -87,6 +87,19 @@ foreground/headless publication. This protects concurrent Flutter engines in one
 process and restart; it does not promise cross-process locking or atomic network delivery
 against a later disconnect.
 
+Completed genuine absence reads also carry phone-private lifecycle evidence: either a
+successful null/blank credential read followed by successful native missing-credential
+retirement, or an established deleted read followed by successful native lease release.
+Activation invalidates that old absence before subsequent publication/failure guards, while
+unrelated healthy connection caches remain valid. Cache probes, cleanup, failed/unavailable
+or tolerated optional reads, parsing/identity retirement alone, pending/skipped work and
+accountless active or stale/Unknown reports cannot establish absence. Captured evidence
+survives later failure/stale and settings transformations, including headless failures that
+would otherwise mark newer widget rows STALE. Absence cannot qualify positive accounts,
+reporting outcomes or recovery-history owners. These stamps never enter shared JSON,
+persisted normalized payloads, watch/widget output, logs or user text. This adds no retraction
+of dispatched calls and no atomic validation/delivery guarantee across engines.
+
 Automatic polling also persists non-secret generation/principal admission stamps and the
 last admitted start time in this private store. The native owner atomically validates the
 current fetch ticket and credential version before recording an attempt. Token revision,

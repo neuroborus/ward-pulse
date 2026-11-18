@@ -121,7 +121,14 @@ Map<String, HistoryOwner?> _capturedOwners(
   AutomaticPollContext? poll,
 ) {
   final versions = <String, CredentialVersion>{};
-  void add(String connection, CredentialVersion version) {
+  void add(
+    String connection,
+    CredentialVersion version, {
+    bool allowAbsent = false,
+  }) {
+    if (version.values.containsKey('conflict') ||
+        (version.isAbsent && !allowAbsent))
+      throw const FormatException('Conflicting recovery provenance.');
     final previous = versions[connection];
     if (previous != null &&
         (!previous.sameCache(version) ||
@@ -132,7 +139,7 @@ Map<String, HistoryOwner?> _capturedOwners(
   }
 
   snapshot.connectionVersions.forEach(
-    (id, values) => add(id, CredentialVersion(values)),
+    (id, values) => add(id, CredentialVersion(values), allowAbsent: true),
   );
   for (final outcome in snapshot.reportingOutcomes) {
     final version = outcome.credentialVersion;
@@ -149,10 +156,13 @@ Map<String, HistoryOwner?> _capturedOwners(
   }
   final owners = {
     for (final entry in versions.entries)
-      entry.key: HistoryOwner.fromVersion(entry.key, entry.value),
+      if (!entry.value.isAbsent)
+        entry.key: HistoryOwner.fromVersion(entry.key, entry.value),
   };
   for (final account in snapshot.accounts) {
     final connection = account.connection;
+    if (versions[connection]?.isAbsent == true)
+      throw const FormatException('Conflicting recovery owner.');
     if (connection == null) {
       if (account.historyOwner != null)
         throw const FormatException('Unqualified recovery owner.');

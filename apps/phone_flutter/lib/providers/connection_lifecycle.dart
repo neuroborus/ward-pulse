@@ -30,12 +30,15 @@ final class CredentialVersion {
           'epoch',
           'identity',
           'committedConnection',
+          'absentRead',
+          'conflict',
         ])
           if (values[key] != null) key: values[key]!,
       });
 
   /// Immutable, non-secret native lifecycle stamp, safe to retain after a read.
   final Map<String, String> values;
+  bool get isAbsent => values.containsKey('absentRead');
   String get generation => values['generation']!;
   String get revision => values['revision']!;
   String get epoch => values['epoch']!;
@@ -47,13 +50,72 @@ final class CredentialVersion {
           'epoch',
           'identity',
           'committedConnection',
+          'absentRead',
+          'conflict',
         ])
           if (map[key] is String) key: map[key]! as String,
       });
   bool sameCache(CredentialVersion other) =>
+      values['absentRead'] == other.values['absentRead'] &&
+      values['conflict'] == other.values['conflict'] &&
+      (!isAbsent || revision == other.revision) &&
       generation == other.generation &&
       epoch == other.epoch &&
       values['identity'] == other.values['identity'];
+}
+
+/// Combines private evidence without allowing a successor to hide a conflict.
+Map<String, Map<String, String>> mergeConnectionVersions(
+  Iterable<Map<String, Map<String, String>>> sources,
+) {
+  final result = <String, Map<String, String>>{};
+  for (final source in sources) {
+    for (final MapEntry(:key, :value) in source.entries) {
+      final previous = result[key];
+      if (previous != null &&
+          !CredentialVersion(previous).sameCache(CredentialVersion(value))) {
+        result[key] = {...previous, 'conflict': 'true'};
+      } else {
+        result[key] = value;
+      }
+    }
+  }
+  return result;
+}
+
+/// Scoped to an actual connection read, never a cache probe or fallback load.
+final class ConnectionReadObservation {
+  ConnectionReadObservation(this.connection);
+  final String? connection;
+  final _versions = <String, Map<String, String>>{};
+  static final _zoneKey = Object();
+  Map<String, Map<String, String>> get versions => Map.unmodifiable(_versions);
+
+  Future<T> run<T>(Future<T> Function() read) =>
+      runZoned(read, zoneValues: {_zoneKey: this});
+
+  static void _completed(String connection, Map<String, Object?> state) {
+    final observer = Zone.current[_zoneKey] as ConnectionReadObservation?;
+    if (observer == null ||
+        observer.connection != connection ||
+        state['mode'] != 'deleted' ||
+        !['generation', 'revision', 'epoch'].every(
+          (key) => state[key] is String && (state[key]! as String).isNotEmpty,
+        ))
+      return;
+    observer._versions.addAll(
+      mergeConnectionVersions([
+        observer._versions,
+        {
+          connection: {
+            'absentRead': 'true',
+            for (final key in ['generation', 'revision', 'epoch'])
+              key: state[key]! as String,
+          },
+        },
+      ]),
+    );
+  }
 }
 
 /// Synchronous observation under a native lease; legacy stores can lack a stamp.
@@ -259,12 +321,14 @@ final class ConnectionCredentialStorage
     }
   }
 
-  Future<void> _release(Map<String, Object?> lease) async {
+  Future<Map<String, Object?>> _release(Map<String, Object?> lease) async {
+    late final Map<String, Object?> state;
     try {
       await _cleanup(lease);
     } finally {
-      await _finish(lease, 'release');
+      state = await _finish(lease, 'release');
     }
+    return state;
   }
 
   @override
@@ -331,7 +395,8 @@ final class ConnectionCredentialStorage
       }
       if (value == null || value.trim().isEmpty) {
         finished = true;
-        await _finish(lease, 'missing');
+        final state = await _finish(lease, 'missing');
+        ConnectionReadObservation._completed(connection, state);
         return null;
       }
       final String identity;
@@ -374,7 +439,11 @@ final class ConnectionCredentialStorage
       }
       return VersionedCredential(value, CredentialVersion.fromMap(state));
     } finally {
-      if (!finished) await _release(lease);
+      if (!finished) {
+        final state = await _release(lease);
+        if (lease['mode'] == 'deleted')
+          ConnectionReadObservation._completed(connection, state);
+      }
     }
   }
 

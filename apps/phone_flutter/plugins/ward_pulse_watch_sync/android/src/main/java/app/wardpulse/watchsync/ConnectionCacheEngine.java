@@ -193,6 +193,7 @@ public final class ConnectionCacheEngine {
     }
     private static boolean same(Map<String, String> state, Map<String, String> expected, boolean credentialRevision) {
         return "active".equals(state.get("mode")) && expected != null
+            && !expected.containsKey("absentRead") && !expected.containsKey("conflict")
             && state.get("generation").equals(expected.get("generation"))
             && state.get("identity").equals(expected.get("identity"))
             && (credentialRevision ? state.get("revision").equals(expected.get("revision"))
@@ -449,7 +450,23 @@ public final class ConnectionCacheEngine {
     }
     public synchronized boolean validAll(Map<String, Map<String, String>> versions) {
         for (Map.Entry<String, Map<String, String>> entry : versions.entrySet()) {
-            if (!valid(entry.getKey(), entry.getValue())) return false;
+            Map<String, String> expected = entry.getValue();
+            if (expected == null || expected.containsKey("conflict")) return false;
+            try {
+                if (!expected.containsKey("absentRead")) {
+                    if (!valid(entry.getKey(), expected)) return false;
+                    continue;
+                }
+                if (fenced.contains(entry.getKey()) || !"true".equals(expected.get("absentRead"))
+                        || expected.size() != 4) return false;
+                Map<String, String> state = state(entry.getKey());
+                if (!"deleted".equals(state.get("mode")) || state.containsKey("slot")
+                        || state.containsKey("identity")) return false;
+                for (String key : Arrays.asList("generation", "revision", "epoch")) {
+                    String value = expected.get(key);
+                    if (value == null || value.trim().isEmpty() || !value.equals(state.get(key))) return false;
+                }
+            } catch (IllegalArgumentException | IllegalStateException unavailable) { return false; }
         }
         return true;
     }

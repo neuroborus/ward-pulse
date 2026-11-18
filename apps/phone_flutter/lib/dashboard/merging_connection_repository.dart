@@ -95,6 +95,25 @@ final class MergingConnectionRepository extends DashboardRepository {
     );
     final store = credentialStore;
     final id = connection;
+    final readObservation = ConnectionReadObservation(
+      _cache?.connection ?? id?.storageKey,
+    );
+    var provenance = <String, Map<String, String>>{};
+    var ownOutcomes = const <ConnectionReportingOutcome>[];
+    Future<Map<String, Map<String, String>>> captureProvenance({
+      bool includeOutcomes = false,
+    }) async {
+      final other = await fallback;
+      return mergeConnectionVersions([
+        provenance,
+        other.connectionVersions,
+        readObservation.versions,
+        if (includeOutcomes)
+          for (final outcome in [...ownOutcomes, ...other.reportingOutcomes])
+            if (outcome.credentialVersion case final version?)
+              {outcome.connection.storageKey: version.values},
+      ]);
+    }
     // Legacy session loaders retain their read/fetch flow. Their store still
     // owns local-read outcomes at the publication boundary.
     final access =
@@ -105,15 +124,22 @@ final class MergingConnectionRepository extends DashboardRepository {
             : null;
     Future<_ConnectionResult> run() async {
       if (store == null || id == null || loadCredentialReport == null) {
-        return _loadOwned(revision, _loadReport!, null);
+        return _loadOwned(
+          revision,
+          () => readObservation.run(_loadReport!),
+          null,
+        );
       }
       // Fetch ownership is acquired before this read. The storage transaction
       // ends inside read(), before any provider request begins.
       final VersionedCredential<String>? read;
       final String? secret;
       try {
-        read = await access?.read();
-        secret = access == null ? await store.readSecret(id) : read?.value;
+        read = access == null ? null : await readObservation.run(access.read);
+        secret =
+            access == null
+                ? await readObservation.run(() => store.readSecret(id))
+                : read?.value;
       } catch (_) {
         return _failed(
           DashboardLoadException.withOutcomes(
@@ -170,15 +196,26 @@ final class MergingConnectionRepository extends DashboardRepository {
       // unrelated held fallback must not queue the next saved-key check.
       final own =
           access == null ? await run() : await access.serializeFetch(run);
+      provenance = mergeConnectionVersions([
+        own.snapshot?.connectionVersions ?? const {},
+        own.failure?.connectionVersions ?? const {},
+        own.cached?.connectionVersions ?? const {},
+        readObservation.versions,
+        if (own.skipped case final skipped?)
+          {skipped.connection: skipped.version.values},
+      ]);
       final facts =
           own.skipped != null
               ? const <ConnectionReportingOutcome>[]
               : own.snapshot?.reportingOutcomes ??
                   own.failure?.reportingOutcomes ??
                   const <ConnectionReportingOutcome>[];
+      ownOutcomes = facts;
       final current =
           own.failure != null
-              ? await isFailureCurrent(own.failure!)
+              ? await isFailureCurrent(
+                own.failure!.withConnectionVersions(provenance),
+              )
               : own.snapshot == null || await isSnapshotCurrent(own.snapshot!);
       if (current && revision == _cacheRevision) {
         if (own.failure != null) {
@@ -208,6 +245,7 @@ final class MergingConnectionRepository extends DashboardRepository {
           );
         }
       }
+      provenance = await captureProvenance();
       final DashboardSnapshot result;
       if (own.failure != null) {
         result = await _recover(fallback, own.failure!, revision, own.cached);
@@ -228,23 +266,38 @@ final class MergingConnectionRepository extends DashboardRepository {
                   skipped.connection: skipped.version.values,
                 });
       }
-      if (!await isSnapshotCurrent(result) || revision != _cacheRevision) {
-        throw const DashboardLoadException(
+      final attributed = result.withConnectionVersions(
+        mergeConnectionVersions([result.connectionVersions, provenance]),
+      );
+      if (!await isSnapshotCurrent(attributed) || revision != _cacheRevision) {
+        throw DashboardLoadException(
           details: 'Connection changed during refresh.',
+          connectionVersions: attributed.connectionVersions,
         );
       }
-      return result;
-    } on DashboardLoadException catch (error) {
-      if (!await isFailureCurrent(error) || revision != _cacheRevision) {
-        throw const DashboardLoadException(
+      return attributed;
+    } on DashboardLoadException catch (error, stackTrace) {
+      final failure = error.withConnectionVersions(
+        mergeConnectionVersions([
+          error.connectionVersions,
+          for (final outcome in error.reportingOutcomes)
+            if (outcome.credentialVersion case final version?)
+              {outcome.connection.storageKey: version.values},
+          await captureProvenance(includeOutcomes: true),
+        ]),
+      );
+      if (!await isFailureCurrent(failure) || revision != _cacheRevision) {
+        throw DashboardLoadException(
           details: 'Connection changed during refresh.',
+          connectionVersions: failure.connectionVersions,
         );
       }
-      rethrow;
+      Error.throwWithStackTrace(failure, stackTrace);
     } catch (_) {
       // Ownership loss and detachment must never become bad-key evidence.
-      throw const DashboardLoadException(
+      throw DashboardLoadException(
         details: 'Connection changed during refresh.',
+        connectionVersions: await captureProvenance(includeOutcomes: true),
       );
     } finally {
       observing = false;
@@ -295,6 +348,7 @@ final class MergingConnectionRepository extends DashboardRepository {
         issue: failure.issue,
         details: failure.details,
         syncRejection: rejection,
+        connectionVersions: failure.connectionVersions,
         reportingOutcomes: [
           ConnectionReportingOutcome(
             connection: connection!,
@@ -322,6 +376,7 @@ final class MergingConnectionRepository extends DashboardRepository {
       issue: failure.issue,
       details: failure.details,
       syncRejection: rejection,
+      connectionVersions: failure.connectionVersions,
       reportingOutcomes: [_outcome(category, version)],
     );
   }

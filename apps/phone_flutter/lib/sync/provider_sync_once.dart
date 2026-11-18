@@ -8,6 +8,7 @@ import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../dashboard/phone_live_bindings.dart';
 import '../dashboard/plan_recoveries.dart';
+import '../providers/connection_lifecycle.dart';
 import '../settings/alert_notification_preferences.dart';
 import '../settings/alert_threshold_preferences.dart';
 import '../settings/debug_data_preferences.dart';
@@ -160,16 +161,20 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
   try {
     loaded = await poll.run(live.repository.load);
   } catch (error) {
-    // Repositories strip an obsolete failure of its stamps, so the credentials
-    // this invocation admitted must still own it as well.
+    // Keep rejected-load absence evidence alongside every admitted credential.
     final failure = DashboardSnapshot.empty()
         .withReportingOutcomes(
           error is DashboardLoadException ? error.reportingOutcomes : const [],
         )
-        .withConnectionVersions({
-          for (final MapEntry(:key, :value) in poll.admittedVersions.entries)
-            key: value.values,
-        });
+        .withConnectionVersions(
+          mergeConnectionVersions([
+            if (error is DashboardLoadException) error.connectionVersions,
+            {
+              for (final MapEntry(:key, :value) in poll.admittedVersions.entries)
+                key: value.values,
+            },
+          ]),
+        );
     owner.bindProvenance(() => live.repository.isSnapshotCurrent(failure));
     // A load that ends after Mock took over is retired, not a Live failure.
     if (!await owner.isLive()) return null;

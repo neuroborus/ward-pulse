@@ -311,6 +311,80 @@ path without revocation material. Other reads retain unavailable errors. Malform
 cleanup stays separate, propagates cleanup errors and forwards at most one retirement receipt;
 readable removal retains best-effort refresh-token revoke after storage leases release.
 
+### Completed absence reads
+
+`MergingConnectionRepository` observes each connection's actual credential/report read,
+excluding cache probes, fallback loads and cleanup. A successful null/blank credential read
+with completed native missing-credential retirement, or an established deleted read whose
+native lease release completed, contributes an absence stamp to the existing phone-private
+`connectionVersions` map. `ConnectionCacheEngine.validAll` accepts it only while the matching
+deleted generation/revision/epoch remains well formed and unfenced. Unchanged absence stays
+usable; activating that connection retires previously captured absence before later guards.
+Healthy siblings and their caches remain usable.
+
+Failed/unavailable or tolerated optional reads, parsing/identity retirement alone, pending
+sign-in, skipped polling, accountless active reports and stale/Unknown data do not establish
+absence. Genuine evidence survives successful/stale/fallback merges, merge errors, captured
+and rejected failures, settings transformations and headless failure proxies. It cannot own
+accounts, positive reporting outcomes or recovery history. The private stamps stay out of
+shared JSON, persisted normalized snapshots, watch/widget output, diagnostics and UI text.
+Guards stop subsequent effects; they do not retract dispatched calls or make validation and
+cross-engine delivery atomic.
+
+### Original19 independent SAME-final replay
+
+Original19 runtime acceptance is pending. After whole code DONE, known/scoped process
+retirement, a separate fresh public idle observation and the actual owning foreground CLI
+exit when used, Root/HOST establishes FINAL → OLD → restored-FINAL independently. Original18's
+controller, OLD choice and results supply no original19 PASS. Native must not execute this replay.
+
+1. Take sole canonical Source/index custody. Bind HEAD, all refs, raw index bytes and a
+   logical index manifest, plus the complete Source identity/content/mode manifest. Positively
+   qualify every substituted path as a stable regular file with known link/ownership identity;
+   absent, null or unreadable evidence proves nothing. Keep immutable OLD and final manifests
+   with named tree/blob identities, byte hashes and modes. Bind the final changed-owner manifest
+   and inspect the complete test/support/import graph: no production change may escape the
+   following eight-owner closure under `apps/phone_flutter/`:
+   `lib/providers/connection_lifecycle.dart`,
+   `lib/dashboard/merging_connection_repository.dart`,
+   `lib/dashboard/connection_snapshot_cache.dart`, `lib/dashboard/dashboard_repository.dart`,
+   `lib/dashboard/dashboard_load.dart`, `lib/sync/provider_sync_once.dart`,
+   `lib/sync/recovery_watchlist.dart`, and
+   `plugins/ward_pulse_watch_sync/android/src/main/java/app/wardpulse/watchsync/ConnectionCacheEngine.java`.
+2. OLD consists of those exact blobs and modes from immutable base
+   `ddc53fcbb139f221e9a46bd05566ab7e379de950`. Seal identical final test/support/input bytes
+   and the unchanged, qualified host FFI artifact across all three legs. The complete graph
+   must compile unchanged through pre-existing public APIs; compile the actual Java engine
+   afresh for each leg. Identify the FFI artifact actually loaded, not merely one built nearby.
+3. Before any substitution, including a partial attempt, arm exact final restoration and open
+   a durable, bounded, sanitized journal. Record positive Source/controller identities,
+   transitions and restoration outcomes. Run each Flutter/JVM invocation as bounded owned
+   processes; establish actual reader retirement before every Source transition. Unknown
+   ownership or restoration retains custody and holds further work.
+4. Run the identical `connection absence ownership retains accepted A+B after late work`
+   test in `test/connection_snapshot_cache_test.dart` with Flutter's JSON reporter on FINAL,
+   OLD and restored-FINAL. It uses real stores/native owners, ordinary repositories and Rust
+   normalization, separate widget coordinators, `buildPhoneWidgetPayload` and
+   `writeHomeWidgetPayload`. Retain its completed native-read observations, full late outcome,
+   aggregate identities/values/order, healthy B, actual publication arguments and redraw/store
+   readback before evaluating validity assertions. OLD must actually replace accepted A+B
+   with late B-only output; both final legs must preserve A+B. Compile/load/setup/transport/
+   timeout failures are infrastructure failures, never semantic RED. Keep only bounded
+   sanitized oracle evidence; do not retain credentials, raw reports or private stamps.
+5. Restore exact final bytes and modes without rewriting the index or refs, even on partial
+   failure. Before releasing custody, prove final Source/runtime manifests and HEAD, refs,
+   raw and logical index preservation against their captured identities. Do not continue
+   ordinary work on uncertain restoration. A matching test result alone is insufficient.
+
+Native's single-step FINALIZE inventory remains exactly `git diff --check HEAD`,
+`just check-docs` and `just release-status`, from the canonical repository root, subject to
+actual FIRST Worker/Reviewer discovery and the managed executor assignments. Selected trusted
+commands run only through Runner's persisted vectors. Focused Flutter regressions, the
+three-leg replay, qualified host FFI build/load, unchanged complete `just check-phone`, and
+normal Android build/install/active APK and FFI/native-frame acceptance remain HOST-owned and
+pending. They are not a Native wait or scoped-commit prerequisite; no check result is claimed
+by this procedure.
+
 The `plan retirement reconciliation` group in `test/app_test.dart` exercises the production
 `PhoneLiveBindings.create` factory, real Java lifecycle/cache engine, synthetic reports and
 `FakeSecureStorage`. A scoped tall test view retains the existing logical width and keeps

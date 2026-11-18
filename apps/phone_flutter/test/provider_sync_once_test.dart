@@ -88,6 +88,72 @@ void main() {
       FlutterSecureStorage.setMockInitialValues({});
       await bridge.reset();
     });
+    for (final activate in [false, true]) {
+      test(
+        'connection absence ownership guards late headless failure '
+        '(activate: $activate)',
+        () async {
+          final secure = FakeSecureStorage();
+          final foreground = SecureProviderCredentialStore(
+            storage: secure,
+            platform: bridge.platform('ui'),
+          );
+          await foreground.writeSecret(
+            ProviderConnections.cursorPlatform,
+            'synthetic-b',
+          );
+          final transport = _HeldFailingTransport();
+          final captured = Completer<void>();
+          final release = Completer<void>();
+          var staleWrites = 0;
+          final failures = <String>[];
+          final run = providerSyncOnce(
+            debugBuild: false,
+            load: (owner) async {
+              try {
+                return await loadProviderSyncWork(
+                  owner,
+                  createLive:
+                      () => PhoneLiveBindings.create(
+                        secureStorage: secure,
+                        cachePlatform: bridge.platform('headless'),
+                        cursorReportingClient: CursorPlatformClient(
+                          http: ProviderReportingHttp(transport: transport),
+                        ),
+                      ),
+                );
+              } catch (_) {
+                captured.complete();
+                await release.future;
+                rethrow;
+              }
+            },
+            markWidgetStale: ({required isCurrent}) async {
+              staleWrites++;
+            },
+            logFailure: (step, _, _) => failures.add(step),
+          );
+          try {
+            await transport.started.future;
+            transport.release.complete();
+            await captured.future;
+            if (activate)
+              await foreground.writeSecret(
+                ProviderConnections.cursorPlan,
+                'synthetic-a',
+              );
+            release.complete();
+            await run;
+            expect(failures, ['setup']);
+            expect(staleWrites, activate ? 0 : 1);
+          } finally {
+            if (!transport.release.isCompleted) transport.release.complete();
+            if (!release.isCompleted) release.complete();
+            await run;
+          }
+        },
+      );
+    }
     test(
       'wholly skipped headless collection does not call surface plugins',
       () async {
@@ -155,8 +221,7 @@ void main() {
         }
         transport.release.complete();
         await run;
-        // The repository strips an obsolete failure of its stamps; only the
-        // admitted credentials can still reject it.
+        // Admitted credentials and any captured absence both guard the failure.
         expect(headless.failures, ['setup']);
         expect(headless.staleWrites, change == 'kept' ? 1 : 0);
       });

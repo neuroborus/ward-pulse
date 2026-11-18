@@ -43,7 +43,7 @@ public final class ConnectionCacheEngineTest {
         return finish(engine, "ui", complete, "activate");
     }
     public static void main(String[] ignored) {
-        automaticAdmission(); automaticMetadataFailure(); automaticWriteCannotActivateCandidate();
+        automaticAdmission(); automaticMetadataFailure(); automaticWriteCannotActivateCandidate(); absenceOwnership();
         restartPartialAndMonotonic(); deletionAndOAuthRevision(); leaseQueueAndDetach(); cancellationAndMigration(); corruptionAndFailures(); identityAndAggregate(); fetchExclusion(); cleanupAcknowledgement(); supersededCancellation(); failedCommitMemoryCannotActivate(); siblingWritesCannotActivateCandidate(); emptyPriorStateSurvivesSiblingWrite(); activeBackupCleanupProtection(); timestampPrecisionAndLegacyUpgrade(); rejectionLifecycle(); rejectionOwnership(); noticeFailures(); noticeMetadataValidation();
         System.out.println("Connection cache engine: " + assertions + " assertions passed.");
     }
@@ -159,6 +159,39 @@ public final class ConnectionCacheEngineTest {
         Map<String, Map<String, String>> all = new HashMap<>(); all.put(C, v);
         check(engine.validAll(all), "Aggregate validates current lease atomically."); all.put(C, wrong);
         check(!engine.validAll(all), "Aggregate rejects any obsolete lease.");
+    }
+    static void absenceOwnership() {
+        Disk disk = new Disk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+        Map<String, Object> read = acquire(engine, "reader", "read", null);
+        Map<String, String> absent = version(finish(engine, "reader", read, "missing"));
+        absent.remove("identity"); absent.put("absentRead", "true");
+        Map<String, Map<String, String>> all = new HashMap<>(); all.put(C, absent);
+        check(engine.validAll(all), "Completed missing read remains current while deletion is unchanged.");
+        check(!engine.valid(C, absent) && engine.readSnapshot(C, absent) == null,
+            "Absence cannot qualify a positive credential or cached payload.");
+        Map<String, String> malformed = new HashMap<>(absent); malformed.put("identity", ID); all.put(C, malformed);
+        check(!engine.validAll(all), "Absence cannot contain positive ownership evidence.");
+        malformed = new HashMap<>(absent); malformed.put("epoch", ""); all.put(C, malformed);
+        check(!engine.validAll(all), "Absence requires a complete matching lifecycle stamp.");
+        all.put(C, absent);
+        String sibling = "cursor.plan";
+        AtomicReference<Map<String, Object>> reply = new AtomicReference<>();
+        engine.acquire("B", sibling, "reconnect", null, reply::set, error -> { throw new RuntimeException(error); });
+        Map<String, Object> pending = reply.get();
+        engine.finish("B", sibling, (String)pending.get("lease"), "release", null);
+        engine.acquire("B", sibling, "complete", version(pending), reply::set, error -> { throw new RuntimeException(error); });
+        Map<String, String> b = version(engine.finish("B", sibling, (String)reply.get().get("lease"), "activate", ID));
+        engine.writeSnapshot(sibling, b, "healthy-B", 77); all.put(sibling, b);
+        check(engine.validAll(all), "A absence and healthy B validate together.");
+        disk.fail = true;
+        try { acquire(engine, "failed", "delete", null); throw new AssertionError("Expected failed barrier."); }
+        catch (RuntimeException expected) { /* The native operation actually failed. */ }
+        disk.fail = false;
+        check(!engine.validAll(all), "Unconfirmed native completion fences absence.");
+        login(engine);
+        check(!engine.validAll(all), "Activation invalidates the captured absence.");
+        check(engine.valid(sibling, b) && "healthy-B".equals(engine.readSnapshot(sibling, b)),
+            "Retiring A absence preserves B and its cached report.");
     }
     static void fetchExclusion() {
         Disk disk = new Disk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);

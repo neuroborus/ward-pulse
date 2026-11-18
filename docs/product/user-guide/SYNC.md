@@ -56,6 +56,12 @@ This recovery works across phone app restarts and background polling. A new conn
 that has never reported successfully has no earlier data to recover. Provider sign-in and
 fresh reporting need network access. Removed or replaced connections cannot reuse obsolete data.
 
+After a newly connected provider has reported, older work that read it as unconnected cannot
+replace the newer combined report or mark its widget rows stale. Other providers keep their
+healthy or recoverable data. A failed credential read does not prove that a connection was
+removed. Updates already sent can still arrive later; phone, widget and watch delivery is
+not one simultaneous transaction.
+
 - The phone can show **Showing previous data** and a provider/sync issue.
 - The home widget keeps earlier rows and can show **STALE** after a failed refresh.
 - Wear also treats a summary as stale when it is at least two hours old.

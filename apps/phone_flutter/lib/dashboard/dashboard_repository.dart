@@ -17,9 +17,9 @@ abstract class DashboardRepository {
 
   Future<bool> isFailureCurrent(DashboardLoadException failure) =>
       isSnapshotCurrent(
-        DashboardSnapshot.empty().withReportingOutcomes(
-          failure.reportingOutcomes,
-        ),
+        DashboardSnapshot.empty()
+            .withConnectionVersions(failure.connectionVersions)
+            .withReportingOutcomes(failure.reportingOutcomes),
       );
 
   void invalidate() {}
@@ -35,6 +35,7 @@ final class DashboardLoadException implements Exception {
     this.issue = DashboardSyncIssue.dashboardUnavailable,
     this.details,
     this.syncRejection,
+    this.connectionVersions = const {},
   }) : reportingOutcomes = const [];
 
   DashboardLoadException.withOutcomes({
@@ -42,12 +43,28 @@ final class DashboardLoadException implements Exception {
     this.details,
     this.syncRejection,
     required Iterable<ConnectionReportingOutcome> reportingOutcomes,
-  }) : reportingOutcomes = List.unmodifiable(reportingOutcomes);
+    Map<String, Map<String, String>> connectionVersions = const {},
+  }) : reportingOutcomes = List.unmodifiable(reportingOutcomes),
+       connectionVersions = Map.unmodifiable({
+         for (final entry in connectionVersions.entries)
+           entry.key: Map<String, String>.unmodifiable(entry.value),
+       });
 
   final DashboardSyncIssue issue;
   final String? details;
   final ConnectionRejection? syncRejection;
   final List<ConnectionReportingOutcome> reportingOutcomes;
+  final Map<String, Map<String, String>> connectionVersions;
+
+  DashboardLoadException withConnectionVersions(
+    Map<String, Map<String, String>> versions,
+  ) => DashboardLoadException.withOutcomes(
+    issue: issue,
+    details: details,
+    syncRejection: syncRejection,
+    reportingOutcomes: reportingOutcomes,
+    connectionVersions: versions,
+  );
 
   @override
   String toString() => issue.message;

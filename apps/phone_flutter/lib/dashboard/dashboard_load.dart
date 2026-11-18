@@ -30,6 +30,12 @@ final class CapturedDashboardLoad {
   final Object? _error;
   final StackTrace? _stackTrace;
 
+  Map<String, Map<String, String>> get connectionVersions {
+    final error = _error;
+    return _value?.connectionVersions ??
+        (error is DashboardLoadException ? error.connectionVersions : const {});
+  }
+
   List<ConnectionReportingOutcome> get reportingOutcomes {
     final error = _error;
     return _value?.reportingOutcomes ??

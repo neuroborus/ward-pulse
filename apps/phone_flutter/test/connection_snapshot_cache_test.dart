@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
@@ -21,6 +22,7 @@ import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_payload.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_sync.dart';
 
 import 'package:ward_pulse_phone/dashboard/dashboard_load.dart';
 import 'package:ward_pulse_phone/dashboard/openai_dashboard_repository.dart';
@@ -134,6 +136,424 @@ void main() {
     mergeSnapshots: mergeDashboardSnapshotsJson,
     logger: const _SilentLogger(),
   );
+
+  group('connection absence ownership', () {
+    final at = DateTime.utc(2026, 11, 18, 12);
+    const a = ProviderConnections.cursorPlan;
+    const b = ProviderConnections.openAiPlatform;
+    SecureProviderCredentialStore keys(String owner) =>
+        SecureProviderCredentialStore(
+          storage: secure,
+          platform: bridge.platform(owner),
+        );
+    DashboardRepository live(String owner, {ConnectionCachePlatform? platform}) {
+      final native = platform ?? bridge.platform(owner);
+      final store = SecureProviderCredentialStore(
+        storage: secure,
+        platform: native,
+      );
+      final http = ProviderReportingHttp(
+        transport: _HistoryReportingTransport(at),
+      );
+      final caches = {
+        for (final id in [a, b])
+          id.storageKey: ConnectionSnapshotCache(
+            connection: id.storageKey,
+            platform: native,
+            readCredentialVersion: () => store.readVersion(id),
+          ),
+      };
+      return buildLiveProviderStack(
+        credentialStore: store,
+        claudeAccountService: const EmptyClaudeAccountService(),
+        openAiAndCodex: openAiDashboardRepository(
+          credentialStore: store,
+          cache: caches[b.storageKey],
+          client: OpenAiReportingClient(http: http),
+          clock: () => at,
+          logger: const _SilentLogger(),
+        ),
+        caches: caches,
+        cursorSessionClient: CursorPlanClient(http: http),
+        clock: () => at,
+        logger: const _SilentLogger(),
+      );
+    }
+
+    test('retains accepted A+B after late work', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      await keys('ui').writeSecret(b, 'synthetic-b');
+      var fetchingA = false;
+      var completedAbsentReads = 0;
+      final native = ObservingCachePlatform(bridge.platform('late'));
+      native.onComplete = (method, arguments, result) {
+        if (arguments['connection'] != a.storageKey) return;
+        if (method == 'acquireFetch') fetchingA = true;
+        if (method == 'releaseFetch') fetchingA = false;
+        if (fetchingA &&
+            method == 'finish' &&
+            result is Map &&
+            result['mode'] == 'deleted') {
+          completedAbsentReads++;
+        }
+      };
+      final oldRepository = live('late', platform: native);
+      final old = await oldRepository.load();
+      final initiallyCurrent = await oldRepository.isSnapshotCurrent(old);
+      final entered = Completer<void>();
+      final release = Completer<void>();
+      final visible = <String, Object?>{};
+      final publications = <Map<String, Object?>>[];
+      final redraws = <Map<String, Object?>>[];
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      const publication = MethodChannel('app.wardpulse/widget_publication');
+      const widget = MethodChannel('home_widget');
+      messenger.setMockMethodCallHandler(publication, (call) async {
+        if (call.method != 'publish') throw MissingPluginException();
+        visible.addAll(Map<String, Object?>.from(call.arguments as Map));
+        publications.add(Map.of(visible));
+        return true;
+      });
+      messenger.setMockMethodCallHandler(widget, (call) async {
+        if (call.method != 'updateWidget') throw MissingPluginException();
+        redraws.add(Map.of(visible));
+        return true;
+      });
+      final preferences = PhoneWidgetPreferences(
+        selectedIds: [
+          'allowance.cursor.cursor-plan',
+          'budget.openai.platform.today',
+        ],
+      );
+      PhoneWidgetSyncCoordinator coordinator() => PhoneWidgetSyncCoordinator(
+        write: HomeWidgetPhoneWidgetSyncService.writeHomeWidgetPayload,
+      );
+      final late = CapturedDashboardLoad.capture(() async {
+        await coordinator().sync(
+          old,
+          preferences,
+          isCurrent: () async {
+            if (!entered.isCompleted) {
+              entered.complete();
+              await release.future;
+            }
+            return oldRepository.isSnapshotCurrent(old);
+          },
+        );
+        return old;
+      });
+      try {
+        await entered.future;
+        await keys('activation').writeSecret(a, 'synthetic-a');
+        final acceptedRepository = live('accepted');
+        final accepted = await acceptedRepository.load();
+        await coordinator().sync(
+          accepted,
+          preferences,
+          isCurrent: () => acceptedRepository.isSnapshotCurrent(accepted),
+        );
+        final acceptedVisible = Map.of(visible);
+        release.complete();
+        final settled = await late;
+        Object? lateError;
+        try {
+          settled.value;
+        } catch (error) {
+          lateError = error;
+        }
+        // Complete the operation and receiver readback before any OLD oracle.
+        final lateVisible = Map.of(visible);
+        final lateRedraws = List.of(redraws);
+        final lateCurrent = await oldRepository.isSnapshotCurrent(old);
+        final bCache = await cache('readback', b.storageKey).capture();
+        List<Object?> accounts(DashboardSnapshot snapshot) => [
+          for (final row in snapshot.accounts)
+            {
+              'id': row.accountId,
+              'connection': row.connection,
+              'status': row.status.name,
+              'spent': row.today.spent?.minorUnits,
+              'allowances': [
+                for (final window in row.allowances)
+                  {'id': window.id, 'usedPercent': window.usedPercent},
+              ],
+            },
+        ];
+        final evidence = {
+          'oldAccounts': accounts(old),
+          'acceptedAccounts': accounts(accepted),
+          'lateOutcome': lateError == null ? 'completed' : 'error',
+          'lateCurrent': lateCurrent,
+          'latePublished': publications.length > 1,
+          'completedAbsentReads': completedAbsentReads,
+          'publications': publications,
+          'redraws': lateRedraws,
+          'visible': lateVisible,
+        };
+        stdout.writeln(
+          'connection absence ownership oracle ${jsonEncode(evidence)}',
+        );
+        expect(lateError, isNull);
+        expect(completedAbsentReads, 1);
+        expect(old.accounts.map((row) => row.connection), [b.storageKey]);
+        expect(accepted.accounts.map((row) => row.connection), [
+          b.storageKey,
+          a.storageKey,
+        ]);
+        expect(accepted.accounts.map((row) => row.accountId), [
+          'openai-local',
+          'cursor-local',
+        ]);
+        expect(acceptedVisible['row_count'], 2);
+        expect(acceptedVisible['row_0_family'], 'Cursor');
+        expect(acceptedVisible['row_0_percent'], '80% left');
+        expect(acceptedVisible['row_1_family'], 'OpenAI');
+        expect(acceptedVisible['row_1_spent_minor'], '900');
+        expect(acceptedVisible['stale'], '0');
+        expect(
+          lateVisible,
+          acceptedVisible,
+          reason: 'Late B-only work must not replace accepted A+B',
+        );
+        expect(lateRedraws, [acceptedVisible]);
+        expect(publications, [acceptedVisible]);
+        expect(initiallyCurrent, isTrue);
+        expect(lateCurrent, isFalse);
+        expect(bCache.snapshot!.accounts.single.status, ProviderStatus.ok);
+        expect(bCache.snapshot!.todayTotal.spent!.minorUnits, 900);
+      } finally {
+        if (!release.isCompleted) release.complete();
+        await late;
+        messenger.setMockMethodCallHandler(publication, null);
+        messenger.setMockMethodCallHandler(widget, null);
+      }
+    });
+
+    test(
+      'preserves genuine absence through copies, settings and skipped work',
+      () async {
+        await keys('ui').writeSecret(b, 'synthetic-b');
+        final repository = live('copies');
+        final snapshot = await repository.load();
+        final absent = snapshot.connectionVersions[a.storageKey];
+        expect(absent?['absentRead'], 'true');
+        final enabled = applyUserAlertSettings(
+          snapshot,
+          const AlertThresholdPreferences(
+            connections: {
+              'openai.platform': ConnectionAlertThresholds(
+                today: AlertPercentThreshold(at: 80),
+                budget: ConnectionBudget(today: 1000),
+              ),
+            },
+          ),
+        );
+        expect(enabled.alertConditions, isNotEmpty);
+        final copies = [
+          snapshot.withAccounts(snapshot.accounts),
+          snapshot.withConnectionVersions(snapshot.connectionVersions),
+          snapshot.withReportingOutcomes(snapshot.reportingOutcomes),
+          snapshot.withSyncIssue(DashboardSyncIssue.rateLimited),
+          snapshot.withStaleStatus(),
+          enabled,
+          applyUserAlertSettings(enabled, const AlertThresholdPreferences()),
+        ];
+        for (final copy in copies) {
+          expect(copy.connectionVersions, snapshot.connectionVersions);
+          expect(await repository.isSnapshotCurrent(copy), isTrue);
+          expect(copy.toJsonString(), isNot(contains('absentRead')));
+        }
+        final skipped = await automatic().run(repository.load);
+        final skippedAgain = await automatic().run(repository.load);
+        expect(skippedAgain.connectionVersions[a.storageKey], absent);
+        expect(skippedAgain.accounts.single.status, ProviderStatus.ok);
+        expect(
+          skipped.accounts.single.accountId,
+          snapshot.accounts.single.accountId,
+        );
+        expect(snapshot.connectionVersions, isNot(contains('anthropic.plan')));
+        expect(
+          await repository.isSnapshotCurrent(
+            snapshot.withAccounts(const []).withReportingOutcomes([
+              const ConnectionReportingOutcome(
+                connection: a,
+                category: ReportingOutcomeCategory.success,
+                source: ReportingOutcomeSource.live,
+                freshness: ReportingOutcomeFreshness.current,
+              ),
+            ]),
+          ),
+          isFalse,
+        );
+        final conflicting = snapshot.withConnectionVersions({
+          ...snapshot.connectionVersions,
+          b.storageKey: absent!,
+        });
+        expect(await repository.isSnapshotCurrent(conflicting), isFalse);
+        expect(
+          await repository.isSnapshotCurrent(
+            conflicting.withReportingOutcomes(const []),
+          ),
+          isFalse,
+        );
+        final cacheBytes =
+            await bridge.invoke('readback', 'readSnapshot', {
+                  'connection': b.storageKey,
+                  'expected': snapshot.connectionVersions[b.storageKey],
+                })
+                as String;
+        expect(cacheBytes, isNot(contains('absentRead')));
+        final watch = WatchDashboardSummaryPayload.fromSnapshot(
+          snapshot,
+          const WatchRingPreferences(selectedIds: []),
+        ).encode();
+        expect(watch, isNot(contains('absentRead')));
+        await keys('activation').writeSecret(a, 'synthetic-a');
+        for (final copy in copies) {
+          expect(await repository.isSnapshotCurrent(copy), isFalse);
+        }
+        expect(await repository.isSnapshotCurrent(skippedAgain), isFalse);
+      },
+    );
+
+    test('empty and all-off selections retain genuine absence', () async {
+      await keys('setup').writeSecret(a, 'synthetic-prior');
+      final prior = await live('prior').load();
+      final priorOwner = prior.accounts.single.historyOwner;
+      expect(priorOwner, isNotNull);
+      await keys('setup').deleteSecret(a);
+      final repository = live('empty');
+      final empty = await repository.load();
+      expect(empty.accounts, isEmpty);
+      expect(empty.connectionVersions[a.storageKey]?['absentRead'], 'true');
+      expect(await repository.isSnapshotCurrent(empty), isTrue);
+      final history = SecureRecoveryWatchlistStore(storage: secure);
+      final key = (
+        accountId: 'previous',
+        allowanceId: 'window',
+        historyOwner: priorOwner,
+      );
+      await history.write([key]);
+      await syncPlanRecoveries(
+        empty,
+        history,
+        _HistoryRecoveryNotifier(),
+        const DisabledRecoveryWakeScheduler(),
+        readWindows: (_) => const [],
+        now: () => at,
+        rethrowFailures: true,
+      );
+      expect(
+        await history.read(),
+        [key],
+        reason: 'Absence cannot own recovery history',
+      );
+      for (final preferences in [
+        const PhoneWidgetPreferences(),
+        const PhoneWidgetPreferences(selectedIds: []),
+      ]) {
+        expect(buildPhoneWidgetPayload(empty, preferences).isEmpty, isTrue);
+      }
+    });
+
+    for (final path in ['fallback', 'stale', 'merge error', 'failure']) {
+      test('retains absence through $path and captured failures', () async {
+        await keys('ui').writeSecret(b, 'synthetic-b');
+        final absent = owned(
+          'absent',
+          a.storageKey,
+          (_) async => throw StateError('Unreachable'),
+        );
+        final bSnapshot = _snapshot('openai', b.storageKey, at, 900);
+        if (path == 'stale') {
+          await owned(
+            'prime',
+            b.storageKey,
+            (_) async => bSnapshot.toJsonString(),
+          ).load();
+        }
+        final fallback =
+            path == 'failure'
+                ? absent
+                : owned('b', b.storageKey, (_) async {
+                  if (path == 'stale')
+                    throw StateError('Synthetic reporting failure.');
+                  return bSnapshot.toJsonString();
+                }, fallback: absent);
+        final DashboardRepository repository;
+        if (path == 'merge error' || path == 'failure') {
+          const c = ProviderConnections.cursorPlatform;
+          await keys('ui').writeSecret(c, 'synthetic-c');
+          repository = MergingConnectionRepository(
+            connection: c,
+            credentialStore: keys('c'),
+            cache: cache('c', c.storageKey),
+            fallback: fallback,
+            loadCredentialReport: (_) async {
+              if (path == 'failure')
+                throw StateError('Synthetic reporting failure.');
+              return _snapshot('cursor', c.storageKey, at, 100).toJsonString();
+            },
+            normalizeReport: (value) => value,
+            mergeSnapshots:
+                (_) => throw const FormatException('Synthetic merge failure.'),
+            mapError:
+                (_) => const DashboardLoadException(
+                  issue: DashboardSyncIssue.rateLimited,
+                ),
+            logger: const _SilentLogger(),
+          );
+        } else {
+          repository = fallback;
+        }
+        final captured = await CapturedDashboardLoad.capture(repository.load);
+        DashboardSnapshot? snapshot;
+        DashboardLoadException? failure;
+        try {
+          snapshot = captured.value;
+        } on DashboardLoadException catch (error) {
+          failure = error;
+        }
+        if (snapshot != null) {
+          expect(snapshot.connectionVersions[a.storageKey]?['absentRead'], 'true');
+          expect(snapshot.accounts.single.connection, b.storageKey);
+          expect(
+            snapshot.accounts.single.status,
+            path == 'stale' ? ProviderStatus.stale : ProviderStatus.ok,
+          );
+          expect(await repository.isSnapshotCurrent(snapshot), isTrue);
+        } else {
+          expect(failure, isNotNull);
+          expect(await repository.isFailureCurrent(failure!), isTrue);
+        }
+        await keys('activation').writeSecret(a, 'synthetic-a');
+        if (snapshot != null) {
+          expect(await repository.isSnapshotCurrent(snapshot), isFalse);
+        } else {
+          expect(await repository.isFailureCurrent(failure!), isFalse);
+        }
+      });
+    }
+
+    test('cache-only absence cannot qualify a failed report read', () async {
+      final owner = repository(
+        'probe',
+        a.storageKey,
+        () async => throw StateError('Synthetic unavailable read.'),
+      );
+      final captured = await CapturedDashboardLoad.capture(owner.load);
+      DashboardLoadException? failure;
+      try {
+        captured.value;
+      } on DashboardLoadException catch (error) {
+        failure = error;
+      }
+      expect(failure, isNotNull);
+      await keys('activation').writeSecret(a, 'synthetic-a');
+      expect(await owner.isFailureCurrent(failure!), isTrue);
+    });
+  });
 
   group('accepted connection history', () {
     final at = DateTime.utc(2026, 11, 14, 12);
