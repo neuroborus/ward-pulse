@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 
 import '../sync/provider_sync_logger.dart';
@@ -267,9 +268,14 @@ final class MergingConnectionRepository extends DashboardRepository {
                   skipped.connection: skipped.version.values,
                 });
       }
-      final attributed = result.withConnectionVersions(
-        mergeConnectionVersions([result.connectionVersions, provenance]),
-      );
+      final versions = mergeConnectionVersions([
+        result.connectionVersions,
+        provenance,
+      ]);
+      final attributed =
+          _sameConnectionVersions(result.connectionVersions, versions)
+              ? result
+              : result.withConnectionVersions(versions);
       if (!await isSnapshotCurrent(attributed) || revision != _cacheRevision) {
         throw DashboardLoadException(
           details: 'Connection changed during refresh.',
@@ -278,15 +284,17 @@ final class MergingConnectionRepository extends DashboardRepository {
       }
       return attributed;
     } on DashboardLoadException catch (error, stackTrace) {
-      final failure = error.withConnectionVersions(
-        mergeConnectionVersions([
-          error.connectionVersions,
-          for (final outcome in error.reportingOutcomes)
-            if (outcome.credentialVersion case final version?)
-              {outcome.connection.storageKey: version.values},
-          await captureProvenance(includeOutcomes: true),
-        ]),
-      );
+      final versions = mergeConnectionVersions([
+        error.connectionVersions,
+        for (final outcome in error.reportingOutcomes)
+          if (outcome.credentialVersion case final version?)
+            {outcome.connection.storageKey: version.values},
+        await captureProvenance(includeOutcomes: true),
+      ]);
+      final failure =
+          _sameConnectionVersions(error.connectionVersions, versions)
+              ? error
+              : error.withConnectionVersions(versions);
       if (!await isFailureCurrent(failure) || revision != _cacheRevision) {
         throw DashboardLoadException(
           details: 'Connection changed during refresh.',
@@ -854,6 +862,13 @@ final class MergingConnectionRepository extends DashboardRepository {
     return _publish(stale);
   }
 }
+
+bool _sameConnectionVersions(
+  Map<String, Map<String, String>> first,
+  Map<String, Map<String, String>> second,
+) =>
+    first.length == second.length &&
+    first.entries.every((entry) => mapEquals(entry.value, second[entry.key]));
 
 List<ConnectionReportingOutcome> _combineOutcomes(
   Iterable<ConnectionReportingOutcome> first,

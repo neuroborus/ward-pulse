@@ -7,6 +7,7 @@ import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/dashboard/live_provider_stack.dart';
 import 'package:ward_pulse_phone/dashboard/merging_connection_repository.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
@@ -150,6 +151,65 @@ void main() {
     );
 
     expect(await repository.load(), same(snapshot));
+  });
+
+  group('unchanged connection attribution', () {
+    final version = CredentialVersion({
+      'generation': '1',
+      'revision': '2',
+      'epoch': '3',
+      'identity': 'synthetic-identity',
+      'committedConnection': 'synthetic-event',
+    });
+    final versions = {
+      ProviderConnections.openAiPlatform.storageKey: version.values,
+    };
+    final outcome = ConnectionReportingOutcome(
+      connection: ProviderConnections.openAiPlatform,
+      category: ReportingOutcomeCategory.rateLimited,
+      source: ReportingOutcomeSource.live,
+      freshness: ReportingOutcomeFreshness.current,
+      credentialVersion: version,
+    );
+
+    test('preserves the already enriched fallback snapshot', () async {
+      final enriched = snapshot
+          .withConnectionVersions(versions)
+          .withReportingOutcomes([outcome]);
+      final repository = MergingConnectionRepository(
+        fallback: ValueDashboardRepository(enriched),
+        logger: const NullProviderSyncLogger(),
+        mapError: mapError,
+        normalizeReport: (_) => throw StateError('must not normalize'),
+        loadReport: () async => null,
+      );
+
+      expect(await repository.load(), same(enriched));
+    });
+
+    test('preserves the already enriched fallback failure and stack', () async {
+      final failure = DashboardLoadException.withOutcomes(
+        issue: DashboardSyncIssue.rateLimited,
+        connectionVersions: versions,
+        reportingOutcomes: [outcome],
+      );
+      final stackTrace = StackTrace.fromString('synthetic fallback failure');
+      final repository = MergingConnectionRepository(
+        fallback: _FailingDashboardRepository(failure, stackTrace),
+        logger: const NullProviderSyncLogger(),
+        mapError: mapError,
+        normalizeReport: (_) => throw StateError('must not normalize'),
+        loadReport: () async => null,
+      );
+
+      try {
+        await repository.load();
+        fail('Expected the fallback failure.');
+      } on DashboardLoadException catch (error, trace) {
+        expect(error, same(failure));
+        expect(trace.toString(), stackTrace.toString());
+      }
+    });
   });
 
   test('normalizes a fetched report when no other account is live', () async {
@@ -792,10 +852,11 @@ final class _RecordingLogger implements ProviderSyncLogger {
 }
 
 final class _FailingDashboardRepository extends DashboardRepository {
-  const _FailingDashboardRepository(this.error);
+  const _FailingDashboardRepository(this.error, [this.stackTrace]);
 
   final Object error;
+  final StackTrace? stackTrace;
 
   @override
-  Future<DashboardSnapshot> load() => Future.error(error);
+  Future<DashboardSnapshot> load() => Future.error(error, stackTrace);
 }
