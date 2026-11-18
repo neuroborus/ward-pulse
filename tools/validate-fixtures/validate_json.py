@@ -103,9 +103,20 @@ TYPES = {
 }
 
 
+def reject_constant(token: str) -> Any:
+    raise ValueError(f"invalid JSON constant {token}")
+
+
+def load_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"), parse_constant=reject_constant)
+    except ValueError as failure:
+        raise ValueError(f"{path.relative_to(ROOT)}: {failure}") from failure
+
+
 def load_schemas() -> dict[str, Any]:
     return {
-        path.name: json.loads(path.read_text(encoding="utf-8"))
+        path.name: load_json(path)
         for path in sorted(ROOT.glob("schemas/*.schema.json"))
     }
 
@@ -189,9 +200,11 @@ def check_string(value: str, schema: Any, where: str) -> list[str]:
     # because a timestamp the shells cannot parse is the bug this gate is for.
     if schema.get("format") == "date-time":
         try:
-            datetime.fromisoformat(value.replace("Z", "+00:00"))
+            instant = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if instant.tzinfo is None or instant.utcoffset() is None:
+                raise ValueError("missing timezone")
         except ValueError:
-            errors.append(f"{where}: {value!r} is not a date-time")
+            errors.append(f"{where}: {value!r} is not a timezone-aware date-time")
     return errors
 
 
@@ -296,10 +309,10 @@ def main() -> int:
     errors: list[str] = []
     for path in paths:
         try:
-            json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as failure:
+            load_json(path)
+        except ValueError as failure:
             # Name the file: a decoder message alone says "line 48" of nothing.
-            errors.append(f"{path.relative_to(ROOT)}: {failure}")
+            errors.append(str(failure))
     if errors:
         # Nothing below can be trusted while a file refuses to parse.
         return report(errors)
@@ -312,7 +325,10 @@ def main() -> int:
                 f"schemas/{path.name}: not named *.schema.json, so nothing reads it"
             )
 
-    schemas = load_schemas()
+    try:
+        schemas = load_schemas()
+    except ValueError as failure:
+        return report([str(failure)])
     errors += check_schema_version(schemas)
     for name, schema in schemas.items():
         errors += check_keywords(name, schema)
@@ -325,7 +341,11 @@ def main() -> int:
 
     for relative, schema_name in sorted(FIXTURE_SCHEMAS.items()):
         fixture = ROOT / "fixtures" / relative
-        instance = json.loads(fixture.read_text(encoding="utf-8"))
+        try:
+            instance = load_json(fixture)
+        except ValueError as failure:
+            errors.append(str(failure))
+            continue
         errors += check(instance, schemas[schema_name], schemas, schema_name, relative)
 
     if errors:
