@@ -338,6 +338,17 @@ retirement, a separate fresh public idle observation and the actual owning foreg
 exit when used, Root/HOST establishes FINAL → OLD → restored-FINAL independently. Original18's
 controller, OLD choice and results supply no original19 PASS. Native must not execute this replay.
 
+The executable route and Root-admitted release-envelope contract are owned by the
+[phone cache harness README](../../tools/test-phone-cache/README.md#host-invocation-and-acceptance-boundary).
+From the canonical repository root, after those whole-run release gates:
+
+```sh
+python3 -B tools/test-phone-cache/replay_original19.py \
+  --final <second-corrective-commit> \
+  --release-receipt <Root-admitted-whole-release-receipt> \
+  --output <fresh-external-evidence-directory>
+```
+
 1. Take sole canonical Source/index custody. Bind HEAD, all refs, raw index bytes and a
    logical index manifest, plus the complete Source identity/content/mode manifest. Positively
    qualify every substituted path as a stable regular file with known link/ownership identity;
@@ -376,10 +387,16 @@ controller, OLD choice and results supply no original19 PASS. Native must not ex
    raw and logical index preservation against their captured identities. Do not continue
    ordinary work on uncertain restoration. A matching test result alone is insufficient.
 
-Native's single-step FINALIZE inventory remains exactly `git diff --check HEAD`,
-`just check-docs` and `just release-status`, from the canonical repository root, subject to
-actual FIRST Worker/Reviewer discovery and the managed executor assignments. Selected trusted
-commands run only through Runner's persisted vectors. Focused Flutter regressions, the
+Native's complete two-commit FINALIZE inventory is `git diff --check HEAD` (both commits),
+`python3 -B -m unittest discover -s tools/test-phone-cache -p 'test_*.py'`, `just check-docs`
+and `just release-status` (the latter three in commit 2), all from the canonical repository
+root. FIRST Worker/Reviewer DISCOVERY inventories applicability, capabilities and observed
+blockers without execution. Root independently qualifies the merged schedule, step assignments
+and current subsets by actual command identity. Diff and docs use ordinary Worker FINALIZE;
+the exact Python command uses selected trusted execution with scratch, and release status uses
+selected trusted execution with scratch/cache. Selected trusted commands execute only through
+Runner's persisted vectors, never inside agent turns. Implementation and semantic review do
+not execute or satisfy these gates. Focused Flutter regressions, the
 three-leg replay, qualified host FFI build/load, unchanged complete `just check-phone`, and
 normal Android build/install/active APK and FFI/native-frame acceptance remain HOST-owned and
 pending. They are not a Native wait or scoped-commit prerequisite; no check result is claimed
