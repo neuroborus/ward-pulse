@@ -195,7 +195,10 @@ class InertFiles(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory(prefix='original19-controlled-')
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name).resolve()
-        self.journal = replay.Journal(self.root)
+        # Fixture subdirectories must not change the sealed journal parent's identity.
+        evidence = self.root / 'evidence'
+        evidence.mkdir(mode=0o700)
+        self.journal = replay.Journal(evidence)
         self.addCleanup(self.journal.close)
         self.custody = replay.Custody(self.root / 'index.lock', self.journal, lambda: None)
         self.addCleanup(self.custody.close_handles)
@@ -273,9 +276,63 @@ class CustodyTests(InertFiles):
         path = self.root / 'index.lock'
         path.write_bytes(b'foreign')
         before = replay.file_seal(path)
-        with self.assertRaises(replay.Hold):
+        with self.assertRaisesRegex(replay.Hold, 'foreign-index-lock'):
             self.custody.acquire()
         self.assertEqual(replay.file_seal(path), before)
+        self.assertEqual(self.custody.evidence(), {
+            'custodyHeld': False, 'lockDisposition': 'foreign', 'lockIdentity': None})
+
+    def test_interrupted_creation_before_descriptor_retention_reports_unknown(self):
+        opened = []
+        original_open = os.open
+        def interrupted(path, flags, *args, **kwargs):
+            if Path(path) == self.custody.path:
+                self.assertIn(b'"event":"lock-acquisition-pending"',
+                              self.journal.path.read_bytes())
+                opened.append(original_open(path, flags, *args, **kwargs))
+                raise KeyboardInterrupt
+            return original_open(path, flags, *args, **kwargs)
+        self.addCleanup(lambda: [os.close(fd) for fd in opened])
+        with patch.object(replay.os, 'open', side_effect=interrupted):
+            with self.assertRaises(KeyboardInterrupt):
+                self.custody.acquire()
+        self.assertIsNone(self.custody.fd)
+        self.assertIsNone(self.custody.owner)
+        before = replay.file_seal(self.custody.path)
+        evidence = self.custody.evidence()
+        self.assertEqual(evidence, {
+            'custodyHeld': 'unknown', 'lockDisposition': 'unknown', 'lockIdentity': None})
+        self.journal.append('custody-disposition', recovery=True, **evidence)
+        replay.persist(self.root / 'result.json', evidence)
+        self.assertEqual(json.loads((self.root / 'result.json').read_bytes()), evidence)
+        with patch.object(replay.StableFile, 'replace', side_effect=AssertionError('source write')):
+            self.custody.restore()
+            with self.assertRaisesRegex(replay.Hold, 'lock-replaced'):
+                self.custody.release()
+        self.custody.close_handles()
+        self.assertEqual(replay.file_seal(self.custody.path), before)
+        self.assert_restored()
+
+    def test_retained_descriptor_without_owner_is_unknown_and_owned_lock_is_positive(self):
+        original_fstat = os.fstat
+        def interrupted(fd):
+            if fd == self.custody.fd:
+                raise KeyboardInterrupt
+            return original_fstat(fd)
+        with patch.object(replay.os, 'fstat', side_effect=interrupted):
+            with self.assertRaises(KeyboardInterrupt):
+                self.custody.acquire()
+        self.assertIsNotNone(self.custody.fd)
+        self.assertEqual(self.custody.evidence()['custodyHeld'], 'unknown')
+        self.assert_restored()
+        # A separate, fully acquired lock supplies positive ownership evidence.
+        other = replay.Custody(self.root / 'other.lock', self.journal, lambda: None)
+        self.addCleanup(other.close_handles)
+        other.acquire()
+        self.assertEqual(other.evidence(), {
+            'custodyHeld': True, 'lockDisposition': 'owned',
+            'lockIdentity': list(replay.identity(other.owner))})
+        other.release()
 
     def test_release_sync_failure_preserves_the_known_unlink_disposition(self):
         self.acquire()
@@ -284,6 +341,8 @@ class CustodyTests(InertFiles):
             with self.assertRaises(OSError):
                 self.custody.release()
         self.assertTrue(self.custody.unlinked)
+        self.assertEqual(self.custody.evidence()['lockDisposition'], 'released')
+        self.assertIs(self.custody.evidence()['custodyHeld'], False)
         self.assertFalse(self.custody.path.exists())
         self.assert_restored()
 
@@ -295,6 +354,7 @@ class CustodyTests(InertFiles):
         lock.write_bytes(b'foreign')
         with self.assertRaises(replay.Hold):
             self.custody.release()
+        self.assertEqual(self.custody.evidence()['custodyHeld'], 'unknown')
         self.assertEqual(lock.read_bytes(), b'foreign')
         path = self.root / 'owner-0'
         path.rename(self.root / 'original-owner')
@@ -756,6 +816,138 @@ class OrchestrationTests(InertFiles):
             flow.run([(b'old', 0o600)] * 3)
         flow.contain()
         self.assert_restored()
+
+
+class RuntimeTests(InertFiles):
+    def setUp(self):
+        super().setUp()
+        self.source = self.root / 'source'
+        self.sdk = self.source / '.toolchains/flutter'
+        self.cache = self.sdk / 'bin/cache'
+        self.cache.mkdir(parents=True)
+        self.engine = b'a' * 40 + b'\n'
+        producers = {}
+        for name in replay.SDK_PRODUCERS:
+            path = self.sdk / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'controlled producer: ' + name.encode())
+            producers[name] = replay.digest(path.read_bytes())
+        producer_patch = patch.object(replay, 'SDK_PRODUCERS', producers)
+        producer_patch.start()
+        self.addCleanup(producer_patch.stop)
+        (self.sdk / 'bin/internal/engine.version').write_bytes(self.engine)
+        (self.cache / 'flutter.version.json').write_bytes(replay.encoded({
+            'frameworkVersion': '3.44.6', 'dartSdkVersion': '3.12.2',
+            'engineRevision': self.engine[:-1].decode()}))
+        paths = {'flutter': self.sdk / 'bin/flutter',
+                 'dart': self.cache / 'dart-sdk/bin/dart',
+                 'tester': self.cache / 'artifacts/engine/linux-x64/flutter_tester',
+                 'python': Path(sys.executable).resolve()}
+        for name in ('java', 'javac', 'git'):
+            paths[name] = self.root / 'tools' / name
+        for name, path in paths.items():
+            if name != 'python':
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if not path.exists():
+                    path.write_bytes(b'inert executable')
+                path.chmod(0o755)
+        (self.cache / 'dart-sdk/version').write_bytes(b'3.12.2\n')
+        self.config = self.source / replay.PACKAGE_CONFIG
+        self.config.parent.mkdir(parents=True)
+        packages = {'ward_pulse_phone': self.source / replay.PHONE,
+                    'ward_pulse_bindings': self.source / 'bindings/dart',
+                    'ward_pulse_watch_sync': self.source / replay.PHONE / 'plugins/ward_pulse_watch_sync'}
+        for path in packages.values():
+            path.mkdir(parents=True, exist_ok=True)
+        self.config.write_bytes(replay.encoded({'configVersion': 2, 'packages': [
+            {'name': name, 'rootUri': path.as_uri(), 'packageUri': 'lib/'}
+            for name, path in packages.items()]}))
+        self.ffi = self.source / replay.FFI
+        self.ffi.parent.mkdir(parents=True)
+        self.ffi.write_bytes(b'inert ffi input, never loaded')
+        self.paths = paths
+        self.inputs = [self.sdk, self.config, self.ffi, paths['python'],
+                       *(paths[name] for name in ('java', 'javac', 'git'))]
+
+    def runtime(self):
+        bookkeeping = replay.sdk_bookkeeping(self.sdk)
+        value = {'versions': {'flutter': '3.44.6', 'dart': '3.12.2'},
+                 'executables': {name: str(path) for name, path in self.paths.items()},
+                 'inputs': [{'path': str(path), 'sealSha256': replay.digest(
+                     replay.encoded(replay.runtime_seal(path, bookkeeping)))} for path in self.inputs],
+                 'ffiSha256': replay.digest(self.ffi.read_bytes())}
+        return replay.Runtime(self.source, Mock(value={'runtime': value}))
+
+    def test_stock_stamp_creation_and_atomic_rename_pass_post_final_verification(self):
+        runtime = self.runtime()
+        self.acquire()
+        self.arm()
+        calls = []
+        def verify(old):
+            runtime.verify()
+            calls.append(('verify', old))
+        def leg(old):
+            stamp = self.cache / 'engine.stamp'
+            previous = replay.identity(stamp.stat()) if stamp.exists() else None
+            temporary = self.cache / 'engine.stamp.tmp.123'
+            temporary.write_bytes(self.engine)
+            temporary.chmod(0o664 if previous is None else 0o644)
+            temporary.replace(stamp)
+            self.assertNotEqual(replay.identity(stamp.stat()), previous)
+            (self.cache / 'engine.realm').write_bytes(b'\n')
+            calls.append(('leg', old))
+            return reporter(transcript(old)).classify(1 if old else 0, old)
+        flow = replay.Replay(self.custody, verify, leg, lambda: None, self.journal)
+        flow.run([(b'old', 0o600)] * 3)
+        self.assertEqual([p['classification'] for p in flow.legs],
+                         ['FINAL0', 'OLD-named-semantic1', 'restored-FINAL0'])
+        self.assertEqual(calls[:4], [('verify', False), ('leg', False),
+                                     ('verify', False), ('verify', True)])
+        self.assert_restored()
+
+    def test_changed_bookkeeping_and_immutable_inputs_hold(self):
+        runtime = self.runtime()
+        changes = [(self.cache / 'engine.stamp', b'b' * 40 + b'\n'),
+                   (self.cache / 'engine.realm', b'foreign-realm\n'),
+                   (self.sdk / 'bin/internal/engine.version', b'b' * 40 + b'\n'),
+                   (self.paths['dart'], b'changed executable'),
+                   (self.cache / 'flutter.version.json', b'{}'),
+                   (self.config, b'{}'), (self.ffi, b'changed ffi'),
+                   (self.cache / 'lockfile', b''),
+                   (self.cache / 'engine.stamp.tmp.123', self.engine)]
+        for path, data in changes:
+            original = path.read_bytes() if path.exists() else None
+            with self.subTest(path=path):
+                try:
+                    path.write_bytes(data)
+                    with self.assertRaises(replay.Hold):
+                        runtime.verify()
+                finally:
+                    if original is None:
+                        path.unlink()
+                    else:
+                        path.write_bytes(original)
+
+    def test_generated_content_and_pinned_producer_are_checked_at_admission(self):
+        (self.cache / 'engine.stamp').write_bytes(b'changed stamp')
+        with self.assertRaisesRegex(replay.Hold, 'sdk-bookkeeping-content'):
+            self.runtime()
+        (self.sdk / 'bin/internal/shared.sh').write_bytes(b'changed producer')
+        with self.assertRaisesRegex(replay.Hold, 'sdk-wrapper-producer'):
+            replay.sdk_bookkeeping(self.sdk)
+
+    def test_immutable_same_byte_rename_and_generated_link_are_rejected(self):
+        runtime = self.runtime()
+        dart = self.paths['dart']
+        temporary = dart.with_suffix('.tmp')
+        temporary.write_bytes(dart.read_bytes())
+        temporary.chmod(0o755)
+        temporary.replace(dart)
+        with self.assertRaisesRegex(replay.Hold, 'runtime-changed'):
+            runtime.verify()
+        (self.cache / 'engine.stamp').symlink_to(self.sdk / 'bin/internal/engine.version')
+        with self.assertRaisesRegex(replay.Hold, 'sdk-bookkeeping-content'):
+            replay.runtime_seal(self.sdk, replay.sdk_bookkeeping(self.sdk))
 
 
 class ReleaseTests(unittest.TestCase):

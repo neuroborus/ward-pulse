@@ -47,6 +47,11 @@ MAX_DEPTH = 24
 JOURNAL_SLOT = 16 * 1024
 JOURNAL_SLOTS = 64
 RESTORATION_SLOTS = 8
+SDK_PRODUCERS = {
+    'bin/flutter': '7d486c33b30a0cf1ea5146231c68bb8f966cdb4e087c5cd8b37e14513f536e7d',
+    'bin/internal/shared.sh': '7029bb28e9f60927807f2119d2afe388742db41d34c26f5e263bf15568911fa2',
+    'bin/internal/update_engine_version.sh': '6d71ef5d911243afdc83a4238b65159aad7905d7b19cb2464db40e347536ebb4',
+}
 
 
 class Hold(Exception):
@@ -186,6 +191,49 @@ def tree_seal(path):
     need(identity(path.lstat()) == identity(info), 'directory-replaced')
     return {'identity': list(identity(info)), 'mode': stat.S_IMODE(info.st_mode),
             'entries': entries}
+
+
+def sdk_bookkeeping(sdk):
+    """Qualify the two outputs of the pinned stock engine-version producer."""
+    for name, expected in SDK_PRODUCERS.items():
+        need(file_seal(sdk / name)['sha256'] == expected, 'sdk-wrapper-producer')
+    engine = read_regular(sdk / 'bin/internal/engine.version')[0]
+    version = strict_json(read_regular(sdk / 'bin/cache/flutter.version.json')[0])
+    need(re.fullmatch(rb'[0-9a-f]{40}\n', engine) is not None and
+         type(version) is dict and version.get('engineRevision') == engine[:-1].decode(),
+         'sdk-engine-binding')
+    cache = sdk / 'bin/cache'
+    need(cache.resolve(strict=True) == cache, 'sdk-cache-path')
+    # Runtime.environment excludes FLUTTER_PREBUILT_ENGINE_VERSION and FLUTTER_REALM.
+    return {cache / 'engine.stamp': engine, cache / 'engine.realm': b'\n'}
+
+
+def runtime_seal(path, bookkeeping):
+    """Keep immutable tree seals; qualify only proven generated engine bookkeeping."""
+    def qualify(path, seal):
+        if path in bookkeeping:
+            expected = bookkeeping[path]
+            if seal is not None:
+                parent = path.parent.stat()
+                need('sha256' in seal and seal['size'] == len(expected) and
+                     seal['sha256'] == digest(expected), 'sdk-bookkeeping-content')
+                need(seal['identity'][0] == parent.st_dev and
+                     seal['identity'][2:] == [os.getuid(), parent.st_gid, 1] and
+                     seal['mode'] & 0o600 == 0o600 and seal['mode'] & ~0o664 == 0,
+                     'sdk-bookkeeping-ownership')
+            # Creation and the producer's same-byte atomic rename may change membership,
+            # inode and nonexecutable creation mode, never the derived engine/realm bytes.
+            return {'bookkeepingSha256': digest(expected), 'size': len(expected)}
+        if 'entries' in seal:
+            entries = seal['entries']
+            for generated in bookkeeping:
+                if generated.parent == path:
+                    need(not any(name.startswith('engine.stamp.tmp.') for name in entries),
+                         'sdk-bookkeeping-temporary')
+                    entries.setdefault(generated.name, None)
+            seal['entries'] = {name: qualify(path / name, child) for name, child in entries.items()}
+        return seal
+    return qualify(Path(path), tree_seal(path))
 
 
 def fsync_directory(path):
@@ -345,22 +393,43 @@ class Custody:
         self.attempted = False
         self.armed = False
         self.unlinked = False
+        self.acquisition = 'not-attempted'
+        self.owner = None
 
     def acquire(self):
+        # A signal may arrive after creation but before the returned descriptor is retained.
+        self.acquisition = 'unknown'
+        self.journal.append('lock-acquisition-pending')
         try:
             self.fd = os.open(self.path, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         except FileExistsError:
+            self.acquisition = 'foreign'
             raise Hold('foreign-index-lock') from None
         self.owner = os.fstat(self.fd)
         need(self.owner.st_uid == os.getuid() and self.owner.st_nlink == 1, 'lock-ownership')
+        self.check()
+        self.acquisition = 'owned'
         os.fsync(self.fd)
         fsync_directory(self.path.parent)
 
     def check(self):
-        need(self.fd is not None and identity(os.fstat(self.fd)) == identity(self.owner) ==
+        need(self.fd is not None and self.owner is not None and
+             identity(os.fstat(self.fd)) == identity(self.owner) ==
              identity(self.path.lstat()), 'lock-replaced')
         need(stat.S_ISREG(os.fstat(self.fd).st_mode) and
              stat.S_IMODE(os.fstat(self.fd).st_mode) == 0o600, 'lock-mode')
+
+    def evidence(self):
+        disposition = 'released' if self.unlinked else self.acquisition
+        if disposition == 'owned':
+            try:
+                self.check()
+            except BaseException:
+                disposition = 'unknown'
+        return {'custodyHeld': True if disposition == 'owned' else
+                'unknown' if disposition == 'unknown' else False,
+                'lockDisposition': disposition,
+                'lockIdentity': list(identity(self.owner)) if self.owner is not None else None}
 
     def prepare(self, files, blobs):
         self.check()
@@ -1320,6 +1389,7 @@ class Runtime:
         need(version.get('frameworkVersion') == '3.44.6' and
              read_regular(sdk / 'bin/cache/dart-sdk/version')[0].strip() == b'3.12.2',
              'pinned-runtime-version-inputs')
+        self.bookkeeping = sdk_bookkeeping(sdk)
         admitted = value.get('inputs')
         need(type(admitted) is list and 0 < len(admitted) <= 512, 'runtime-inputs')
         self.inputs = {}
@@ -1328,7 +1398,7 @@ class Runtime:
                  type(item['path']) is str and Path(item['path']).is_absolute(), 'runtime-input')
             path = Path(item['path'])
             need(path not in self.inputs and path.resolve(strict=True) == path, 'runtime-input-identity')
-            seal = tree_seal(path)
+            seal = runtime_seal(path, self.bookkeeping)
             need(digest(encoded(seal)) == item['sealSha256'], 'runtime-input-seal')
             self.inputs[path] = seal
         required = external_packages(source) | {sdk, source / PACKAGE_CONFIG,
@@ -1347,7 +1417,8 @@ class Runtime:
         need(value.get('ffiSha256') == self.ffi['sha256'], 'ffi-release-binding')
 
     def verify(self):
-        need(all(tree_seal(path) == seal for path, seal in self.inputs.items()), 'runtime-changed')
+        need(all(runtime_seal(path, self.bookkeeping) == seal for path, seal in self.inputs.items()),
+             'runtime-changed')
 
     def environment(self):
         paths = [self.executables[k].parent for k in ('flutter', 'java', 'javac', 'python', 'git')]
@@ -1575,17 +1646,14 @@ def host_replay(final, receipt, output):
             except BaseException as containment_error:
                 outcome['containmentFailure'] = str(containment_error) if isinstance(
                     containment_error, Hold) else 'infrastructure'
-        held = custody.fd is not None and not custody.unlinked
         outcome['failureRestoration'] = ('not-required' if not attempted else
                                          'unknown' if custody.attempted else 'verified')
-        outcome['custodyHeld'] = held
-        if held:
-            try:
-                custody.check()
-            except BaseException:
-                outcome['custodyHeld'] = 'unknown'
-        owner = getattr(custody, 'owner', None)
-        outcome['lockIdentity'] = list(identity(owner)) if owner is not None else None
+        lock_evidence = custody.evidence()
+        outcome.update(lock_evidence)
+        try:
+            journal.append('custody-disposition', recovery=True, **lock_evidence)
+        except BaseException:
+            outcome['custodyEvidenceFailure'] = 'journal-failure'
         outcome['legs'] = replay.legs if replay else []
         outcome['ownedProcesses'] = [{k: record[k] for k in ('pid', 'start', 'parent', 'session')}
                                      for record in (*git.processes.known.values(),

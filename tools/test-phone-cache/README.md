@@ -30,8 +30,23 @@ or copied controller is rejected.
 
 Only HOST may run this invocation. Neither the controlled tests nor historical
 FIXED-only measurements confer real replay, full-suite, Java, FFI or device acceptance.
-HOST also owns fresh locked FFI build/load qualification, the existing five-file focused
-absence command, unchanged complete `just check-phone`, documentation confirmation,
+HOST retains two distinct Flutter focuses from `apps/phone_flutter/` after that release
+boundary:
+
+```sh
+flutter test test/openai_dashboard_repository_test.dart \
+  test/codex_dashboard_repository_test.dart test/merging_connection_repository_test.dart
+flutter test test/connection_snapshot_cache_test.dart \
+  test/connection_credential_lifecycle_test.dart test/provider_sync_once_test.dart \
+  test/apply_alert_settings_test.dart test/recovery_watchlist_test.dart \
+  --plain-name 'connection absence ownership'
+```
+
+The first must preserve and pass all seven existing identity assertions. The second
+retains the separate five-file absence-ownership obligation; a historical FIXED-only
+result does not satisfy its rerun or the real three-leg replay.
+HOST also owns fresh locked FFI build/load qualification and actual library identification,
+unchanged complete `just check-phone` including JVM and formatting checks, documentation confirmation,
 Android build/install, active APK/ABI/FFI identities and original native-frame review.
 Root's full independent zero-findings review and admission of final Source and actual
 HOST evidence remain necessary. F1 stays separate, known-open whole-app work before release.
@@ -90,24 +105,54 @@ a previous run's hashes are insufficient. Do not run a replay to create its own 
 - `executables`, mapping exactly `flutter`, `dart`, `tester`, `java`, `javac`, `python`
   and `git` to qualified absolute physical executable paths;
 - `inputs`, a list of `{path, sealSha256}` records using
-  SHA-256 of `encoded(tree_seal(path))`;
+  SHA-256 of `encoded(runtime_seal(path, bookkeeping))`, where
+  `bookkeeping = sdk_bookkeeping(sdk)` and `sdk` is the resolved pinned
+  `.toolchains/flutter` directory;
 - `ffiSha256`, the content hash of the qualified unchanged
   `core/target/debug/libward_pulse_ffi.so`.
 
 Inputs must cover the pinned SDK, all named executables, the actual package-config
 file, every external or SDK package root that config names, and the FFI artifact. Directory
 seals include membership, regular-file contents/modes/identities and symlink identities
-and targets without traversing them. Root must include separately resolved toolchain
+and targets without traversing them, with only the qualified engine bookkeeping below.
+Root must include separately resolved toolchain
 or package inputs reached through symlinks; `Runtime` rejects unsealed link targets.
 It verifies SDK version metadata without invoking a writing SDK wrapper.
+Root must use this same `sdk_bookkeeping` / `runtime_seal` recipe for every runtime input,
+including an SDK ancestor or separately named leaf; the envelope's fields and format
+remain unchanged. Ordinary metadata/record bindings still use `file_seal`.
+
+`sdk_bookkeeping` checks the exact pinned `bin/flutter`, `bin/internal/shared.sh` and
+`bin/internal/update_engine_version.sh` producer hashes in `SDK_PRODUCERS`. The normal
+wrapper unconditionally runs the engine-version producer before its warm-cache checks.
+The qualified outputs are exactly `bin/cache/engine.stamp`, whose bytes must equal the
+immutable `bin/internal/engine.version` and the version JSON's `engineRevision`, and
+`bin/cache/engine.realm`, whose bytes must be one newline. `Runtime.environment` excludes
+engine-version and realm overrides. The two outputs may be absent at admission and
+created by the wrapper; the stamp's temporary-file/atomic-rename replacement may change
+its inode and creation mode. Their seals bind the derived bytes instead of leaf identity
+or presence. Present outputs must be single-link regular files owned by the current
+user, on the cache directory's device and group, with owner read/write permissions and
+only nonexecutable bits permitted by mode `0664`. Symlinks and changed bytes hold.
+Any `engine.stamp.tmp.*` entry at a verification checkpoint holds; temporary files must
+be gone after readers retire. Cache directory identity/mode and all other membership
+remain sealed. No SDK metadata is restored or adopted as a new immutable baseline.
+The wrapper, SDK Git state, Dart/tool snapshot, executables, version metadata, packages,
+Source and FFI retain their immutable seals. Cache lockfile creation, tool recompilation,
+artifact downloads and other SDK mutations receive no exception. The controller still
+launches the normal `bin/flutter` driver for every leg.
+
 The new controller independently binds its own script, interpreter, PID/start and boot
 identity. It also verifies its script against the released commit's immutable blob.
 
 ## Replay and custody
 
-`Git` disables optional writes and replacement objects. `Custody` exclusively creates
-the canonical `.git/index.lock` before mutable state is sealed. An existing lock is
-left untouched. Git launch, identity capture and stream setup share an owned-process
+`Git` disables optional writes and replacement objects. `Custody` durably journals
+`lock-acquisition-pending` before exclusively creating the canonical `.git/index.lock`,
+before mutable state is sealed. An existing lock is confirmed foreign and left untouched.
+An interrupted creation without retained descriptor/owner identity remains unknown,
+even if the kernel created the lock. No pathname observation confers ownership.
+Git launch, identity capture and stream setup share an owned-process
 cleanup scope. Known Git sessions and descendants are retired and reaped even when
 setup fails; uncertain launch ownership blocks restoration and custody release, just
 as for Flutter legs. Under custody the controller captures all refs, raw index bytes and
@@ -203,6 +248,14 @@ with uncertain restoration. Root must reconcile exact owned PID/start and lock i
 reader retirement and the sealed immutable restoration records before any recovery.
 Uncatchable controller death or power loss likewise leaves the durable arm/custody records
 for explicit recovery; it cannot report successful restoration or release.
+
+Failure evidence uses `lockDisposition` to distinguish `not-attempted`, `foreign`,
+`owned`, `unknown` and `released`. `custodyHeld` is true only for positively retained,
+rechecked ownership, `"unknown"` for unresolved acquisition/replacement, and false for
+the other dispositions. `lockIdentity` is null when no owner identity was retained.
+The pending journal record and best-effort `custody-disposition` recovery record preserve
+uncertainty even before a descriptor attribute survives. Unknown acquisition performs
+no Source writes or lock adoption/deletion and waits for Root reconciliation.
 
 ## Native controlled regressions and check ownership
 
