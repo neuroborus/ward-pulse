@@ -13,6 +13,9 @@ import 'package:ward_pulse_phone/dashboard/phone_live_bindings.dart';
 import 'package:ward_pulse_phone/sync/openai_reporting_client.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting_clients.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
+import 'package:ward_pulse_phone/providers/codex_account_row.dart';
+import 'package:ward_pulse_phone/providers/codex_account_store.dart';
+import 'package:ward_pulse_phone/sync/codex_account_client.dart';
 import 'package:ward_pulse_phone/providers/connection_rejection_notice.dart';
 import 'package:ward_pulse_phone/providers/cursor_plan_row.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting.dart';
@@ -59,6 +62,255 @@ void main() {
     setUpAll(() async => bridge = await NativeCacheTestBridge.start());
     tearDownAll(() => bridge.close());
     setUp(() => bridge.reset());
+
+    testWidgets(
+      'Codex encrypted-read failure reconciles before post-lease cleanup feedback',
+      (tester) async {
+        await tester.runAsync(() async {
+          const id = ProviderConnections.codexPlan;
+          final secure = FakeSecureStorage();
+          final platform = ObservingCachePlatform(bridge.platform('foreground'));
+          final now = DateTime.utc(2026, 11, 18, 12);
+          final live = PhoneLiveBindings.create(
+            secureStorage: secure,
+            cachePlatform: platform,
+            codexClient: CodexAccountClient(
+              transport: _PlanCodexTransport(),
+              clock: () => now,
+            ),
+            openAiClient: OpenAiReportingClient(
+              http: ProviderReportingHttp(transport: _PlanReportingTransport()),
+            ),
+          );
+          final store = SecureCodexAccountStore(
+            storage: secure,
+            platform: platform,
+          );
+          final session = CodexAccountSession(
+            accessToken: 'synthetic-access',
+            refreshToken: 'synthetic-refresh',
+            accountId: 'synthetic-account',
+            refreshedAt: now,
+          );
+          await store.write(session);
+          final keys = <String>[];
+          secure.onRead = (key, _) => keys.add(key);
+          await store.readVersioned();
+          final slot = keys.singleWhere(
+            (key) => secure.values[key] == jsonEncode(session.toJson()),
+          );
+          await live.credentialStore.writeSecret(
+            ProviderConnections.openAiPlatform,
+            'synthetic-reporting-key',
+          );
+          final initialSync = Completer<void>();
+          final removalSync = Completer<void>();
+          final cleanupStarted = Completer<void>();
+          final releaseCleanup = Completer<void>();
+          const channel = MethodChannel('app.wardpulse/watch_sync');
+          final messenger = tester.binding.defaultBinaryMessenger;
+          final payloads = <Map>[];
+          messenger.setMockMethodCallHandler(channel, (call) async {
+            payloads.add(jsonDecode(call.arguments as String) as Map);
+            if (!initialSync.isCompleted) {
+              initialSync.complete();
+            } else if (!removalSync.isCompleted) {
+              removalSync.complete();
+            }
+            return null;
+          });
+          final replies = <Future<Object?>>[];
+          var joined = 0;
+          bridge.onInvoke = replies.add;
+          secure.onRead = (key, completion) => replies.add(
+            completion.then<Object?>((value) => value, onError: (_) => null),
+          );
+          Future<void> drain() async {
+            do {
+              final batch = replies.sublist(joined);
+              joined = replies.length;
+              await Future.wait(batch);
+              await tester.idle();
+              await tester.pump();
+              await tester.idle();
+            } while (joined != replies.length);
+          }
+
+          String? deletionLease;
+          var deletionReleased = false, settled = false;
+          platform.onComplete = (method, args, result) {
+            if (args['connection'] != id.storageKey) return;
+            if (method == 'acquire' && args['action'] == 'delete') {
+              deletionLease = (result! as Map)['lease'] as String;
+            }
+            if (method == 'finish' &&
+                deletionLease != null &&
+                args['lease'] == deletionLease &&
+                args['operation'] == 'release') {
+              deletionReleased = true;
+              // Earlier cleanup under the lease has already completed normally.
+              secure.beforeDelete = (key) async {
+                if (key == 'wardpulse.codex-companion.config') {
+                  cleanupStarted.complete();
+                  await releaseCleanup.future;
+                  throw StateError('Synthetic post-lease companion failure.');
+                }
+              };
+            }
+          };
+          Future<void>? editing;
+          try {
+            tester.view.physicalSize = Size(
+              tester.view.physicalSize.width,
+              2400 * tester.view.devicePixelRatio,
+            );
+            await tester.pumpWidget(
+              WardPulseApp(
+                repository: live.repository,
+                credentialStore: live.credentialStore,
+                codexAccountService: live.codexAccountService,
+                claudeAccountService: live.claudeAccountService,
+                rejectionNotices: live.rejectionNotices,
+                watchSyncService: const MethodChannelWatchSyncService(),
+              ),
+            );
+            await initialSync.future;
+            await drain();
+            final app = find.byType(FutureBuilder<DashboardSnapshot>);
+            final beforeLoad =
+                tester
+                    .widget<FutureBuilder<DashboardSnapshot>>(app)
+                    .future!;
+            final before = await beforeLoad;
+            expect(
+              before.accounts.map((a) => a.connection),
+              containsAll(['openai.plan', 'openai.platform']),
+            );
+            await tester.tap(find.text('Providers'));
+            await drain();
+            await tester.scrollUntilVisible(
+              find.text('Codex plan'),
+              300,
+              scrollable: find.byType(Scrollable).first,
+            );
+            await drain();
+            final row = find.byType(CodexAccountRow);
+            final owner = tester.state(row);
+            final rowFinder = find.widgetWithText(
+              ProviderConnectionRow,
+              'Codex plan',
+            );
+            expect(
+              find.descendant(of: rowFinder, matching: find.text('Connected')),
+              findsOneWidget,
+            );
+            secure.failReadKey = slot;
+            editing =
+                (tester.widget<ProviderConnectionRow>(rowFinder).onTap
+                        as dynamic)()
+                    as Future<void>;
+            editing = editing.then((_) {
+              settled = true;
+            });
+            await tester.pumpAndSettle();
+            await tester.tap(find.text('Disconnect'));
+            await cleanupStarted.future;
+            await tester.pump();
+            final load =
+                tester
+                    .widget<FutureBuilder<DashboardSnapshot>>(app)
+                    .future!;
+            final accepted = await load;
+            await removalSync.future;
+            await drain();
+            final visible =
+                tester
+                    .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+                    .snapshot!;
+            final payload = payloads.last;
+            expect(
+              [
+                deletionReleased,
+                owner.mounted && identical(tester.state(row), owner),
+                find
+                    .descendant(
+                      of: rowFinder,
+                      matching: find.text('Not connected'),
+                    )
+                    .hitTestable()
+                    .evaluate()
+                    .length,
+                identical(beforeLoad, load),
+                accepted.accounts.any((a) => a.connection == 'openai.plan'),
+                visible.accounts.any((a) => a.connection == 'openai.plan'),
+                accepted.accounts.any(
+                  (a) =>
+                      a.connection == 'openai.platform' &&
+                      a.status == ProviderStatus.ok,
+                ),
+                visible.accounts.any(
+                  (a) =>
+                      a.connection == 'openai.platform' &&
+                      a.status == ProviderStatus.ok,
+                ),
+                (payload['providers'] as List).any(
+                  (p) => p['provider'] == 'codex',
+                ),
+                (payload['providers'] as List).any(
+                  (p) => p['provider'] == 'openai',
+                ),
+                payloads.length,
+                settled,
+              ],
+              [true, true, 1, false, false, false, true, true, false, true, 2, false],
+              reason:
+                  'The owned row, app, Providers and watch must reconcile '
+                  'once while only post-lease companion cleanup is held.',
+            );
+            expect(
+              find.text('Disconnected, but local cleanup remains'),
+              findsNothing,
+            );
+            releaseCleanup.complete();
+            await editing;
+            await drain();
+            expect(
+              find.text('Disconnected, but local cleanup remains'),
+              findsOneWidget,
+            );
+            expect(
+              tester.widget<FutureBuilder<DashboardSnapshot>>(app).future,
+              same(load),
+            );
+            expect(payloads, hasLength(2));
+          } finally {
+            if (!releaseCleanup.isCompleted) releaseCleanup.complete();
+            try {
+              if (find.byType(AlertDialog).evaluate().isNotEmpty) {
+                Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+              }
+              try {
+                await tester.pumpWidget(const SizedBox());
+              } finally {
+                if (editing != null) await editing;
+              }
+            } finally {
+              try {
+                await drain();
+              } finally {
+                platform.onComplete = null;
+                secure.beforeDelete = null;
+                secure.onRead = null;
+                bridge.onInvoke = null;
+                messenger.setMockMethodCallHandler(channel, null);
+                tester.view.resetPhysicalSize();
+              }
+            }
+          }
+        });
+      },
+      timeout: const Timeout(Duration(seconds: 60)),
+    );
 
     for (final advancedRemove in [false, true]) {
       for (final syncFails in [false, true]) {
@@ -6820,6 +7072,33 @@ final class _RejectionNotices implements ConnectionRejectionNoticeStore {
     );
     return true;
   }
+}
+
+final class _PlanCodexTransport implements CodexHttpTransport {
+  @override
+  Future<CodexHttpResponse> send(
+    String method,
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+  }) async => CodexHttpResponse(
+    statusCode: 200,
+    body: jsonEncode(
+      uri.path.endsWith('/profiles/me')
+          ? {'stats': {'daily_usage_buckets': <Object>[]}}
+          : {
+            'plan_type': 'plus',
+            'rate_limit': {
+              'primary_window': {
+                'used_percent': 20,
+                'limit_window_seconds': 18000,
+                'reset_at': 1795006800,
+              },
+            },
+            'credits': {'has_credits': false, 'unlimited': false, 'balance': '0'},
+          },
+    ),
+  );
 }
 
 final class _PlanReportingTransport implements ProviderHttpTransport {

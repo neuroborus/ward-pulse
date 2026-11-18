@@ -305,8 +305,11 @@ before cleanup. The owned open row settles and starts normal app invalidation/re
 that checkpoint; cleanup or downstream failure cannot undo retirement. Later feedback uses
 `observeLifecycle` under a read lease to match the exact deleted stamp. A newer active/pending
 owner suppresses old feedback; unreadable evidence releases busy state with Retry check and
-reconnect available. Retry check observes evidence without deleting again. Codex retains its
-existing disconnect read ordering, malformed-session cleanup and best-effort revoke.
+reconnect available. Retry check observes evidence without deleting again. Codex disconnect
+alone tolerates general encrypted-session read failure and continues to the existing deletion
+path without revocation material. Other reads retain unavailable errors. Malformed-session
+cleanup stays separate, propagates cleanup errors and forwards at most one retirement receipt;
+readable removal retains best-effort refresh-token revoke after storage leases release.
 
 The `plan retirement reconciliation` group in `test/app_test.dart` exercises the production
 `PhoneLiveBindings.create` factory, real Java lifecycle/cache engine, synthetic reports and
@@ -468,6 +471,343 @@ Final-APK emulator acceptance on 2026-10-13 covered three real plan connections 
 Claude and Cursor), a production periodic WorkManager task in a fresh background process,
 offline cold-start recovery with unchanged cached data/success times, and restored live
 phone-to-watch delivery. Hardware and whole-phase release acceptance remain separate gates.
+
+### Codex encrypted-read removal regression (HOST only)
+
+`Codex disconnect retires the managed owner when encrypted reads fail` in
+`test/connection_credential_lifecycle_test.dart` uses the production Java engine, secure Codex
+store/service and normalized cache without Rust FFI. It verifies an active owner and healthy
+reporting sibling, then faults only the observed encrypted session slot. It collects service
+outcome, stamped retirement, old-owner/cache eligibility, late publication, recovered reads
+and engine-restart observations before its joint oracle. Its framework timeout is 45 seconds.
+`CODEX-READ-ORACLE` contains only non-secret observations. OLD must reach that oracle with its
+old owner/cache still eligible; an early service error alone is not semantic RED.
+
+The Codex case in `test/app_test.dart`'s `plan retirement reconciliation` group observes the
+actual deletion lease's completed native release through `ObservingCachePlatform`. Only then
+does it hold the separate companion delete. The original owned row, accepted app/Providers
+data and watch summary must reconcile once with the healthy sibling while held; failure of
+that call produces separate cleanup feedback without another reload. Other controls retain
+malformed cleanup errors/one deletion, readable revoke success/failure and a failed native
+barrier: no receipt, fenced observation, then the prior durable owner/cache after restart.
+
+For this change, the complete Native catalogue is `git diff --check HEAD`, `just check-docs`
+and `just release-status`, all exclusively Runner-owned writable FINALIZE. Discovery,
+authoring and read-only review execute none. All Flutter/JVM and artifact/device execution
+below remains Root-owned HOST acceptance, with no Native wait before its step commit.
+
+After WHOLE code DONE, actual owning foreground CLI exit if used, known/scoped process
+retirement and a separate fresh public idle observation, Root independently reviews this
+procedure and assumes sole Source custody. Warm the existing toolchain/dependencies before
+custody; qualify Linux `/proc`, subreaper and pidfd support. Build the unchanged host FFI
+library once with `cargo build --locked -p ward-pulse-ffi` from `core/`. Set
+`WARDPULSE_CODEX_HOST_LIBRARY` to its absolute real path and
+`WARDPULSE_CODEX_FINAL_COMMIT` to the focused final commit's full hash. The procedure pins that
+artifact but does not load it. Invoke this one-shot block from the repository root; its new
+journal directory must be under `LOCAL_ARTIFACTS/` and must not already exist.
+
+It runs FINAL → exact OLD → restored FINAL. Every invocation owns a fresh process group,
+has a 60-second wall deadline and a five-second TERM grace before KILL. A Linux subreaper
+retains escaped/orphaned descendants; pidfds bind individual signals/waits to actual process
+identities. Retirement requires an empty owned descendant census after reaping, including
+Flutter and JVM readers, before any Source transition. No unowned process is signalled.
+Timeouts, interrupts and infrastructure failures remain failures even after restoration.
+OLD must exit normally with status 1, the joint oracle's assertion reason and a completed
+summary with exactly one failed test; signal termination cannot establish semantic RED.
+Uncatchable termination or uncertain retirement/restoration leaves custody unresolved: keep
+the durable journal, establish retirement and restore its exact final blob/mode before any
+further work. Controller exit or pipe EOF alone grants no acceptance.
+
+```sh
+python3 - "$WARDPULSE_CODEX_FINAL_COMMIT" "$PWD/LOCAL_ARTIFACTS/codex-read-replay-20261118" <<'PY'
+import ctypes, hashlib, json, os, pathlib, re, select, shutil, signal, stat
+import subprocess, sys, time
+
+root = pathlib.Path.cwd().resolve()
+final, journal_name = sys.argv[1:]
+focus = 'apps/phone_flutter/lib/providers/codex_account_service.dart'
+old = '833f5061fec4ec356762f201e65042f71adb1a26'
+old_blob = 'd26e5e45941678c7238a85c9565b2b9f604cd472'
+env = dict(os.environ, GIT_OPTIONAL_LOCKS='0')
+def git(*args):
+    return subprocess.check_output(['git', *args], cwd=root, env=env)
+def digest(data):
+    return hashlib.sha256(data).hexdigest()
+def identity(path):
+    s = path.lstat()
+    data = os.fsencode(os.readlink(path)) if stat.S_ISLNK(s.st_mode) else path.read_bytes()
+    return [stat.S_IMODE(s.st_mode), digest(data)]
+def source():
+    names = git('ls-files', '-z').split(b'\0')[:-1]
+    return {os.fsdecode(n): identity(root / os.fsdecode(n)) for n in names}
+def metadata():
+    index = pathlib.Path(os.fsdecode(git('rev-parse', '--git-path', 'index').strip()))
+    head = pathlib.Path(os.fsdecode(git('rev-parse', '--git-path', 'HEAD').strip()))
+    return [git('rev-parse', 'HEAD').decode().strip(),
+            digest(git('symbolic-ref', 'HEAD')), digest(git('show-ref', '--head')),
+            identity(index), digest(git('ls-files', '--stage', '-z')), identity(head)]
+def tree_entry(commit):
+    fields = git('ls-tree', commit, '--', focus).decode().split()
+    assert fields[0:2] == ['100644', 'blob'] and fields[3] == focus
+    return fields[2]
+
+assert sys.platform == 'linux' and hasattr(os, 'pidfd_open')
+assert hasattr(signal, 'pidfd_send_signal')
+assert ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0) == 0  # child subreaper
+assert re.fullmatch('[0-9a-f]{40}', final) and git('rev-parse', 'HEAD').decode().strip() == final
+assert not git('status', '--porcelain=v1', '--untracked-files=all')
+assert tree_entry(old) == old_blob
+final_blob = tree_entry(final)
+assert final_blob != old_blob
+allowed = {focus, 'apps/phone_flutter/test/connection_credential_lifecycle_test.dart',
+           'apps/phone_flutter/test/app_test.dart', 'apps/phone_flutter/test/codex_account_service_test.dart',
+           'apps/phone_flutter/test/connection_cache_test_support.dart', 'apps/phone_flutter/README.md',
+           'docs/product/SECURITY_MODEL.md', 'docs/product/PRIVACY_POLICY.md',
+           'docs/product/user-guide/PROVIDERS.md', '.changeset/codex-disconnect-read-failure.md'}
+assert set(git('diff', '--name-only', old, final).decode().splitlines()) <= allowed
+# This constrains every other tracked production dependency's bytes and Git mode.
+target = root / focus
+assert stat.S_ISREG(target.lstat().st_mode) and stat.S_IMODE(target.stat().st_mode) == 0o664
+assert target.read_bytes() == git('cat-file', 'blob', final_blob)
+executables = [pathlib.Path(shutil.which(n)).absolute() for n in ('flutter', 'dart', 'java', 'javac')]
+sdk = executables[0].resolve().parent.parent
+runtime_paths = executables + [sdk / 'bin/cache/dart-sdk/bin/dart',
+    sdk / 'bin/cache/dart-sdk/bin/dartaotruntime', sdk / 'bin/cache/flutter_tools.snapshot',
+    root / 'apps/phone_flutter/.dart_tool/package_config.json']
+machine = os.uname().machine
+engine = sdk / 'bin/cache/artifacts/engine' / {'x86_64': 'linux-x64', 'aarch64': 'linux-arm64'}[machine]
+runtime_paths.append(engine / 'flutter_tester')
+library = pathlib.Path(os.environ['WARDPULSE_CODEX_HOST_LIBRARY'])
+assert library.is_absolute() and library.resolve().is_file()
+runtime_paths.append(library)
+def runtime():
+    return {str(p): [str(p.resolve()), identity(p), identity(p.resolve())] for p in runtime_paths}
+baseline, meta, tools = source(), metadata(), runtime()
+directory = pathlib.Path(journal_name).resolve()
+assert directory.is_relative_to(root / 'LOCAL_ARTIFACTS')
+directory.mkdir(exist_ok=False)
+journal = (directory / 'journal.jsonl').open('x')
+def record(event, **values):
+    journal.write(json.dumps(dict(event=event, **values)) + '\n')
+    journal.flush()
+    os.fsync(journal.fileno())
+record('custody', final=final, final_blob=final_blob, old=old, old_blob=old_blob,
+       git_mode='100644', filesystem_mode='0664', source=baseline, metadata=meta, runtime=tools,
+       environment_sha256=digest(json.dumps(env, sort_keys=True).encode()))
+
+def census():
+    while True:
+        table = {}
+        for path in pathlib.Path('/proc').glob('[0-9]*/stat'):
+            try:
+                text = path.read_text()
+                fields = text[text.rfind(')') + 2:].split()
+                table[int(path.parent.name)] = [int(fields[1]), int(fields[2]), fields[19]]
+            except (FileNotFoundError, ProcessLookupError):
+                pass
+        # A child may be adopted after its stale PPID was scanned and its parent
+        # disappeared. The controller's direct-child list closes that census gap.
+        direct = {int(pid) for pid in pathlib.Path(
+            f'/proc/self/task/{os.getpid()}/children').read_text().split()}
+        if direct <= table.keys():
+            break
+    family = {os.getpid()} | direct
+    while True:
+        expanded = family | {pid for pid, v in table.items() if v[0] in family}
+        if expanded == family:
+            break
+        family = expanded
+    return table, {pid: table[pid] for pid in family - {os.getpid()}}
+def owned():
+    return census()[1]
+def send(proc, sig):
+    table, children = census()
+    group = {pid for pid, v in table.items() if v[1] == proc.pid}
+    assert group <= children.keys(), 'Uncertain process-group ownership; retain custody.'
+    record('signal', signal=sig, identities=children)
+    if group:
+        try:
+            os.killpg(proc.pid, sig)
+        except ProcessLookupError:
+            pass
+    for pid, ident in children.items():
+        if pid in group:
+            continue
+        try:
+            fd = os.pidfd_open(pid)
+            try:
+                current = census()[0].get(pid)
+                if current is not None:
+                    assert current[2] == ident[2], 'PID identity changed; retain custody.'
+                signal.pidfd_send_signal(fd, sig)
+            finally:
+                os.close(fd)
+        except ProcessLookupError:
+            pass
+def retire(proc):
+    if proc is None:
+        assert not owned(), 'Outstanding reader; retain custody.'
+        return
+    if owned():
+        send(proc, signal.SIGTERM)
+    grace = time.monotonic() + 5
+    while True:
+        for pid in owned():
+            if pid != proc.pid:
+                try:
+                    os.waitpid(pid, os.WNOHANG)
+                except ChildProcessError:
+                    pass
+        children = owned()
+        # Keep the leader unreaped until its descendants retire, reserving its
+        # PID/process-group identity against reuse while group signals are possible.
+        if set(children) == {proc.pid}:
+            fd = os.pidfd_open(proc.pid)
+            try:
+                if select.select([fd], [], [], 0)[0]:
+                    proc.wait()
+            finally:
+                os.close(fd)
+            children = owned()
+        if not children:
+            proc.wait()
+            record('retired', leader=proc.pid, returncode=proc.returncode)
+            return
+        killed = time.monotonic() >= grace
+        if killed:
+            # Include descendants adopted since the preceding signal/census.
+            send(proc, signal.SIGKILL)
+        fds = []
+        try:
+            for pid in children:
+                try:
+                    fds.append(os.pidfd_open(pid))
+                except ProcessLookupError:
+                    pass
+            ready = select.select(fds, [], [], 0)[0] if fds else []
+            waiting = [fd for fd in fds if fd not in ready]
+            if waiting:
+                select.select(waiting, [], [], None if killed else max(0, grace - time.monotonic()))
+        finally:
+            for fd in fds:
+                os.close(fd)
+
+interrupts, cleaning = [], False
+def interrupted(sig, frame):
+    interrupts.append(sig)
+    if not cleaning:
+        raise InterruptedError('HOST replay interrupted')
+for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+    signal.signal(sig, interrupted)
+def install(blob):
+    assert not owned()
+    record('substitute', path=focus, blob=blob, git_mode='100644', filesystem_mode='0664')
+    target.write_bytes(git('cat-file', 'blob', blob))
+    target.chmod(0o664)
+def preserved(expected):
+    assert not owned()
+    assert source() == expected and metadata() == meta and runtime() == tools
+
+proc, results, expected = None, [], baseline
+try:  # Restoration is installed before the first substitution, including partial writes.
+    for leg, blob in [('FINAL', final_blob), ('OLD', old_blob), ('RESTORED_FINAL', final_blob)]:
+        if interrupts:
+            raise InterruptedError('HOST replay interrupted')
+        preserved(expected)
+        if leg != 'FINAL':
+            install(blob)
+        expected = dict(baseline)
+        expected[focus] = [0o664, digest(git('cat-file', 'blob', blob))]
+        preserved(expected)
+        log = directory / (leg + '.log')
+        started = time.monotonic()
+        outcome = 'launch-failed'
+        try:
+            with log.open('xb') as output:
+                # Record signals without raising until the launched child has a
+                # retained handle; the child still inherits normal signal masks.
+                cleaning = True
+                try:
+                    proc = subprocess.Popen([str(executables[0]), 'test',
+                        'test/connection_credential_lifecycle_test.dart', '--plain-name',
+                        'Codex disconnect retires the managed owner when encrypted reads fail'],
+                        cwd=root / 'apps/phone_flutter', env=env, start_new_session=True,
+                        stdout=output, stderr=subprocess.STDOUT)
+                finally:
+                    cleaning = False
+                record('started', leg=leg, leader=proc.pid, identities=owned())
+                if interrupts:
+                    raise InterruptedError('HOST replay interrupted')
+                outcome = 'controller-failed'
+                fd = os.pidfd_open(proc.pid)
+                try:
+                    ready = select.select([fd], [], [], max(0, started + 60 - time.monotonic()))[0]
+                    outcome = 'exited' if ready else 'timeout'
+                finally:
+                    os.close(fd)
+        except BaseException as error:
+            if isinstance(error, InterruptedError):
+                outcome = 'interrupted'
+            record('failure', leg=leg, outcome=outcome, error=repr(error))
+            raise
+        finally:
+            # Catchable repeated interrupts cannot bypass reader retirement/restoration.
+            cleaning = True
+            try:
+                retire(proc)
+                if outcome == 'exited' and proc.returncode < 0:
+                    outcome = 'signal-terminated'
+            finally:
+                record('leg', leg=leg, outcome=outcome, returncode=None if proc is None else proc.returncode,
+                       elapsed_seconds=time.monotonic() - started, interrupts=interrupts)
+                cleaning = False
+        text = log.read_text()
+        observations = re.findall(r'CODEX-READ-ORACLE (\{[^\r\n]*\})', text)
+        oracle = json.loads(observations[-1]) if observations else None
+        expected_failure = ('Codex encrypted-read retirement oracle;' in text
+                            and re.search(r'\+0 -1: Some tests failed\.', text) is not None)
+        results.append((leg, outcome, proc.returncode, oracle, expected_failure))
+        proc = None
+        preserved(expected)
+finally:
+    cleaning = True
+    try:
+        retire(proc)
+        install(final_blob)
+        preserved(baseline)
+        record('restored', source_identity=True, runtime_identity=True, metadata_identity=True,
+               results=results, interrupts=interrupts)
+    except BaseException as error:
+        record('restoration-failed', error=repr(error), results=results, interrupts=interrupts)
+        raise
+    finally:
+        journal.close()
+        cleaning = False
+
+assert not interrupts and len(results) == 3
+for leg, outcome, code, oracle, expected_failure in results:
+    assert outcome == 'exited' and oracle is not None, (leg, outcome, code, 'infrastructure failure')
+    assert oracle['encryptedReadFailed'] and oracle['siblingUnchanged'], (leg, oracle)
+    if leg == 'OLD':
+        assert code == 1 and expected_failure and oracle['mode'] == 'active' and all(oracle[k] for k in
+            ('current', 'cacheEligible', 'retainedCache', 'coldCurrent', 'coldCacheEligible', 'coldCache'))
+    else:
+        assert code == 0, (leg, code, oracle)
+print('Replay complete; Source/runtime/index/refs/HEAD restored. HOST acceptance remains pending.')
+PY
+```
+
+Retain the journal, all three logs, outcomes and elapsed times, including failed/interrupted
+legs. Root then runs focused app/service coverage and unchanged full `just check-phone`
+(both nonmutating format checks, analysis, all Flutter tests and JVM harnesses). Select the
+unchanged host library's absolute directory with the documented `LD_LIBRARY_PATH` route;
+record its actual loaded path from the owned test process's mappings and hash that resolved
+file wherever FFI is consumed. A requested loader path is not loading evidence. Build the
+final debug phone APK, verify source-bound JNI inputs and packaged/installed native artifact
+identity, install on the qualified phone emulator, and smoke-test startup and Providers
+navigation without live account operations or data clearing. The encrypted-read claim belongs
+to the bridge tests. No Wear matrix is triggered. Root repeats full independent ZERO after
+the last correction and replay restoration; all HOST evidence remains pending until executed.
 
 ## Configured empty dashboard (HOST only)
 

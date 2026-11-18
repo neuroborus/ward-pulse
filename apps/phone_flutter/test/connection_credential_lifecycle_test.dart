@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -352,6 +353,307 @@ void main() {
       ).observeLifecycle((mode, _) => expect(mode, 'deleted'));
     },
   );
+
+  test(
+    'Codex disconnect retires the managed owner when encrypted reads fail',
+    () async {
+      const id = ProviderConnections.codexPlan;
+      const siblingId = ProviderConnections.openAiPlatform;
+      final platform = ObservingCachePlatform(bridge.platform('codex'));
+      final codex = SecureCodexAccountStore(storage: secure, platform: platform);
+      final sibling = reportingStore('sibling');
+      final session = CodexAccountSession(
+        accessToken: 'synthetic-access',
+        refreshToken: 'synthetic-refresh',
+        accountId: 'synthetic-account',
+        refreshedAt: now,
+      );
+      await codex.write(session);
+      await sibling.writeSecret(siblingId, 'synthetic-reporting-key');
+      final readKeys = <String>[];
+      secure.onRead = (key, _) => readKeys.add(key);
+      final old = (await codex.readVersioned())!.version;
+      final slot = readKeys.singleWhere(
+        (key) => secure.values[key] == jsonEncode(session.toJson()),
+      );
+      final siblingVersion = (await sibling.readVersion(siblingId))!;
+      ConnectionSnapshotCache cache(
+        String connection,
+        Future<CredentialVersion?> Function() readVersion,
+      ) => ConnectionSnapshotCache(
+        connection: connection,
+        platform: bridge.platform('cache'),
+        readCredentialVersion: readVersion,
+      );
+      final oldCache = cache(
+        id.storageKey,
+        () async => (await codex.readVersioned())?.version,
+      );
+      final siblingCache = cache(
+        siblingId.storageKey,
+        () => sibling.readVersion(siblingId),
+      );
+      final normalized = _connectionSnapshot(id.storageKey, 'codex', now);
+      final siblingSnapshot = _connectionSnapshot(
+        siblingId.storageKey,
+        'openai',
+        now,
+      );
+      await codex.observeLifecycle((mode, stamp) {
+        expect(mode, 'active');
+        expect(stamp!.values, old.values);
+      });
+      expect(await codex.isCurrent(old), isTrue);
+      expect(await oldCache.store(normalized, old), isTrue);
+      expect((await oldCache.capture()).snapshot, isNotNull);
+      expect(await siblingCache.store(siblingSnapshot, siblingVersion), isTrue);
+      final siblingBefore = (await siblingCache.capture()).snapshot!;
+
+      final events = <String>[];
+      platform.onComplete = (method, args, result) {
+        events.add('$method:${args['action'] ?? args['operation']}:$result');
+      };
+      secure.failReadKey = slot;
+      secure.onRead = (key, completion) {
+        if (key == slot) {
+          unawaited(
+            completion.then<void>(
+              (_) => events.add('encrypted-read-succeeded'),
+              onError: (Object error, StackTrace stack) {
+                events.add('encrypted-read-failed');
+              },
+            ),
+          );
+        }
+      };
+      var requests = 0;
+      final client = CodexAccountClient(
+        transport: _CodexTransport((uri, headers, body) async {
+          requests++;
+          return _usageResponse(uri);
+        }),
+        clock: () => now,
+      );
+      final service = MobileCodexAccountService(store: codex, client: client);
+      final receipts = <CredentialVersion>[];
+      Object? serviceError;
+      try {
+        await service.disconnect(onRetired: receipts.add);
+        events.add('service-completed');
+      } catch (error) {
+        serviceError = error;
+        events.add('service-failed');
+      }
+      String? mode;
+      CredentialVersion? stamp;
+      await codex.observeLifecycle((observedMode, observedStamp) {
+        mode = observedMode;
+        stamp = observedStamp;
+      });
+      final current = await codex.isCurrent(old);
+      final eligible = await oldCache.valid(old);
+      final retained = (await oldCache.capture(expected: old)).snapshot;
+      final latePublished = await oldCache.store(normalized, old);
+      secure.failReadKey = null;
+      final recovered = await codex.readVersioned();
+      final recoveredConnected = await service.isConnected();
+      final recoveredReport = await service.fetchReport();
+      await bridge.invoke('test', 'restart', {});
+      final cold = SecureCodexAccountStore(
+        storage: secure,
+        platform: bridge.platform('cold'),
+      );
+      final coldService = MobileCodexAccountService(store: cold, client: client);
+      final coldRead = await cold.readVersioned();
+      final coldConnected = await coldService.isConnected();
+      final coldReport = await coldService.fetchReport();
+      final coldCache = cache(
+        id.storageKey,
+        () async => (await cold.readVersioned())?.version,
+      );
+      final coldCurrent = await cold.isCurrent(old);
+      final coldEligible = await coldCache.valid(old);
+      final coldSnapshot = (await coldCache.capture(expected: old)).snapshot;
+      final coldPublished = await coldCache.store(normalized, old);
+      final siblingAfter = (await siblingCache.capture()).snapshot;
+      final siblingSecret = await sibling.readSecret(siblingId);
+      final siblingCurrent = await sibling.readVersion(siblingId);
+      stdout.writeln(
+        'CODEX-READ-ORACLE ${jsonEncode({
+          'mode': mode,
+          'current': current,
+          'cacheEligible': eligible,
+          'retainedCache': retained != null,
+          'latePublished': latePublished,
+          'coldCurrent': coldCurrent,
+          'coldCacheEligible': coldEligible,
+          'coldCache': coldSnapshot != null,
+          'coldPublished': coldPublished,
+          'encryptedReadFailed': events.contains('encrypted-read-failed'),
+          'receipts': receipts.length,
+          'siblingUnchanged':
+              siblingSecret == 'synthetic-reporting-key' &&
+              siblingAfter?.toJsonString() == siblingBefore.toJsonString() &&
+              jsonEncode(siblingCurrent?.values) ==
+                  jsonEncode(siblingVersion.values),
+        })}',
+      );
+
+      // OLD reaches this joint oracle with its owner/cache still eligible.
+      expect(
+        [
+          mode,
+          current,
+          eligible,
+          retained,
+          latePublished,
+          recovered,
+          recoveredConnected,
+          recoveredReport,
+          coldRead,
+          coldConnected,
+          coldReport,
+          coldCurrent,
+          coldEligible,
+          coldSnapshot,
+          coldPublished,
+        ],
+        [
+          'deleted',
+          false,
+          false,
+          null,
+          false,
+          null,
+          false,
+          null,
+          null,
+          false,
+          null,
+          false,
+          false,
+          null,
+          false,
+        ],
+        reason:
+            'Codex encrypted-read retirement oracle; '
+            'service error=$serviceError; native/read events=$events',
+      );
+      expect(serviceError, isNull);
+      expect(events, contains('encrypted-read-failed'));
+      expect(receipts, hasLength(1));
+      expect(stamp!.values, receipts.single.values);
+      expect(
+        [stamp!.generation, stamp!.revision, stamp!.epoch],
+        everyElement(isNotEmpty),
+      );
+      expect(requests, 0, reason: 'Unreadable material cannot be revoked.');
+      expect(siblingSecret, 'synthetic-reporting-key');
+      expect(siblingCurrent!.values, siblingVersion.values);
+      expect(siblingAfter!.toJsonString(), siblingBefore.toJsonString());
+    },
+    timeout: const Timeout(Duration(seconds: 45)),
+  );
+
+  test('Codex failed delete barrier never reports retirement', () async {
+    final platform = ObservingCachePlatform(bridge.platform('codex'));
+    final codex = SecureCodexAccountStore(storage: secure, platform: platform);
+    await codex.write(
+      CodexAccountSession(
+        accessToken: 'synthetic-access',
+        refreshToken: 'synthetic-refresh',
+        accountId: 'synthetic-account',
+        refreshedAt: now,
+      ),
+    );
+    final keys = <String>[];
+    secure.onRead = (key, _) => keys.add(key);
+    final original = (await codex.readVersioned())!;
+    final slot = keys.single;
+    ConnectionSnapshotCache cache(SecureCodexAccountStore store) =>
+        ConnectionSnapshotCache(
+          connection: 'openai.plan',
+          platform: bridge.platform('cache'),
+          readCredentialVersion:
+              () async => (await store.readVersioned())?.version,
+        );
+    final snapshot = _connectionSnapshot('openai.plan', 'codex', now);
+    expect(await cache(codex).store(snapshot, original.version), isTrue);
+    final before = (await cache(codex).capture()).snapshot!;
+    String? readLease;
+    var readReleased = false, faultAfterRelease = false;
+    platform.onComplete = (method, args, result) {
+      if (method == 'acquire' && args['action'] == 'read') {
+        readLease = (result! as Map)['lease'] as String;
+      }
+      if (method == 'finish' &&
+          args['lease'] == readLease &&
+          args['operation'] == 'release') {
+        readReleased = true;
+      }
+    };
+    platform.beforeInvoke = (method, args) async {
+      if (method == 'acquire' && args['action'] == 'delete') {
+        faultAfterRelease = readReleased;
+        await bridge.invoke('test', 'failCommit', {'value': true});
+      }
+    };
+    secure.failReadKey = slot;
+    final receipts = <CredentialVersion>[];
+    var requests = 0;
+    final service = MobileCodexAccountService(
+      store: codex,
+      client: CodexAccountClient(
+        transport: _CodexTransport((uri, headers, body) async {
+          requests++;
+          return _usageResponse(uri);
+        }),
+        clock: () => now,
+      ),
+    );
+    Object? serviceError;
+    try {
+      await service.disconnect(onRetired: receipts.add);
+    } catch (error) {
+      serviceError = error;
+    } finally {
+      await bridge.invoke('test', 'failCommit', {'value': false});
+      secure.failReadKey = null;
+      platform.beforeInvoke = null;
+    }
+    Object? observationError;
+    String? mode;
+    try {
+      await codex.observeLifecycle((value, _) => mode = value);
+    } catch (error) {
+      observationError = error;
+    }
+    final current = await codex.isCurrent(original.version);
+    await bridge.invoke('test', 'restart', {});
+    final cold = SecureCodexAccountStore(
+      storage: secure,
+      platform: bridge.platform('cold'),
+    );
+    final recovered = await cold.readVersioned();
+    final recoveredCache = (await cache(cold).capture()).snapshot;
+    expect(faultAfterRelease, isTrue);
+    expect(
+      serviceError,
+      isA<CodexAccountException>().having(
+        (error) => error.failure,
+        'failure',
+        CodexAccountFailure.unavailable,
+      ),
+    );
+    expect(receipts, isEmpty);
+    expect(requests, 0);
+    expect(observationError, isStateError);
+    expect(mode, isNull);
+    expect(current, isFalse);
+    expect(recovered!.value.toJson(), original.value.toJson());
+    expect(recovered.version.values, original.version.values);
+    expect(recoveredCache!.toJsonString(), before.toJsonString());
+  });
 
   test(
     'OAuth removals forward retirement before secure cleanup fails',
@@ -1499,6 +1801,33 @@ void main() {
 }
 
 typedef _Response = ({int status, String body});
+
+DashboardSnapshot _connectionSnapshot(
+  String connection,
+  String provider,
+  DateTime now,
+) {
+  final empty = DashboardSnapshot.empty(generatedAt: now);
+  return DashboardSnapshot.fromJson({
+    ...empty.toJson(),
+    'accounts': [
+      {
+        'accountId': 'synthetic-account',
+        'provider': provider,
+        'connection': connection,
+        'status': 'ok',
+        'today': empty.todayTotal.toJson(),
+        'week': empty.weekTotal.toJson(),
+        'month': empty.monthTotal.toJson(),
+        'credits': <Object>[],
+        'allowances': <Object>[],
+        'buckets': <Object>[],
+        'modelBreakdown': <Object>[],
+        'lastSuccessfulSyncAt': now.toIso8601String(),
+      },
+    ],
+  });
+}
 typedef _ResponseHandler =
     Future<_Response> Function(Uri, Map<String, String>, String?);
 

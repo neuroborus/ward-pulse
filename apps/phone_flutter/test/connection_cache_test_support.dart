@@ -113,6 +113,7 @@ final class FakeSecureStorage extends FlutterSecureStorage {
   final values = <String, String>{};
   final deleted = <String>[];
   String? failDeleteKey;
+  String? failReadKey;
   bool failRead = false;
   bool failWrite = false;
   Future<void> Function(String)? beforeWrite;
@@ -142,7 +143,8 @@ final class FakeSecureStorage extends FlutterSecureStorage {
     WindowsOptions? wOptions,
   }) {
     final result = Future<String?>.sync(() {
-      if (failRead) throw StateError('Sanitized storage read failure.');
+      if (failRead || key == failReadKey)
+        throw StateError('Sanitized storage read failure.');
       return values[key];
     });
     onRead?.call(key, result);
@@ -184,5 +186,21 @@ final class FakeSecureStorage extends FlutterSecureStorage {
     if (key == failDeleteKey)
       throw StateError('Sanitized storage delete failure.');
     values.remove(key);
+  }
+}
+
+/// Delegates every operation, observing replies only after native completion.
+final class ObservingCachePlatform implements ConnectionCachePlatform {
+  ObservingCachePlatform(this.delegate);
+  final ConnectionCachePlatform delegate;
+  FutureOr<void> Function(String, Map<String, Object?>)? beforeInvoke;
+  void Function(String, Map<String, Object?>, Object?)? onComplete;
+
+  @override
+  Future<Object?> invoke(String method, Map<String, Object?> arguments) async {
+    await beforeInvoke?.call(method, arguments);
+    final result = await delegate.invoke(method, arguments);
+    onComplete?.call(method, arguments, result);
+    return result;
   }
 }

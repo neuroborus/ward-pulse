@@ -208,7 +208,10 @@ final class MobileCodexAccountService implements CodexAccountService {
       onRetired?.call(stamp);
     }
 
-    final session = await _readSession(onRetired: observe);
+    final session = await _readSession(
+      onRetired: observe,
+      tolerateUnavailable: true,
+    );
     if (!retired) await _deleteSession(onRetired: observe);
     if (session != null) {
       try {
@@ -221,6 +224,7 @@ final class MobileCodexAccountService implements CodexAccountService {
 
   Future<CodexAccountSession?> _readSession({
     void Function(CredentialVersion)? onRetired,
+    bool tolerateUnavailable = false,
   }) async {
     try {
       return await _store.read();
@@ -228,6 +232,7 @@ final class MobileCodexAccountService implements CodexAccountService {
       await _deleteSession(onRetired: onRetired);
       return null;
     } catch (_) {
+      if (tolerateUnavailable) return null;
       throw const CodexAccountException(
         CodexAccountFailure.unavailable,
         'Codex plan · Secure storage unavailable',

@@ -62,14 +62,19 @@ unpublished; retained Stale data keeps its original successful time. See
   Label names this connection on your phone.
 - **Remove** clears the selected pasted credential. **Cancel** leaves it unchanged.
 
-Disconnecting or removing a connection clears its local credential and prevents obsolete
-data from being reused. It does not revoke a key at the provider. Revoke it in that
+Confirmed removal prevents the local credential and obsolete data from being reused.
+It does not revoke a reporting key at the provider. Revoke it in that
 provider's key settings if needed; other WardPulse connections remain independent.
 
-A disconnected plan switches to **Not connected** in the open row and leaves usage views even
-if a later cleanup step fails. A separate message explains remaining local cleanup or in-app
-Cursor session cleanup. If the row says **Unavailable · Retry check**, tap that control to check its current
-state, or tap the row to reconnect. Checking again does not repeat a confirmed removal.
+A plan with confirmed local removal switches to **Not connected** in the open row and leaves
+usage views even if a later cleanup step fails. A separate message explains remaining local
+cleanup or in-app Cursor session cleanup. If the row says **Unavailable · Retry check**, tap
+that control to check its current state, or tap the row to reconnect. That unavailable state
+does not confirm removal.
+Checking again does not repeat a confirmed removal. Codex can still be removed locally when
+its encrypted sign-in material cannot be read, provided local removal can be confirmed.
+Provider sign-out is best effort when that material is available; local removal does not
+guarantee provider-side revocation.
 
 A saved rejection warning on Dashboard opens Providers at its exact connection. For an
 unconnected **Codex plan** or **Claude plan**, tap the row to start sign-in; for a connected

@@ -75,8 +75,9 @@ confirmed native deletion barrier, before remaining secure cleanup. The synchron
 receives only the existing non-secret lifecycle stamp; app reload is started without awaiting
 provider work under the lease. Cleanup feedback requires a read lease confirming the exact
 deleted generation/revision/epoch. Active or pending replacements suppress older feedback;
-unreadable evidence remains unavailable and recoverable. Cleanup and reload failures remain
-separate from committed local removal and cannot reactivate retired credentials.
+unreadable evidence remains unavailable and recoverable. An unknown or failed deletion barrier
+does not confirm removal. Cleanup and reload failures remain separate from confirmed local
+retirement and cannot reactivate retired credentials.
 
 Snapshots retain their original success times. Cold recovery checks credential presence and
 identity, rejects malformed/foreign/mock records, and does not manufacture unknown accounts or
@@ -109,7 +110,12 @@ network exclusion and does not hold a credential/storage transaction over networ
   sanitized report reaches Rust.
 - A `401` triggers one token refresh and retry. Only an invalid, expired, reused, or revoked refresh
   token removes the local session; permission and transient failures preserve it. Explicit
-  disconnect removes the session locally before best-effort remote revocation.
+  disconnect tolerates unavailable encrypted session reads so an independently available
+  native deletion barrier can still retire the local session. Other reads keep their errors;
+  malformed-session cleanup and its failures remain separate. Confirmed retirement precedes
+  remaining cleanup and optional best-effort refresh-token revocation after storage leases
+  release. Unreadable or missing session material produces no revocation request, and remote
+  failure cannot undo local retirement or establish provider-side revocation.
 - The direct Codex compatibility endpoints are not a published third-party API. Treat this adapter
   as experimental, keep failures isolated, and do not extend it to prompts, conversations, model
   execution, or arbitrary ChatGPT backend access.
