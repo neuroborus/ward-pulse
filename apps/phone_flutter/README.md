@@ -481,7 +481,11 @@ reporting sibling, then faults only the observed encrypted session slot. It coll
 outcome, stamped retirement, old-owner/cache eligibility, late publication, recovered reads
 and engine-restart observations before its joint oracle. Its framework timeout is 45 seconds.
 `CODEX-READ-ORACLE` contains only non-secret observations. OLD must reach that oracle with its
-old owner/cache still eligible; an early service error alone is not semantic RED.
+old owner/cache still eligible; an early service error alone is not semantic RED. The joint
+assertion uses the fixed reason `Codex encrypted-read retirement oracle;`, without service
+errors or native event payloads. The projection's 16,384-byte record bound and fatal errors
+remain unchanged. The oversized failed record's origin remains unproven; HOST replay must
+establish compatibility.
 
 The Codex case in `test/app_test.dart`'s `plan retirement reconciliation` group observes the
 actual deletion lease's completed native release through `ObservingCachePlatform`. Only then
@@ -499,12 +503,25 @@ below remains Root-owned HOST acceptance, with no Native wait before its step co
 After WHOLE code DONE, actual owning foreground CLI exit if used, known/scoped process
 retirement and a separate fresh public idle observation, Root independently reviews this
 procedure and assumes sole Source custody. Warm the existing toolchain/dependencies before
-custody; qualify Linux `/proc`, subreaper and pidfd support. Build the unchanged host FFI
-library once with `cargo build --locked -p ward-pulse-ffi` from `core/`. Set
+custody; qualify Linux `/proc`, subreaper and pidfd support. Root must identify current index
+custody and quiesce identified refresh producers through their owning controls before launch;
+unknown ownership or an existing index lock holds execution. Do not kill refresh producers
+or unrelated processes. Build the unchanged host FFI library once with
+`cargo build --locked -p ward-pulse-ffi` from `core/`. Set
 `WARDPULSE_CODEX_HOST_LIBRARY` to its absolute real path and
 `WARDPULSE_CODEX_FINAL_COMMIT` to the focused final commit's full hash. The procedure pins that
 artifact but does not load it. Invoke this one-shot block from the repository root; its new
 journal directory must be under `LOCAL_ARTIFACTS/` and must not already exist.
+
+The controller retains `GIT_OPTIONAL_LOCKS=0` and exclusively creates only the resolved index
+path's `.lock`, without waiting or following a symlink. It retains the descriptor and journals
+its device/inode and controller PID/start time, process group, session and boot identity.
+Acquisition and cleanup defer catchable interrupts. Current custody requires that actual
+owned lease and Root's current owner evidence; it identifies no historical writer. Release
+requires the same descriptor/path/controller identity, retired readers, safe FINAL restoration
+and successful Source/runtime/HEAD/refs/logical-index/raw-index comparisons. Uncertainty retains
+the lock and custody. Never rewrite or restore the index, adopt a changed baseline or excuse
+raw drift with logical equality; add no broad Git lock, global configuration or new refs.
 
 It runs FINAL → exact OLD → restored FINAL. Every invocation owns a fresh process group,
 has a 60-second wall deadline and a five-second TERM grace before KILL. A Linux subreaper
@@ -520,11 +537,15 @@ fields, the fixed joint-assertion identifier, completed-summary facts and fixed 
 error categories. Raw records, failure tails and VM-service data are never emitted or saved.
 Missing, invalid or incomplete projected evidence is an infrastructure failure, not causal RED.
 Uncatchable termination or uncertain retirement/restoration leaves custody unresolved: keep
-the durable journal, establish retirement and restore its exact final blob/mode before any
-further work. Controller exit or pipe EOF alone grants no acceptance.
+the durable journal and lock, qualify its recorded owner/identity, establish retirement and
+restore its exact final blob/mode before any further work. Release only the matching owned
+lock after successful integrity comparisons. Controller exit or pipe EOF alone grants no
+acceptance. Preserve `LOCAL_ARTIFACTS/codex-read-replay-20261118` and its failed evidence unchanged;
+its prior non-PASS status and separate safe Source recovery establish neither restored replay
+proof nor original acceptance.
 
 ```sh
-python3 - "$WARDPULSE_CODEX_FINAL_COMMIT" "$PWD/LOCAL_ARTIFACTS/codex-read-replay-20261118" <<'PY'
+python3 - "$WARDPULSE_CODEX_FINAL_COMMIT" "$PWD/LOCAL_ARTIFACTS/codex-read-replay-correction-20261118" <<'PY'
 import ctypes, hashlib, json, os, pathlib, re, select, shutil, signal, stat
 import subprocess, sys, time
 
@@ -587,6 +608,8 @@ assert library.is_absolute() and library.resolve().is_file()
 runtime_paths.append(library)
 def runtime():
     return {str(p): [str(p.resolve()), identity(p), identity(p.resolve())] for p in runtime_paths}
+index_path = pathlib.Path(os.fsdecode(git('rev-parse', '--git-path', 'index').strip())).resolve(strict=True)
+lock_path = pathlib.Path(str(index_path) + '.lock')
 baseline, meta, tools = source(), metadata(), runtime()
 directory = pathlib.Path(journal_name).resolve()
 assert directory.is_relative_to(root / 'LOCAL_ARTIFACTS')
@@ -596,7 +619,7 @@ def record(event, **values):
     journal.write(json.dumps(dict(event=event, **values)) + '\n')
     journal.flush()
     os.fsync(journal.fileno())
-record('custody', final=final, final_blob=final_blob, old=old, old_blob=old_blob,
+record('baseline', final=final, final_blob=final_blob, old=old, old_blob=old_blob,
        git_mode='100644', filesystem_mode='0664', source=baseline, metadata=meta, runtime=tools,
        environment_sha256=digest(json.dumps(env, sort_keys=True).encode()))
 
@@ -818,17 +841,50 @@ def interrupted(sig, frame):
         raise InterruptedError('HOST replay interrupted')
 for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
     signal.signal(sig, interrupted)
+def controller_identity():
+    text = pathlib.Path('/proc/self/stat').read_text()
+    fields = text[text.rfind(')') + 2:].split()
+    return dict(pid=os.getpid(), start_ticks=fields[19], process_group=os.getpgrp(),
+                session=os.getsid(0), boot_id=pathlib.Path('/proc/sys/kernel/random/boot_id').read_text().strip())
+controller = controller_identity()
+lock_fd, lock_identity, lease_ready = None, None, False
+def lease_owned():
+    assert lock_fd is not None and lock_identity is not None, 'Index lease uncertain; retain custody.'
+    assert controller_identity() == controller, 'Index lease owner changed; retain custody.'
+    index = pathlib.Path(os.fsdecode(git('rev-parse', '--git-path', 'index').strip()))
+    assert stat.S_ISREG(index.lstat().st_mode) and index.resolve(strict=True) == index_path
+    descriptor, path = os.fstat(lock_fd), lock_path.lstat()
+    assert all(stat.S_ISREG(s.st_mode) and s.st_nlink == 1
+               and [s.st_dev, s.st_ino] == lock_identity for s in (descriptor, path)), (
+                   'Index lease replaced; retain custody.')
 def install(blob):
     assert not owned()
+    lease_owned()
     record('substitute', path=focus, blob=blob, git_mode='100644', filesystem_mode='0664')
     target.write_bytes(git('cat-file', 'blob', blob))
     target.chmod(0o664)
 def preserved(expected):
     assert not owned()
+    lease_owned()
     assert source() == expected and metadata() == meta and runtime() == tools
 
 proc, evidence, results, expected = None, None, [], baseline
 try:  # Restoration is installed before the first substitution, including partial writes.
+    # Fence acquisition until the descriptor and durable owner evidence are retained.
+    cleaning = True
+    try:
+        lock_fd = os.open(lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+        descriptor = os.fstat(lock_fd)
+        lock_identity = [descriptor.st_dev, descriptor.st_ino]
+        lease_owned()
+        record('index-lease-acquired', index=str(index_path), lock=str(lock_path), descriptor=lock_fd,
+               device=lock_identity[0], inode=lock_identity[1], controller=controller)
+        lease_ready = True
+        preserved(baseline)
+        record('custody', index=str(index_path), lock=str(lock_path), descriptor=lock_fd,
+               device=lock_identity[0], inode=lock_identity[1], controller=controller)
+    finally:
+        cleaning = False
     for leg, blob in [('FINAL', final_blob), ('OLD', old_blob), ('RESTORED_FINAL', final_blob)]:
         if interrupts:
             raise InterruptedError('HOST replay interrupted')
@@ -928,11 +984,20 @@ try:  # Restoration is installed before the first substitution, including partia
 finally:
     cleaning = True
     try:
-        retire(proc, evidence)
-        install(final_blob)
-        preserved(baseline)
-        record('restored', source_identity=True, runtime_identity=True, metadata_identity=True,
-               results=results, interrupts=interrupts)
+        if lease_ready:
+            retire(proc, evidence)
+            install(final_blob)
+            preserved(baseline)
+            record('restored', source_identity=True, runtime_identity=True, metadata_identity=True,
+                   results=results, interrupts=interrupts)
+            lease_owned()
+            os.unlink(lock_path)
+            os.close(lock_fd)
+            lock_fd = None
+            record('index-lease-released', device=lock_identity[0], inode=lock_identity[1],
+                   controller=controller)
+        elif lock_fd is not None:
+            raise RuntimeError('Index lease acquisition uncertain; retain custody.')
     except BaseException:
         record('restoration-failed', category='restoration-failed', results=results, interrupts=interrupts)
         raise RuntimeError('HOST restoration uncertain; retain custody.') from None

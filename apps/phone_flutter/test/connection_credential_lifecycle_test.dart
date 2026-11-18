@@ -535,9 +535,7 @@ void main() {
           null,
           false,
         ],
-        reason:
-            'Codex encrypted-read retirement oracle; '
-            'service error=$serviceError; native/read events=$events',
+        reason: 'Codex encrypted-read retirement oracle;',
       );
       expect(serviceError, isNull);
       expect(events, contains('encrypted-read-failed'));
