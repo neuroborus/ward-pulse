@@ -146,7 +146,10 @@ void main() {
           storage: secure,
           platform: bridge.platform(owner),
         );
-    DashboardRepository live(String owner, {ConnectionCachePlatform? platform}) {
+    DashboardRepository live(
+      String owner, {
+      ConnectionCachePlatform? platform,
+    }) {
       final native = platform ?? bridge.platform(owner);
       final store = SecureProviderCredentialStore(
         storage: secure,
@@ -404,10 +407,11 @@ void main() {
                 })
                 as String;
         expect(cacheBytes, isNot(contains('absentRead')));
-        final watch = WatchDashboardSummaryPayload.fromSnapshot(
-          snapshot,
-          const WatchRingPreferences(selectedIds: []),
-        ).encode();
+        final watch =
+            WatchDashboardSummaryPayload.fromSnapshot(
+              snapshot,
+              const WatchRingPreferences(selectedIds: []),
+            ).encode();
         expect(watch, isNot(contains('absentRead')));
         await keys('activation').writeSecret(a, 'synthetic-a');
         for (final copy in copies) {
@@ -444,11 +448,9 @@ void main() {
         now: () => at,
         rethrowFailures: true,
       );
-      expect(
-        await history.read(),
-        [key],
-        reason: 'Absence cannot own recovery history',
-      );
+      expect(await history.read(), [
+        key,
+      ], reason: 'Absence cannot own recovery history');
       for (final preferences in [
         const PhoneWidgetPreferences(),
         const PhoneWidgetPreferences(selectedIds: []),
@@ -516,7 +518,10 @@ void main() {
           failure = error;
         }
         if (snapshot != null) {
-          expect(snapshot.connectionVersions[a.storageKey]?['absentRead'], 'true');
+          expect(
+            snapshot.connectionVersions[a.storageKey]?['absentRead'],
+            'true',
+          );
           expect(snapshot.accounts.single.connection, b.storageKey);
           expect(
             snapshot.accounts.single.status,

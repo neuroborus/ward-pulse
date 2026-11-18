@@ -114,6 +114,7 @@ final class MergingConnectionRepository extends DashboardRepository {
               {outcome.connection.storageKey: version.values},
       ]);
     }
+
     // Legacy session loaders retain their read/fetch flow. Their store still
     // owns local-read outcomes at the publication boundary.
     final access =

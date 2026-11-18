@@ -170,7 +170,8 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
           mergeConnectionVersions([
             if (error is DashboardLoadException) error.connectionVersions,
             {
-              for (final MapEntry(:key, :value) in poll.admittedVersions.entries)
+              for (final MapEntry(:key, :value)
+                  in poll.admittedVersions.entries)
                 key: value.values,
             },
           ]),
