@@ -514,6 +514,11 @@ Flutter and JVM readers, before any Source transition. No unowned process is sig
 Timeouts, interrupts and infrastructure failures remain failures even after restoration.
 OLD must exit normally with status 1, the joint oracle's assertion reason and a completed
 summary with exactly one failed test; signal termination cannot establish semantic RED.
+Merged Flutter stdout/stderr passes through a nonblocking pipe and bounded in-memory
+projection before any evidence is written. The leg logs contain only typed test-owned oracle
+fields, the fixed joint-assertion identifier, completed-summary facts and fixed acquisition
+error categories. Raw records, failure tails and VM-service data are never emitted or saved.
+Missing, invalid or incomplete projected evidence is an infrastructure failure, not causal RED.
 Uncatchable termination or uncertain retirement/restoration leaves custody unresolved: keep
 the durable journal, establish retirement and restore its exact final blob/mode before any
 further work. Controller exit or pipe EOF alone grants no acceptance.
@@ -595,6 +600,116 @@ record('custody', final=final, final_blob=final_blob, old=old, old_blob=old_blob
        git_mode='100644', filesystem_mode='0664', source=baseline, metadata=meta, runtime=tools,
        environment_sha256=digest(json.dumps(env, sort_keys=True).encode()))
 
+class Evidence:
+    def __init__(self, output):
+        self.output, self.pipe = output, None
+        self.pending, self.dropping, self.eof = bytearray(), False, False
+        self.oracle, self.summary, self.assertion = None, None, False
+        self.oracle_seen, self.errors = False, set()
+    def emit(self, event, **values):
+        if 'evidence-write' in self.errors:
+            return
+        try:
+            self.output.write(json.dumps(dict(event=event, **values)) + '\n')
+            self.output.flush()
+            os.fsync(self.output.fileno())
+        except OSError:
+            self.errors.add('evidence-write')
+    def reject(self, category):
+        if category not in self.errors:
+            self.errors.add(category)
+            self.emit('projection-error', category=category)
+    def project(self):
+        line = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '',
+                      self.pending.decode('utf-8', errors='replace')).strip()
+        self.pending.clear()
+        match = re.search(r'(?:^|: )CODEX-READ-ORACLE (\{.*\})$', line)
+        if 'CODEX-READ-ORACLE ' in line:
+            if self.oracle_seen:
+                self.reject('oracle-count')
+                return
+            self.oracle_seen = True
+            def unique_fields(pairs):
+                value = {}
+                for key, item in pairs:
+                    if key in value:
+                        raise ValueError
+                    value[key] = item
+                return value
+            try:
+                value = json.loads(match[1], object_pairs_hook=unique_fields) if match else None
+                flags = ('current', 'cacheEligible', 'retainedCache', 'latePublished',
+                         'coldCurrent', 'coldCacheEligible', 'coldCache', 'coldPublished',
+                         'encryptedReadFailed', 'siblingUnchanged')
+                valid = (type(value) is dict and set(value) == set(flags) | {'mode', 'receipts'}
+                         and (value['mode'] is None or value['mode'] in ('active', 'deleted'))
+                         and all(type(value[key]) is bool for key in flags)
+                         and type(value['receipts']) is int and 0 <= value['receipts'] <= 2147483647)
+            except (ValueError, RecursionError):
+                valid = False
+            if valid:
+                self.oracle = {key: value[key] for key in ('mode', *flags, 'receipts')}
+                self.emit('oracle', fields=self.oracle)
+            else:
+                self.reject('oracle-invalid')
+        if 'Codex encrypted-read retirement oracle;' in line and not self.assertion:
+            self.assertion = True
+            self.emit('assertion', identifier='Codex encrypted-read retirement oracle')
+        match = re.fullmatch(r'(?:\d{2,}:\d{2}(?::\d{2})? )?\+(\d{1,6})'
+                             r'(?: ~(\d{1,6}))?(?: -(\d{1,6}))?: '
+                             r'(All tests passed!|Some tests failed\.)', line)
+        if match:
+            summary = dict(passed=int(match[1]), skipped=int(match[2] or 0),
+                           failed=int(match[3] or 0),
+                           result='passed' if match[4] == 'All tests passed!' else 'failed')
+            if self.summary is None:
+                self.summary = summary
+                self.emit('summary', **summary)
+            elif self.summary != summary:
+                self.reject('summary-conflict')
+    def drain(self, limit=16):
+        if self.pipe is None or self.eof:
+            return
+        # Bound each drain so continuous output cannot starve deadline/retirement checks.
+        for _ in range(limit):
+            try:
+                data = os.read(self.pipe.fileno(), 4096)
+            except BlockingIOError:
+                return
+            except OSError:
+                self.reject('pipe-read')
+                self.pipe.close()
+                self.pipe = None
+                return
+            if not data:
+                self.eof = True
+                if not self.dropping:
+                    self.project()  # Accept a final fragment without a line terminator.
+                return
+            for byte in data:
+                if byte in (10, 13):  # Compact reporter redraws use CR; expanded output uses LF.
+                    if not self.dropping:
+                        self.project()
+                    self.pending.clear()
+                    self.dropping = False
+                elif not self.dropping:
+                    if len(self.pending) < 16384:
+                        self.pending.append(byte)
+                    else:
+                        self.pending.clear()
+                        self.dropping = True
+                        self.reject('record-limit')
+    def finish(self):
+        # Retirement has its own descendant census; never wait for inherited pipe EOF.
+        self.drain(limit=256)
+        if self.pipe is not None:
+            if not self.eof:
+                self.reject('pipe-incomplete')
+                if not self.dropping:
+                    self.project()
+            self.pipe.close()
+            self.pipe = None
+
 def census():
     while True:
         table = {}
@@ -644,7 +759,7 @@ def send(proc, sig):
                 os.close(fd)
         except ProcessLookupError:
             pass
-def retire(proc):
+def retire(proc, evidence=None):
     if proc is None:
         assert not owned(), 'Outstanding reader; retain custody.'
         return
@@ -652,6 +767,8 @@ def retire(proc):
         send(proc, signal.SIGTERM)
     grace = time.monotonic() + 5
     while True:
+        if evidence is not None:
+            evidence.drain()
         for pid in owned():
             if pid != proc.pid:
                 try:
@@ -686,8 +803,10 @@ def retire(proc):
                     pass
             ready = select.select(fds, [], [], 0)[0] if fds else []
             waiting = [fd for fd in fds if fd not in ready]
+            if evidence is not None and evidence.pipe is not None and not evidence.eof:
+                waiting.append(evidence.pipe.fileno())
             if waiting:
-                select.select(waiting, [], [], None if killed else max(0, grace - time.monotonic()))
+                select.select(waiting, [], [], 0.1 if killed else min(0.1, max(0, grace - time.monotonic())))
         finally:
             for fd in fds:
                 os.close(fd)
@@ -708,7 +827,7 @@ def preserved(expected):
     assert not owned()
     assert source() == expected and metadata() == meta and runtime() == tools
 
-proc, results, expected = None, [], baseline
+proc, evidence, results, expected = None, None, [], baseline
 try:  # Restoration is installed before the first substitution, including partial writes.
     for leg, blob in [('FINAL', final_blob), ('OLD', old_blob), ('RESTORED_FINAL', final_blob)]:
         if interrupts:
@@ -722,83 +841,126 @@ try:  # Restoration is installed before the first substitution, including partia
         log = directory / (leg + '.log')
         started = time.monotonic()
         outcome = 'launch-failed'
+        entry = None
         try:
-            with log.open('xb') as output:
-                # Record signals without raising until the launched child has a
-                # retained handle; the child still inherits normal signal masks.
-                cleaning = True
+            with log.open('x', encoding='utf-8') as output:
+                evidence = Evidence(output)
                 try:
-                    proc = subprocess.Popen([str(executables[0]), 'test',
-                        'test/connection_credential_lifecycle_test.dart', '--plain-name',
-                        'Codex disconnect retires the managed owner when encrypted reads fail'],
-                        cwd=root / 'apps/phone_flutter', env=env, start_new_session=True,
-                        stdout=output, stderr=subprocess.STDOUT)
+                    # Record signals without raising until the launched child has a
+                    # retained handle and pipe; normal child signal masks are unchanged.
+                    cleaning = True
+                    try:
+                        proc = subprocess.Popen([str(executables[0]), 'test',
+                            'test/connection_credential_lifecycle_test.dart', '--plain-name',
+                            'Codex disconnect retires the managed owner when encrypted reads fail'],
+                            cwd=root / 'apps/phone_flutter', env=env, start_new_session=True,
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+                        try:
+                            os.set_blocking(proc.stdout.fileno(), False)
+                        except OSError:
+                            proc.stdout.close()
+                            evidence.reject('pipe-setup')
+                            raise
+                        evidence.pipe = proc.stdout
+                    finally:
+                        cleaning = False
+                    record('started', leg=leg, leader=proc.pid, identities=owned())
+                    if interrupts:
+                        raise InterruptedError('HOST replay interrupted')
+                    outcome = 'controller-failed'
+                    fd = os.pidfd_open(proc.pid)
+                    try:
+                        while True:
+                            if interrupts:
+                                raise InterruptedError('HOST replay interrupted')
+                            evidence.drain()
+                            remaining = started + 60 - time.monotonic()
+                            if remaining <= 0:
+                                outcome = 'timeout'
+                                break
+                            readers = [fd]
+                            if evidence.pipe is not None and not evidence.eof:
+                                readers.append(evidence.pipe.fileno())
+                            if fd in select.select(readers, [], [], min(0.1, remaining))[0]:
+                                outcome = 'exited'
+                                break
+                    finally:
+                        os.close(fd)
+                except BaseException as error:
+                    if isinstance(error, InterruptedError):
+                        outcome = 'interrupted'
+                    record('failure', leg=leg, outcome=outcome, category='acquisition-failed')
+                    raise RuntimeError('HOST replay acquisition failed; retain journal.') from None
                 finally:
-                    cleaning = False
-                record('started', leg=leg, leader=proc.pid, identities=owned())
-                if interrupts:
-                    raise InterruptedError('HOST replay interrupted')
-                outcome = 'controller-failed'
-                fd = os.pidfd_open(proc.pid)
-                try:
-                    ready = select.select([fd], [], [], max(0, started + 60 - time.monotonic()))[0]
-                    outcome = 'exited' if ready else 'timeout'
-                finally:
-                    os.close(fd)
+                    # Catchable repeated interrupts cannot bypass reader retirement/restoration.
+                    cleaning = True
+                    try:
+                        retire(proc, evidence)
+                        if interrupts:
+                            outcome = 'interrupted'
+                        elif outcome == 'exited' and proc.returncode < 0:
+                            outcome = 'signal-terminated'
+                    except BaseException:
+                        outcome = 'retirement-failed'
+                        raise RuntimeError('HOST reader retirement uncertain; retain custody.') from None
+                    finally:
+                        evidence.finish()
+                        entry = dict(leg=leg, outcome=outcome,
+                                     returncode=None if proc is None else proc.returncode,
+                                     elapsed_seconds=time.monotonic() - started, interrupts=list(interrupts),
+                                     oracle=evidence.oracle, assertion=evidence.assertion,
+                                     summary=evidence.summary, projection_errors=sorted(evidence.errors))
+                        results.append(entry)
+                        record('leg', **entry)
+                        cleaning = False
         except BaseException as error:
             if isinstance(error, InterruptedError):
                 outcome = 'interrupted'
-            record('failure', leg=leg, outcome=outcome, error=repr(error))
-            raise
-        finally:
-            # Catchable repeated interrupts cannot bypass reader retirement/restoration.
-            cleaning = True
-            try:
-                retire(proc)
-                if outcome == 'exited' and proc.returncode < 0:
-                    outcome = 'signal-terminated'
-            finally:
-                record('leg', leg=leg, outcome=outcome, returncode=None if proc is None else proc.returncode,
-                       elapsed_seconds=time.monotonic() - started, interrupts=interrupts)
-                cleaning = False
-        text = log.read_text()
-        observations = re.findall(r'CODEX-READ-ORACLE (\{[^\r\n]*\})', text)
-        oracle = json.loads(observations[-1]) if observations else None
-        expected_failure = ('Codex encrypted-read retirement oracle;' in text
-                            and re.search(r'\+0 -1: Some tests failed\.', text) is not None)
-        results.append((leg, outcome, proc.returncode, oracle, expected_failure))
+            if entry is None:
+                record('leg', leg=leg, outcome=outcome,
+                       returncode=None if proc is None else proc.returncode,
+                       elapsed_seconds=time.monotonic() - started, interrupts=list(interrupts),
+                       category='evidence-acquisition')
+            raise RuntimeError('HOST replay failed; retain journal and projected evidence.') from None
         proc = None
+        evidence = None
         preserved(expected)
 finally:
     cleaning = True
     try:
-        retire(proc)
+        retire(proc, evidence)
         install(final_blob)
         preserved(baseline)
         record('restored', source_identity=True, runtime_identity=True, metadata_identity=True,
                results=results, interrupts=interrupts)
-    except BaseException as error:
-        record('restoration-failed', error=repr(error), results=results, interrupts=interrupts)
-        raise
+    except BaseException:
+        record('restoration-failed', category='restoration-failed', results=results, interrupts=interrupts)
+        raise RuntimeError('HOST restoration uncertain; retain custody.') from None
     finally:
         journal.close()
         cleaning = False
 
 assert not interrupts and len(results) == 3
-for leg, outcome, code, oracle, expected_failure in results:
-    assert outcome == 'exited' and oracle is not None, (leg, outcome, code, 'infrastructure failure')
+for entry in results:
+    leg, outcome, code, oracle = (entry[key] for key in ('leg', 'outcome', 'returncode', 'oracle'))
+    assert outcome == 'exited' and oracle is not None and not entry['projection_errors'], (
+        leg, outcome, code, 'infrastructure failure')
     assert oracle['encryptedReadFailed'] and oracle['siblingUnchanged'], (leg, oracle)
     if leg == 'OLD':
-        assert code == 1 and expected_failure and oracle['mode'] == 'active' and all(oracle[k] for k in
+        assert code == 1 and entry['assertion'] and entry['summary'] == dict(
+            passed=0, skipped=0, failed=1, result='failed')
+        assert oracle['mode'] == 'active' and all(oracle[k] for k in
             ('current', 'cacheEligible', 'retainedCache', 'coldCurrent', 'coldCacheEligible', 'coldCache'))
     else:
-        assert code == 0, (leg, code, oracle)
+        assert code == 0 and entry['summary'] == dict(passed=1, skipped=0, failed=0, result='passed'), (
+            leg, code, oracle)
 print('Replay complete; Source/runtime/index/refs/HEAD restored. HOST acceptance remains pending.')
 PY
 ```
 
-Retain the journal, all three logs, outcomes and elapsed times, including failed/interrupted
-legs. Root then runs focused app/service coverage and unchanged full `just check-phone`
+Retain the journal, all three projected leg logs, outcomes and elapsed times, including
+allowed partial evidence from failed/interrupted legs. Root then runs focused app/service
+coverage and unchanged full `just check-phone`
 (both nonmutating format checks, analysis, all Flutter tests and JVM harnesses). Select the
 unchanged host library's absolute directory with the documented `LD_LIBRARY_PATH` route;
 record its actual loaded path from the owned test process's mappings and hash that resolved
