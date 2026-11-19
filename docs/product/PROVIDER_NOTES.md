@@ -328,8 +328,11 @@ and reports `credits` once at the response root. The phone keeps the main limit 
 `codex`, retains credits only on that root report record, and builds the report's
 `rateLimitsByLimitId` map from the main limit plus known additional limits. Additional limits are
 recognized by a local `metered_feature` table: `codex_bengalfox` maps to `spark` / `Spark`. The
-API's versioned `limit_name` is not a stable label, and an unknown feature is omitted until the
-table is updated rather than exposed under an internal code name.
+reserved literal `metered_feature=codex` is retained as a collision with the unnamed root,
+including complementary valid slots, in both root report representations. It leaves that
+root scope incomplete. The API's versioned `limit_name` is not a stable label, and an
+unrelated unknown feature is omitted until the table is updated rather than exposed under
+an internal code name.
 
 Recovery applicability is a separate optional `recoveryRequirements` descriptor on each
 normalized allowance: required Plan allowance IDs, scoped to the same account and history

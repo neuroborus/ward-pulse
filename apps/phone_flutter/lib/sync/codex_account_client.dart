@@ -402,6 +402,7 @@ final class CodexAccountClient {
       'rateLimitReachedType': response['rate_limit_reached_type'],
     };
     final additional = <String, Map<String, dynamic>>{};
+    var rootCollision = false;
     var unknownFeatures =
         response['additional_rate_limits'] != null &&
         response['additional_rate_limits'] is! List;
@@ -411,23 +412,18 @@ final class CodexAccountClient {
         final feature = _nonEmptyString(raw?['metered_feature']);
         final known = _additionalRateLimits[feature];
         final nested = _optionalMap(raw?['rate_limit']);
+        if (feature == 'codex') {
+          rootCollision = true;
+          _retainBucketCollision(main, _normalizeBucket('codex', nested));
+          continue;
+        }
         if (known == null) {
           unknownFeatures = true;
           continue;
         }
         final bucket = _normalizeBucket(feature!, nested);
         if (additional.containsKey(known.id)) {
-          // Keep the first valid value per slot and retain every known constraint.
-          final existing = additional[known.id]!;
-          final evidence = existing['evidence'] as Map<String, dynamic>;
-          for (final slot in ['primary', 'secondary']) {
-            if (existing[slot] == null && bucket[slot] != null) {
-              existing[slot] = bucket[slot];
-              evidence[slot] = 'valid';
-            }
-          }
-          evidence['collision'] = true;
-          evidence['loss'] = true;
+          _retainBucketCollision(additional[known.id]!, bucket);
           continue;
         }
         additional[known.id] = {
@@ -437,7 +433,7 @@ final class CodexAccountClient {
         };
       }
     }
-    if (additional.isEmpty) {
+    if (additional.isEmpty && !rootCollision) {
       return {'rateLimits': main, 'unknownFeatures': unknownFeatures};
     }
 
@@ -450,10 +446,23 @@ final class CodexAccountClient {
     };
   }
 
-  Map<String, dynamic> _normalizeBucket(
-    String id,
-    Map<String, dynamic>? raw,
+  void _retainBucketCollision(
+    Map<String, dynamic> existing,
+    Map<String, dynamic> bucket,
   ) {
+    // Keep the first valid value per slot and retain every known constraint.
+    final evidence = existing['evidence'] as Map<String, dynamic>;
+    for (final slot in ['primary', 'secondary']) {
+      if (existing[slot] == null && bucket[slot] != null) {
+        existing[slot] = bucket[slot];
+        evidence[slot] = 'valid';
+      }
+    }
+    evidence['collision'] = true;
+    evidence['loss'] = true;
+  }
+
+  Map<String, dynamic> _normalizeBucket(String id, Map<String, dynamic>? raw) {
     final primary = _normalizeWindow(raw?['primary_window']);
     final secondary = _normalizeWindow(raw?['secondary_window']);
     String state(String key, Map<String, dynamic>? window) {
@@ -461,6 +470,7 @@ final class CodexAccountClient {
       if (raw[key] == null) return 'null';
       return window == null ? 'malformed' : 'valid';
     }
+
     final primaryState = state('primary_window', primary);
     final secondaryState = state('secondary_window', secondary);
     final allowed = raw?['allowed'];
