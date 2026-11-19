@@ -12,6 +12,7 @@ use serde::Deserialize;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
     connection, AllowanceSource, AllowanceState, BudgetPeriod, ProviderKind, ProviderSnapshot,
+    RecoveryRequirements,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
@@ -93,6 +94,16 @@ pub fn cursor_plan_snapshot_from_report_json(
         .filter(|plan| plan.enabled.unwrap_or(true))
     {
         let has_pool_percents = plan.auto_percent_used.is_some() || plan.api_percent_used.is_some();
+        let complete = if has_pool_percents {
+            plan.auto_percent_used.is_some() && plan.api_percent_used.is_some()
+        } else {
+            let measured = percent_of(plan.used, plan.limit);
+            let conflict = match (plan.total_percent_used, measured) {
+                (Some(reported), Some(measured)) => (reported >= 100.0) != (measured >= 100.0),
+                _ => false,
+            };
+            !conflict && (plan.total_percent_used.is_some() || measured.is_some() || unlimited)
+        };
         if has_pool_percents {
             if let Some(used_percent) = plan.auto_percent_used {
                 allowances.push(plan_pool_allowance(
@@ -117,6 +128,7 @@ pub fn cursor_plan_snapshot_from_report_json(
                 .total_percent_used
                 .or_else(|| percent_of(plan.used, plan.limit));
             allowances.push(AllowanceState {
+                recovery_requirements: None,
                 id: "cursor-plan".to_string(),
                 source: AllowanceSource::Plan,
                 label: "Plan usage".to_string(),
@@ -130,6 +142,12 @@ pub fn cursor_plan_snapshot_from_report_json(
                 status: percent_status(used_percent),
             });
         }
+        for allowance in &mut allowances {
+            allowance.recovery_requirements = Some(RecoveryRequirements {
+                allowance_ids: vec![allowance.id.clone()],
+                complete,
+            });
+        }
     }
 
     if let Some(on_demand) = report
@@ -140,6 +158,7 @@ pub fn cursor_plan_snapshot_from_report_json(
     {
         let used_percent = percent_of(on_demand.used, on_demand.limit);
         allowances.push(AllowanceState {
+            recovery_requirements: None,
             id: "cursor-on-demand".to_string(),
             source: AllowanceSource::Purchased,
             label: "On-demand usage".to_string(),
@@ -198,6 +217,7 @@ fn plan_pool_allowance(
     // Pool meters are percentage-first; shared plan used/limit cents are not
     // attributed per pool in usage-summary.
     AllowanceState {
+        recovery_requirements: None,
         id: id.to_string(),
         source: AllowanceSource::Plan,
         label: label.to_string(),
@@ -262,6 +282,48 @@ mod tests {
 
     const REPORT_FIXTURE: &str =
         include_str!("../../../../fixtures/providers/cursor/usage_summary.json");
+
+    #[test]
+    fn split_requirements_are_independent_and_partial_or_conflicting_shapes_are_unknown() {
+        let mut report: serde_json::Value = serde_json::from_str(REPORT_FIXTURE).unwrap();
+        let normalized = cursor_plan_snapshot_from_report_json(&report.to_string()).unwrap();
+        for allowance in normalized
+            .provider_snapshot
+            .allowances
+            .iter()
+            .filter(|a| a.source == AllowanceSource::Plan)
+        {
+            let requirements = allowance.recovery_requirements.as_ref().unwrap();
+            assert!(requirements.complete);
+            assert_eq!(
+                requirements.allowance_ids,
+                std::slice::from_ref(&allowance.id)
+            );
+        }
+        let plan = report["individualUsage"]["plan"].as_object_mut().unwrap();
+        plan.remove("apiPercentUsed");
+        let partial = cursor_plan_snapshot_from_report_json(&report.to_string()).unwrap();
+        assert!(
+            !partial.provider_snapshot.allowances[0]
+                .recovery_requirements
+                .as_ref()
+                .unwrap()
+                .complete
+        );
+        report["individualUsage"]["plan"]
+            .as_object_mut()
+            .unwrap()
+            .remove("autoPercentUsed");
+        report["individualUsage"]["plan"]["totalPercentUsed"] = serde_json::json!(100);
+        let conflict = cursor_plan_snapshot_from_report_json(&report.to_string()).unwrap();
+        assert!(
+            !conflict.provider_snapshot.allowances[0]
+                .recovery_requirements
+                .as_ref()
+                .unwrap()
+                .complete
+        );
+    }
 
     #[test]
     fn normalizes_plan_pools_and_on_demand_meters() {

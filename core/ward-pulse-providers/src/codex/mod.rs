@@ -6,7 +6,7 @@ use serde::Deserialize;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
     connection, AllowanceSource, AllowanceState, BudgetPeriod, ProviderKind, ProviderSnapshot,
-    ProviderStatus, Quantity, QuantityUnit, UsageBucket,
+    ProviderStatus, Quantity, QuantityUnit, RecoveryRequirements, UsageBucket,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
@@ -76,22 +76,48 @@ pub fn codex_provider_snapshot_from_report_json(
         .rate_limits_by_limit_id
         .as_ref()
         .filter(|values| !values.is_empty())
-        .map(|values| values.values().collect::<Vec<_>>())
-        .unwrap_or_else(|| vec![&report.rate_limits.rate_limits]);
+        .map(|values| {
+            values
+                .iter()
+                .map(|(id, limit)| (Some(id.as_str()), limit))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_else(|| vec![(None, &report.rate_limits.rate_limits)]);
 
     let mut allowances = Vec::new();
-    for rate_limit in rate_limits {
+    for (map_id, rate_limit) in &rate_limits {
+        let start = allowances.len();
         if let Some(window) = &rate_limit.primary {
             allowances.push(plan_allowance(rate_limit, "primary", window)?);
         }
         if let Some(window) = &rate_limit.secondary {
             allowances.push(plan_allowance(rate_limit, "secondary", window)?);
         }
+        let ids: Vec<String> = allowances[start..]
+            .iter()
+            .map(|allowance| allowance.id.clone())
+            .collect();
+        let id = rate_limit.limit_id.as_deref().unwrap_or("codex");
+        let unique = rate_limits
+            .iter()
+            .filter(|(_, limit)| limit.limit_id.as_deref().unwrap_or("codex") == id)
+            .count()
+            == 1;
+        let complete = unique
+            && map_id.map_or(true, |map_id| map_id == id)
+            && qualified_main_bucket(rate_limit);
+        for allowance in &mut allowances[start..] {
+            allowance.recovery_requirements = Some(RecoveryRequirements {
+                allowance_ids: ids.clone(),
+                complete,
+            });
+        }
     }
 
     if let Some(credits) = report.rate_limits.rate_limits.credits.as_ref() {
         if credits.has_credits || credits.unlimited {
             allowances.push(AllowanceState {
+                recovery_requirements: None,
                 id: "codex-purchased-credits".to_string(),
                 source: AllowanceSource::Purchased,
                 label: "Purchased credits".to_string(),
@@ -141,6 +167,35 @@ pub fn codex_provider_snapshot_from_report_json(
         generated_at: report.generated_at,
         provider_snapshot,
     })
+}
+
+/// Qualification is bounded to the reported root included bucket. Status is
+/// independent of room: access may be denied, reached, or backed by paid credit.
+fn qualified_main_bucket(limit: &RawRateLimit) -> bool {
+    let Some(evidence) = &limit.evidence else {
+        return false;
+    };
+    let slot_matches = |state: SlotState, window: &Option<RawRateLimitWindow>| match (state, window)
+    {
+        (SlotState::Valid, Some(window)) => {
+            window.used_percent.is_finite()
+                && window.used_percent >= 0.0
+                && window
+                    .window_duration_mins
+                    .is_some_and(|minutes| minutes > 0)
+        }
+        (SlotState::Null, None) => true,
+        _ => false,
+    };
+    limit.limit_id.as_deref().unwrap_or("codex") == "codex"
+        && evidence.bucket_id == "codex"
+        && !evidence.loss
+        && !evidence.collision
+        && evidence.allowed == Some(true)
+        && evidence.limit_reached == Some(false)
+        && (limit.primary.is_some() || limit.secondary.is_some())
+        && slot_matches(evidence.primary, &limit.primary)
+        && slot_matches(evidence.secondary, &limit.secondary)
 }
 
 fn quantity_credits(value: &str) -> Result<Quantity, CodexReportError> {
@@ -200,6 +255,7 @@ fn plan_allowance(
     };
 
     Ok(AllowanceState {
+        recovery_requirements: None,
         id: format!(
             "{}-{window_id}",
             rate_limit.limit_id.as_deref().unwrap_or("codex")
@@ -361,11 +417,41 @@ struct RawRateLimitsResponse {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RawRateLimit {
+    #[serde(default, deserialize_with = "deserialize_evidence")]
+    evidence: Option<BucketEvidence>,
     limit_id: Option<String>,
     limit_name: Option<String>,
     primary: Option<RawRateLimitWindow>,
     secondary: Option<RawRateLimitWindow>,
     credits: Option<RawCredits>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum SlotState {
+    Valid,
+    Null,
+    Omitted,
+    Malformed,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BucketEvidence {
+    bucket_id: String,
+    allowed: Option<bool>,
+    limit_reached: Option<bool>,
+    primary: SlotState,
+    secondary: SlotState,
+    collision: bool,
+    loss: bool,
+}
+
+fn deserialize_evidence<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<BucketEvidence>, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(serde_json::from_value(value).ok())
 }
 
 #[derive(Debug, Deserialize)]
@@ -409,6 +495,92 @@ mod tests {
     /// reported when held, the shares and resets so ordering has something to order.
     const TWO_LIMITS_FIXTURE: &str =
         include_str!("../../../../fixtures/providers/codex/report_two_limits.json");
+
+    #[test]
+    fn qualifies_reported_root_shapes_without_claiming_spark_or_feature_entitlements() {
+        let report: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/providers/codex/recovery_report.json"
+        ))
+        .unwrap();
+        let parse = |value: &serde_json::Value| {
+            codex_provider_snapshot_from_report_json(&value.to_string())
+                .unwrap()
+                .provider_snapshot
+                .allowances
+        };
+        let allowances = parse(&report);
+        let requirements = allowances[0].recovery_requirements.as_ref().unwrap();
+        assert!(requirements.complete);
+        assert_eq!(
+            requirements.allowance_ids,
+            ["codex-primary", "codex-secondary"]
+        );
+        let spark = allowances
+            .iter()
+            .find(|a| a.id == "spark-primary")
+            .unwrap()
+            .recovery_requirements
+            .as_ref()
+            .unwrap();
+        assert!(!spark.complete);
+        assert_eq!(spark.allowance_ids, ["spark-primary", "spark-secondary"]);
+
+        let mut legacy = report.clone();
+        legacy["rateLimits"]
+            .as_object_mut()
+            .unwrap()
+            .remove("rateLimitsByLimitId");
+        assert!(
+            parse(&legacy)[0]
+                .recovery_requirements
+                .as_ref()
+                .unwrap()
+                .complete
+        );
+        let singleton: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/providers/codex/recovery_singleton_report.json"
+        ))
+        .unwrap();
+        let single = parse(&singleton);
+        assert!(single[0].recovery_requirements.as_ref().unwrap().complete);
+        assert_eq!(
+            single[0]
+                .recovery_requirements
+                .as_ref()
+                .unwrap()
+                .allowance_ids,
+            ["codex-primary"]
+        );
+        for (field, value) in [
+            ("secondary", serde_json::json!("omitted")),
+            ("secondary", serde_json::json!("malformed")),
+            ("loss", serde_json::json!(true)),
+            ("collision", serde_json::json!(true)),
+            ("allowed", serde_json::json!(false)),
+            ("allowed", serde_json::json!("true")),
+            ("limitReached", serde_json::json!(true)),
+        ] {
+            let mut invalid = singleton.clone();
+            invalid["rateLimits"]["rateLimits"]["primary"]["usedPercent"] = serde_json::json!(0);
+            invalid["rateLimits"]["rateLimits"]["evidence"][field] = value;
+            assert!(
+                !parse(&invalid)[0]
+                    .recovery_requirements
+                    .as_ref()
+                    .unwrap()
+                    .complete,
+                "{field}"
+            );
+        }
+        // Existing lossy reports preserve display and pair context, never qualification.
+        let lossy = codex_provider_snapshot_from_report_json(TWO_LIMITS_FIXTURE).unwrap();
+        assert!(lossy
+            .provider_snapshot
+            .allowances
+            .iter()
+            .filter(|a| a.source == AllowanceSource::Plan)
+            .all(|a| !a.recovery_requirements.as_ref().unwrap().complete));
+    }
 
     #[test]
     fn trims_trailing_zeros_from_credit_balance() {

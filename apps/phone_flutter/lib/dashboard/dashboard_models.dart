@@ -643,8 +643,42 @@ class UsageBucket {
 
 enum AllowanceSource { plan, purchased }
 
+/// Necessary included Plan constraints, scoped to the allowance's account and owner.
+class RecoveryRequirements {
+  const RecoveryRequirements({
+    required this.allowanceIds,
+    required this.complete,
+  });
+
+  final List<String> allowanceIds;
+  final bool complete;
+
+  static RecoveryRequirements? maybeFromJson(Object? value) {
+    if (value is! Map<String, dynamic> ||
+        value.keys.any((key) => key != 'allowanceIds' && key != 'complete') ||
+        value['complete'] is! bool ||
+        value['allowanceIds'] is! List)
+      return null;
+    final ids = value['allowanceIds'] as List;
+    if (ids.isEmpty ||
+        ids.any((id) => id is! String || id.isEmpty) ||
+        ids.toSet().length != ids.length)
+      return null;
+    return RecoveryRequirements(
+      allowanceIds: ids.cast<String>(),
+      complete: value['complete'] as bool,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'allowanceIds': allowanceIds,
+    'complete': complete,
+  };
+}
+
 class AllowanceState {
   const AllowanceState({
+    this.recoveryRequirements,
     required this.id,
     required this.source,
     required this.label,
@@ -658,6 +692,7 @@ class AllowanceState {
     required this.status,
   });
 
+  final RecoveryRequirements? recoveryRequirements;
   final String id;
   final AllowanceSource source;
   final String label;
@@ -672,6 +707,9 @@ class AllowanceState {
 
   factory AllowanceState.fromJson(Map<String, dynamic> json) {
     return AllowanceState(
+      recoveryRequirements: RecoveryRequirements.maybeFromJson(
+        json['recoveryRequirements'],
+      ),
       id: json['id'] as String,
       source: switch (json['source']) {
         'purchased' => AllowanceSource.purchased,
@@ -692,6 +730,8 @@ class AllowanceState {
   Map<String, dynamic> toJson() => {
     'id': id,
     'source': source.name,
+    if (recoveryRequirements != null)
+      'recoveryRequirements': recoveryRequirements!.toJson(),
     'label': label,
     'usedPercent': usedPercent,
     'used': used?.toJson(),

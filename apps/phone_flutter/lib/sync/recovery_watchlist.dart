@@ -34,8 +34,23 @@ abstract interface class PartitionedRecoveryWatchlistStore
   });
 }
 
+/// Additive context API; existing key-only stores remain valid test/legacy clients.
+abstract interface class ContextualRecoveryWatchlistStore
+    implements PartitionedRecoveryWatchlistStore {
+  Future<({List<PendingRecovery> pending, Map<WindowKey, DateTime> resets})>
+      readPendingOwners(Set<HistoryOwner?> owners);
+
+  @override
+  Future<void> writeObserved(
+    List<WindowKey> keys,
+    Set<HistoryOwner?> owners, {
+    Map<WindowKey, DateTime> resets = const {},
+    Map<WindowKey, RecoveryRequirements> requirements = const {},
+  });
+}
+
 final class SecureRecoveryWatchlistStore
-    implements RecoveryWatchlistStore, PartitionedRecoveryWatchlistStore {
+    implements ContextualRecoveryWatchlistStore {
   SecureRecoveryWatchlistStore({FlutterSecureStorage? storage})
     : _storage = storage ?? const FlutterSecureStorage();
 
@@ -68,24 +83,34 @@ final class SecureRecoveryWatchlistStore
   Future<({List<WindowKey> keys, Map<WindowKey, DateTime> resets})> readOwners(
     Set<HistoryOwner?> owners,
   ) async {
-    final result = <WindowKey>[];
+    final result = await readPendingOwners(owners);
+    return (
+      keys: [for (final entry in result.pending) entry.key],
+      resets: result.resets,
+    );
+  }
+
+  @override
+  Future<({List<PendingRecovery> pending, Map<WindowKey, DateTime> resets})>
+      readPendingOwners(Set<HistoryOwner?> owners) async {
+    final result = <PendingRecovery>[];
     final resets = <WindowKey, DateTime>{};
     for (final owner in owners) {
       final stored = await _storage.read(key: _ownerKey(owner));
       if (stored == null) continue;
-      final keys = decodeWindowKeys(stored);
-      if (keys.isEmpty) continue;
+      final pending = decodePendingRecoveries(stored);
+      if (pending.isEmpty) continue;
       final values = jsonDecode(stored) as List<dynamic>;
-      for (var i = 0; i < keys.length; i++) {
-        final key = keys[i];
-        if (key.historyOwner != owner) continue;
-        result.add(key);
+      for (var i = 0; i < pending.length; i++) {
+        final entry = pending[i];
+        if (entry.key.historyOwner != owner) continue;
+        result.add(entry);
         final value = (values[i] as Map<String, dynamic>)['resetsAt'];
         final reset = value is String ? DateTime.tryParse(value) : null;
-        if (reset != null) resets[key] = reset;
+        if (reset != null) resets[entry.key] = reset;
       }
     }
-    return (keys: result, resets: resets);
+    return (pending: result, resets: resets);
   }
 
   @override
@@ -99,19 +124,39 @@ final class SecureRecoveryWatchlistStore
     List<WindowKey> keys,
     Set<HistoryOwner?> owners, {
     Map<WindowKey, DateTime> resets = const {},
+    Map<WindowKey, RecoveryRequirements> requirements = const {},
   }) async {
     for (final owner in owners) {
-      final partition = keys.where((key) => key.historyOwner == owner).toList();
-      final values = jsonDecode(encodeWindowKeys(partition)) as List<dynamic>;
-      for (var i = 0; i < partition.length; i++) {
-        final reset = resets[partition[i]];
-        if (reset != null)
-          (values[i] as Map<String, dynamic>)['resetsAt'] =
-              reset.toUtc().toIso8601String();
-      }
+      final values = [
+        for (final key in keys)
+          if (key.historyOwner == owner)
+            {
+              ...PendingRecovery(key, requirements: requirements[key]).toJson(),
+              if (resets[key] != null)
+                'resetsAt': resets[key]!.toUtc().toIso8601String(),
+            },
+      ];
       await _storage.write(key: _ownerKey(owner), value: jsonEncode(values));
     }
   }
+}
+
+Future<({List<PendingRecovery> pending, Map<WindowKey, DateTime> resets})>
+_readPendingHistory(
+  RecoveryWatchlistStore store,
+  Set<HistoryOwner?> owners,
+) async {
+  if (store is ContextualRecoveryWatchlistStore) {
+    return store.readPendingOwners(owners);
+  }
+  final history =
+      store is PartitionedRecoveryWatchlistStore
+          ? await store.readOwners(owners)
+          : (keys: await store.read(), resets: <WindowKey, DateTime>{});
+  return (
+    pending: [for (final key in history.keys) PendingRecovery(key)],
+    resets: history.resets,
+  );
 }
 
 /// Reconcile captured evidence only. Never read today's credentials to relabel
@@ -219,6 +264,7 @@ Future<void> syncPlanRecoveries(
   bool notifications = true,
   ReadPlanRecoveries readRecoveries = planRecoveries,
   ReadExhaustedWindows readWindows = exhaustedWindows,
+  ReconcilePlanRecoveries? reconcile,
   DateTime Function() now = DateTime.now,
   bool rethrowFailures = false,
   AutomaticPollContext? poll,
@@ -250,21 +296,19 @@ Future<void> syncPlanRecoveries(
           entry.value,
       if (owners.isEmpty) null,
     };
-    // An edge needs a past. With nothing remembered there is nothing to have
-    // left, and asking the core would serialize the whole snapshot to be told
-    // so — on most polls, since most of the time nothing is spent.
-    final capturedHistory =
-        store is PartitionedRecoveryWatchlistStore
-            ? await store.readOwners({null, ...owners.values})
-            : (keys: await store.read(), resets: <WindowKey, DateTime>{});
-    final remembered =
-        capturedHistory.keys
+    final capturedHistory = await _readPendingHistory(store, {
+      null,
+      ...owners.values,
+    });
+    final rememberedPending =
+        capturedHistory.pending
             .where(
-              (key) =>
-                  key.historyOwner == null ||
-                  owners.containsValue(key.historyOwner),
+              (entry) =>
+                  entry.key.historyOwner == null ||
+                  owners.containsValue(entry.key.historyOwner),
             )
             .toList();
+    final remembered = [for (final entry in rememberedPending) entry.key];
     if (isCurrent != null && !await isCurrent()) return;
     final observedAccounts = {
       for (final account in snapshot.accounts)
@@ -297,13 +341,77 @@ Future<void> syncPlanRecoveries(
                       : !partial || observed(key),
             )
             .toList();
+    final eligiblePending = [
+      for (final entry in rememberedPending)
+        if (observedHistory.contains(entry.key)) entry,
+    ];
+    final observedSnapshot = snapshot.withAccounts([
+      for (final account in snapshot.accounts)
+        if (observedAccounts.contains((
+          accountId: account.accountId,
+          historyOwner: account.historyOwner,
+        )))
+          account,
+    ]);
+    // Raw exhaustion remains separate scheduling evidence, even when a target
+    // stays pending after its own window clears.
+    final currentSpent =
+        poll?.whollySkipped == true
+            ? <WindowKey>[]
+            : readWindows(observedSnapshot);
+    final RecoveryReconciliation result;
+    if (poll?.whollySkipped == true) {
+      result = (pending: eligiblePending, recoveries: <PlanRecovery>[]);
+    } else if (reconcile != null ||
+        (readRecoveries == planRecoveries && readWindows == exhaustedWindows)) {
+      result = (reconcile ?? reconcilePlanRecoveries)(
+        observedSnapshot,
+        eligiblePending,
+      );
+    } else {
+      // Preserve the old injectable seams for key-only clients. Production uses
+      // the single Rust reconciliation above, including while delivery is muted.
+      final recovered =
+          observedHistory.isNotEmpty &&
+                  (notifications ||
+                      observedHistory.any((key) => key.historyOwner != null))
+              ? readRecoveries(observedSnapshot, observedHistory)
+              : <PlanRecovery>[];
+      final keys = {
+        ...currentSpent,
+        for (final key in observedHistory)
+          if (key.historyOwner != null &&
+              !recovered.any(
+                (item) =>
+                    item.accountId == key.accountId &&
+                    item.historyOwner == key.historyOwner &&
+                    item.allowanceId == key.allowanceId,
+              ))
+            key,
+      };
+      result = (
+        pending: [
+          for (final key in keys)
+            eligiblePending.where((entry) => entry.key == key).firstOrNull ??
+                PendingRecovery(key),
+        ],
+        recoveries: recovered,
+      );
+    }
+    bool eligible(WindowKey key) =>
+        key.historyOwner != null ? observed(key) : !partial || observed(key);
+    final returnedPending =
+        result.pending.where((entry) => eligible(entry.key)).toList();
     final recoveries =
-        observedHistory.isNotEmpty &&
-                poll?.whollySkipped != true &&
-                (notifications ||
-                    observedHistory.any((key) => key.historyOwner != null))
-            ? readRecoveries(snapshot, observedHistory)
-            : <PlanRecovery>[];
+        result.recoveries
+            .where(
+              (item) => observedHistory.contains((
+                accountId: item.accountId,
+                historyOwner: item.historyOwner,
+                allowanceId: item.allowanceId,
+              )),
+            )
+            .toList();
     if (notifications &&
         observedHistory.isNotEmpty &&
         poll?.whollySkipped != true) {
@@ -334,34 +442,21 @@ Future<void> syncPlanRecoveries(
                   (partial && !observed(key)),
             )
             .toList();
-    final currentSpent =
+    final pending =
         poll?.whollySkipped == true
-            ? <WindowKey>[]
-            : readWindows(snapshot)
-                .where(
-                  (key) =>
-                      key.historyOwner != null
-                          ? observed(key)
-                          : !partial || observed(key),
-                )
-                .toList();
-    // Missing/unknown observations have no recovery decision. Preserve owned
-    // history until Rust sees usable capacity, even while delivery is muted.
-    final unresolved = observedHistory.where(
+            ? rememberedPending
+            : [
+              ...returnedPending,
+              for (final entry in rememberedPending)
+                if (protected.contains(entry.key)) entry,
+            ];
+    final spent = [for (final entry in pending) entry.key].toSet().toList();
+    final unresolved = spent.where(
       (key) =>
           key.historyOwner != null &&
-          !currentSpent.contains(key) &&
-          !recoveries.any(
-            (recovery) =>
-                recovery.accountId == key.accountId &&
-                recovery.historyOwner == key.historyOwner &&
-                recovery.allowanceId == key.allowanceId,
-          ),
+          observedHistory.contains(key) &&
+          !currentSpent.contains(key),
     );
-    final spent =
-        poll?.whollySkipped == true
-            ? remembered
-            : [...currentSpent, ...unresolved, ...protected].toSet().toList();
     // Reset instants are scheduling evidence, separate from Rust's edge keys.
     // Keep the last known reset while a window is missing or unknown, so a
     // sibling's later reset cannot replace its pending wake after a restart.
@@ -371,6 +466,11 @@ Future<void> syncPlanRecoveries(
           key: capturedHistory.resets[key]!,
     };
     for (final account in snapshot.accounts) {
+      if (!observedAccounts.contains((
+        accountId: account.accountId,
+        historyOwner: account.historyOwner,
+      )))
+        continue;
       for (final window in account.allowances) {
         final key = (
           accountId: account.accountId,
@@ -383,7 +483,17 @@ Future<void> syncPlanRecoveries(
     }
     if (isCurrent != null && !await isCurrent()) return;
     if (poll?.whollySkipped != true) {
-      if (store is PartitionedRecoveryWatchlistStore) {
+      if (store is ContextualRecoveryWatchlistStore) {
+        await store.writeObserved(
+          spent,
+          observedOwners,
+          resets: resets,
+          requirements: {
+            for (final entry in pending)
+              if (entry.requirements != null) entry.key: entry.requirements!,
+          },
+        );
+      } else if (store is PartitionedRecoveryWatchlistStore) {
         await store.writeObserved(spent, observedOwners, resets: resets);
       } else {
         await store.write(spent);

@@ -11,4 +11,7 @@ pub use alerts::{
     ConnectionAlertThresholds, PercentThreshold,
 };
 pub use dashboard::build_dashboard_snapshot;
-pub use recovery::{exhausted_windows, plan_recoveries, PlanRecovery, WindowKey};
+pub use recovery::{
+    exhausted_windows, plan_recoveries, reconcile_plan_recoveries, PendingRecovery, PlanRecovery,
+    RecoveryReconciliation, WindowKey,
+};

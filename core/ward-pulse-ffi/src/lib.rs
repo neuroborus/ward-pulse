@@ -7,7 +7,7 @@ use ward_pulse_core::model::{DashboardSnapshot, ProviderSnapshot};
 use ward_pulse_core::time::DateTimeUtc;
 use ward_pulse_core::{
     apply_alert_settings, build_dashboard_snapshot, exhausted_windows, plan_recoveries,
-    AlertSettings, WindowKey,
+    reconcile_plan_recoveries, AlertSettings, PendingRecovery, WindowKey,
 };
 use ward_pulse_providers::claude::{
     anthropic_provider_snapshot_from_report_json, claude_provider_snapshot_from_report_json,
@@ -247,6 +247,29 @@ fn plan_recoveries_json(request_json: &str) -> Result<String, DashboardSnapshotJ
         .map_err(DashboardSnapshotJsonError::Serialize)
 }
 
+fn reconcile_plan_recoveries_json(
+    request_json: &str,
+) -> Result<String, DashboardSnapshotJsonError> {
+    let value: serde_json::Value =
+        serde_json::from_str(request_json).map_err(DashboardSnapshotJsonError::PlanRecovery)?;
+    let snapshot: DashboardSnapshot = serde_json::from_value(
+        value
+            .get("snapshot")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+    )
+    .map_err(DashboardSnapshotJsonError::PlanRecovery)?;
+    let pending: Vec<PendingRecovery> = serde_json::from_value(
+        value
+            .get("pending")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+    )
+    .map_err(DashboardSnapshotJsonError::PlanRecovery)?;
+    serde_json::to_string(&reconcile_plan_recoveries(&snapshot, &pending))
+        .map_err(DashboardSnapshotJsonError::Serialize)
+}
+
 fn snapshot_result_json(result: Result<String, DashboardSnapshotJsonError>) -> Option<String> {
     result_json("dashboardJson", result)
 }
@@ -433,6 +456,20 @@ pub unsafe extern "C" fn ward_pulse_plan_recoveries_result_json(
     })
 }
 
+/// Reconciles pending Plan targets and returns `reconciliationJson` in the result envelope.
+///
+/// # Safety
+///
+/// `request_json` must be a non-null pointer to a valid, null-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn ward_pulse_reconcile_plan_recoveries_result_json(
+    request_json: *const c_char,
+) -> *mut c_char {
+    transform_report_json(request_json, |json| {
+        result_json("reconciliationJson", reconcile_plan_recoveries_json(json))
+    })
+}
+
 unsafe fn transform_report_json(
     report_json: *const c_char,
     transform: impl FnOnce(&str) -> Option<String> + std::panic::UnwindSafe,
@@ -598,6 +635,36 @@ mod tests {
         .expect("parse recoveries");
 
         assert_eq!(recoveries, golden["recoveries"]);
+    }
+
+    #[test]
+    fn reconciliation_envelope_preserves_requirements_through_merge_and_settings() {
+        let normalized = codex_dashboard_snapshot_json(include_str!(
+            "../../../fixtures/providers/codex/recovery_report.json"
+        ))
+        .unwrap();
+        let snapshot: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+        let merged =
+            merge_dashboard_snapshots_json(&serde_json::json!([snapshot]).to_string()).unwrap();
+        let applied = apply_alert_settings_json(&serde_json::json!({
+            "snapshot": serde_json::from_str::<serde_json::Value>(&merged).unwrap(), "settings": {}
+        }).to_string()).unwrap();
+        let request = serde_json::json!({"snapshot": serde_json::from_str::<serde_json::Value>(&applied).unwrap(), "pending": []});
+        let encoded = result_json(
+            "reconciliationJson",
+            reconcile_plan_recoveries_json(&request.to_string()),
+        )
+        .unwrap();
+        let envelope: serde_json::Value = serde_json::from_str(&encoded).unwrap();
+        let result: serde_json::Value =
+            serde_json::from_str(envelope["reconciliationJson"].as_str().unwrap()).unwrap();
+        assert_eq!(result["pending"][0]["accountId"], "codex-local");
+        assert_eq!(result["pending"][0]["requirements"]["complete"], true);
+        assert_eq!(
+            result["pending"][0]["requirements"]["allowanceIds"],
+            serde_json::json!(["codex-primary", "codex-secondary"])
+        );
+        assert!(result["recoveries"].as_array().unwrap().is_empty());
     }
 
     #[test]

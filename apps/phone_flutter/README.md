@@ -493,6 +493,18 @@ data and bookkeeping, outside watch/widget payloads and notification text. Mock 
 currentness guarded and clears only unbound history, preserving qualified live partitions,
 stored reset evidence and their pending wake; cancellation during cleanup requires no
 qualified live history to remain.
+
+`ContextualRecoveryWatchlistStore` adds pending requirements without changing the key-only
+store API. `syncPlanRecoveries` sends eligible observed history to the shared Rust reconciler,
+filters returned identities to those observations and persists its pending context through
+`writeObserved`'s additive requirements argument. Protected partitions retain their saved
+context; wholly skipped loads perform no reconciliation or history writes. Notification submission precedes persistence,
+and muted delivery still consumes actually recovered targets without a later backlog.
+Optional malformed context becomes Unknown while retaining a valid key. Fixed snapshot codecs,
+cache serialization and alert-setting transforms carry allowance requirements without moving
+phone-only connection provenance into shared payloads. This boundary-adoption stage retains
+per-window recovery eligibility; it does not yet activate applicable-capacity gating.
+
 Each partition also retains the last known reset for its spent windows, so an incomplete
 or skipped report cannot postpone an earlier wake when a sibling supplies a later reset.
 When that window's own captured native start or matching owner/account success is at or after

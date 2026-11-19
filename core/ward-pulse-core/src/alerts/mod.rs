@@ -437,6 +437,7 @@ mod tests {
 
     fn purchased(used_percent: f64) -> AllowanceState {
         AllowanceState {
+            recovery_requirements: None,
             id: "claude-extra-usage".into(),
             source: AllowanceSource::Purchased,
             label: "Extra usage".into(),

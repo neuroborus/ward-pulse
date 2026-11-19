@@ -1,0 +1,31 @@
+{
+  "generatedAt": "2026-07-19T12:00:00.000Z",
+  "rateLimits": {
+    "rateLimits": {
+      "limitId": "codex",
+      "limitName": null,
+      "primary": {
+        "usedPercent": 100,
+        "windowDurationMins": 300,
+        "resetsAt": 1784480400
+      },
+      "secondary": null,
+      "evidence": {
+        "bucketId": "codex",
+        "allowed": true,
+        "limitReached": false,
+        "primary": "valid",
+        "secondary": "null",
+        "collision": false,
+        "loss": false
+      },
+      "credits": null,
+      "planType": "plus",
+      "rateLimitReachedType": null
+    },
+    "unknownFeatures": false
+  },
+  "usage": {
+    "dailyUsageBuckets": []
+  }
+}

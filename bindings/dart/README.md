@@ -18,6 +18,22 @@ NUL input is rejected before the C-string boundary. Phone startup exposes this o
 Rebuild both Android ABIs and qualify the actual APK/FFI symbols on HOST before acceptance;
 Flutter tests alone do not establish native symbol availability.
 
+## Plan recovery reconciliation
+
+`reconcilePlanRecoveriesJson(snapshotJson, pendingJson)` calls the additive
+`ward_pulse_reconcile_plan_recoveries_result_json` export with `{snapshot, pending}`.
+Its normal result envelope carries a JSON string in `reconciliationJson`, containing
+`{pending, recoveries}`. Existing window/recovery exports retain their signatures.
+Pending entries keep flat `accountId`, `allowanceId` and optional `historyOwner`, with
+optional `requirements: {allowanceIds, complete}`. Allowances carry the same descriptor as
+`recoveryRequirements`. References are account/owner-local Plan IDs; incomplete or malformed
+context is Unknown, and legacy key-only records remain readable.
+
+The phone persists Rust-returned pending context through owner-partitioned storage, retaining
+reset scheduling metadata separately. This adoption stage retains per-window eligibility;
+applicable-capacity evaluation is activated separately behind the same reconciliation API.
+Rebuild and identify actual loaded libraries on HOST before runtime acceptance.
+
 ## Threshold condition observations
 
 The existing `ward_pulse_apply_alert_settings_result_json` export returns an optional

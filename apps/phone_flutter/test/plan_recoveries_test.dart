@@ -6,6 +6,76 @@ import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
 
 void main() {
+  test(
+    'pending context is additive and malformed optional context retains identity',
+    () {
+      const key = (accountId: 'a', allowanceId: 'session', historyOwner: null);
+      const pending = PendingRecovery(
+        key,
+        requirements: RecoveryRequirements(
+          allowanceIds: ['session', 'weekly'],
+          complete: false,
+        ),
+      );
+      final decoded =
+          decodePendingRecoveries(encodePendingRecoveries([pending])).single;
+      expect(decoded.key, key);
+      expect(decoded.requirements!.toJson(), pending.requirements!.toJson());
+      expect(decodeWindowKeys(encodePendingRecoveries([pending])), [key]);
+      expect(
+        decodePendingRecoveries(encodeWindowKeys([key])).single.requirements,
+        isNull,
+      );
+      final invalid =
+          decodePendingRecoveries(
+            jsonEncode([
+              {
+                ...pending.toJson(),
+                'requirements': {'allowanceIds': [1], 'complete': true},
+              },
+            ]),
+          ).single;
+      expect(invalid.key, key);
+      expect(invalid.requirements, isNull);
+    },
+  );
+
+  test('fixed snapshot codecs preserve requirements and raw reset facts', () {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File(
+        '../../fixtures/snapshots/dashboard_today.json',
+      ).readAsStringSync(),
+    );
+    final json = snapshot.toJson();
+    final account = (json['accounts'] as List).first as Map<String, dynamic>;
+    account['allowances'] = [
+      {
+        'id': 'session',
+        'source': 'plan',
+        'label': 'Session',
+        'usedPercent': 100,
+        'used': null,
+        'limit': null,
+        'remaining': null,
+        'windowMinutes': 300,
+        'resetsAt': '2026-07-19T17:00:00.000Z',
+        'status': 'rateLimited',
+        'recoveryRequirements': {
+          'allowanceIds': ['session', 'weekly'],
+          'complete': false,
+        },
+      },
+    ];
+    final roundtrip = DashboardSnapshot.fromJsonString(
+      DashboardSnapshot.fromJson(json).toJsonString(),
+    );
+    final allowance = roundtrip.accounts.first.allowances.single;
+    expect(allowance.recoveryRequirements!.allowanceIds, ['session', 'weekly']);
+    expect(allowance.recoveryRequirements!.complete, isFalse);
+    expect(allowance.usedPercent, 100);
+    expect(allowance.resetsAt, DateTime.utc(2026, 7, 19, 17));
+  });
+
   // The golden the Rust side builds from; parsing it here is what keeps the two
   // ends of the FFI boundary describing the same payload.
   final golden =

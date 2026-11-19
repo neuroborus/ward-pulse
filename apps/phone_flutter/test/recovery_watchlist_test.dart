@@ -16,6 +16,117 @@ import 'connection_cache_test_support.dart' show FakeSecureStorage;
 
 void main() {
   test(
+    'reconciliation persists context only in observed partitions before reload',
+    () async {
+      final storage = FakeSecureStorage();
+      final store = SecureRecoveryWatchlistStore(storage: storage);
+      final at = DateTime.utc(2026, 11, 6);
+      final version = CredentialVersion({
+        'generation': '1',
+        'revision': '1',
+        'epoch': '0',
+        'identity': 'owner-a',
+        'committedConnection': 'accepted-a',
+      });
+      final owner = HistoryOwner.fromVersion('anthropic.plan', version)!;
+      final key = (accountId: 'a', allowanceId: 'session', historyOwner: owner);
+      const protectedKey = (
+        accountId: 'b',
+        allowanceId: 'weekly',
+        historyOwner: HistoryOwner(connection: 'cursor.plan', identity: 'owner-b'),
+      );
+      const requirements = RecoveryRequirements(
+        allowanceIds: ['session', 'weekly'],
+        complete: false,
+      );
+      const protectedRequirements = RecoveryRequirements(
+        allowanceIds: ['weekly'],
+        complete: true,
+      );
+      await store.writeObserved(
+        [key, protectedKey],
+        {owner, protectedKey.historyOwner},
+        resets: {key: at.add(const Duration(minutes: 10))},
+        requirements: {protectedKey: protectedRequirements},
+      );
+      final source = DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      );
+      final snapshot = DashboardSnapshot.fromJson({
+        ...source.toJson(),
+        'accounts': [
+          {
+            ...source.accounts.first.toJson(),
+            'accountId': 'a',
+            'connection': owner.connection,
+            'historyOwner': owner.toJson(),
+          },
+        ],
+      }).withConnectionVersions({owner.connection: version.values});
+      var calls = 0;
+      await syncPlanRecoveries(
+        snapshot,
+        store,
+        const SilentRecoveryNotifier(),
+        _RecordingWake(),
+        notifications: false,
+        now: () => at,
+        readWindows: (_) => [],
+        reconcile: (observed, pending) {
+          calls++;
+          expect(pending.single.key, key);
+          expect(observed.accounts.single.accountId, 'a');
+          return (
+            pending: [
+              PendingRecovery(key, requirements: requirements),
+              const PendingRecovery(protectedKey),
+            ],
+            recoveries: <PlanRecovery>[],
+          );
+        },
+        rethrowFailures: true,
+      );
+      final restarted = SecureRecoveryWatchlistStore(storage: storage);
+      final result = await restarted.readPendingOwners({
+        owner,
+        protectedKey.historyOwner,
+      });
+      expect(calls, 1);
+      expect(result.pending.first.requirements!.toJson(), requirements.toJson());
+      expect(
+        result.pending.last.requirements!.toJson(),
+        protectedRequirements.toJson(),
+      );
+      expect(result.resets[key], at.add(const Duration(minutes: 10)));
+      final skipped =
+          AutomaticPollContext()
+            ..skipped[owner.connection] = AutomaticPollSkipped(
+              owner.connection,
+              version,
+              at.add(const Duration(minutes: 20)),
+            );
+      await syncPlanRecoveries(
+        snapshot,
+        restarted,
+        const SilentRecoveryNotifier(),
+        _RecordingWake(),
+        poll: skipped,
+        now: () => at,
+        readWindows: (_) => throw StateError('wholly skipped raw read'),
+        reconcile: (_, _) => throw StateError('wholly skipped reconciliation'),
+        rethrowFailures: true,
+      );
+      final unchanged = await restarted.readPendingOwners({owner});
+      expect(
+        unchanged.pending.single.requirements!.toJson(),
+        requirements.toJson(),
+      );
+    },
+  );
+
+  test(
     'partial skips preserve remembered windows and denied reset rebooks its exact eligibility',
     () async {
       final at = DateTime.utc(2026, 11, 6);

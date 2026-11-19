@@ -81,6 +81,10 @@ final class _WardPulseBindings {
           .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
             'ward_pulse_plan_recoveries_result_json',
           ),
+      _reconcilePlanRecoveriesResultJson = library
+          .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
+            'ward_pulse_reconcile_plan_recoveries_result_json',
+          ),
       _stringFree = library.lookupFunction<_NativeStringFree, _DartStringFree>(
         'ward_pulse_string_free',
       );
@@ -102,6 +106,7 @@ final class _WardPulseBindings {
   final _DartJsonTransform _applyAlertSettingsResultJson;
   final _DartJsonTransform _exhaustedWindowsResultJson;
   final _DartJsonTransform _planRecoveriesResultJson;
+  final _DartJsonTransform _reconcilePlanRecoveriesResultJson;
   final _DartStringFree _stringFree;
 
   String loadDashboardSnapshotJson() {
@@ -194,6 +199,17 @@ final class _WardPulseBindings {
       request,
       _planRecoveriesResultJson,
       payloadKey: 'recoveriesJson',
+    );
+  }
+
+  String reconcilePlanRecoveriesJson(String snapshotJson, String pendingJson) {
+    return _normalizeReportJson(
+      jsonEncode({
+        'snapshot': jsonDecode(snapshotJson),
+        'pending': jsonDecode(pendingJson),
+      }),
+      _reconcilePlanRecoveriesResultJson,
+      payloadKey: 'reconciliationJson',
     );
   }
 
@@ -294,4 +310,8 @@ String exhaustedWindowsJson(String snapshotJson) {
 
 String planRecoveriesJson(String snapshotJson, String exhaustedJson) {
   return _bindings.planRecoveriesJson(snapshotJson, exhaustedJson);
+}
+
+String reconcilePlanRecoveriesJson(String snapshotJson, String pendingJson) {
+  return _bindings.reconcilePlanRecoveriesJson(snapshotJson, pendingJson);
 }

@@ -217,9 +217,58 @@ pub struct Quantity {
     pub unit: QuantityUnit,
 }
 
+/// Included Plan constraints required by one target, within its account and owner.
+/// Incomplete evidence is scoped to that target; raw usage and resets stay independent.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct RecoveryRequirements {
+    pub allowance_ids: Vec<String>,
+    pub complete: bool,
+}
+
+/// Optional context must never make an otherwise valid snapshot or saved key unreadable.
+pub fn deserialize_recovery_requirements<'de, D>(
+    deserializer: D,
+) -> Result<Option<RecoveryRequirements>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Context {
+        Valid(RecoveryRequirements),
+        Invalid(serde::de::IgnoredAny),
+    }
+    Ok(match Context::deserialize(deserializer)? {
+        Context::Valid(requirements)
+            if !requirements.allowance_ids.is_empty()
+                && requirements
+                    .allowance_ids
+                    .iter()
+                    .enumerate()
+                    .all(|(index, id)| {
+                        !id.is_empty() && !requirements.allowance_ids[..index].contains(id)
+                    }) =>
+        {
+            Some(requirements)
+        }
+        Context::Valid(_) => None,
+        Context::Invalid(ignored) => {
+            let _ = ignored;
+            None
+        }
+    })
+}
+
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AllowanceState {
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_recovery_requirements"
+    )]
+    pub recovery_requirements: Option<RecoveryRequirements>,
     pub id: String,
     pub source: AllowanceSource,
     pub label: String,

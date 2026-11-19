@@ -161,6 +161,19 @@
     "nullableQuantity": {
       "anyOf": [{ "$ref": "#/$defs/quantity" }, { "type": "null" }]
     },
+    "recoveryRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowanceIds", "complete"],
+      "properties": {
+        "allowanceIds": {
+          "type": "array",
+          "description": "Nonempty unique Plan allowance IDs within the same account and owner; complete scope includes the target.",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "complete": { "type": "boolean" }
+      }
+    },
     "allowanceState": {
       "type": "object",
       "additionalProperties": false,
@@ -177,6 +190,9 @@
         "status"
       ],
       "properties": {
+        "recoveryRequirements": {
+          "anyOf": [{ "$ref": "#/$defs/recoveryRequirements" }, { "type": "null" }]
+        },
         "id": { "type": "string" },
         "source": { "$ref": "#/$defs/allowanceSource" },
         "label": { "type": "string" },

@@ -331,6 +331,47 @@ recognized by a local `metered_feature` table: `codex_bengalfox` maps to `spark`
 API's versioned `limit_name` is not a stable label, and an unknown feature is omitted until the
 table is updated rather than exposed under an internal code name.
 
+Recovery applicability is a separate optional `recoveryRequirements` descriptor on each
+normalized allowance: required Plan allowance IDs, scoped to the same account and history
+owner, plus `complete`. A complete scope includes its target. Missing or malformed context
+means targeted Unknown; it does not change raw consumption, quantities, status or resets.
+`reconcile_plan_recoveries` in `core/ward-pulse-core/src/recovery/mod.rs` returns both
+`pending` and `recoveries`. `PendingRecovery` saves flat window identity with optional
+requirements. This boundary-adoption stage still uses per-window room for delivery;
+applicable-capacity gating is a separate activation, not a claim of current runtime acceptance.
+
+The phone retains sanitized bucket qualification evidence before its fixed JSON boundary:
+root/recognized-feature bucket identity, typed `allowed`/`limit_reached`, distinct valid/null/omitted/
+malformed slots, and loss/collision flags. Repeated recognized additional identities retain
+the first valid value per slot, preserving known pair context while marking the bucket
+colliding rather than silently overwriting it.
+Unknown-feature presence is retained without raw names or payloads; it does not globally veto
+the reported main bucket. The paired synthetic examples `recovery_usage_raw.json` and
+`recovery_report.json` under `fixtures/providers/codex/`, plus the raw-derived explicit-null
+`recovery_singleton_report.json`, are joined by the transport test in
+`apps/phone_flutter/test/codex_account_client_test.dart`.
+
+The finite positive scope is the unique root `codex` included-quota bucket, with well-formed
+status, no collision or lost evidence, and either two valid slots or one valid slot whose
+sibling is explicitly null. The pair requires `codex-primary` and `codex-secondary`; the
+singleton requires its present target. Both require `allowed:true` and `limit_reached:false`
+for completeness. Denial, including false/false with room, and reached=true with room remain
+bucket-local unresolved evidence and retain known constraints. Positive access with exhausted
+included slots can reflect purchased-credit fallback; it does not restore included capacity.
+The same bounded inference supports the legacy root report representation when qualification
+evidence is retained. Metadata-free/lossy normalized reports, including `report_two_limits.json`,
+remain decodable without manufacturing qualification. A current explicit-null singleton does
+not retire a previously remembered necessary sibling: reconciliation unions known constraints
+until qualified retirement evidence exists. Known Spark pairs retain their two constraints
+without claiming universal Spark applicability or a cross-bucket dependency.
+
+This is a compatibility inference about reported main-bucket included capacity, grounded in
+the official Codex revision
+[`cf881a627dd52e7aecef63416c1acd2a89c4dfbd`](https://github.com/openai/codex/tree/cf881a627dd52e7aecef63416c1acd2a89c4dfbd).
+It infers no tier, duration, model entitlement or relation from co-occurrence, labels, credit
+fallback or preview policy. It guarantees neither deployed-service behavior nor arbitrary
+model/API request execution; broader feature uncertainty stays separate from these targets.
+
 A limit that carries a name labels both of its windows after itself, so a limit reporting two of
 them would label them identically. A named limit reporting both therefore appends the short window
 token a watch row can carry — `Spark 5h`, `Spark Weekly`. The token joins with a space rather than
@@ -516,6 +557,14 @@ the separately approved runtime adoption. It may surface as a warning/error aler
 **only when the user configures a threshold** for that meter on Providers — never from a
 hard-coded utilization cutoff alone.
 
+Ordinary recovery descriptors require the applicable session and overall weekly windows.
+A qualified explicit-null session with a reported weekly window supports weekly-only scope
+without a tier gate; omitted session evidence does not. Missing overall weekly applicability
+leaves ordinary targets incomplete. Fable retains its known overall-weekly dependency and own
+scoped ceiling, while unresolved Fable/session/model relations remain incomplete only for
+Fable. Legacy model windows retain their own and overall-weekly constraints without imposing
+those unresolved relations on ordinary targets.
+
 The optional included Fable weekly sub-cap is normalized independently as
 `claude-seven-day-fable` (`Fable weekly`), never as an Opus alias. The adapter joins
 `weekly_scoped_shares[].limit_index` to that response's `limits` array, requiring a
@@ -582,6 +631,12 @@ on the phone and as selectable watch rings. Purchased on-demand usage is phone-o
 alert **only** with a user-configured threshold on Providers); it is not a ring. Older combined-only payloads keep a single Plan
 usage bar. Selected known exhausted pools remain on the watch as 0% left with empty grey
 tracks; unknown or unavailable pools are not fabricated as zero.
+
+Recovery descriptors for the qualified two-pool shape each require only that pool. A partial
+split remains incomplete for its reported targets. The combined shape requires its one
+aggregate allowance; disagreement about exhaustion between its combined percentage and
+amount-derived percentage leaves that target incomplete. Purchased capacity supplies no Plan-recovery permission. These
+relationships are adapter evidence, not provider-name policy in the shared core.
 
 Both included pools remain Plan windows for alert configuration, independently of watch
 selection. Each can inherit Plan, set its own percentage or explicitly turn Off;

@@ -9,6 +9,69 @@ import 'dashboard_models.dart';
 typedef WindowKey =
     ({String accountId, String allowanceId, HistoryOwner? historyOwner});
 
+/// Additive persisted context; identity remains the existing flat window key.
+class PendingRecovery {
+  const PendingRecovery(this.key, {this.requirements});
+
+  final WindowKey key;
+  final RecoveryRequirements? requirements;
+
+  Map<String, dynamic> toJson() => {
+    'accountId': key.accountId,
+    'allowanceId': key.allowanceId,
+    if (key.historyOwner != null) 'historyOwner': key.historyOwner!.toJson(),
+    if (requirements != null) 'requirements': requirements!.toJson(),
+  };
+}
+
+typedef RecoveryReconciliation =
+    ({List<PendingRecovery> pending, List<PlanRecovery> recoveries});
+
+typedef ReconcilePlanRecoveries =
+    RecoveryReconciliation Function(
+      DashboardSnapshot snapshot,
+      List<PendingRecovery> pending,
+    );
+
+RecoveryReconciliation reconcilePlanRecoveries(
+  DashboardSnapshot snapshot,
+  List<PendingRecovery> pending,
+) {
+  final result =
+      jsonDecode(
+            reconcilePlanRecoveriesJson(
+              snapshot.toJsonString(),
+              encodePendingRecoveries(pending),
+            ),
+          )
+          as Map<String, dynamic>;
+  return (
+    pending: decodePendingRecoveries(jsonEncode(result['pending'])),
+    recoveries: [
+      for (final value in result['recoveries'] as List)
+        planRecoveryFromJson(value as Map<String, dynamic>),
+    ],
+  );
+}
+
+String encodePendingRecoveries(List<PendingRecovery> pending) =>
+    jsonEncode([for (final entry in pending) entry.toJson()]);
+
+List<PendingRecovery> decodePendingRecoveries(String json) {
+  final keys = decodeWindowKeys(json);
+  if (keys.isEmpty) return const [];
+  final values = jsonDecode(json) as List;
+  return [
+    for (var i = 0; i < keys.length; i++)
+      PendingRecovery(
+        keys[i],
+        requirements: RecoveryRequirements.maybeFromJson(
+          (values[i] as Map<String, dynamic>)['requirements'],
+        ),
+      ),
+  ];
+}
+
 /// A window that was spent and has room again.
 ///
 /// `accountId` and ownership key the notification so a repeat replaces it;

@@ -13,6 +13,7 @@ use serde_json::Value;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
     connection, AllowanceSource, AllowanceState, BudgetPeriod, ProviderKind, ProviderSnapshot,
+    RecoveryRequirements,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
@@ -79,6 +80,11 @@ pub fn claude_provider_snapshot_from_report_json(
     report_json: &str,
 ) -> Result<ClaudeReportSnapshot, ClaudeReportError> {
     let report: RawReport = serde_json::from_str(report_json).map_err(ClaudeReportError::Json)?;
+    let no_session = serde_json::from_str::<Value>(report_json)
+        .ok()
+        .is_some_and(|value| value.get("five_hour").is_some_and(Value::is_null));
+    let has_session = report.five_hour.is_some();
+    let has_weekly = report.seven_day.is_some();
     let mut allowances = Vec::new();
 
     if let Some(window) = report.five_hour {
@@ -129,6 +135,7 @@ pub fn claude_provider_snapshot_from_report_json(
             _ => None,
         };
         allowances.push(AllowanceState {
+            recovery_requirements: None,
             id: "claude-extra-usage".to_string(),
             source: AllowanceSource::Purchased,
             label: "Extra usage".to_string(),
@@ -140,6 +147,29 @@ pub fn claude_provider_snapshot_from_report_json(
             window_minutes: None,
             resets_at: None,
             status: percent_status(extra.utilization),
+        });
+    }
+
+    for allowance in &mut allowances {
+        if allowance.source != AllowanceSource::Plan {
+            continue;
+        }
+        let mut ids = vec![allowance.id.clone()];
+        let ordinary = matches!(
+            allowance.id.as_str(),
+            "claude-five-hour" | "claude-seven-day"
+        );
+        // Fable's scoped weekly ceiling requires overall weekly capacity, but
+        // its model/session applicability is not established by co-occurrence.
+        if allowance.id != "claude-seven-day" {
+            ids.push("claude-seven-day".into());
+        }
+        if ordinary && has_session && allowance.id != "claude-five-hour" {
+            ids.push("claude-five-hour".into());
+        }
+        allowance.recovery_requirements = Some(RecoveryRequirements {
+            allowance_ids: ids,
+            complete: ordinary && has_weekly && (has_session || no_session),
         });
     }
 
@@ -176,6 +206,7 @@ fn plan_window(
     window: RawWindow,
 ) -> Result<AllowanceState, ClaudeReportError> {
     Ok(AllowanceState {
+        recovery_requirements: None,
         id: id.to_string(),
         source: AllowanceSource::Plan,
         label: label.to_string(),
@@ -230,6 +261,7 @@ fn fable_weekly_window(limits: &Value, shares: &Value) -> Option<AllowanceState>
         };
 
         Some(AllowanceState {
+            recovery_requirements: None,
             id: "claude-seven-day-fable".to_string(),
             source: AllowanceSource::Plan,
             label: "Fable weekly".to_string(),
@@ -428,6 +460,58 @@ mod tests {
     }
 
     #[test]
+    fn requirements_keep_ordinary_scope_and_qualified_no_session_separate_from_fable() {
+        let mut report = synthetic_fable_report();
+        report["five_hour"] = serde_json::json!({"utilization": 100.0, "resets_at": null});
+        report["seven_day"] = serde_json::json!({"utilization": 10.0, "resets_at": null});
+        let normalized = claude_provider_snapshot_from_report_json(&report.to_string()).unwrap();
+        let ordinary = normalized
+            .provider_snapshot
+            .allowances
+            .iter()
+            .find(|a| a.id == "claude-five-hour")
+            .unwrap();
+        assert_eq!(
+            ordinary
+                .recovery_requirements
+                .as_ref()
+                .unwrap()
+                .allowance_ids,
+            ["claude-five-hour", "claude-seven-day"]
+        );
+        assert!(ordinary.recovery_requirements.as_ref().unwrap().complete);
+        let fable = normalized
+            .provider_snapshot
+            .allowances
+            .iter()
+            .find(|a| a.id == "claude-seven-day-fable")
+            .unwrap();
+        assert_eq!(
+            fable.recovery_requirements.as_ref().unwrap().allowance_ids,
+            ["claude-seven-day-fable", "claude-seven-day"]
+        );
+        assert!(!fable.recovery_requirements.as_ref().unwrap().complete);
+        report["five_hour"] = Value::Null;
+        let no_session = claude_provider_snapshot_from_report_json(&report.to_string()).unwrap();
+        assert!(
+            no_session.provider_snapshot.allowances[0]
+                .recovery_requirements
+                .as_ref()
+                .unwrap()
+                .complete
+        );
+        report.as_object_mut().unwrap().remove("five_hour");
+        let omitted = claude_provider_snapshot_from_report_json(&report.to_string()).unwrap();
+        assert!(
+            !omitted.provider_snapshot.allowances[0]
+                .recovery_requirements
+                .as_ref()
+                .unwrap()
+                .complete
+        );
+    }
+
+    #[test]
     fn normalizes_plan_windows_and_extra_usage() {
         let report = include_str!("../../../../fixtures/providers/claude/oauth_usage.json");
         let snapshot = claude_provider_snapshot_from_report_json(report).expect("normalize");
@@ -495,6 +579,15 @@ mod tests {
                         .any(|item| item.id == "claude-extra-usage"),
                     enabled
                 );
+                let mut expected = expected.clone();
+                let weekly = expected
+                    .iter_mut()
+                    .find(|item| item.id == "claude-seven-day")
+                    .unwrap();
+                weekly.recovery_requirements = Some(RecoveryRequirements {
+                    allowance_ids: vec!["claude-seven-day".into()],
+                    complete: session.is_some(),
+                });
                 assert_eq!(
                     actual
                         .allowances
