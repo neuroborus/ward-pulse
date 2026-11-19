@@ -207,9 +207,12 @@ flutter test test/connection_snapshot_cache_test.dart \
   --reporter json
 ```
 
-`Reporter` reads the real raw `connection absence ownership oracle ` line alongside
-reporter JSON. Exactly one oracle must occur while the named test is active. Account
-objects retain `id`, `connection`, `status`, nullable `spent` and allowance observations.
+`Reporter` accepts an oracle only at a line boundary, beginning with
+`connection absence ownership oracle ` or exactly one `Shell: ` immediately followed
+by that tag. Both framings share duplicate rejection and require the exact named test
+to be known and active. JSON `print` messages containing the tag remain ambiguous and
+are rejected; substring searches, repeated prefixes and arbitrary output are not accepted.
+Account objects retain `id`, `connection`, `status`, nullable `spent` and allowance observations.
 Completed absence reads, account order, healthy B, accepted A+B publication, late outcome,
 actual publication and redraw/readback values are established before classifying flags
 or assertions. FINAL must exit 0 with successful reporter completion and preserved A+B.
@@ -220,8 +223,15 @@ transport, timeout or missing evidence are infrastructure/validity failures, nev
 
 The parser bounds UTF-8, 64 KiB lines, 4 MiB stdout, 4 MiB stderr, nesting and retained
 evidence. It rejects duplicate keys, duplicate or unassociated oracles, malformed
-JSON, wrong required types and nonfinite numbers. Repeated reporter event types and
-legitimately nullable locations or oracle values remain valid. `seals.json`, the journal
+JSON, wrong required types and nonfinite numbers. Standard `group` events from pinned
+`test_core` 0.6.17 require `id`, `suiteID`, `parentID`, `name`, `testCount`, `metadata`,
+`line`, `column` and `url`. IDs and counts are nonnegative integers excluding booleans;
+the parent may be null, and the name may be any string (including empty) or null.
+Metadata requires boolean `skip` and string-or-null `skipReason`. Locations must be
+all null or positive integer line/column plus a string URL. Group values are validated
+in memory and discarded; they confer no test-success or oracle credit. Unknown events,
+including debug events, remain rejected. Repeated reporter event types and legitimately
+nullable locations or oracle values remain valid. `seals.json`, the journal
 and `result.json` retain no free-form widget labels; bounded printable Unicode labels
 from the real producer are accepted and bound by the payload hash. These files
 retain only allowlisted proof, hashes, identities and fixed failure
@@ -259,28 +269,39 @@ no Source writes or lock adoption/deletion and waits for Root reconciliation.
 
 ## Native controlled regressions and check ownership
 
-The complete corrective plan's inventory remains four commands, all from the canonical
-repository root, **only in FINALIZE**:
+The earlier two-commit corrective inventory contained four commands, including
+`just release-status`. That inventory and selection are historical. The Root-admitted
+reporter correction has exactly these three commands, all from the canonical repository
+root in its single step, **only in FINALIZE**:
 
-| Command | Commit | Executor |
-| --- | --- | --- |
-| `git diff --check HEAD` | 1, 2 | Ordinary Worker |
-| `python3 -B -m unittest discover -s tools/test-phone-cache -p 'test_*.py'` | 2 | Selected Runner-trusted vector, scratch only |
-| `just check-docs` | 2 | Ordinary Worker; writes generated docs beside Source |
-| `just release-status` | 2 | Selected Runner-trusted vector, scratch/cache |
+| Command | Executor / purpose |
+| --- | --- |
+| `git diff --check HEAD` | Ordinary Worker; scoped whitespace |
+| `python3 -B -m unittest discover -s tools/test-phone-cache -p 'test_*.py'` | Selected Runner-trusted vector; scratch only; controlled regressions |
+| `just check-docs` | Ordinary Worker; actual citation/build gate for changed prose |
 
 FIRST Worker/Reviewer DISCOVERY inventories applicability, actual capabilities and observed
 blockers without executing these checks. Root independently qualifies the merged schedule,
-step assignments and each current subset by exact command identity. The command-specific
-executor assignments above correct the plan's generic trusted-vector sentence; none of the
-four checks is dropped or moved to HOST. Implementation and semantic review confer no
-FINALIZE credit. Selected trusted commands never execute inside an agent turn.
+step assignments and each current subset by exact command identity. Implementation,
+focused development regressions and semantic review confer no FINALIZE credit.
+The selected trusted vector runs through Runner after Worker returns, never inside an
+agent turn. The historical release-status selection is absent from this catalogue.
+
+Historical application results (947/48/18) and documentation results require Root to prove exact
+relevant Source/test/support/toolchain/package/FFI input-closure equality before reuse.
+Changed helper and prose checks remain actual Native work; documentation also requires
+fresh Root HOST confirmation. Subsequent Root acceptance still requires whole CODE DONE,
+actual owning CLI exit when used, known/scoped retirement, separate fresh public idle
+and fresh Source/runtime/release admission before real
+`FINAL0 / OLD-named-semantic1 / restored-FINAL0` with exact restoration. OLD remains
+unexecuted; final Android/APK/active FFI/native UI acceptance remains pending.
 
 Controlled tests use inert temporary files, injected observations and harmless owned
 Python subprocesses. They never substitute canonical Source, execute JVM/provider faults,
 launch Flutter, or run `host_replay`. Their scope includes partial writes, durable arming,
 byte/mode restoration, locks and identity replacement, PID reuse and surviving readers,
-journal bounds/failures, stream/parser contracts, semantic versus infrastructure outcomes,
-release admission and failure-evidence privacy. The protected original19 Changeset and
+journal bounds/failures, stream/parser contracts (including producer-shaped groups,
+loader/setup/named/oracle/teardown traffic and both exact oracle framings), semantic versus
+infrastructure outcomes, release admission and failure-evidence privacy. The protected original19 Changeset and
 historical evidence remain unchanged; this engineering route adds no product behavior,
 dependency, framework, version or release note.

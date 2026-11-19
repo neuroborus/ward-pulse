@@ -626,6 +626,8 @@ class Reporter:
         need(self.done is None, 'reporter-after-done')
         self.events += 1
         need(self.events <= 20000, 'reporter-event-bound')
+        if line.startswith('Shell: ' + TAG):
+            line = line[len('Shell: '):]
         if line.startswith(TAG):
             need(self.oracle is None and self.named is not None and
                  self.tests[self.named]['result'] is None, 'oracle-duplicate-or-unassociated')
@@ -641,6 +643,26 @@ class Reporter:
             return
         need(self.started, 'reporter-no-start')
         if kind in ('suite', 'allSuites'):
+            return
+        if kind == 'group':
+            group = event.get('group')
+            need(type(group) is dict and {'id', 'suiteID', 'parentID', 'name', 'testCount',
+                 'metadata', 'line', 'column', 'url'} <= group.keys(), 'reporter-group')
+            for key in ('id', 'suiteID', 'testCount'):
+                need(integer(group[key]) and group[key] >= 0, 'reporter-group-integer')
+            need(group['parentID'] is None or
+                 (integer(group['parentID']) and group['parentID'] >= 0), 'reporter-group-parent')
+            need(group['name'] is None or type(group['name']) is str, 'reporter-group-name')
+            metadata = group['metadata']
+            need(type(metadata) is dict and {'skip', 'skipReason'} <= metadata.keys() and
+                 type(metadata['skip']) is bool and
+                 (metadata['skipReason'] is None or type(metadata['skipReason']) is str),
+                 'reporter-group-metadata')
+            need(all(group[key] is None for key in ('line', 'column', 'url')) or
+                 (integer(group['line']) and group['line'] >= 1 and
+                  integer(group['column']) and group['column'] >= 1 and
+                  type(group['url']) is str), 'reporter-group-location')
+            # Group metadata is not test-success or oracle evidence; retain none of it.
             return
         if kind == 'testStart':
             test = event.get('test')

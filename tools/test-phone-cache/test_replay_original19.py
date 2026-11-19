@@ -42,26 +42,42 @@ def event(kind, **fields):
     return json.dumps({'type': kind, 'time': 0, **fields}) + '\n'
 
 
-def transcript(old=False, evidence=None, error=None):
+def group(**fields):
+    return {'id': 3, 'suiteID': 2, 'parentID': None, 'name': '', 'testCount': 1,
+            'metadata': {'skip': False, 'skipReason': None},
+            'line': None, 'column': None, 'url': None, **fields}
+
+
+def test_entry(test_id, name, suite_id=2, group_ids=(3, 4)):
+    return {'id': test_id, 'name': name, 'suiteID': suite_id, 'groupIDs': list(group_ids),
+            'metadata': {'skip': False, 'skipReason': None},
+            'line': None, 'column': None, 'url': None}
+
+
+def transcript(old=False, evidence=None, error=None, prefix=''):
     result = event('start', protocolVersion='0.1.1', runnerVersion=None)
-    result += event('suite', suite={'id': 0, 'platform': 'vm', 'path': None})
-    result += event('testStart', test={'id': 1, 'name': '(setUpAll)', 'line': None,
-                                    'column': None, 'url': None})
+    result += event('suite', suite={'id': 0, 'platform': 'vm', 'path': 'synthetic_test.dart'})
+    result += event('testStart', test=test_entry(1, 'loading synthetic_test.dart', 0, ()))
     result += event('testDone', testID=1, result='success', hidden=True, skipped=False)
-    result += event('testStart', test={'id': 2, 'name': replay.CASE, 'line': None,
-                                    'column': None, 'url': None})
+    result += event('suite', suite={'id': 2, 'platform': 'vm', 'path': 'synthetic_test.dart'})
+    result += event('allSuites', count=2)
+    result += event('group', group=group())
+    result += event('group', group=group(id=4, parentID=3, name='connection absence ownership',
+                                       line=1, column=1, url='package:synthetic/synthetic_test.dart'))
+    result += event('testStart', test=test_entry(5, '(setUpAll)'))
+    result += event('testDone', testID=5, result='success', hidden=True, skipped=False)
+    result += event('testStart', test=test_entry(6, replay.CASE))
     # Repeated reporter types are ordinary protocol traffic, not duplicate causality.
-    result += event('print', testID=2, message='synthetic progress', messageType='print') * 2
-    result += replay.TAG + json.dumps(oracle(old) if evidence is None else evidence,
-                                     ensure_ascii=False) + '\n'
+    result += event('print', testID=6, message='synthetic progress', messageType='print') * 2
+    result += prefix + replay.TAG + json.dumps(oracle(old) if evidence is None else evidence,
+                                              ensure_ascii=False) + '\n'
     if old or error:
-        result += event('error', testID=2, error=error or replay.ASSERTION,
+        result += event('error', testID=6, error=error or replay.ASSERTION,
                         isFailure=True, stackTrace='private synthetic stack')
-    result += event('testDone', testID=2, result='failure' if old or error else 'success',
+    result += event('testDone', testID=6, result='failure' if old or error else 'success',
                     hidden=False, skipped=False)
-    result += event('testStart', test={'id': 3, 'name': '(tearDownAll)', 'line': None,
-                                    'column': None, 'url': None})
-    result += event('testDone', testID=3, result='success', hidden=True, skipped=False)
+    result += event('testStart', test=test_entry(7, '(tearDownAll)'))
+    result += event('testDone', testID=7, result='success', hidden=True, skipped=False)
     result += event('done', success=not (old or bool(error)))
     return result.encode()
 
@@ -74,16 +90,156 @@ def reporter(data):
 
 
 class ParserTests(unittest.TestCase):
-    def test_real_account_shape_nulls_repeated_events_and_split_utf8(self):
-        data = transcript().replace(b'synthetic progress', 'synthetic \u03bb'.encode())
+    def test_producer_groups_and_exact_oracle_framings(self):
+        for old in (False, True):
+            for prefix in ('', 'Shell: '):
+                with self.subTest(old=old, prefix=prefix):
+                    result = reporter(transcript(old, prefix=prefix))
+                    proof = result.classify(1 if old else 0, old)
+                    self.assertEqual(proof['classification'],
+                                     'OLD-named-semantic1' if old else 'FINAL0')
+
+    def test_shell_oracle_without_groups(self):
+        data = b''.join(line for line in transcript(prefix='Shell: ').splitlines(keepends=True)
+                        if not line.startswith(b'{"type": "group"'))
+        self.assertEqual(reporter(data).classify(0)['classification'], 'FINAL0')
+
+    def test_group_nulls_metadata_and_private_values_are_discarded(self):
+        original = event('group', group=group()).encode()
+        marker = 'synthetic-private-group'
+        for name in ('', None, marker):
+            for metadata in ({'skip': False, 'skipReason': None},
+                             {'skip': True, 'skipReason': marker}):
+                value = group(name=name, metadata=metadata)
+                with self.subTest(name=name, metadata=metadata):
+                    result = reporter(transcript().replace(original, event('group', group=value).encode()))
+                    self.assertEqual(result.classify(0)['classification'], 'FINAL0')
+                    self.assertNotIn(marker, repr(vars(result)))
+        value = group(name=marker, line=1, column=2, url='package:synthetic/' + marker,
+                      metadata={'skip': True, 'skipReason': marker})
+        result = reporter(transcript().replace(original, event('group', group=value).encode()))
+        self.assertNotIn(marker, repr(vars(result)))
+        self.assertNotIn(marker, json.dumps(result.classify(0)))
+
+    def test_group_required_fields_and_types(self):
+        start = event('start').encode()
+        for key in group():
+            value = group()
+            del value[key]
+            with self.subTest(missing=key), self.assertRaises(replay.Hold):
+                reporter(start + event('group', group=value).encode())
+        bad_values = {'id': (None, True, -1, 1.0, '3'),
+                      'suiteID': (None, False, -1, 2.0, '2'),
+                      'parentID': (False, -1, 3.0, '3'),
+                      'testCount': (None, True, -1, 1.0, '1'),
+                      'name': (False, 1, []), 'metadata': (None, False, [])}
+        for key, values in bad_values.items():
+            for bad in values:
+                with self.subTest(key=key, bad=bad), self.assertRaises(replay.Hold):
+                    reporter(start + event('group', group=group(**{key: bad})).encode())
+        for fields in ({}, {'group': None}, {'group': []}):
+            with self.subTest(fields=fields), self.assertRaises(replay.Hold):
+                reporter(start + event('group', **fields).encode())
+
+    def test_group_metadata_and_location_combinations(self):
+        start = event('start').encode()
+        for metadata in ({}, {'skip': False}, {'skipReason': None},
+                         {'skip': None, 'skipReason': None}, {'skip': 0, 'skipReason': None},
+                         {'skip': False, 'skipReason': False}, {'skip': False, 'skipReason': []}):
+            with self.subTest(metadata=metadata), self.assertRaises(replay.Hold):
+                reporter(start + event('group', group=group(metadata=metadata)).encode())
+        located = {'line': 1, 'column': 2, 'url': 'package:synthetic/test.dart'}
+        for key in located:
+            for fields in ({**located, key: None}, {key: located[key]}):
+                with self.subTest(fields=fields), self.assertRaises(replay.Hold):
+                    reporter(start + event('group', group=group(**fields)).encode())
+        for key, values in (('line', (True, 0, -1, 1.5, '1')),
+                            ('column', (False, 0, -1, 2.5, '2')), ('url', (False, 1, []))):
+            for bad in values:
+                value = group(**{**located, key: bad})
+                with self.subTest(key=key, bad=bad), self.assertRaises(replay.Hold):
+                    reporter(start + event('group', group=value).encode())
+
+    def test_groups_confer_no_test_success_or_oracle_credit(self):
+        result = reporter((event('start') + event('group', group=group(name=replay.CASE)) +
+                           event('done', success=True)).encode())
+        self.assertEqual(result.tests, {})
+        self.assertIsNone(result.named)
+        self.assertIsNone(result.oracle)
+        with self.assertRaises(replay.Hold):
+            result.classify(0)
+        lines = transcript().splitlines(keepends=True)
+        with self.assertRaises(replay.Hold):
+            reporter(b''.join(line for line in lines if not line.startswith(replay.TAG.encode()))).classify(0)
+
+    def test_exact_framing_and_named_active_association_are_required(self):
+        for prefix in (' Shell: ', 'Shell:', 'Shell:  ', 'Shell: Shell: ',
+                       'test 0: Shell: ', 'synthetic prefix '):
+            with self.subTest(prefix=prefix), self.assertRaises(replay.Hold):
+                reporter(transcript(prefix=prefix))
+        for prefix in ('', 'Shell: '):
+            data = transcript(prefix=prefix)
+            line = next(line for line in data.splitlines(keepends=True)
+                        if line.startswith((prefix + replay.TAG).encode()))
+            without = data.replace(line, b'')
+            setup = event('testStart', test=test_entry(5, '(setUpAll)')).encode()
+            teardown = event('testStart', test=test_entry(7, '(tearDownAll)')).encode()
+            for bad in (line + without, without.replace(setup, setup + line),
+                        without.replace(teardown, teardown + line),
+                        data.replace(replay.CASE.encode(), (replay.CASE + ' extra').encode())):
+                with self.subTest(prefix=prefix), self.assertRaises(replay.Hold):
+                    reporter(bad)
+
+    def test_cross_framing_duplicates_and_json_print_oracles_are_rejected(self):
+        raw = (replay.TAG + json.dumps(oracle(), ensure_ascii=False) + '\n').encode()
+        for first in (b'', b'Shell: '):
+            data = transcript(prefix=first.decode())
+            for second in (b'', b'Shell: '):
+                with self.subTest(first=first, second=second), self.assertRaises(replay.Hold):
+                    reporter(data.replace(first + raw, first + raw + second + raw))
+            message = (first + raw).decode().rstrip('\n')
+            ambiguous = event('print', testID=6, message=message, messageType='print').encode()
+            with self.subTest(first=first), self.assertRaisesRegex(replay.Hold, 'oracle-ambiguous-channel'):
+                reporter(data.replace(first + raw, ambiguous))
+
+    def test_groups_obey_json_line_stream_and_event_bounds(self):
+        start = event('start').encode()
+        line = event('group', group=group()).encode()
+        for bad in (line.replace(b'"id": 3', b'"id": 3, "id": 3'),
+                    line.replace(b'"skip": false', b'"skip": false, "skip": false'),
+                    event('group', group=group(name='x' * replay.MAX_LINE)).encode(),
+                    line.replace(b'"name": ""', b'"name": ' + b'[' * 25 + b'0' + b']' * 25)):
+            with self.subTest(size=len(bad)), self.assertRaises(replay.Hold):
+                reporter(start + bad)
         result = replay.Reporter()
-        for byte in data:
-            result.feed(bytes([byte]))
-        result.feed(b'', final=True)
-        proof = result.classify(0)
-        self.assertEqual(proof['classification'], 'FINAL0')
-        self.assertIsNone(proof['acceptedAccounts'][1]['spent'])
-        self.assertEqual(proof['acceptedAccounts'][0]['spent'], 900)
+        with patch.object(replay, 'MAX_STREAM', len(start) + 2 * len(line)):
+            result.feed(start + 2 * line)
+            with self.assertRaisesRegex(replay.Hold, 'stream-bound'):
+                result.feed(line)
+        result = replay.Reporter()
+        result.feed(start)
+        for _ in range(19999):
+            result.line(line.decode().rstrip('\n'))
+        with self.assertRaisesRegex(replay.Hold, 'reporter-event-bound'):
+            result.feed(line)
+
+    def test_unknown_events_and_unframed_output_still_fail(self):
+        for line in (event('debug'), event('unknown'), 'synthetic output\n',
+                     'Shell: ' + event('done', success=True)):
+            with self.subTest(line=line), self.assertRaises(replay.Hold):
+                reporter(event('start').encode() + line.encode())
+
+    def test_real_account_shape_nulls_repeated_events_and_split_utf8(self):
+        for prefix in ('', 'Shell: '):
+            data = transcript(prefix=prefix).replace(b'synthetic progress', 'synthetic \u03bb'.encode())
+            result = replay.Reporter()
+            for byte in data:
+                result.feed(bytes([byte]))
+            result.feed(b'', final=True)
+            proof = result.classify(0)
+            self.assertEqual(proof['classification'], 'FINAL0')
+            self.assertIsNone(proof['acceptedAccounts'][1]['spent'])
+            self.assertEqual(proof['acceptedAccounts'][0]['spent'], 900)
         nullable = oracle()
         nullable['acceptedAccounts'][1]['allowances'].append(
             {'id': 'cursor-on-demand', 'usedPercent': None})
@@ -146,7 +302,7 @@ class ParserTests(unittest.TestCase):
             reporter(data.replace(line, line + line))
         with self.assertRaises(replay.Hold):
             reporter(line + data)
-        duplicate = event('print', testID=2, message=replay.TAG + json.dumps(oracle())).encode()
+        duplicate = event('print', testID=6, message=replay.TAG + json.dumps(oracle())).encode()
         with self.assertRaises(replay.Hold):
             reporter(data.replace(line, line + duplicate))
         with self.assertRaises(replay.Hold):
@@ -166,7 +322,7 @@ class ParserTests(unittest.TestCase):
 
     def test_unrelated_errors_and_errors_before_the_oracle_never_qualify(self):
         data = transcript(True)
-        failure = event('error', testID=2, error=replay.ASSERTION,
+        failure = event('error', testID=6, error=replay.ASSERTION,
                         isFailure=True, stackTrace=None).encode()
         without_error = transcript(True).splitlines(keepends=True)
         without_error = b''.join(line for line in without_error if b'"type": "error"' not in line)
