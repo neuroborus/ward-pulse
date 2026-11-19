@@ -221,9 +221,7 @@ void main() {
         );
         storage = _DiskStorage(directory!);
         store = SecureRecoveryWatchlistStore(storage: storage);
-        final reloaded = await runAsync(
-          () => store.readPendingOwners({owner}),
-        );
+        final reloaded = await runAsync(() => store.readPendingOwners({owner}));
         transport.root['secondary_window']['used_percent'] = 20;
         final recovered = await observe(() => tester.pumpWidget(app()));
         await runAsync(() async {
