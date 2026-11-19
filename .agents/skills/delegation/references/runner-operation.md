@@ -27,6 +27,11 @@ starting; do not invent a no-commit mode. If the task forbids commits and no sup
 noncommitting route fits, report that conflict and continue independent authorized work
 rather than implement by hand.
 
+Before launch, qualify clean-start `plan-execution` versus supported `polishing` for retained
+dirty Runner-authored WIP. Preserve the WIP; do not discard it or make a pre-check commit
+merely to force clean admission. Polishing remains stage-only, followed by required HOST
+acceptance, the coordinator's full independent ZERO and a separate scoped authorized commit.
+
 Codex-managed `COMMIT` is readiness-only: the pinned adapter admits a limited set of Git verbs, so an ordinarily read-only command can still be rejected. The operator qualifies the actual pinned policy; the managed role uses only admitted read-only operations and leaves additional operator Git preflight outside that turn. Readiness must not stage or create the commit; the constrained executor owns those effects. Handle rejection through [error classification](#classify-runner-failures-and-report-new-defects) and [supported recovery](#frozen-configuration-and-backend-recovery).
 
 **Who runs which check is settled in
@@ -80,11 +85,14 @@ documented supported recovery controls.
 
 ## Frozen configuration and backend recovery
 
-During active owner-authorized work, a public `operator_paused` state calls for supported
-resume without renewed owner or Telegram confirmation, after the usual actual run/checkpoint
-and ownership qualification. An explicit owner pause or stop overrides this standing rule.
-Keep one qualified controller; resume does not waive defect stops, environment/capability
-restrictions, quota/model recovery or frozen-input policy.
+During active owner-authorized work, an offered `operator_paused` null-resume remains
+autonomous without renewed owner or Telegram confirmation, after actual run/checkpoint and
+ownership qualification. Inspect the actual public `pause.nextActions` projection before
+choosing a control: the same `no_progress` label does not imply uniform recovery. Do not
+guess extra-fix applicability or reset markers; use an offered action or a separately
+owner-authorized fresh disposition, preserving frozen inputs, history and gates. An explicit
+owner pause or stop overrides the standing resume rule. Keep one qualified controller;
+resume does not waive defect stops, environment/capability restrictions or quota/model recovery.
 
 - **Trusted-check configuration is frozen at run start.** Editing
   `LOCAL_ARTIFACTS/agent-runner.json` while a run exists leaves that run unable to resume *and*
