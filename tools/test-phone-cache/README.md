@@ -287,14 +287,30 @@ focused development regressions and semantic review confer no FINALIZE credit.
 The selected trusted vector runs through Runner after Worker returns, never inside an
 agent turn. The historical release-status selection is absent from this catalogue.
 
-Historical application results (947/48/18) and documentation results require Root to prove exact
-relevant Source/test/support/toolchain/package/FFI input-closure equality before reuse.
-Changed helper and prose checks remain actual Native work; documentation also requires
-fresh Root HOST confirmation. Subsequent Root acceptance still requires whole CODE DONE,
-actual owning CLI exit when used, known/scoped retirement, separate fresh public idle
-and fresh Source/runtime/release admission before real
-`FINAL0 / OLD-named-semantic1 / restored-FINAL0` with exact restoration. OLD remains
-unexecuted; final Android/APK/active FFI/native UI acceptance remains pending.
+Reusing earlier application or documentation results requires Root to prove exact relevant
+Source/test/support/toolchain/package/FFI input-closure equality. Changed helper and prose
+checks remain actual Native work, with fresh Root HOST documentation confirmation where
+applicable. A subsequent replay still requires whole CODE DONE, actual owning CLI exit when
+used, known/scoped retirement, separate fresh public idle and fresh Source/runtime/release
+admission before real `FINAL0 / OLD-named-semantic1 / restored-FINAL0` with exact restoration.
+
+On 2026-11-19, Root independently accepted that real three-leg proof for
+[0e651c6](https://github.com/neuroborus/ward-pulse/commit/0e651c604ddbdc52adbdd86728d9d698a6efbff4).
+Both FINAL legs preserved A+B; OLD reached the named late B-only publication failure while
+healthy B remained intact. Actual per-leg Java and loaded FFI were qualified. Complete
+Source, index, refs, graph and all 95 runtime inputs were exactly restored; custody was
+released and Root separately confirmed known controller/leg retirement. Earlier failed
+attempts remain failed historical observations, not proof credits.
+
+Fresh HOST verification at that code baseline passed all 947 Flutter tests,
+189 cache and 348 widget JVM assertions, both unchanged formatting gates, analysis and
+documentation. Root also accepted the normal phone Android build, data-preserving update,
+active APK and x86_64 FFI, and the personally viewed unobscured Dashboard original on
+2026-11-19. The build used 22305f0; relevant app, core and compiled inputs were qualified
+unchanged through 0e651c6. This ordinary startup/artifact acceptance is separate from the
+HOST A+B causal proof above and supplies no controlled native A+B UI proof.
+This is scoped Original19 evidence, not whole-application acceptance; F1 and effective-plan
+recovery (Original20) remain separate open work.
 
 Controlled tests use inert temporary files, injected observations and harmless owned
 Python subprocesses. They never substitute canonical Source, execute JVM/provider faults,

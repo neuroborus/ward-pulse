@@ -333,14 +333,21 @@ cross-engine delivery atomic.
 
 ### Original19 independent SAME-final replay
 
-Original19 runtime acceptance is pending. After whole code DONE, known/scoped process
-retirement, a separate fresh public idle observation and the actual owning foreground CLI
-exit when used, Root/HOST establishes FINAL → OLD → restored-FINAL independently. Original18's
-controller, OLD choice and results supply no original19 PASS. Native must not execute this replay.
+On 2026-11-19, Root independently accepted the Original19 real FINAL → OLD → restored-FINAL
+causal proof at [0e651c6](https://github.com/neuroborus/ward-pulse/commit/0e651c604ddbdc52adbdd86728d9d698a6efbff4),
+with exact Source/runtime/index/refs restoration. The owning harness README records the
+scoped causal and ordinary phone startup/artifact qualifications.
+This does not establish whole-application acceptance or close F1/Original20.
+
+For a subsequent replay, whole code DONE, known/scoped process retirement, a separate fresh
+public idle observation and actual owning foreground CLI exit when used remain prerequisites.
+Original18's controller, OLD choice and results supply no original19 PASS. Native must not
+execute this replay.
 
 The executable route and Root-admitted release-envelope contract are owned by the
 [phone cache harness README](../../tools/test-phone-cache/README.md#host-invocation-and-acceptance-boundary).
-From the canonical repository root, after those whole-run release gates:
+From the canonical repository root, after those whole-run release gates, use the released
+clean FINAL commit for the example's historical final-commit placeholder:
 
 ```sh
 python3 -B tools/test-phone-cache/replay_original19.py \
@@ -387,20 +394,27 @@ python3 -B tools/test-phone-cache/replay_original19.py \
    raw and logical index preservation against their captured identities. Do not continue
    ordinary work on uncertain restoration. A matching test result alone is insufficient.
 
-Native's complete two-commit FINALIZE inventory is `git diff --check HEAD` (both commits),
+The earlier two-commit corrective FINALIZE inventory was `git diff --check HEAD` (both commits),
 `python3 -B -m unittest discover -s tools/test-phone-cache -p 'test_*.py'`, `just check-docs`
 and `just release-status` (the latter three in commit 2), all from the canonical repository
-root. FIRST Worker/Reviewer DISCOVERY inventories applicability, capabilities and observed
+root. That inventory and trusted selection are historical; the current reporter correction's
+three-command catalogue is owned by the harness README. FIRST Worker/Reviewer DISCOVERY
+inventories applicability, capabilities and observed
 blockers without execution. Root independently qualifies the merged schedule, step assignments
-and current subsets by actual command identity. Diff and docs use ordinary Worker FINALIZE;
-the exact Python command uses selected trusted execution with scratch, and release status uses
+and current subsets by actual command identity. In that historical selection, diff and docs
+used ordinary Worker FINALIZE; the exact Python command used selected trusted execution with
+scratch, and release status used
 selected trusted execution with scratch/cache. Selected trusted commands execute only through
 Runner's persisted vectors, never inside agent turns. Implementation and semantic review do
 not execute or satisfy these gates. Focused Flutter regressions, the
 three-leg replay, qualified host FFI build/load, unchanged complete `just check-phone`, and
-normal Android build/install/active APK and FFI/native-frame acceptance remain HOST-owned and
-pending. They are not a Native wait or scoped-commit prerequisite; no check result is claimed
-by this procedure.
+normal Android build/install/active APK and FFI/native-frame acceptance remain HOST-owned.
+The causal replay and fresh full-phone/documentation results at the code baseline above are
+qualified. Root separately accepted the normal phone build, data-preserving install, active
+APK/x86_64 FFI and personally viewed unobscured Dashboard original. That ordinary startup
+acceptance is separate from the HOST causal proof and supplies no controlled native A+B UI
+proof. Those HOST checks are not a Native wait or scoped-commit prerequisite; the reusable
+procedure itself is not execution evidence.
 
 The `plan retirement reconciliation` group in `test/app_test.dart` exercises the production
 `PhoneLiveBindings.create` factory, real Java lifecycle/cache engine, synthetic reports and
