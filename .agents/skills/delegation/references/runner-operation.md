@@ -96,6 +96,11 @@ documented supported recovery controls.
   --project … --task …` — where both probes see one binary, which also puts the real error on
   stderr instead of leaving it to be dug out of `state.json`.
 
+For external configuration, qualify the actual selected config file against its effective
+`infrastructure.rootPath` and canonical `projectPath`, including config-path containment under
+that root. Copying or successfully parsing/resolving old configuration does not rebind its root;
+preserve a precreation binding rejection and correct only the unfrozen input.
+
 Before freezing a commit-capable run, qualify the actual repository commit-clarification path
 and its Git-ignore status; external configuration does not relocate it. Prefer omitting
 `artifactRoot` for the supported ignored `LOCAL_ARTIFACTS` default unless the actual
@@ -148,6 +153,11 @@ Before claiming a required capture is missing or stopping for that reason, fresh
 Distinguish the capture's recorded timestamp/revision from when the operator reads it: null bootstrap work after completion or quiet stdout does not establish historical absence.
 Require phase-bound receipt evidence; a later snapshot cannot manufacture an unretained earlier PASS. Verified check/step mismatches still require supported stop/reconciliation.
 For `plan-execution`, independently verify merged `validationSchedule.commands` against the admitted complete-plan Native union and resolve every step's command-index mapping against that step's admitted commands before accepting the schedule. Compare `pipelineState.requiredChecks` with the current step's resolved subset before accepting it, not with the complete-plan union. Compare exact command identities, not local C-IDs, which may be renumbered between discovery and steps. Preserve every admitted check: missing/extra commands or incorrect step mappings require supported stop/reconciliation. Apply this domain distinction to other routes only when they expose those domains; do not assume these `plan-execution` fields exist in authoring or another route.
+For a supported public `validationAmendment`, verify its affected step, exact command identities
+and accepted confirmation fingerprint against the finalization/review evidence. Treat that accepted
+step-local overlay separately from original discovery/schedule history, preserving unaffected
+assignments and all mandatory obligations. A proposed or unconfirmed amendment does not change
+admitted checks.
 Put read-only discovery versus workspace-write FINALIZE and real extra-authority needs in that task/context;
 local operator guidance is not injected. Report genuine Native needs truthfully, never force empty reports.
 Treat assigned Worker `workspace-write` separately from Runner-trusted `sourceProjection`, which creates an extra owned disposable Source copy for an exact selected check. Ordinary generated outputs beside inputs do not alone establish an unmet capability; require an actual command-specific limitation of the assigned executor before declaring that extra projection. If an accepted declaration needs correction, preserve it through [supported terminal reconciliation](#frozen-configuration-and-backend-recovery) and start a fresh run, without frozen-report edits or authority added merely to clear admission.

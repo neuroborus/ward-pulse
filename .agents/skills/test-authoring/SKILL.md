@@ -23,6 +23,8 @@ and `justfile`; do not add a framework or dependency for this workflow.
   the actual nested parsers' required fields; an enclosing object's fields do not supply them.
   Correct malformed fixtures rather than loosening production parsing. Intentional
   malformed-input parser-rejection tests remain valid.
+  For isolated notification-plugin fixtures, perform supported platform registration before reading
+  a late singleton; restore owned singleton/channel state through failure-safe teardown.
 - Add regressions for reproduced defects and known fragile boundaries; retain RED→GREEN
   evidence proving the failure and fix. Elsewhere, test only an important uncovered contract.
   A change alone does not justify another test.
@@ -35,6 +37,10 @@ and `justfile`; do not add a framework or dependency for this workflow.
   For injected widget-effect callbacks that may execute under another guarded tester scope, record/signal actual observations there.
   Keep the assertions in the awaited test body outside the conflicting guard, preserving callback arguments and entry/hold ordering.
   Keep normal guarded calls and failure-safe teardown; never suppress guard errors, weaken assertions or replace synchronization with sleeps.
+  When a widget test mixes fake async with real I/O, qualify which zone owns readiness-future
+  creation and queued completion; awaiting real I/O must not withhold required fake-zone progress.
+  Use bounded framework pumping where needed, preserve event-based readiness and the original
+  error/stack, and propagate failed/null async results without masking them or extending timeouts.
 - Prefer framework-owned default resources, such as enabled `testWidgets` semantics,
   when they already provide the required coverage. Before adding a manual handle,
   check the framework's actual verification lifetime: generic teardown may run after

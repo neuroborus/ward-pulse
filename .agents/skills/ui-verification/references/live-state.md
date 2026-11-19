@@ -23,6 +23,12 @@ and remains Unknown when before bits are missing. Keep content, index and actual
 guards exact; Git equality cannot replace a required POSIX guard, and neither `chmod` nor
 content edits may force equality.
 Keep applicable byte guards exact: decoded-value equality cannot replace a required container-byte guard; never canonicalize or add tolerance to obtain equality.
+During an admitted Source counterfactual with exact index custody, use `git --no-optional-locks`
+for Git observations: logical index equality does not establish raw `.git/index` equality or identify
+its writer. A temporary standard `index.lock` is only an explicitly admitted operator-owned control,
+with atomic exclusive acquisition, exact identity before release and failure-safe cleanup; never
+overwrite/reconstruct index bytes or change global Git settings to recover equality. A fresh
+baseline/repeat qualifies only its own interval.
 Retain bounded expected AND actual presence/hashes, state source and relevant target identity, operation/phase, snapshot/read times and available
 generation/write times with their origins/timezones. Record whether writer custody covered
 the interval, authorized writes if any, and known attribution or Unknown. Capture these facts and the exact phase-applicable predicate BEFORE evaluating its guard;
