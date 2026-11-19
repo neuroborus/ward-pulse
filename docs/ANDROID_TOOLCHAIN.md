@@ -773,35 +773,71 @@ Treat the configured AVDs as persistent development devices:
 **Named snapshot retention.** Full-state snapshots preserve OS/app/user data and can include
 large RAM images; they are recovery points, not a permanent record of every test. Read-only
 inspection, screenshots and routine non-destructive navigation do not warrant a fresh whole-RAM
-snapshot each time. Keep durable sanitized QA evidence instead. This does not waive recovery
-before an actual risk or permit an old restore point that no longer covers current user state.
+snapshot each time. Keep durable sanitized QA evidence instead. Reuse qualified recovery while
+it still covers the current state and intended risk; neither its age nor a successful boot alone
+proves that compatibility.
 
-The WardPulse default per AVD is **one verified current/recovery anchor plus one transient
-pre-change named snapshot**, not a quota to fill, platform limit or automatic deletion threshold.
-Do not create checkpoints merely to fill that allowance. Quick Boot is separate; do not change
-its settings for housekeeping. Additional active-case checkpoints,
-paired anchors or other justified pins need a recorded recovery purpose, owner/dependency and
-review date or acceptance boundary. Reaching that date triggers review, not blind deletion.
+The WardPulse default for each needed AVD is **at most two named recovery points**: one verified
+current baseline and, when needed, one active pre-change snapshot. This is a retention bound,
+not a quota to fill or an automatic deletion threshold. Ordinary Quick Boot, when configured,
+is separate; do not change its settings for housekeeping. Paired anchors count toward the named
+bound unless recorded as an exception. Each additional active-case or other pinned checkpoint
+needs an identified owner, recovery purpose, protected dependency, compatibility limits and a
+retirement condition, such as task acceptance or a verified replacement. A review date prompts
+that qualification; it does not itself permit deletion.
 
-Inspect allocated disk usage and named-snapshot counts before adding checkpoints and when a
-case completes. Keep concise ignored working notes with AVD/snapshot identity, allocated
-size, purpose, verification/compatibility limits, active dependencies, review/expiry trigger and
-keep/retire decision; no credentials or raw user payloads. After verified restoration or
-acceptance of the intended state, retire superseded task snapshots through supported snapshot
-management, such as the emulator's Snapshots pane Delete action. Preserve required recovery,
-paired/active checkpoints and other owners' state; no name, age or count alone establishes that
-a snapshot is disposable.
+Retire a task's superseded checkpoints as part of that task's completion, after verified
+restoration or acceptance of its intended state. Do not defer this to completion of unrelated
+tests, the whole audit backlog or a later project phase. Retain an unresolved reproduction or
+rollback dependency as an owned exception with its retirement condition. Preserve the last
+required verified baseline; reaching the default bound does not authorize its removal.
 
-For already-authorized retirement of a task's own superseded transient, the operator's existing
-working notes and keep/retire check suffice; no fresh approval or independent agent review is needed.
+Before checkpoint creation, retirement or authorized AVD/system-image cleanup, record the
+affected identities, allocated and apparent bytes, and snapshot counts; retain the same
+measurements afterward. For bulk cleanup, include the affected aggregate totals. Distinguish named points from Quick Boot and,
+where both exist, snapshot directories from internal QCOW snapshots; a directory count alone
+does not prove backing references were retired. State the measurement producer and any Unknown
+or unavailable result. These measurements apply to checkpoint/storage work, not every screenshot
+or routine ADB inspection, and sizes or counts alone never establish disposal eligibility.
+
+Keep concise ignored notes with those measurements, purpose, verification limits, owner and
+active dependencies, retirement condition and keep/retire decision; no credentials or raw guest
+payloads. Use supported logical snapshot management, such as the emulator's Snapshots pane
+Delete action, and verify the resulting snapshot references and storage measurements. Never
+blindly remove RAM/image files or snapshot directories, make a new full-AVD copy, lower its RAM,
+resize partitions or change configuration merely to conceal growth. Configuration changes can
+also invalidate snapshots. Preserve running state, userdata, sign-ins and pairing, and avoid
+disturbing active work.
+
+For already-authorized retirement of a task's own superseded transient, the existing working
+notes and keep/retire check suffice; no fresh approval or independent agent review is needed.
 For bulk historical cleanup, review the exact keep/retire manifest under applicable authorization;
-a storage-diagnosis question alone does not authorize that deletion. Both paths require verified
-intended/restored state, suitable recovery kept, no active dependency or other-owner impact, and
-supported snapshot management. Without applicable authorization, report candidates only. Never
-blindly remove RAM/image files or snapshot directories, make a new full-AVD copy, wipe/recreate
-an AVD, lower its RAM, resize partitions or change configuration merely to conceal growth.
-Preserve current running state, userdata, sign-ins and pairing; configuration changes can also
-invalidate snapshots. Use supported management without disturbing active work.
+a storage-diagnosis or policy request alone does not authorize deletion. Both paths require
+verified intended/restored state, suitable recovery kept, no active dependency or other-owner
+impact, and supported snapshot management. Without applicable authorization, report candidates.
+
+**AVD and system-image retirement.** Keep the currently needed phone, round and square watch,
+API 33 unsupported-path, API 34 legacy WFF and API 36 unpaired Push coverage AVDs while their
+roles remain necessary. An old name, age, lack of a running process or a completed screenshot
+does not make an AVD obsolete. Qualify its coverage role, active work, owner, sign-in/pairing
+state and recovery dependencies before proposing retirement.
+
+An AVD may be retired through supported Android management only when existing owner
+authorization covers that selected AVD and disposal of its userdata and recovery, its required
+coverage is retained, and no active work or other-owner dependency remains. Reuse authorization
+that already covers a task-owned temporary AVD's disposal. When authorization or shared use,
+authenticated/paired state, minimum-API coverage or required recovery is Unknown, retain it as
+a candidate and obtain the missing owner direction. Never wipe or recreate an AVD as a repair,
+or discard the last required recovery point to make a storage target fit.
+
+An SDK system image is unused only after positively accounting for all remaining AVD
+definitions, including stopped AVDs, snapshot/backing-image dependencies and other owners' or
+projects' needs. Never remove an image while any retained AVD or snapshot depends on it. The
+absence of a running emulator does not establish that its image is unused. Use supported SDK
+management only
+within actual cleanup authorization. Unknown dependencies require retention and clarification.
+Permission to remove an unused system image does not include unrelated SDK platforms, build
+tools or NDK installations.
 
 Respect the canonical phone's failed `paired` restore documented above: it is not verified
 rollback coverage. The cold-boot route preserves data across restart, not a prior version of

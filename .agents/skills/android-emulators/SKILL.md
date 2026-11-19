@@ -1,6 +1,6 @@
 ---
 name: android-emulators
-description: Operate WardPulse Android phone and Wear OS emulators safely. Use for isolated Android Studio work, AVD input or screenshots, emulator phone-watch pairing or bridge recovery, snapshots and restarts; not for physical devices, ordinary app implementation or build configuration.
+description: Operate WardPulse Android phone and Wear OS emulators safely. Use for isolated Android Studio work, AVD input or screenshots, emulator phone-watch pairing or bridge recovery, snapshots, restarts and authorized AVD or system-image retirement; not for physical devices, ordinary app implementation or build configuration.
 ---
 
 # Android Emulators — WardPulse
@@ -68,7 +68,8 @@ For physical phones and watches over USB/wireless ADB, use
   for undo; a set hash/count is not a recovery handle. Keep lost mappings or obsolete dynamic
   VM endpoints Unknown rather than guessing a replacement. Follow
   [Preserving emulator state](../../../docs/ANDROID_TOOLCHAIN.md#preserving-emulator-state)
-  for bounded snapshot retention and authorized cleanup; inspection/captures alone need no new snapshot.
+  for bounded recovery, task-end checkpoint retirement and authorized AVD or system-image cleanup;
+  inspection/captures alone need no new snapshot.
 - Never delete or recreate an AVD as a troubleshooting step. That loses sign-in, browser
   sessions, system settings, keyboard layout, and pairing state.
 - Never clear `com.google.android.gms` data on the watch; doing so destroys the pairing.
@@ -82,10 +83,13 @@ For physical phones and watches over USB/wireless ADB, use
 
 1. Identify the exact AVDs and discover their current ADB serials; bind any running emulator to
    current QEMU process argv using its actual `-avd NAME` or `@NAME` form, not one assumed shape.
-2. Inspect connection, process, and snapshot state without mutating it.
+2. Inspect connection, process, and snapshot state without mutating it; qualify recovery and
+   AVD/image dependencies through the linked retention policy before storage cleanup.
 3. Read the matching toolchain procedure and choose the least state-changing operation.
 4. Verify suitable recoverable state before any operation that could affect pairing or device data.
-5. Verify the requested outcome through ADB or the documented Studio screenshot workflow.
+5. Verify device/UI outcomes through ADB or the documented Studio screenshot workflow. For
+   storage outcomes, use qualified manager/inventory results and the retention measurements;
+   do not boot an AVD solely to verify storage cleanup.
 
 If a proposed recovery conflicts with these preservation rules, stop before changing state and
 explain which persisted state it would destroy.
