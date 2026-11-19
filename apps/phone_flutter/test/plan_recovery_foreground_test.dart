@@ -25,13 +25,24 @@ import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
 import 'package:ward_pulse_phone/sync/recovery_watchlist.dart';
 
 void main() {
+  setUp(AndroidFlutterLocalNotificationsPlugin.registerWith);
+
   testWidgets(
     'foreground recovery retains newly necessary capacity across disk reload',
     (tester) async {
       final previous = FlutterLocalNotificationsPlatform.instance;
       AndroidFlutterLocalNotificationsPlugin.registerWith();
-      const channel = MethodChannel('dexterous.com/flutter/local_notifications');
+      const channel = MethodChannel(
+        'dexterous.com/flutter/local_notifications',
+      );
       final messenger = tester.binding.defaultBinaryMessenger;
+      addTearDown(() {
+        try {
+          messenger.setMockMethodCallHandler(channel, null);
+        } finally {
+          FlutterLocalNotificationsPlatform.instance = previous;
+        }
+      });
       final posts = <Map<dynamic, dynamic>>[];
       messenger.setMockMethodCallHandler(channel, (call) async {
         if (call.method == 'show') posts.add(Map.of(call.arguments as Map));
@@ -40,7 +51,9 @@ void main() {
       Directory? directory;
       try {
         await tester.runAsync(() async {
-          directory = await Directory.systemTemp.createTemp('wardpulse-recovery-');
+          directory = await Directory.systemTemp.createTemp(
+            'wardpulse-recovery-',
+          );
         });
         var storage = _DiskStorage(directory!);
         var store = SecureRecoveryWatchlistStore(storage: storage);
@@ -59,7 +72,10 @@ void main() {
         );
         final at = DateTime.utc(2026, 7, 19, 12);
         final transport = _UsageTransport();
-        final client = CodexAccountClient(transport: transport, clock: () => at);
+        final client = CodexAccountClient(
+          transport: transport,
+          clock: () => at,
+        );
         final session = CodexAccountSession(
           accessToken: 'synthetic-access',
           refreshToken: 'synthetic-refresh',
@@ -71,7 +87,8 @@ void main() {
             accountService: const EmptyCodexAccountService(),
             fallback: const NoProvidersDashboardRepository(),
             logger: const NullProviderSyncLogger(),
-            loadReport: () async => (await client.fetchReport(session)).reportJson,
+            loadReport:
+                () async => (await client.fetchReport(session)).reportJson,
           ),
           cache,
           version,
@@ -89,7 +106,9 @@ void main() {
         );
         Widget app() {
           final coordinator = PhoneNotificationCoordinator(
-            attempts: SecureNotificationPermissionAttemptStore(storage: storage),
+            attempts: SecureNotificationPermissionAttemptStore(
+              storage: storage,
+            ),
           );
           return WardPulseApp(
             repository: repository,
@@ -101,6 +120,7 @@ void main() {
             notificationCoordinator: coordinator,
           );
         }
+
         Future<String> observe(Future<void> Function() action) async {
           final written = storage.arm();
           String? value;
@@ -127,21 +147,18 @@ void main() {
           () => tester.tap(find.byTooltip('Refresh')),
         );
         final earlyPosts = List<Map<dynamic, dynamic>>.of(posts);
-        final loadedLibraries = File('/proc/self/maps')
-            .readAsLinesSync()
-            .where((line) => line.contains('/libward_pulse_ffi.so'))
-            .map((line) => line.substring(line.indexOf('/')))
-            .toSet()
-            .toList();
+        final loadedLibraries =
+            File('/proc/self/maps')
+                .readAsLinesSync()
+                .where((line) => line.contains('/libward_pulse_ffi.so'))
+                .map((line) => line.substring(line.indexOf('/')))
+                .toSet()
+                .toList();
         // Retain observations before any semantic assertion, including under OLD.
         await tester.runAsync(() async {
-          stdout.writeln('PLAN_RECOVERY_BLOCKED ${jsonEncode({
-            'pid': pid,
-            'loadedLibraries': loadedLibraries,
-            'initial': jsonDecode(initial),
-            'blocked': jsonDecode(blocked),
-            'pluginShows': earlyPosts,
-          })}');
+          stdout.writeln(
+            'PLAN_RECOVERY_BLOCKED ${jsonEncode({'pid': pid, 'loadedLibraries': loadedLibraries, 'initial': jsonDecode(initial), 'blocked': jsonDecode(blocked), 'pluginShows': earlyPosts})}',
+          );
           await stdout.flush();
         });
 
@@ -160,11 +177,13 @@ void main() {
         transport.root['secondary_window']['used_percent'] = 20;
         final recovered = await observe(() => tester.pumpWidget(app()));
         await tester.runAsync(() async {
-          stdout.writeln('PLAN_RECOVERY_RELOADED ${jsonEncode({
-            'pending': [for (final entry in reloaded.pending) entry.toJson()],
-            'final': jsonDecode(recovered),
-            'pluginShows': posts,
-          })}');
+          stdout.writeln(
+            'PLAN_RECOVERY_RELOADED ${jsonEncode({
+              'pending': [for (final entry in reloaded.pending) entry.toJson()],
+              'final': jsonDecode(recovered),
+              'pluginShows': posts,
+            })}',
+          );
           await stdout.flush();
         });
 
@@ -176,7 +195,8 @@ void main() {
         expect(
           earlyPosts,
           isEmpty,
-          reason: 'necessary weekly capacity blocks premature normal notification',
+          reason:
+              'necessary weekly capacity blocks premature normal notification',
         );
         final firstPending = decodePendingRecoveries(initial).single;
         expect(firstPending.requirements!.complete, isFalse);
@@ -194,14 +214,16 @@ void main() {
         expect(posts.map((post) => post['id']).toSet(), hasLength(2));
         expect(
           posts.map((post) => post['id']),
-          contains(recoveryNotificationId((
-            accountId: retained.key.accountId,
-            historyOwner: owner,
-            provider: 'codex',
-            allowanceId: 'codex-primary',
-            label: '5-hour session',
-            resetsAt: null,
-          ))),
+          contains(
+            recoveryNotificationId((
+              accountId: retained.key.accountId,
+              historyOwner: owner,
+              provider: 'codex',
+              allowanceId: 'codex-primary',
+              label: '5-hour session',
+              resetsAt: null,
+            )),
+          ),
         );
         for (final post in posts) {
           expect(post['body'], 'Usable again.');
@@ -220,8 +242,6 @@ void main() {
             const Duration(seconds: 5),
           );
         } finally {
-          messenger.setMockMethodCallHandler(channel, null);
-          FlutterLocalNotificationsPlatform.instance = previous;
           if (directory != null) {
             await tester.runAsync(() => directory!.delete(recursive: true));
           }
@@ -278,7 +298,8 @@ final class _DiskStorage extends FlutterSecureStorage {
   final Directory directory;
   Completer<String>? _written;
   Future<String> arm() => (_written = Completer<String>()).future;
-  File _file(String key) => File('${directory.path}/${Uri.encodeComponent(key)}');
+  File _file(String key) =>
+      File('${directory.path}/${Uri.encodeComponent(key)}');
   @override
   Future<String?> read({
     required String key,
@@ -292,6 +313,7 @@ final class _DiskStorage extends FlutterSecureStorage {
     final file = _file(key);
     return file.existsSync() ? file.readAsStringSync() : null;
   }
+
   @override
   Future<Map<String, String>> readAll({
     AppleOptions? iOptions,
