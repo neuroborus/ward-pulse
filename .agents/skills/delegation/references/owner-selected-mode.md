@@ -18,6 +18,11 @@ profile/effort selections. Plan-authoring has a Planner, not a Worker; its Plann
 therefore remains Sol. Qualify actual role selections before freezing a new run,
 without inspecting private profile stores or probing accounts merely for quota.
 
+The owner's 2026-11-19 upgrade selects backend `codex` and native model `gpt-6.2-sol`
+for fresh Sol roles, preserving profile `current` and qualified effort/context choices.
+The current local catalogue and official launch were verified; `xhigh` is supported.
+This changes neither the Opus availability/fallback rule nor historical/frozen selections.
+
 On actual Opus quota exhaustion, reconcile the owning lifecycle through supported
 controls, preserve work and receipts, and start a fresh all-Sol Combined route
 within the approved scope. The owner authorizes this fallback; it does not permit

@@ -80,6 +80,12 @@ documented supported recovery controls.
 
 ## Frozen configuration and backend recovery
 
+During active owner-authorized work, a public `operator_paused` state calls for supported
+resume without renewed owner or Telegram confirmation, after the usual actual run/checkpoint
+and ownership qualification. An explicit owner pause or stop overrides this standing rule.
+Keep one qualified controller; resume does not waive defect stops, environment/capability
+restrictions, quota/model recovery or frozen-input policy.
+
 - **Trusted-check configuration is frozen at run start.** Editing
   `LOCAL_ARTIFACTS/agent-runner.json` while a run exists leaves that run unable to resume *and*
   unable to cancel — the protected-input guard refuses both. Prepare the selection before
