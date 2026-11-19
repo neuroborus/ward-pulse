@@ -38,7 +38,7 @@ abstract interface class PartitionedRecoveryWatchlistStore
 abstract interface class ContextualRecoveryWatchlistStore
     implements PartitionedRecoveryWatchlistStore {
   Future<({List<PendingRecovery> pending, Map<WindowKey, DateTime> resets})>
-      readPendingOwners(Set<HistoryOwner?> owners);
+  readPendingOwners(Set<HistoryOwner?> owners);
 
   @override
   Future<void> writeObserved(
@@ -92,7 +92,7 @@ final class SecureRecoveryWatchlistStore
 
   @override
   Future<({List<PendingRecovery> pending, Map<WindowKey, DateTime> resets})>
-      readPendingOwners(Set<HistoryOwner?> owners) async {
+  readPendingOwners(Set<HistoryOwner?> owners) async {
     final result = <PendingRecovery>[];
     final resets = <WindowKey, DateTime>{};
     for (final owner in owners) {
@@ -466,11 +466,10 @@ Future<void> syncPlanRecoveries(
           key: capturedHistory.resets[key]!,
     };
     for (final account in snapshot.accounts) {
-      if (!observedAccounts.contains((
+      final accountObserved = observedAccounts.contains((
         accountId: account.accountId,
         historyOwner: account.historyOwner,
-      )))
-        continue;
+      ));
       for (final window in account.allowances) {
         final key = (
           accountId: account.accountId,
@@ -478,7 +477,13 @@ Future<void> syncPlanRecoveries(
           allowanceId: window.id,
         );
         final reset = window.resetsAt;
-        if (spent.contains(key) && reset != null) resets[key] = reset;
+        // Retained facts may fill a missing scheduling hint for an exact
+        // protected key, but cannot replace its saved reset or admit history.
+        if (spent.contains(key) &&
+            reset != null &&
+            (accountObserved ||
+                (protected.contains(key) && !resets.containsKey(key))))
+          resets[key] = reset;
       }
     }
     if (isCurrent != null && !await isCurrent()) return;

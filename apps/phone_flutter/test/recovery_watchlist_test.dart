@@ -33,7 +33,10 @@ void main() {
       const protectedKey = (
         accountId: 'b',
         allowanceId: 'weekly',
-        historyOwner: HistoryOwner(connection: 'cursor.plan', identity: 'owner-b'),
+        historyOwner: HistoryOwner(
+          connection: 'cursor.plan',
+          identity: 'owner-b',
+        ),
       );
       const requirements = RecoveryRequirements(
         allowanceIds: ['session', 'weekly'],
@@ -94,7 +97,10 @@ void main() {
         protectedKey.historyOwner,
       });
       expect(calls, 1);
-      expect(result.pending.first.requirements!.toJson(), requirements.toJson());
+      expect(
+        result.pending.first.requirements!.toJson(),
+        requirements.toJson(),
+      );
       expect(
         result.pending.last.requirements!.toJson(),
         protectedRequirements.toJson(),
