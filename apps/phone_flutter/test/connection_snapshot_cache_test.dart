@@ -115,6 +115,156 @@ void main() {
     readInterval: () async => const Duration(minutes: 5),
   );
 
+  test(
+    'six real Rust normalizers retain phone and cache source ownership',
+    () async {
+      String fixture(String path) =>
+          File('../../fixtures/providers/$path').readAsStringSync();
+      final cases = [
+        (
+          ProviderConnections.codexPlan,
+          'codex',
+          'codex-local',
+          normalizeCodexReportJson,
+          fixture('codex/report.json'),
+        ),
+        (
+          ProviderConnections.openAiPlatform,
+          'openai',
+          'openai-local',
+          normalizeOpenAiReportJson,
+          jsonEncode({
+            'accountId': 'openai-local',
+            'generatedAt': '2026-07-19T12:00:00Z',
+            'todayStart': 1784419200,
+            'weekStart': 1783900800,
+            'monthStart': 1782864000,
+            'usagePages': [fixture('openai/usage_completions.json')],
+            'costPages': [fixture('openai/costs.json')],
+          }),
+        ),
+        (
+          ProviderConnections.claudePlan,
+          'claude',
+          'claude-local',
+          normalizeClaudeReportJson,
+          fixture('claude/oauth_usage.json'),
+        ),
+        (
+          ProviderConnections.anthropicPlatform,
+          'claude',
+          'anthropic-local',
+          normalizeAnthropicReportJson,
+          jsonEncode({
+            'accountId': 'anthropic-local',
+            'generatedAt': '2026-07-19T12:00:00Z',
+            'capturedEndMicros': 1784462400000000,
+            'todayStart': '2026-07-19T00:00:00Z',
+            'weekStart': '2026-07-13T00:00:00Z',
+            'monthStart': '2026-07-01T00:00:00Z',
+            'usagePages': [fixture('claude/usage_report.json')],
+            'costPages': [fixture('claude/cost_report.json')],
+          }),
+        ),
+        (
+          ProviderConnections.cursorPlan,
+          'cursor',
+          'cursor-local',
+          normalizeCursorPlanReportJson,
+          fixture('cursor/usage_summary.json'),
+        ),
+        (
+          ProviderConnections.cursorPlatform,
+          'cursor',
+          'cursor-team-local',
+          normalizeCursorPlatformReportJson,
+          jsonEncode({
+            'accountId': 'cursor-team-local',
+            'generatedAt': '2026-07-19T12:00:00Z',
+            'requestStartMs': 1782864000000,
+            'endExclusiveMs': 1784462400000,
+            'todayStartMs': 1784419200000,
+            'weekStartMs': 1783900800000,
+            'monthStartMs': 1782864000000,
+            'dailyUsagePages': [fixture('cursor/daily_usage.json')],
+            'usageEventPages': [fixture('cursor/usage_events.json')],
+          }),
+        ),
+      ];
+      final normalized = <String>[];
+      final expectedAccounts = <Map<String, dynamic>>[];
+      for (final (id, tag, accountId, normalize, report) in cases) {
+        final snapshot = DashboardSnapshot.fromJsonString(normalize(report));
+        final roundTrip = DashboardSnapshot.fromJsonString(
+          snapshot.toJsonString(),
+        );
+        expect(roundTrip.toJson(), snapshot.toJson());
+        final account = roundTrip.accounts.single;
+        expect(account.provider, tag);
+        expect(account.connection, id.storageKey);
+        expect(account.accountId, accountId);
+        final snapshots = cache('writer', id.storageKey);
+        expect(snapshots.owns(roundTrip), isTrue);
+        await credentials(
+          'writer',
+          id.storageKey,
+        ).write('synthetic-${id.storageKey}');
+        final version =
+            (await credentials('writer', id.storageKey).read())!.version;
+        expect(await snapshots.store(roundTrip, version), isTrue);
+        final retained =
+            (await cache('reader', id.storageKey).capture()).snapshot!;
+        expect(
+          retained.accounts.single.historyOwner,
+          HistoryOwner.fromVersion(id.storageKey, version),
+        );
+        expect(
+          retained.accounts.single.allowances.map((value) => value.toJson()),
+          account.allowances.map((value) => value.toJson()),
+        );
+        expect(await snapshots.validSnapshot(retained), isTrue);
+        normalized.add(retained.toJsonString());
+        expectedAccounts.add(retained.accounts.single.toJson());
+
+        for (final field in ['provider', 'connection']) {
+          final wrong = roundTrip.toJson();
+          final wrongAccount = (wrong['accounts'] as List).single as Map;
+          wrongAccount[field] =
+              field == 'provider'
+                  ? 'mock'
+                  : ProviderConnectionId(
+                    provider: id.provider,
+                    kind:
+                        id.kind == ConnectionKind.plan
+                            ? ConnectionKind.platform
+                            : ConnectionKind.plan,
+                  ).storageKey;
+          final rejected = DashboardSnapshot.fromJson(wrong);
+          expect(
+            snapshots.owns(rejected),
+            isFalse,
+            reason: '${id.storageKey}: wrong $field',
+          );
+          await expectLater(
+            snapshots.store(rejected, version),
+            throwsFormatException,
+          );
+        }
+      }
+      final merged = DashboardSnapshot.fromJsonString(
+        mergeDashboardSnapshotsJson(normalized),
+      );
+      expect(
+        merged.accounts.map((account) => account.toJson()),
+        expectedAccounts,
+      );
+      expect(
+        DashboardSnapshot.fromJsonString(merged.toJsonString()).toJson(),
+        merged.toJson(),
+      );
+    },
+  );
+
   DashboardRepository codex(
     String owner,
     ConnectionReportLoader load, {

@@ -1,18 +1,17 @@
 use crate::time::DateTimeUtc;
 use serde::{Deserialize, Serialize};
 
-pub type AccountId = String;
+mod identity;
+mod legacy;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum ProviderKind {
-    #[serde(rename = "openai")]
-    OpenAi,
-    Codex,
-    Claude,
-    Cursor,
-    Mock,
-}
+pub use legacy::ProviderKind;
+
+pub use identity::{
+    ConnectionKind, ProviderConnectionId, ProviderFamily, ProviderIdentity, ProviderSource,
+    SourceOrigin,
+};
+
+pub type AccountId = String;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -51,12 +50,8 @@ impl ProviderStatus {
     }
 }
 
-/// Phone `ProviderConnectionId.storageKey` values.
-///
-/// One provider kind can back two connections — a subscription plan and an
-/// organization API — so [`ProviderKind`] alone cannot say which one produced a
-/// snapshot. The adapter that owns a connection stamps its key into
-/// [`ProviderSnapshot::connection`], and user alert rules are keyed by it.
+/// Legacy storage keys shared with the phone. Canonical source decisions use
+/// [`ProviderConnectionId`]; unknown explicit boundary keys remain accepted.
 pub mod connection {
     pub const CODEX_PLAN: &str = "openai.plan";
     pub const OPENAI_PLATFORM: &str = "openai.platform";
@@ -153,7 +148,7 @@ pub struct BudgetState {
 #[serde(rename_all = "camelCase")]
 pub struct ProviderAccount {
     pub id: AccountId,
-    pub provider: ProviderKind,
+    pub provider: ProviderIdentity,
     pub display_name: String,
     pub workspace_name: Option<String>,
     pub masked_credential: Option<String>,
@@ -308,11 +303,8 @@ pub struct ProviderErrorSummary {
 #[serde(rename_all = "camelCase")]
 pub struct ProviderSnapshot {
     pub account_id: AccountId,
-    pub provider: ProviderKind,
-    /// Owning connection, as a [`connection`] key. `None` on snapshots built
-    /// before adapters stamped it; alerts then fall back to the provider's plan.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub connection: Option<String>,
+    #[serde(flatten)]
+    pub source: ProviderSource,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub history_owner: Option<HistoryOwner>,
     pub status: ProviderStatus,
@@ -347,9 +339,9 @@ pub struct Alert {
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AlertConditionKey {
-    pub provider: ProviderKind,
+    pub provider: ProviderIdentity,
     pub account_id: AccountId,
-    /// Resolved connection key, including the legacy provider fallback.
+    /// Rule-routing identity, including compatibility fallback; not source evidence.
     pub connection: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub history_owner: Option<HistoryOwner>,
@@ -461,5 +453,145 @@ mod tests {
                 "\"mock\""
             ]
         );
+    }
+
+    #[test]
+    fn six_sources_keep_their_exact_legacy_boundary() {
+        let tags = ["codex", "openai", "claude", "claude", "cursor", "cursor"];
+        let keys = [
+            "openai.plan",
+            "openai.platform",
+            "anthropic.plan",
+            "anthropic.platform",
+            "cursor.plan",
+            "cursor.platform",
+        ];
+        for ((id, tag), key) in ProviderConnectionId::ALL.into_iter().zip(tags).zip(keys) {
+            assert_eq!(id.storage_key(), key);
+            assert_eq!(ProviderConnectionId::from_storage_key(key), Some(id));
+            let source = ProviderSource::connection(id);
+            assert_eq!(source.origin(), SourceOrigin::Connection(id));
+            assert_eq!(source.provider().family(), Some(id.family));
+            let encoded = serde_json::to_value(&source).unwrap();
+            assert_eq!(
+                encoded,
+                serde_json::json!({"provider": tag, "connection": key})
+            );
+            assert_eq!(
+                serde_json::from_value::<ProviderSource>(encoded).unwrap(),
+                source
+            );
+        }
+        assert_eq!(ProviderConnectionId::from_storage_key("future.plan"), None);
+        let mock = ProviderSource::mock();
+        assert_eq!(mock.origin(), SourceOrigin::Mock);
+        assert_eq!(mock.provider().family(), None);
+        assert_eq!(
+            serde_json::to_value(mock).unwrap(),
+            serde_json::json!({"provider": "mock", "connection": "mock.plan"})
+        );
+    }
+
+    #[test]
+    fn legacy_snapshots_preserve_unresolved_and_unknown_sources() {
+        let golden: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../fixtures/snapshots/dashboard_today.json"
+        ))
+        .unwrap();
+        for (tag, origin) in [
+            (
+                "openai",
+                SourceOrigin::Connection(ProviderConnectionId::OPENAI_PLATFORM),
+            ),
+            (
+                "codex",
+                SourceOrigin::Connection(ProviderConnectionId::OPENAI_PLAN),
+            ),
+            ("claude", SourceOrigin::UnresolvedLegacy),
+            ("cursor", SourceOrigin::UnresolvedLegacy),
+            ("mock", SourceOrigin::Mock),
+        ] {
+            for connection in [
+                None,
+                Some(serde_json::Value::Null),
+                Some(serde_json::json!("future.source")),
+            ] {
+                let mut value = golden["accounts"][0].clone();
+                value["provider"] = tag.into();
+                value.as_object_mut().unwrap().remove("connection");
+                if let Some(connection) = &connection {
+                    value["connection"] = connection.clone();
+                }
+                let snapshot: ProviderSnapshot = serde_json::from_value(value.clone()).unwrap();
+                let expected = if connection.as_ref().is_some_and(|c| c.is_string()) {
+                    SourceOrigin::UnresolvedLegacy
+                } else {
+                    origin
+                };
+                assert_eq!(snapshot.source.origin(), expected, "{tag}: {connection:?}");
+                let fallback = match tag {
+                    "openai" => "openai.platform",
+                    "codex" => "openai.plan",
+                    "claude" => "anthropic.plan",
+                    "cursor" => "cursor.plan",
+                    "mock" => "mock.plan",
+                    _ => unreachable!(),
+                };
+                assert_eq!(
+                    snapshot.source.alert_connection(),
+                    if connection.as_ref().is_some_and(|c| c.is_string()) {
+                        "future.source"
+                    } else {
+                        fallback
+                    }
+                );
+                if connection == Some(serde_json::Value::Null) {
+                    value.as_object_mut().unwrap().remove("connection");
+                }
+                assert_eq!(serde_json::to_value(snapshot).unwrap(), value);
+            }
+        }
+        let mismatched = serde_json::json!({"provider": "claude", "connection": "openai.plan"});
+        let source: ProviderSource = serde_json::from_value(mismatched.clone()).unwrap();
+        assert_eq!(source.origin(), SourceOrigin::UnresolvedLegacy);
+        assert_eq!(source.provider().family(), Some(ProviderFamily::Anthropic));
+        assert_eq!(serde_json::to_value(source).unwrap(), mismatched);
+    }
+
+    #[test]
+    fn old_accounts_have_family_membership_without_an_invented_source() {
+        for (tag, family) in [
+            ("openai", Some(ProviderFamily::OpenAi)),
+            ("codex", Some(ProviderFamily::OpenAi)),
+            ("claude", Some(ProviderFamily::Anthropic)),
+            ("cursor", Some(ProviderFamily::Cursor)),
+            ("mock", None),
+        ] {
+            let value = serde_json::json!({"id": "account", "provider": tag, "displayName": "Local", "workspaceName": null, "maskedCredential": null, "enabled": true, "budget": null});
+            let account: ProviderAccount = serde_json::from_value(value.clone()).unwrap();
+            assert_eq!(account.provider.family(), family);
+            assert_eq!(serde_json::to_value(account).unwrap(), value);
+        }
+    }
+
+    #[test]
+    fn condition_keys_keep_legacy_provider_tokens_and_required_connection() {
+        for (tag, connection) in [
+            ("openai", "openai.platform"),
+            ("codex", "openai.plan"),
+            ("claude", "anthropic.plan"),
+            ("claude", "anthropic.platform"),
+            ("cursor", "cursor.plan"),
+            ("cursor", "cursor.platform"),
+            ("cursor", "future.source"),
+            ("mock", "mock.plan"),
+        ] {
+            let value = serde_json::json!({"provider": tag, "accountId": "same-account", "connection": connection, "historyOwner": {"connection": connection, "identity": "accepted-owner"}, "target": {"kind": "allowance", "source": "plan", "id": "same-window"}});
+            let key: AlertConditionKey = serde_json::from_value(value.clone()).unwrap();
+            assert_eq!(serde_json::to_value(key).unwrap(), value);
+            let mut missing = value;
+            missing.as_object_mut().unwrap().remove("connection");
+            assert!(serde_json::from_value::<AlertConditionKey>(missing).is_err());
+        }
     }
 }

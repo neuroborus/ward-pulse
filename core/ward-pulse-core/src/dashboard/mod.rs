@@ -119,8 +119,10 @@ mod tests {
     fn provider_snapshot(account_id: &str, today: BudgetState) -> ProviderSnapshot {
         ProviderSnapshot {
             account_id: account_id.to_string(),
-            provider: crate::model::ProviderKind::Mock,
-            connection: None,
+            source: crate::model::ProviderSource::from_legacy(
+                crate::model::ProviderKind::Mock,
+                None,
+            ),
             history_owner: None,
             status: ProviderStatus::Ok,
             today,
@@ -174,8 +176,10 @@ mod tests {
             DateTimeUtc::from("2026-06-27T18:42:00Z"),
             vec![ProviderSnapshot {
                 account_id: "codex".to_string(),
-                provider: crate::model::ProviderKind::Mock,
-                connection: None,
+                source: crate::model::ProviderSource::from_legacy(
+                    crate::model::ProviderKind::Mock,
+                    None,
+                ),
                 history_owner: None,
                 status: ProviderStatus::Ok,
                 today: open_budget.clone(),

@@ -59,9 +59,12 @@ Run all cargo commands from `core/` — there is no root `Cargo.toml`. Tests are
 - `dashboard/mod.rs` builds snapshots and aggregate totals; `alerts/mod.rs` applies alert
   settings and local budget limits; `budget/` evaluates spend against a limit; `projection/`
   projects spend linearly over a period.
-- One adapter module per family: `openai/`, `codex/`, `claude/`, `cursor/`, `mock/`.
-  `claude/platform.rs` and `cursor/platform.rs` normalize the Anthropic organization and
-  Cursor team Admin APIs; `mock/demo.rs` invents demo data. Shared: `allowance.rs`, `poll.rs`.
+- Canonical identities live in `ward-pulse-core/src/model/identity.rs`; private Serde
+  compatibility DTOs live in `model/legacy.rs`.
+- Family adapters: `openai/`, `anthropic/`, `cursor/`, each with `plan.rs` and `platform.rs`.
+  Legacy `codex` and `claude` entrypoints are compatibility reexports. `mock/demo.rs` invents
+  demo data. Source capability descriptors live with each adapter; shared: `allowance.rs`,
+  `poll.rs` (uses the core connection identity).
 - FFI surface: `ward-pulse-ffi/src/lib.rs` (single file). Adding a core capability the phone
   needs means touching ffi + `bindings/dart/lib/src/ward_pulse_bindings.dart` +
   `apps/phone_flutter/lib/dashboard/phone_live_bindings.dart`.
@@ -143,7 +146,7 @@ Start with:
 
 ### Provider parsing or a new provider capability
 Start with:
-- `core/ward-pulse-providers/src/<family>/mod.rs`
+- `core/ward-pulse-providers/src/<family>/{plan,platform}.rs`
 - `fixtures/providers/<family>/`
 - `docs/product/PROVIDER_NOTES.md`
 

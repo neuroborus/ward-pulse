@@ -352,15 +352,20 @@ Synchronization should be pull-based by default. Usage and cost data should be t
 
 The Rust core should own stable product models. Platform-specific models can exist, but they should be derived from the Rust models.
 
-Suggested core model:
+Canonical identity model (see `ProviderFamily`, `ProviderConnectionId`, `ProviderIdentity`
+and `ProviderSource` in `core/ward-pulse-core/src/model/identity.rs`):
 
 ```rust
-enum ProviderKind {
-    OpenAi,
-    Codex,
-    Claude,
-    Cursor,
+enum ProviderFamily { OpenAi, Anthropic, Cursor }
+enum ConnectionKind { Plan, Platform }
+struct ProviderConnectionId {
+    family: ProviderFamily,
+    kind: ConnectionKind,
+}
+enum SourceOrigin {
+    Connection(ProviderConnectionId),
     Mock,
+    UnresolvedLegacy,
 }
 
 enum ProviderStatus {
@@ -375,7 +380,7 @@ enum ProviderStatus {
 
 struct ProviderAccount {
     id: AccountId,
-    provider: ProviderKind,
+    provider: ProviderIdentity,
     display_name: String,
     workspace_name: Option<String>,
     masked_credential: Option<String>,
@@ -430,7 +435,7 @@ struct BudgetState {
 
 struct ProviderSnapshot {
     account_id: AccountId,
-    provider: ProviderKind,
+    source: ProviderSource,
     status: ProviderStatus,
     today: BudgetState,
     week: BudgetState,
@@ -455,7 +460,21 @@ struct DashboardSnapshot {
 }
 ```
 
-The exact Rust structs can change, but the direction should remain stable: provider-specific raw data enters the core, normalized dashboard snapshots leave the core.
+`ProviderIdentity` records family membership and retains a private legacy display/wire tag.
+Accounts require no source. `ProviderSource` adds a canonical origin and retains the original
+optional connection independently. Private Serde DTOs keep the five provider tokens and six
+connection IDs unchanged; the new family/source fields stay internal. Synthetic Mock has no
+production family or connection. Connectionless OpenAI/Codex snapshots retain their historical
+source distinction; Claude/Cursor origin remains unresolved. Unknown explicit connections are
+retained without inferring a supported source, including mismatched tag/key pairs.
+
+Family membership never merges accounts or authorizes a sibling connection. Account IDs,
+credential/session identities, `HistoryOwner`, and lifecycle/currentness proofs remain separate.
+Alerts prefer every explicit connection, including unknown keys; their legacy fallback is
+routing compatibility, not source evidence. Condition-key provider tokens, consumed-marker
+addressing, recovery requirements and private ownership keep their existing encodings.
+
+Provider-specific raw data enters the core; normalized dashboard snapshots leave the core.
 
 ---
 
@@ -483,6 +502,16 @@ Owned by Rust:
 - normalize usage buckets;
 - map provider-specific errors to shared error types;
 - calculate dashboard-ready states.
+
+Family-owned normalization lives under `openai/{plan,platform}.rs`,
+`anthropic/{plan,platform}.rs` and `cursor/{plan,platform}.rs` in
+`core/ward-pulse-providers/src/`. Small family parents and compatibility reexports preserve
+the existing `openai`, `codex`, `claude` and `cursor` entrypoints and result/error types.
+`connection_capabilities` in `core/ward-pulse-providers/src/lib.rs` selects the descriptor
+owned by each source. It never unions sibling features. Missing optional report values do
+not change a supported capability; synthetic Mock has its own descriptor.
+`guidance` in `core/ward-pulse-providers/src/poll.rs` uses the same `ProviderConnectionId`
+for cadence floors and Cursor Team freshness guidance.
 
 This keeps platform-sensitive behavior outside Rust and keeps deterministic product logic inside Rust.
 
@@ -1732,7 +1761,7 @@ Deliverables:
 - named minimum-interval constants in `core/ward-pulse-providers`, one per connection kind,
   each with a comment linking its source (see section 14);
 - a `const fn` lookup in `ward-pulse-providers::poll`, the cadence counterpart of
-  `provider_capabilities`, returning the minimum poll interval and freshness guidance for a
+  `connection_capabilities`, returning the minimum poll interval and freshness guidance for a
   provider connection;
 - one global refresh interval setting rendered as a slider from the strictest hard minimum
   (rounded up) to 60 minutes;
@@ -1820,7 +1849,8 @@ Deliverables:
   billing-cycle spend accepts canonical pooled totals or complete included-plus-on-demand
   member totals, preserving unknown data; daily counts use complete funding-channel raw
   events without adding the overlapping feature breakdown;
-- capability descriptors registered for `ProviderKind::Claude` and `ProviderKind::Cursor`;
+- source-owned capability descriptors for Anthropic and Cursor plan/platform connections,
+  selected by the shared core `ProviderConnectionId`;
 - `docs/product/PROVIDER_NOTES.md` updated per provider with credential type, permissions,
   rate limits, revocation path, and redaction rules.
 

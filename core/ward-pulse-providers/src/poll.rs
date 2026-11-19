@@ -1,6 +1,6 @@
 //! Per-connection polling floors and freshness guidance.
 //!
-//! Cadence counterpart of [`crate::provider_capabilities`]. Reporting and
+//! Cadence counterpart of [`crate::connection_capabilities`]. Reporting and
 //! administration endpoints are rate-limited independently from model inference
 //! and agent traffic, so polling usage reports does not consume agent capacity
 //! and cannot slow down a running agent. Every floor below is a report-polling
@@ -8,18 +8,7 @@
 
 use std::time::Duration;
 
-/// Homogeneous connection identity used for cadence lookup.
-///
-/// Matches the phone Settings plan/platform split.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ProviderConnectionKind {
-    OpenAiPlatform,
-    CodexPlan,
-    AnthropicPlatform,
-    ClaudePlan,
-    CursorPlan,
-    CursorPlatform,
-}
+use ward_pulse_core::model::{ConnectionKind, ProviderConnectionId, ProviderFamily};
 
 /// Minimum poll interval and optional non-clamping freshness guidance.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -70,29 +59,29 @@ pub const GLOBAL_REFRESH_MIN: Duration = Duration::from_secs(5 * 60);
 pub const GLOBAL_REFRESH_MAX: Duration = Duration::from_secs(60 * 60);
 
 /// Cadence lookup for one connection.
-pub const fn guidance(connection: ProviderConnectionKind) -> Guidance {
-    match connection {
-        ProviderConnectionKind::OpenAiPlatform => Guidance {
+pub const fn guidance(connection: ProviderConnectionId) -> Guidance {
+    match (connection.family, connection.kind) {
+        (ProviderFamily::OpenAi, ConnectionKind::Platform) => Guidance {
             min_interval: OPENAI_PLATFORM_MIN_POLL,
             freshness_note: None,
         },
-        ProviderConnectionKind::CodexPlan => Guidance {
+        (ProviderFamily::OpenAi, ConnectionKind::Plan) => Guidance {
             min_interval: CODEX_PLAN_MIN_POLL,
             freshness_note: None,
         },
-        ProviderConnectionKind::AnthropicPlatform => Guidance {
+        (ProviderFamily::Anthropic, ConnectionKind::Platform) => Guidance {
             min_interval: ANTHROPIC_PLATFORM_MIN_POLL,
             freshness_note: None,
         },
-        ProviderConnectionKind::ClaudePlan => Guidance {
+        (ProviderFamily::Anthropic, ConnectionKind::Plan) => Guidance {
             min_interval: CLAUDE_PLAN_MIN_POLL,
             freshness_note: None,
         },
-        ProviderConnectionKind::CursorPlan => Guidance {
+        (ProviderFamily::Cursor, ConnectionKind::Plan) => Guidance {
             min_interval: CURSOR_PLAN_MIN_POLL,
             freshness_note: None,
         },
-        ProviderConnectionKind::CursorPlatform => Guidance {
+        (ProviderFamily::Cursor, ConnectionKind::Platform) => Guidance {
             min_interval: CURSOR_PLATFORM_MIN_POLL,
             freshness_note: Some(CURSOR_USAGE_FRESHNESS_NOTE),
         },
@@ -102,7 +91,7 @@ pub const fn guidance(connection: ProviderConnectionKind) -> Guidance {
 /// `max(user_setting, provider_minimum)` for one connection.
 pub const fn effective_interval(
     user_setting: Duration,
-    connection: ProviderConnectionKind,
+    connection: ProviderConnectionId,
 ) -> Duration {
     let floor = guidance(connection).min_interval;
     // `Duration` comparison is not const; whole-second floors make this exact.
@@ -117,50 +106,40 @@ pub const fn effective_interval(
 mod tests {
     use super::*;
 
-    const ALL_CONNECTIONS: [ProviderConnectionKind; 6] = [
-        ProviderConnectionKind::OpenAiPlatform,
-        ProviderConnectionKind::CodexPlan,
-        ProviderConnectionKind::AnthropicPlatform,
-        ProviderConnectionKind::ClaudePlan,
-        ProviderConnectionKind::CursorPlan,
-        ProviderConnectionKind::CursorPlatform,
-    ];
-
     #[test]
     fn documents_per_connection_floors() {
-        assert_eq!(
-            guidance(ProviderConnectionKind::OpenAiPlatform).min_interval,
-            OPENAI_PLATFORM_MIN_POLL
-        );
-        assert_eq!(
-            guidance(ProviderConnectionKind::CodexPlan).min_interval,
-            CODEX_PLAN_MIN_POLL
-        );
-        assert_eq!(
-            guidance(ProviderConnectionKind::AnthropicPlatform).min_interval,
-            ANTHROPIC_PLATFORM_MIN_POLL
-        );
-        assert_eq!(
-            guidance(ProviderConnectionKind::ClaudePlan).min_interval,
-            CLAUDE_PLAN_MIN_POLL
-        );
-        assert_eq!(
-            guidance(ProviderConnectionKind::CursorPlan).min_interval,
-            CURSOR_PLAN_MIN_POLL
-        );
-        assert_eq!(
-            guidance(ProviderConnectionKind::CursorPlatform).min_interval,
-            CURSOR_PLATFORM_MIN_POLL
-        );
+        for (id, seconds) in [
+            (ProviderConnectionId::OPENAI_PLATFORM, 300),
+            (ProviderConnectionId::OPENAI_PLAN, 300),
+            (ProviderConnectionId::ANTHROPIC_PLATFORM, 60),
+            (ProviderConnectionId::ANTHROPIC_PLAN, 300),
+            (ProviderConnectionId::CURSOR_PLAN, 300),
+            (ProviderConnectionId::CURSOR_PLATFORM, 300),
+        ] {
+            let guidance = guidance(id);
+            assert_eq!(
+                guidance.min_interval,
+                Duration::from_secs(seconds),
+                "{id:?}"
+            );
+            assert_eq!(
+                guidance.freshness_note,
+                if id == ProviderConnectionId::CURSOR_PLATFORM {
+                    Some(CURSOR_USAGE_FRESHNESS_NOTE)
+                } else {
+                    None
+                }
+            );
+        }
     }
 
     #[test]
     fn surfaces_cursor_admin_freshness_without_clamping() {
-        let plan = guidance(ProviderConnectionKind::CursorPlan);
+        let plan = guidance(ProviderConnectionId::CURSOR_PLAN);
         assert_eq!(plan.freshness_note, None);
         assert_eq!(plan.min_interval, CURSOR_PLAN_MIN_POLL);
 
-        let platform = guidance(ProviderConnectionKind::CursorPlatform);
+        let platform = guidance(ProviderConnectionId::CURSOR_PLATFORM);
         assert_eq!(platform.freshness_note, Some(CURSOR_USAGE_FRESHNESS_NOTE));
         assert_eq!(platform.min_interval, CURSOR_PLATFORM_MIN_POLL);
         assert!(platform.min_interval < Duration::from_secs(60 * 60));
@@ -170,23 +149,23 @@ mod tests {
     fn clamps_user_setting_to_connection_floor() {
         let under = Duration::from_secs(60);
         assert_eq!(
-            effective_interval(under, ProviderConnectionKind::OpenAiPlatform),
+            effective_interval(under, ProviderConnectionId::OPENAI_PLATFORM),
             OPENAI_PLATFORM_MIN_POLL
         );
         let over = Duration::from_secs(15 * 60);
         assert_eq!(
-            effective_interval(over, ProviderConnectionKind::OpenAiPlatform),
+            effective_interval(over, ProviderConnectionId::OPENAI_PLATFORM),
             over
         );
         assert_eq!(
-            effective_interval(under, ProviderConnectionKind::AnthropicPlatform),
+            effective_interval(under, ProviderConnectionId::ANTHROPIC_PLATFORM),
             ANTHROPIC_PLATFORM_MIN_POLL
         );
     }
 
     #[test]
     fn global_slider_lower_bound_satisfies_every_floor() {
-        for connection in ALL_CONNECTIONS {
+        for connection in ProviderConnectionId::ALL {
             assert_eq!(
                 effective_interval(GLOBAL_REFRESH_MIN, connection),
                 GLOBAL_REFRESH_MIN,

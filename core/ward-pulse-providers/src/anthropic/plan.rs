@@ -1,9 +1,7 @@
-//! Claude / Anthropic provider normalization.
-//!
-//! - Plan: undocumented Claude Code `GET /api/oauth/usage` compatibility contract.
-//! - Platform: official Usage & Cost Admin API organization reporting.
+//! Claude plan usage normalization.
 
-mod platform;
+#[cfg(test)]
+use ward_pulse_core::model::{connection, ProviderKind};
 
 use std::error::Error as StdError;
 use std::fmt;
@@ -12,31 +10,26 @@ use serde::Deserialize;
 use serde_json::Value;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
-    connection, AllowanceSource, AllowanceState, BudgetPeriod, ProviderKind, ProviderSnapshot,
-    RecoveryRequirements,
+    AllowanceSource, AllowanceState, BudgetPeriod, ProviderConnectionId, ProviderSnapshot,
+    ProviderSource, RecoveryRequirements,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
 use crate::allowance::{credits_from_cents, percent_status, worst_status};
 use crate::{BucketCapabilities, ProviderCapabilities};
 
-pub use platform::{
-    anthropic_provider_snapshot_from_report_json, AnthropicReportError, AnthropicReportSnapshot,
-};
-
 pub const PROVIDER_NAME: &str = "Claude";
 
-/// Union of Claude plan and Anthropic platform reporting capabilities.
 pub(crate) const CAPABILITIES: ProviderCapabilities = ProviderCapabilities {
-    supports_cost: true,
-    supports_tokens: true,
+    supports_cost: false,
+    supports_tokens: false,
     supports_requests: false,
     supports_credits: true,
-    usage_buckets: BucketCapabilities::DAILY_AND_HOURLY,
-    cost_buckets: BucketCapabilities::DAILY,
-    supports_usage_model_breakdown: true,
+    usage_buckets: BucketCapabilities::NONE,
+    cost_buckets: BucketCapabilities::NONE,
+    supports_usage_model_breakdown: false,
     supports_cost_model_breakdown: false,
-    supports_workspace_breakdown: true,
+    supports_workspace_breakdown: false,
     supports_active_agents: false,
 };
 
@@ -182,8 +175,7 @@ pub fn claude_provider_snapshot_from_report_json(
             account_id: report
                 .account_id
                 .unwrap_or_else(|| "claude-local".to_string()),
-            provider: ProviderKind::Claude,
-            connection: Some(connection::CLAUDE_PLAN.to_string()),
+            source: ProviderSource::connection(ProviderConnectionId::ANTHROPIC_PLAN),
             history_owner: None,
             status,
             today: unknown_budget(BudgetPeriod::Today),
@@ -282,7 +274,7 @@ fn fable_weekly_window(limits: &Value, shares: &Value) -> Option<AllowanceState>
 
 /// Parses ASCII Gregorian `YYYY-MM-DDTHH:MM:SS[.digits]` with `Z` or `±HH:MM`.
 /// Years must remain within 0000–9999 in UTC; leap seconds are unsupported.
-fn parse_timestamp(value: &str) -> Result<DateTimeUtc, ClaudeReportError> {
+pub(super) fn parse_timestamp(value: &str) -> Result<DateTimeUtc, ClaudeReportError> {
     let bytes = value.as_bytes();
     if bytes.len() < 20
         || !value.is_ascii()
@@ -515,7 +507,14 @@ mod tests {
     fn normalizes_plan_windows_and_extra_usage() {
         let report = include_str!("../../../../fixtures/providers/claude/oauth_usage.json");
         let snapshot = claude_provider_snapshot_from_report_json(report).expect("normalize");
-        assert_eq!(snapshot.provider_snapshot.provider, ProviderKind::Claude);
+        assert_eq!(
+            snapshot
+                .provider_snapshot
+                .source
+                .provider()
+                .legacy_provider(),
+            ProviderKind::Claude
+        );
         assert!(snapshot
             .provider_snapshot
             .allowances
@@ -652,7 +651,7 @@ mod tests {
                 .unwrap()
                 .provider_snapshot;
             assert_eq!(
-                snapshot.connection.as_deref(),
+                snapshot.source.explicit_connection(),
                 Some(connection::CLAUDE_PLAN)
             );
             assert_eq!(snapshot.allowances.len(), 1);

@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 use crate::budget::calculate_budget_state;
 use crate::dashboard::build_dashboard_snapshot;
 use crate::model::{
-    connection, Alert, AlertCondition, AlertConditionKey, AlertConditionState,
-    AlertConditionTarget, AlertSeverity, AllowanceSource, AllowanceState, BudgetPeriod,
-    DashboardSnapshot, Money, ProviderKind, ProviderSnapshot, ProviderStatus,
+    Alert, AlertCondition, AlertConditionKey, AlertConditionState, AlertConditionTarget,
+    AlertSeverity, AllowanceSource, AllowanceState, BudgetPeriod, DashboardSnapshot, Money,
+    ProviderSnapshot, ProviderStatus,
 };
 
 /// Opt-in used-% threshold. `None` means the rule is off.
@@ -257,10 +257,7 @@ fn raise_crossed_thresholds(
 
 /// Storage key of the connection that produced this account.
 fn connection_key(account: &ProviderSnapshot) -> &str {
-    account
-        .connection
-        .as_deref()
-        .unwrap_or_else(|| fallback_storage_key(account.provider))
+    account.source.alert_connection()
 }
 
 fn conditions_for_account(
@@ -275,7 +272,7 @@ fn conditions_for_account(
     }
 
     let mut conditions = Vec::new();
-    let provider_label = provider_label(account.provider);
+    let provider_label = account.source.provider().display_label();
     for (period, label, state, threshold) in [
         (
             BudgetPeriod::Today,
@@ -348,7 +345,7 @@ fn condition_for_target(
     };
     Some(AlertCondition {
         key: AlertConditionKey {
-            provider: account.provider,
+            provider: account.source.provider(),
             account_id: account.account_id.clone(),
             connection: connection_key(account).into(),
             history_owner: account.history_owner.clone(),
@@ -376,34 +373,12 @@ fn crossed(used_percent: Option<f64>, at: Option<u8>) -> bool {
     }
 }
 
-/// Fallback for snapshots taken before adapters stamped
-/// [`ProviderSnapshot::connection`]: the one connection each kind used to imply.
-fn fallback_storage_key(provider: ProviderKind) -> &'static str {
-    match provider {
-        ProviderKind::Codex => connection::CODEX_PLAN,
-        ProviderKind::OpenAi => connection::OPENAI_PLATFORM,
-        ProviderKind::Claude => connection::CLAUDE_PLAN,
-        ProviderKind::Cursor => connection::CURSOR_PLAN,
-        ProviderKind::Mock => connection::MOCK_PLAN,
-    }
-}
-
-fn provider_label(provider: ProviderKind) -> &'static str {
-    match provider {
-        ProviderKind::OpenAi => "OpenAI",
-        ProviderKind::Codex => "Codex",
-        ProviderKind::Claude => "Claude",
-        ProviderKind::Cursor => "Cursor",
-        ProviderKind::Mock => "Mock",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::{
-        BudgetPeriod, BudgetState, HistoryOwner, Money, ProviderSnapshot, ProviderStatus, Quantity,
-        QuantityUnit, WatchSummary,
+        connection, BudgetPeriod, BudgetState, HistoryOwner, Money, ProviderKind, ProviderSnapshot,
+        ProviderSource, ProviderStatus, Quantity, QuantityUnit, WatchSummary,
     };
     use crate::time::DateTimeUtc;
 
@@ -440,8 +415,7 @@ mod tests {
     fn claude_account(allowance: AllowanceState) -> ProviderSnapshot {
         ProviderSnapshot {
             account_id: "claude".into(),
-            provider: ProviderKind::Claude,
-            connection: None,
+            source: ProviderSource::from_legacy(ProviderKind::Claude, None),
             history_owner: None,
             status: ProviderStatus::Warning,
             today: budget(0.0),
@@ -641,7 +615,10 @@ mod tests {
                 ..account.clone()
             },
             ProviderSnapshot {
-                connection: Some("other-connection".into()),
+                source: ProviderSource::from_legacy(
+                    ProviderKind::Claude,
+                    Some("other-connection".into()),
+                ),
                 ..account
             },
         ]);
@@ -671,7 +648,7 @@ mod tests {
         assert_eq!(
             applied.alert_conditions[0].key,
             AlertConditionKey {
-                provider: ProviderKind::Claude,
+                provider: ProviderKind::Claude.into(),
                 account_id: "claude".into(),
                 connection: connection::CLAUDE_PLAN.into(),
                 history_owner: None,
@@ -994,7 +971,7 @@ mod tests {
             ..purchased(95.0)
         };
         let account = ProviderSnapshot {
-            provider: ProviderKind::Cursor,
+            source: ProviderSource::from_legacy(ProviderKind::Cursor, None),
             allowances: vec![pool("Cursor Models"), pool("Other Models")],
             ..claude_account(purchased(95.0))
         };
@@ -1026,7 +1003,8 @@ mod tests {
     #[test]
     fn platform_and_plan_of_one_family_keep_separate_rules() {
         let mut account = claude_account(purchased(84.0));
-        account.connection = Some(connection::ANTHROPIC_PLATFORM.to_string());
+        account.source =
+            ProviderSource::connection(crate::model::ProviderConnectionId::ANTHROPIC_PLATFORM);
         let snapshot = snapshot_with(account, budget(10.0));
 
         let rule = ConnectionAlertThresholds {
@@ -1179,7 +1157,7 @@ mod tests {
     fn plan_window_identity_uses_the_owning_connection_and_id() {
         let account = ProviderSnapshot {
             account_id: "account-a".into(),
-            connection: Some("connection-a".into()),
+            source: ProviderSource::from_legacy(ProviderKind::Claude, Some("connection-a".into())),
             status: ProviderStatus::Ok,
             allowances: vec![
                 plan_window("window/7", Some(80.0)),
@@ -1189,7 +1167,7 @@ mod tests {
         };
         let other = ProviderSnapshot {
             account_id: "account-b".into(),
-            connection: Some("connection-b".into()),
+            source: ProviderSource::from_legacy(ProviderKind::Claude, Some("connection-b".into())),
             ..account.clone()
         };
         let mut snapshot = snapshot_with(account, budget(0.0));
@@ -1220,7 +1198,7 @@ mod tests {
             let applied = apply_alert_settings(snapshot, &settings);
             assert_eq!(applied.alerts, alerts);
             for account in &applied.accounts {
-                let owner = account.connection.as_deref() == Some("connection-a");
+                let owner = account.source.explicit_connection() == Some("connection-a");
                 assert_eq!(
                     account.status,
                     if owner {

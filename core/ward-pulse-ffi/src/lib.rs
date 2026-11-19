@@ -9,11 +9,10 @@ use ward_pulse_core::{
     apply_alert_settings, build_dashboard_snapshot, exhausted_windows, plan_recoveries,
     reconcile_plan_recoveries, AlertSettings, PendingRecovery, WindowKey,
 };
-use ward_pulse_providers::claude::{
+use ward_pulse_providers::anthropic::{
     anthropic_provider_snapshot_from_report_json, claude_provider_snapshot_from_report_json,
     AnthropicReportError, ClaudeReportError,
 };
-use ward_pulse_providers::codex::{codex_provider_snapshot_from_report_json, CodexReportError};
 use ward_pulse_providers::cursor::{
     cursor_plan_snapshot_from_report_json, cursor_platform_snapshot_from_report_json,
     CursorPlanReportError, CursorPlatformReportError,
@@ -21,6 +20,9 @@ use ward_pulse_providers::cursor::{
 use ward_pulse_providers::mock::{
     debug_multi_provider_dashboard_json, debug_multi_provider_dashboard_json_at,
     mock_provider_snapshot_from_usage_fixture, DebugDemoDashboardError, MockUsageFixtureError,
+};
+use ward_pulse_providers::openai::plan::{
+    codex_provider_snapshot_from_report_json, CodexReportError,
 };
 use ward_pulse_providers::openai::{openai_provider_snapshot_from_report_json, OpenAiReportError};
 
@@ -537,6 +539,156 @@ mod tests {
     use super::*;
 
     #[test]
+    fn six_source_c_api_round_trips_preserve_order_and_private_ownership() {
+        use serde_json::{json, Value};
+        use ward_pulse_core::model::{ProviderConnectionId, SourceOrigin};
+
+        type Normalizer = unsafe extern "C" fn(*const c_char) -> *mut c_char;
+        let cases: [(ProviderConnectionId, &str, &str, Normalizer, Value); 6] = [
+            (
+                ProviderConnectionId::OPENAI_PLAN,
+                "codex",
+                "codex-local",
+                ward_pulse_codex_dashboard_snapshot_result_json,
+                serde_json::from_str(include_str!(
+                    "../../../fixtures/providers/codex/report.json"
+                ))
+                .unwrap(),
+            ),
+            (
+                ProviderConnectionId::OPENAI_PLATFORM,
+                "openai",
+                "openai-local",
+                ward_pulse_openai_dashboard_snapshot_result_json,
+                json!({
+                    "accountId": "openai-local", "generatedAt": "2026-07-19T12:00:00Z",
+                    "todayStart": 1_784_419_200_i64, "weekStart": 1_783_900_800_i64, "monthStart": 1_782_864_000_i64,
+                    "usagePages": [include_str!("../../../fixtures/providers/openai/usage_completions.json")],
+                    "costPages": [include_str!("../../../fixtures/providers/openai/costs.json")]
+                }),
+            ),
+            (
+                ProviderConnectionId::ANTHROPIC_PLAN,
+                "claude",
+                "claude-local",
+                ward_pulse_claude_dashboard_snapshot_result_json,
+                serde_json::from_str(include_str!(
+                    "../../../fixtures/providers/claude/oauth_usage.json"
+                ))
+                .unwrap(),
+            ),
+            (
+                ProviderConnectionId::ANTHROPIC_PLATFORM,
+                "claude",
+                "anthropic-local",
+                ward_pulse_anthropic_dashboard_snapshot_result_json,
+                json!({
+                    "accountId": "anthropic-local", "generatedAt": "2026-07-19T12:00:00Z", "capturedEndMicros": 1_784_462_400_000_000_i64,
+                    "todayStart": "2026-07-19T00:00:00Z", "weekStart": "2026-07-13T00:00:00Z", "monthStart": "2026-07-01T00:00:00Z",
+                    "usagePages": [include_str!("../../../fixtures/providers/claude/usage_report.json")],
+                    "costPages": [include_str!("../../../fixtures/providers/claude/cost_report.json")]
+                }),
+            ),
+            (
+                ProviderConnectionId::CURSOR_PLAN,
+                "cursor",
+                "cursor-local",
+                ward_pulse_cursor_plan_dashboard_snapshot_result_json,
+                serde_json::from_str(include_str!(
+                    "../../../fixtures/providers/cursor/usage_summary.json"
+                ))
+                .unwrap(),
+            ),
+            (
+                ProviderConnectionId::CURSOR_PLATFORM,
+                "cursor",
+                "cursor-team-local",
+                ward_pulse_cursor_platform_dashboard_snapshot_result_json,
+                json!({
+                    "accountId": "cursor-team-local", "generatedAt": "2026-07-19T12:00:00Z",
+                    "requestStartMs": 1_782_864_000_000_i64, "endExclusiveMs": 1_784_462_400_000_i64,
+                    "todayStartMs": 1_784_419_200_000_i64, "weekStartMs": 1_783_900_800_000_i64, "monthStartMs": 1_782_864_000_000_i64,
+                    "dailyUsagePages": [include_str!("../../../fixtures/providers/cursor/daily_usage.json")],
+                    "usageEventPages": [include_str!("../../../fixtures/providers/cursor/usage_events.json")]
+                }),
+            ),
+        ];
+        let mut snapshots = Vec::new();
+        let mut expected_accounts = Vec::new();
+        for (id, tag, account_id, normalize, report) in cases {
+            let request = CString::new(report.to_string()).unwrap();
+            let pointer = unsafe { normalize(request.as_ptr()) };
+            assert!(!pointer.is_null());
+            let result: Value =
+                serde_json::from_str(unsafe { CStr::from_ptr(pointer) }.to_str().unwrap()).unwrap();
+            unsafe { ward_pulse_string_free(pointer) };
+            assert_eq!(
+                result
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>(),
+                ["dashboardJson", "status"]
+            );
+            assert_eq!(result["status"], "success");
+            let mut snapshot: Value =
+                serde_json::from_str(result["dashboardJson"].as_str().unwrap()).unwrap();
+            let account = &mut snapshot["accounts"][0];
+            assert_eq!(account["accountId"], account_id);
+            assert_eq!(account["provider"], tag);
+            assert_eq!(account["connection"], id.storage_key());
+            let expected_allowances: &[&str] = match id {
+                ProviderConnectionId::OPENAI_PLAN => &["codex-primary", "codex-purchased-credits"],
+                ProviderConnectionId::ANTHROPIC_PLAN => &[
+                    "claude-five-hour",
+                    "claude-seven-day",
+                    "claude-seven-day-opus",
+                    "claude-extra-usage",
+                ],
+                ProviderConnectionId::CURSOR_PLAN => &[
+                    "cursor-plan-models",
+                    "cursor-plan-other",
+                    "cursor-on-demand",
+                ],
+                _ => &[],
+            };
+            let allowances = account
+                .get("allowances")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .map(|allowance| allowance["id"].as_str().unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(allowances, expected_allowances, "{}", id.storage_key());
+            // Shell-bound ownership must survive normalization's serialized boundary,
+            // core reparsing and merge without granting sibling access.
+            account["historyOwner"] = json!({"connection": id.storage_key(), "identity": format!("owner-{}", id.storage_key())});
+            expected_accounts.push(account.clone());
+            let parsed: DashboardSnapshot = serde_json::from_value(snapshot.clone()).unwrap();
+            assert_eq!(
+                parsed.accounts[0].source.origin(),
+                SourceOrigin::Connection(id)
+            );
+            assert_eq!(serde_json::to_value(parsed).unwrap(), snapshot);
+            snapshots.push(snapshot);
+        }
+        let request = CString::new(serde_json::to_string(&snapshots).unwrap()).unwrap();
+        let pointer = unsafe { ward_pulse_merge_dashboard_snapshots_result_json(request.as_ptr()) };
+        assert!(!pointer.is_null());
+        let result: Value =
+            serde_json::from_str(unsafe { CStr::from_ptr(pointer) }.to_str().unwrap()).unwrap();
+        unsafe { ward_pulse_string_free(pointer) };
+        assert_eq!(result["status"], "success");
+        let merged: Value =
+            serde_json::from_str(result["dashboardJson"].as_str().unwrap()).unwrap();
+        assert_eq!(merged["accounts"], json!(expected_accounts));
+        let reparsed: DashboardSnapshot = serde_json::from_value(merged.clone()).unwrap();
+        assert_eq!(reparsed.accounts.len(), 6);
+        assert_eq!(serde_json::to_value(reparsed).unwrap(), merged);
+    }
+
+    #[test]
     fn snapshot_json_matches_golden_fixture() {
         let actual: serde_json::Value =
             serde_json::from_str(&dashboard_snapshot_json().expect("serialize dashboard snapshot"))
@@ -563,15 +715,14 @@ mod tests {
     #[test]
     fn fractional_watch_snapshot_matches_fixture() {
         use ward_pulse_core::budget::calculate_budget_state;
-        use ward_pulse_core::model::{connection, BudgetPeriod, Money, ProviderKind};
+        use ward_pulse_core::model::{BudgetPeriod, Money, ProviderConnectionId, ProviderSource};
 
         let generated_at = DateTimeUtc::new("2026-06-27T18:42:00Z");
         let usd = |minor_units| Some(Money::minor_units(minor_units, "USD"));
         let today = calculate_budget_state(BudgetPeriod::Today, usd(4), usd(10_000), None);
         let account = ProviderSnapshot {
             account_id: "openai-platform-local".to_owned(),
-            provider: ProviderKind::OpenAi,
-            connection: Some(connection::OPENAI_PLATFORM.to_owned()),
+            source: ProviderSource::connection(ProviderConnectionId::OPENAI_PLATFORM),
             history_owner: None,
             status: today.status,
             today,

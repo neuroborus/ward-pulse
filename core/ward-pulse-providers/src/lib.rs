@@ -1,12 +1,17 @@
 mod allowance;
-pub mod claude;
-pub mod codex;
+pub mod anthropic;
+
 pub mod cursor;
 pub mod mock;
 pub mod openai;
 pub mod poll;
 
-use ward_pulse_core::model::ProviderKind;
+/// Legacy Claude entrypoints, backed by the Anthropic family adapters.
+pub use anthropic as claude;
+/// Legacy Codex entrypoints, backed by the OpenAI plan adapter.
+pub use openai::plan as codex;
+
+use ward_pulse_core::model::{ConnectionKind, ProviderConnectionId, ProviderFamily};
 
 pub use mock::{
     debug_multi_provider_dashboard, debug_multi_provider_dashboard_json, mock_provider_snapshot,
@@ -48,14 +53,21 @@ pub struct ProviderCapabilities {
     pub supports_active_agents: bool,
 }
 
-pub const fn provider_capabilities(provider: ProviderKind) -> ProviderCapabilities {
-    match provider {
-        ProviderKind::OpenAi => openai::CAPABILITIES,
-        ProviderKind::Codex => codex::CAPABILITIES,
-        ProviderKind::Claude => claude::CAPABILITIES,
-        ProviderKind::Cursor => cursor::CAPABILITIES,
-        ProviderKind::Mock => mock::CAPABILITIES,
+/// Capabilities belong to a source, never to a union of sibling connections.
+pub const fn connection_capabilities(connection: ProviderConnectionId) -> ProviderCapabilities {
+    match (connection.family, connection.kind) {
+        (ProviderFamily::OpenAi, ConnectionKind::Plan) => openai::plan::CAPABILITIES,
+        (ProviderFamily::OpenAi, ConnectionKind::Platform) => openai::platform::CAPABILITIES,
+        (ProviderFamily::Anthropic, ConnectionKind::Plan) => anthropic::plan::CAPABILITIES,
+        (ProviderFamily::Anthropic, ConnectionKind::Platform) => anthropic::platform::CAPABILITIES,
+        (ProviderFamily::Cursor, ConnectionKind::Plan) => cursor::plan::CAPABILITIES,
+        (ProviderFamily::Cursor, ConnectionKind::Platform) => cursor::platform::CAPABILITIES,
     }
+}
+
+/// Synthetic data has no production connection identity.
+pub const fn mock_capabilities() -> ProviderCapabilities {
+    mock::CAPABILITIES
 }
 
 #[cfg(test)]
@@ -248,7 +260,7 @@ mod tests {
 
     #[test]
     fn distinguishes_usage_and_cost_reporting() {
-        let openai = provider_capabilities(ProviderKind::OpenAi);
+        let openai = connection_capabilities(ProviderConnectionId::OPENAI_PLATFORM);
         assert_eq!(
             (openai.usage_buckets, openai.cost_buckets),
             (
@@ -258,29 +270,74 @@ mod tests {
         );
         assert!(openai.supports_usage_model_breakdown);
         assert!(!openai.supports_cost_model_breakdown);
+        assert!(openai.supports_cost);
+        assert!(openai.supports_tokens);
+        assert!(openai.supports_requests);
+        assert!(!openai.supports_credits);
+        assert!(!openai.supports_workspace_breakdown);
+        assert!(!openai.supports_active_agents);
 
-        let mock = provider_capabilities(ProviderKind::Mock);
+        let mock = mock_capabilities();
         assert_eq!(
             (mock.usage_buckets, mock.cost_buckets),
             (BucketCapabilities::NONE, BucketCapabilities::NONE)
         );
 
-        let codex = provider_capabilities(ProviderKind::Codex);
+        let codex = connection_capabilities(ProviderConnectionId::OPENAI_PLAN);
         assert_eq!(codex.usage_buckets, BucketCapabilities::DAILY);
         assert!(codex.supports_tokens);
         assert!(codex.supports_credits);
+        assert!(!codex.supports_cost);
+        assert!(!codex.supports_requests);
+        assert_eq!(codex.cost_buckets, BucketCapabilities::NONE);
+        assert!(!codex.supports_usage_model_breakdown);
+        assert!(!codex.supports_cost_model_breakdown);
+        assert!(!codex.supports_workspace_breakdown);
+        assert!(!codex.supports_active_agents);
     }
 
     #[test]
-    fn registers_claude_and_cursor_capabilities() {
-        let claude = provider_capabilities(ProviderKind::Claude);
-        assert!(claude.supports_cost);
-        assert!(claude.supports_credits);
-        assert_eq!(claude.usage_buckets, BucketCapabilities::DAILY_AND_HOURLY);
-
-        let cursor = provider_capabilities(ProviderKind::Cursor);
+    fn distinguishes_plan_and_reporting_capabilities() {
+        for id in [
+            ProviderConnectionId::ANTHROPIC_PLAN,
+            ProviderConnectionId::CURSOR_PLAN,
+        ] {
+            let plan = connection_capabilities(id);
+            assert!(plan.supports_credits);
+            assert!(!plan.supports_cost);
+            assert!(!plan.supports_tokens);
+            assert!(!plan.supports_requests);
+            assert_eq!(plan.usage_buckets, BucketCapabilities::NONE);
+            assert_eq!(plan.cost_buckets, BucketCapabilities::NONE);
+            assert!(!plan.supports_usage_model_breakdown);
+            assert!(!plan.supports_cost_model_breakdown);
+            assert!(!plan.supports_workspace_breakdown);
+            assert!(!plan.supports_active_agents);
+        }
+        let anthropic = connection_capabilities(ProviderConnectionId::ANTHROPIC_PLATFORM);
+        assert!(anthropic.supports_cost);
+        assert!(anthropic.supports_tokens);
+        assert!(!anthropic.supports_requests);
+        assert!(!anthropic.supports_credits);
+        assert_eq!(
+            anthropic.usage_buckets,
+            BucketCapabilities::DAILY_AND_HOURLY
+        );
+        assert_eq!(anthropic.cost_buckets, BucketCapabilities::DAILY);
+        assert!(anthropic.supports_usage_model_breakdown);
+        assert!(anthropic.supports_workspace_breakdown);
+        assert!(!anthropic.supports_cost_model_breakdown);
+        assert!(!anthropic.supports_active_agents);
+        let cursor = connection_capabilities(ProviderConnectionId::CURSOR_PLATFORM);
         assert!(cursor.supports_cost);
         assert!(cursor.supports_requests);
+        assert!(!cursor.supports_credits);
+        assert!(!cursor.supports_tokens);
         assert_eq!(cursor.usage_buckets, BucketCapabilities::DAILY);
+        assert_eq!(cursor.cost_buckets, BucketCapabilities::DAILY);
+        assert!(!cursor.supports_usage_model_breakdown);
+        assert!(!cursor.supports_cost_model_breakdown);
+        assert!(!cursor.supports_workspace_breakdown);
+        assert!(!cursor.supports_active_agents);
     }
 }

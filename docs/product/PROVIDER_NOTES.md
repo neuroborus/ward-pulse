@@ -29,6 +29,54 @@ Each provider should document:
 
 Platform code owns transport, TLS, background scheduling, secure credential retrieval, retries, and encrypted storage. Rust owns parsing, validation, normalization, error mapping, aggregation, budgets, projections, alerts, and dashboard view models.
 
+### Family, source and compatibility identity
+
+`ProviderFamily`, `ConnectionKind` and `ProviderConnectionId` in
+`core/ward-pulse-core/src/model/identity.rs` mirror the phone family/kind pair.
+`ProviderSource` distinguishes a known connection, synthetic Mock and unresolved legacy origin.
+The private Serde boundary retains each original provider tag and optional connection;
+family/source fields are internal and introduce no schema or persisted encoding change.
+
+| Family | Source | Connection | Encoded provider |
+| --- | --- | --- | --- |
+| OpenAI | Codex plan | `openai.plan` | `codex` |
+| OpenAI | Platform reporting | `openai.platform` | `openai` |
+| Anthropic | Claude plan | `anthropic.plan` | `claude` |
+| Anthropic | Organization reporting | `anthropic.platform` | `claude` |
+| Cursor | Plan | `cursor.plan` | `cursor` |
+| Cursor | Team reporting | `cursor.platform` | `cursor` |
+
+Old account records need no source. Connectionless OpenAI/Codex snapshots retain their historical
+source distinction, while Claude/Cursor stay unresolved. Omitted/null connections keep the
+existing omission behavior. Unknown explicit keys and mismatched tag/key pairs round-trip
+without becoming a known source. Alert lookup prefers an explicit key; otherwise the legacy
+openai/codex/claude/cursor/mock fallback remains respectively `openai.platform`, `openai.plan`,
+`anthropic.plan`, `cursor.plan`, `mock.plan`. That fallback does not establish origin.
+
+Account IDs, credential/session keys, authorization, `HistoryOwner` and currentness remain
+independent. Family grouping grants no sibling access. Cache ownership still requires both
+the exact connection and legacy provider token. Alert-condition provider tokens and canonical
+key JSON, consumed markers, recovery ownership and remembered necessary constraints remain
+unchanged. FFI names, envelopes and string allocation ownership, phone labels and selections,
+ring/metric IDs and Wear schema version 9 are unchanged.
+
+`connection_capabilities` in `core/ward-pulse-providers/src/lib.rs` selects source-owned
+descriptors from the family `plan.rs` and `platform.rs` modules, with no family union.
+OpenAI Platform supports cost, tokens, requests, daily/hourly usage and daily costs, and usage
+model breakdown. Codex plan supports credits and daily token activity without Platform cost
+or requests. Claude and Cursor plans support allowances/credits without reporting buckets,
+tokens, requests or cost. Anthropic reporting supports cost, tokens, daily/hourly usage,
+daily cost, usage model and workspace breakdowns, without credits or requests. Cursor Team
+supports cost, requests and daily usage/cost without plan credits or tokens. Optional missing
+values do not disable supported descriptors. Synthetic Mock capabilities remain separate.
+`guidance` in `core/ward-pulse-providers/src/poll.rs` uses the shared connection identity,
+preserving each floor and the non-clamping Cursor Team freshness note.
+
+Existing normalization and tests live under `openai/{plan,platform}.rs`,
+`anthropic/{plan,platform}.rs` and `cursor/{plan,platform}.rs` in
+`core/ward-pulse-providers/src/`. Legacy normalization entrypoints and result/error types
+remain available through `openai`, `codex`, `claude` and `cursor` reexports.
+
 ### Validation stops short of rejecting timestamps
 
 Rust validates what it can act on. It deliberately does **not** reject a malformed instant:
@@ -490,7 +538,7 @@ Scope:
   `buildLiveProviderStack` in `apps/phone_flutter/lib/dashboard/live_provider_stack.dart`
   carries the captured `generatedAt` and private integer `capturedEndMicros` together.
   `anthropic_provider_snapshot_from_report_json` in
-  `core/ward-pulse-providers/src/claude/platform.rs` continues to use the private precise
+  `core/ward-pulse-providers/src/anthropic/platform.rs` continues to use the private precise
   captured-end bound when selecting cost days and deciding empty periods, independently
   of shared timestamp canonicalization.
   Amounts are decimal strings in lowest currency units (cents); WardPulse accumulates them
@@ -608,7 +656,7 @@ has an explicit percentage or Off override. See the user guide's
 [Alert thresholds](user-guide/DASHBOARD.md#alert-thresholds).
 
 Claude plan resets are validated by `claude_provider_snapshot_from_report_json` in
-`core/ward-pulse-providers/src/claude/mod.rs`. Supported input is ASCII Gregorian
+`core/ward-pulse-providers/src/anthropic/plan.rs`. Supported input is ASCII Gregorian
 `YYYY-MM-DDTHH:MM:SS[.digits]` with uppercase `T` and a mandatory uppercase `Z` or numeric
 `±HH:MM` zone (at most `23:59`), valid calendar dates, and no leap seconds. Years must stay
 within `0000`–`9999` before and after UTC conversion. The adapter validates the entire fraction,

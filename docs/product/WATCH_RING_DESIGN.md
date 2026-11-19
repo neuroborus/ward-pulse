@@ -1610,7 +1610,7 @@ on its own value.
 A split band never carries ring type, and no rule is needed to keep them apart: type belongs to
 budget rings, and a Cursor budget ring hangs off the **team Admin** connection that reports
 spend (`cursor/platform.rs`), while the two pools live on the **plan** connection
-(`cursor/mod.rs`). Different connections, so a band is either one or the other. Which is
+(`cursor/plan.rs`). Different connections, so a band is either one or the other. Which is
 fortunate — a cap of 15.8 units does not fit in half a band.
 
 Geometry was settled on a device, not in arithmetic: the halves measure 9.75 units each and

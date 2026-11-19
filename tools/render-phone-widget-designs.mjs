@@ -503,7 +503,7 @@ async function renderOwnFontPreview(options) {
     [path, await hashFile(join(root, path))])))
   const protectedBefore = await hashes(protectedPaths)
   const inputHashes = await hashes(['tools/render-phone-widget-designs.mjs', 'docs/DESIGN_ASSETS.md',
-    PHOTO, HOST_FRAME, hostPng, WIDGET_BRIEF, CLAUDE_FIXTURE, 'core/ward-pulse-providers/src/claude/mod.rs',
+    PHOTO, HOST_FRAME, hostPng, WIDGET_BRIEF, CLAUDE_FIXTURE, 'core/ward-pulse-providers/src/anthropic/plan.rs',
     ...(responsive ? Object.keys(RESPONSIVE_INPUTS) : [])])
 
   await mkdir(directory, { mode: 0o700 })

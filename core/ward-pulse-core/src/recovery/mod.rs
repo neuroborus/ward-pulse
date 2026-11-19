@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::model::{
     deserialize_recovery_requirements, AccountId, AllowanceSource, AllowanceState,
-    DashboardSnapshot, HistoryOwner, ProviderKind, ProviderSnapshot, ProviderStatus,
+    DashboardSnapshot, HistoryOwner, ProviderIdentity, ProviderSnapshot, ProviderStatus,
     RecoveryRequirements,
 };
 use crate::time::DateTimeUtc;
@@ -122,7 +122,7 @@ pub fn reconcile_plan_recoveries(
         recoveries.push(PlanRecovery {
             account_id: account.account_id.clone(),
             history_owner: account.history_owner.clone(),
-            provider: account.provider,
+            provider: account.source.provider(),
             allowance_id: allowance.id.clone(),
             label: allowance.label.clone(),
             resets_at: allowance.resets_at.clone(),
@@ -210,10 +210,9 @@ pub struct PlanRecovery {
     pub account_id: AccountId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub history_owner: Option<HistoryOwner>,
-    /// Which family the window belongs to. Two subscriptions can both call a
-    /// window "Weekly plan", so the family is what tells a reader which one is
-    /// back.
-    pub provider: ProviderKind,
+    /// Display identity of the window. Two subscriptions can both call a
+    /// window "Weekly plan", so its display label tells a reader which one is back.
+    pub provider: ProviderIdentity,
     pub allowance_id: String,
     pub label: String,
     /// When the window is next expected to roll, as the new snapshot reports it.
@@ -290,9 +289,7 @@ fn has_room(allowance: &AllowanceState) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{
-        AllowanceSource, BudgetPeriod, ProviderKind, ProviderSnapshot, ProviderStatus,
-    };
+    use crate::model::{AllowanceSource, BudgetPeriod, ProviderSnapshot, ProviderStatus};
 
     fn allowance(id: &str, used_percent: Option<f64>) -> AllowanceState {
         AllowanceState {
@@ -318,8 +315,10 @@ mod tests {
         let budget = |period| crate::budget::calculate_budget_state(period, None, None, None);
         ProviderSnapshot {
             account_id: id.to_string(),
-            provider: ProviderKind::Claude,
-            connection: None,
+            source: crate::model::ProviderSource::from_legacy(
+                crate::model::ProviderKind::Claude,
+                None,
+            ),
             history_owner: None,
             status: ProviderStatus::Ok,
             today: budget(BudgetPeriod::Today),
@@ -721,7 +720,10 @@ mod tests {
 
         assert_eq!(recoveries.len(), 1);
         assert_eq!(recoveries[0].account_id, "claude");
-        assert_eq!(recoveries[0].provider, ProviderKind::Claude);
+        assert_eq!(
+            recoveries[0].provider.legacy_provider(),
+            crate::model::ProviderKind::Claude
+        );
         assert_eq!(recoveries[0].allowance_id, "weekly");
         assert_eq!(
             recoveries[0].resets_at,
@@ -781,7 +783,7 @@ mod tests {
             vec![PlanRecovery {
                 account_id: "claude".to_string(),
                 history_owner: None,
-                provider: ProviderKind::Claude,
+                provider: crate::model::ProviderKind::Claude.into(),
                 allowance_id: "weekly".to_string(),
                 label: "Weekly plan".to_string(),
                 resets_at: Some(DateTimeUtc::new("2026-08-23T12:00:00Z")),

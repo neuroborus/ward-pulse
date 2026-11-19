@@ -1,3 +1,6 @@
+#[cfg(test)]
+use ward_pulse_core::model::ProviderKind;
+
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
 use std::fmt;
@@ -5,8 +8,8 @@ use std::fmt;
 use serde::Deserialize;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
-    connection, AllowanceSource, AllowanceState, BudgetPeriod, ProviderKind, ProviderSnapshot,
-    ProviderStatus, Quantity, QuantityUnit, RecoveryRequirements, UsageBucket,
+    AllowanceSource, AllowanceState, BudgetPeriod, ProviderConnectionId, ProviderSnapshot,
+    ProviderSource, ProviderStatus, Quantity, QuantityUnit, RecoveryRequirements, UsageBucket,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
@@ -148,8 +151,7 @@ pub fn codex_provider_snapshot_from_report_json(
     let unknown_budget = |period| calculate_budget_state(period, None, None, None);
     let provider_snapshot = ProviderSnapshot {
         account_id: "codex-local".to_string(),
-        provider: ProviderKind::Codex,
-        connection: Some(connection::CODEX_PLAN.to_string()),
+        source: ProviderSource::connection(ProviderConnectionId::OPENAI_PLAN),
         history_owner: None,
         status,
         today: unknown_budget(BudgetPeriod::Today),
@@ -596,7 +598,10 @@ mod tests {
             .expect("normalize Codex account report");
         let snapshot = report.provider_snapshot;
 
-        assert_eq!(snapshot.provider, ProviderKind::Codex);
+        assert_eq!(
+            snapshot.source.provider().legacy_provider(),
+            ProviderKind::Codex
+        );
         assert_eq!(snapshot.status, ProviderStatus::Warning);
         assert_eq!(snapshot.allowances.len(), 2);
         assert_eq!(snapshot.allowances[0].source, AllowanceSource::Plan);

@@ -11,20 +11,20 @@ use serde_json::{json, Value};
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::build_dashboard_snapshot;
 use ward_pulse_core::model::{
-    AllowanceSource, AllowanceState, BudgetState, DashboardSnapshot, Money, ProviderSnapshot,
-    ProviderStatus, Quantity, QuantityUnit,
+    AllowanceSource, AllowanceState, BudgetState, DashboardSnapshot, Money, ProviderConnectionId,
+    ProviderSnapshot, ProviderStatus, Quantity, QuantityUnit, SourceOrigin,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
 use crate::allowance::{percent_status, worst_status};
-use crate::claude::{
+use crate::anthropic::{
     anthropic_provider_snapshot_from_report_json, claude_provider_snapshot_from_report_json,
 };
-use crate::codex::codex_provider_snapshot_from_report_json;
 use crate::cursor::{
     cursor_plan_snapshot_from_report_json, cursor_platform_snapshot_from_report_json,
 };
 use crate::openai::openai_provider_snapshot_from_report_json;
+use crate::openai::plan::codex_provider_snapshot_from_report_json;
 
 const CODEX_FIXTURE: &str = include_str!("../../../../fixtures/providers/codex/report.json");
 const CLAUDE_OAUTH_FIXTURE: &str =
@@ -129,8 +129,8 @@ pub fn debug_multi_provider_dashboard_at(
     // Docs preset revision 2 keeps all random draws and unrelated data intact.
     if let (280, Some(anchor)) = (seed, anchor) {
         for account in &mut accounts {
-            match account.connection.as_deref() {
-                Some("openai.plan") => {
+            match account.source.origin() {
+                SourceOrigin::Connection(ProviderConnectionId::OPENAI_PLAN) => {
                     if let Some(window) = account
                         .allowances
                         .iter_mut()
@@ -140,7 +140,7 @@ pub fn debug_multi_provider_dashboard_at(
                         window.status = percent_status(window.used_percent);
                     }
                 }
-                Some("anthropic.plan") => {
+                SourceOrigin::Connection(ProviderConnectionId::ANTHROPIC_PLAN) => {
                     if let Some(window) = account
                         .allowances
                         .iter_mut()
@@ -152,7 +152,7 @@ pub fn debug_multi_provider_dashboard_at(
                         window.status = percent_status(window.used_percent);
                     }
                 }
-                Some("cursor.plan") => {
+                SourceOrigin::Connection(ProviderConnectionId::CURSOR_PLAN) => {
                     account
                         .allowances
                         .retain(|meter| meter.id != "cursor-on-demand");
@@ -773,7 +773,7 @@ mod tests {
                 assert!(
                     state.used_percent.is_some(),
                     "{:?} {:?} has spend but no percentage",
-                    account.provider,
+                    account.source.provider().legacy_provider(),
                     state.period
                 );
             }
@@ -800,7 +800,7 @@ mod tests {
                     assert!(
                         percent < 100.0,
                         "seed {seed}: {:?} {:?} drew {percent}",
-                        account.provider,
+                        account.source.provider().legacy_provider(),
                         state.period
                     );
                 }
@@ -814,7 +814,7 @@ mod tests {
         let kinds: Vec<_> = snapshot
             .accounts
             .iter()
-            .map(|account| account.provider)
+            .map(|account| account.source.provider().legacy_provider())
             .collect();
         assert!(kinds.contains(&ProviderKind::OpenAi));
         assert!(kinds.contains(&ProviderKind::Codex));
@@ -838,7 +838,7 @@ mod tests {
         let anthropic = snapshot
             .accounts
             .iter()
-            .find(|account| account.connection.as_deref() == Some("anthropic.platform"))
+            .find(|account| account.source.explicit_connection() == Some("anthropic.platform"))
             .unwrap();
         for budget in [&anthropic.today, &anthropic.week, &anthropic.month] {
             assert!(budget.spent.is_some());
@@ -846,7 +846,7 @@ mod tests {
         let cursor = snapshot
             .accounts
             .iter()
-            .find(|account| account.connection.as_deref() == Some("cursor.platform"))
+            .find(|account| account.source.explicit_connection() == Some("cursor.platform"))
             .unwrap();
         for budget in [&cursor.today, &cursor.week, &cursor.month] {
             assert!(budget.spent.is_some());
@@ -862,7 +862,7 @@ mod tests {
             unanchored
                 .accounts
                 .iter()
-                .map(|account| account.connection.as_deref().unwrap())
+                .map(|account| account.source.explicit_connection().unwrap())
                 .collect::<Vec<_>>(),
             vec![
                 "openai.platform",
@@ -883,7 +883,7 @@ mod tests {
             let claude = snapshot
                 .accounts
                 .iter()
-                .find(|account| account.connection.as_deref() == Some("anthropic.plan"))
+                .find(|account| account.source.explicit_connection() == Some("anthropic.plan"))
                 .unwrap();
             assert_eq!(
                 claude
@@ -899,7 +899,7 @@ mod tests {
             let cursor = snapshot
                 .accounts
                 .iter()
-                .find(|account| account.connection.as_deref() == Some("cursor.plan"))
+                .find(|account| account.source.explicit_connection() == Some("cursor.plan"))
                 .unwrap();
             assert_eq!(
                 cursor
@@ -971,7 +971,10 @@ mod tests {
             snapshot
                 .accounts
                 .iter()
-                .map(|account| (account.account_id.as_str(), account.connection.as_deref()))
+                .map(|account| (
+                    account.account_id.as_str(),
+                    account.source.explicit_connection()
+                ))
                 .collect::<Vec<_>>(),
             vec![
                 ("openai-demo", Some("openai.platform")),
@@ -1144,7 +1147,7 @@ mod tests {
                     account.last_successful_sync_at.as_ref().unwrap().as_str(),
                     anchor
                 );
-                let anthropic = account.connection.as_deref() == Some("anthropic.platform");
+                let anthropic = account.source.explicit_connection() == Some("anthropic.platform");
                 let history: Vec<_> = account
                     .buckets
                     .iter()
@@ -1167,7 +1170,7 @@ mod tests {
                         start.0 - old_start.0,
                         time.day_start().0 - old_sync.day_start().0,
                         "{:?} history",
-                        account.connection
+                        account.source.explicit_connection()
                     );
                     assert_eq!(bucket.input_tokens, old_bucket.input_tokens);
                     assert_eq!(bucket.cached_tokens, old_bucket.cached_tokens);
@@ -1238,7 +1241,7 @@ mod tests {
                         .filter_map(|bucket| bucket.cost.as_ref())
                         .map(|cost| cost.minor_units)
                         .sum();
-                    let empty = account.connection.as_deref() == Some("anthropic.platform")
+                    let empty = account.source.explicit_connection() == Some("anthropic.platform")
                         && DemoTime::parse(&start).unwrap().0 >= time.0;
                     assert_eq!(
                         state.spent.as_ref().map(|spent| spent.minor_units),

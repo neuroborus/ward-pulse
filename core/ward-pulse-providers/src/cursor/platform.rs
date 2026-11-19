@@ -1,5 +1,8 @@
 //! Cursor team daily history and extra-paid calendar usage-event normalization.
 
+#[cfg(test)]
+use ward_pulse_core::model::{connection, ProviderKind};
+
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
 use std::fmt;
@@ -8,9 +11,25 @@ use serde::Deserialize;
 use serde_json::{Number, Value};
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
-    connection, BudgetPeriod, Money, ProviderKind, ProviderSnapshot, ProviderStatus, UsageBucket,
+    BudgetPeriod, Money, ProviderConnectionId, ProviderSnapshot, ProviderSource, ProviderStatus,
+    UsageBucket,
 };
 use ward_pulse_core::time::DateTimeUtc;
+
+use crate::{BucketCapabilities, ProviderCapabilities};
+
+pub(crate) const CAPABILITIES: ProviderCapabilities = ProviderCapabilities {
+    supports_cost: true,
+    supports_tokens: false,
+    supports_requests: true,
+    supports_credits: false,
+    usage_buckets: BucketCapabilities::DAILY,
+    cost_buckets: BucketCapabilities::DAILY,
+    supports_usage_model_breakdown: false,
+    supports_cost_model_breakdown: false,
+    supports_workspace_breakdown: false,
+    supports_active_agents: false,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CursorPlatformReportSnapshot {
@@ -108,8 +127,7 @@ pub fn cursor_platform_snapshot_from_report_json(
         generated_at: report.generated_at.clone(),
         provider_snapshot: ProviderSnapshot {
             account_id: report.account_id,
-            provider: ProviderKind::Cursor,
-            connection: Some(connection::CURSOR_PLATFORM.to_string()),
+            source: ProviderSource::connection(ProviderConnectionId::CURSOR_PLATFORM),
             history_owner: None,
             status: ProviderStatus::Ok,
             today: calculate_budget_state(BudgetPeriod::Today, spend[0].clone(), None, None),
@@ -513,9 +531,12 @@ mod tests {
         .unwrap();
         let snapshot = normalize(&envelope(vec![page])).unwrap();
         assert_eq!(amounts(&snapshot), [Some(20), Some(50), Some(4326)]);
-        assert_eq!(snapshot.provider, ProviderKind::Cursor);
         assert_eq!(
-            snapshot.connection.as_deref(),
+            snapshot.source.provider().legacy_provider(),
+            ProviderKind::Cursor
+        );
+        assert_eq!(
+            snapshot.source.explicit_connection(),
             Some(connection::CURSOR_PLATFORM)
         );
         assert_eq!(

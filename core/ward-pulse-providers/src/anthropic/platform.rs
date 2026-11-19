@@ -1,5 +1,8 @@
 //! Anthropic organization Usage & Cost Admin API normalization.
 
+#[cfg(test)]
+use ward_pulse_core::model::ProviderKind;
+
 use std::collections::BTreeMap;
 use std::error::Error as StdError;
 use std::fmt;
@@ -7,10 +10,25 @@ use std::fmt;
 use serde::Deserialize;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
-    connection, BudgetPeriod, ModelUsage, Money, ProviderKind, ProviderSnapshot, ProviderStatus,
-    UsageBucket,
+    BudgetPeriod, ModelUsage, Money, ProviderConnectionId, ProviderSnapshot, ProviderSource,
+    ProviderStatus, UsageBucket,
 };
 use ward_pulse_core::time::DateTimeUtc;
+
+use crate::{BucketCapabilities, ProviderCapabilities};
+
+pub(crate) const CAPABILITIES: ProviderCapabilities = ProviderCapabilities {
+    supports_cost: true,
+    supports_tokens: true,
+    supports_requests: false,
+    supports_credits: false,
+    usage_buckets: BucketCapabilities::DAILY_AND_HOURLY,
+    cost_buckets: BucketCapabilities::DAILY,
+    supports_usage_model_breakdown: true,
+    supports_cost_model_breakdown: false,
+    supports_workspace_breakdown: true,
+    supports_active_agents: false,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct AnthropicReportSnapshot {
@@ -162,8 +180,7 @@ pub fn anthropic_provider_snapshot_from_report_json(
         generated_at: report.generated_at.clone(),
         provider_snapshot: ProviderSnapshot {
             account_id: report.account_id,
-            provider: ProviderKind::Claude,
-            connection: Some(connection::ANTHROPIC_PLATFORM.to_string()),
+            source: ProviderSource::connection(ProviderConnectionId::ANTHROPIC_PLATFORM),
             history_owner: None,
             status: ProviderStatus::Ok,
             today,
@@ -210,7 +227,7 @@ fn budget_for(
 }
 
 fn utc_timestamp(value: &str) -> Result<DateTimeUtc, AnthropicReportError> {
-    super::parse_timestamp(value).map_err(|_| AnthropicReportError::InvalidTimestamp)
+    super::plan::parse_timestamp(value).map_err(|_| AnthropicReportError::InvalidTimestamp)
 }
 
 /// Gregorian day arithmetic; the existing Claude parser validates and normalizes UTC first.
@@ -492,7 +509,14 @@ mod tests {
 
         let snapshot =
             anthropic_provider_snapshot_from_report_json(&report).expect("normalize Anthropic");
-        assert_eq!(snapshot.provider_snapshot.provider, ProviderKind::Claude);
+        assert_eq!(
+            snapshot
+                .provider_snapshot
+                .source
+                .provider()
+                .legacy_provider(),
+            ProviderKind::Claude
+        );
         assert!(snapshot.provider_snapshot.today.spent.is_some());
         assert_eq!(
             snapshot.provider_snapshot.week.spent,
