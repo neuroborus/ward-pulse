@@ -48,9 +48,36 @@ void main() {
         if (call.method == 'show') posts.add(Map.of(call.arguments as Map));
         return true;
       });
+
+      Future<T> runAsync<T>(Future<T> Function() action) async {
+        late T value;
+        Object? error;
+        StackTrace? stackTrace;
+        final completed = await tester.runAsync(() async {
+          try {
+            value = await action();
+            return true;
+          } catch (caught, stack) {
+            error = caught;
+            stackTrace = stack;
+            return false;
+          }
+        });
+        if (error != null) {
+          Error.throwWithStackTrace(error!, stackTrace!);
+        }
+        if (completed != true) {
+          throw tester.takeException() ??
+              StateError('Asynchronous action did not complete.');
+        }
+        return value;
+      }
+
       Directory? directory;
+      Object? failure;
+      StackTrace? failureStack;
       try {
-        await tester.runAsync(() async {
+        await runAsync(() async {
           directory = await Directory.systemTemp.createTemp(
             'wardpulse-recovery-',
           );
@@ -93,7 +120,7 @@ void main() {
           cache,
           version,
         );
-        await tester.runAsync(
+        await runAsync(
           () => SecureAlertThresholdPreferenceStore(storage: storage).write(
             const AlertThresholdPreferences(
               connections: {
@@ -122,18 +149,42 @@ void main() {
         }
 
         Future<String> observe(Future<void> Function() action) async {
-          final written = storage.arm();
-          String? value;
-          await tester.runAsync(() async {
+          final value = await runAsync(() async {
+            final written = storage.arm();
             await action();
-            value = await written.timeout(const Duration(seconds: 10));
+            final delivery = written.timeout(const Duration(seconds: 10));
+            late String value;
+            var completed = false;
+            Object? error;
+            StackTrace? stackTrace;
+            unawaited(
+              delivery.then<void>(
+                (result) {
+                  value = result;
+                  completed = true;
+                },
+                onError: (Object caught, StackTrace stack) {
+                  error = caught;
+                  stackTrace = stack;
+                  completed = true;
+                },
+              ),
+            );
+            while (!completed) {
+              await tester.pump();
+              if (!completed) await Future<void>.delayed(Duration.zero);
+            }
+            if (error != null) {
+              Error.throwWithStackTrace(error!, stackTrace!);
+            }
+            return value;
           });
           await tester.pumpAndSettle(
             const Duration(milliseconds: 100),
             EnginePhase.sendSemanticsUpdate,
             const Duration(seconds: 5),
           );
-          return value!;
+          return value;
         }
 
         final initial = await observe(() => tester.pumpWidget(app()));
@@ -155,7 +206,7 @@ void main() {
                 .toSet()
                 .toList();
         // Retain observations before any semantic assertion, including under OLD.
-        await tester.runAsync(() async {
+        await runAsync(() async {
           stdout.writeln(
             'PLAN_RECOVERY_BLOCKED ${jsonEncode({'pid': pid, 'loadedLibraries': loadedLibraries, 'initial': jsonDecode(initial), 'blocked': jsonDecode(blocked), 'pluginShows': earlyPosts})}',
           );
@@ -170,13 +221,12 @@ void main() {
         );
         storage = _DiskStorage(directory!);
         store = SecureRecoveryWatchlistStore(storage: storage);
-        final reloadedResult = await tester.runAsync(
+        final reloaded = await runAsync(
           () => store.readPendingOwners({owner}),
         );
-        final reloaded = reloadedResult!;
         transport.root['secondary_window']['used_percent'] = 20;
         final recovered = await observe(() => tester.pumpWidget(app()));
-        await tester.runAsync(() async {
+        await runAsync(() async {
           stdout.writeln(
             'PLAN_RECOVERY_RELOADED ${jsonEncode({
               'pending': [for (final entry in reloaded.pending) entry.toJson()],
@@ -233,6 +283,9 @@ void main() {
           );
         }
         expect(decodePendingRecoveries(recovered), isEmpty);
+      } catch (error, stack) {
+        failure = error;
+        failureStack = stack;
       } finally {
         try {
           await tester.pumpWidget(const SizedBox.shrink());
@@ -241,11 +294,21 @@ void main() {
             EnginePhase.sendSemanticsUpdate,
             const Duration(seconds: 5),
           );
-        } finally {
-          if (directory != null) {
-            await tester.runAsync(() => directory!.delete(recursive: true));
-          }
+        } catch (error, stack) {
+          failure ??= error;
+          failureStack ??= stack;
         }
+        try {
+          if (directory != null) {
+            await runAsync(() => directory!.delete(recursive: true));
+          }
+        } catch (error, stack) {
+          failure ??= error;
+          failureStack ??= stack;
+        }
+      }
+      if (failure != null) {
+        Error.throwWithStackTrace(failure, failureStack!);
       }
     },
     variant: TargetPlatformVariant.only(TargetPlatform.android),
