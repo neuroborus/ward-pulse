@@ -502,8 +502,10 @@ context; wholly skipped loads perform no reconciliation or history writes. Notif
 and muted delivery still consumes actually recovered targets without a later backlog.
 Optional malformed context becomes Unknown while retaining a valid key. Fixed snapshot codecs,
 cache serialization and alert-setting transforms carry allowance requirements without moving
-phone-only connection provenance into shared payloads. This boundary-adoption stage retains
-per-window recovery eligibility; it does not yet activate applicable-capacity gating.
+phone-only connection provenance into shared payloads. The Rust reconciler merges remembered
+and current requirements before evaluating fresh usable included capacity. Targets remain
+pending through reload while a necessary constraint is exhausted or Unknown, even when their
+own raw window has room. Omission or explicit null does not retire a remembered constraint.
 
 Each partition also retains the last known reset for its spent windows, so an incomplete
 or skipped report cannot postpone an earlier wake when a sibling supplies a later reset.
@@ -543,6 +545,59 @@ publish watch/widget data or deliver alerts. Scheduling remains subject to Andro
 engine's adversarial tests with the existing Android JDK (`javac` and `java`). Flutter tests also
 exercise the real engine through a test-only JVM bridge with fake encrypted storage and HTTP
 responses. No live credentials, emulator state or provider network are used by these tests.
+
+### Applicable-capacity recovery proof (HOST, pending)
+
+`test/plan_recovery_foreground_test.dart`, test
+`foreground recovery retains newly necessary capacity across disk reload`, mounts the normal
+foreground app with production Codex HTTP normalization, Rust normalization/serde/FFI, fixed
+Dart codecs, merge and enabled alert-setting transforms. A synthetic committed owner is
+stamped with `ConnectionSnapshotCache.stamp`. The default reconciler,
+`SecureRecoveryWatchlistStore` and `LocalRecoveryNotifier` remain production implementations;
+only HTTP and secure-storage transports are test-local. Storage uses small temporary files,
+and notification observations capture the actual plugin `show` call.
+
+The first report exhausts the short window with omitted weekly applicability. The next gives
+the short window room and establishes an exhausted weekly requirement. FINAL must remain
+silent and persist that original target with both requirements. New storage/store instances
+read the disk context before fresh room in both windows permits the normal, distinct target
+notifications. `PLAN_RECOVERY_BLOCKED` and `PLAN_RECOVERY_RELOADED` retain observations before
+semantic assertions, including process ID, actual loaded library mappings, pending JSON and
+plugin submissions. Android encryption, process death, OS delivery and sound are separate
+acceptance evidence.
+
+OLD is the actual Commit 1 production `core/ward-pulse-core/src/recovery/mod.rs` from commit
+`0f4b6633ac033b5db3faa46dc0f9548e6d6f4dad`, Git blob
+`bc37ffb41bf484a356e1600480e48f4950dbf737`, mode `100644`. Its external reconciliation API/types
+remain compatible with final support. The pre-API predecessor and precode library are not OLD.
+HOST runs identical final test/fixture/support Source through FINAL → this OLD module → restored
+FINAL, building separate task-owned library directories from `core/` with
+`cargo build --locked -p ward-pulse-ffi` and task-local `CARGO_TARGET_DIR` values. This builds the
+production library, excluding historical unit tests. Select each library through the existing
+`LD_LIBRARY_PATH` route in a fresh Flutter process, from `apps/phone_flutter/`:
+
+```sh
+LD_LIBRARY_PATH="$WARDPULSE_RECOVERY_TARGET/debug${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  flutter test test/plan_recovery_foreground_test.dart \
+  --plain-name 'foreground recovery retains newly necessary capacity across disk reload'
+```
+
+Before any Source transition, HOST retires owned readers, pins final bytes/mode and Source,
+index and ref identities, and registers unconditional exact restoration even on failure.
+After each leg it retires the owned process group and verifies library identity and exact
+restoration before proceeding. The test has an explicit 60-second framework deadline and
+10-second write barriers; HOST also bounds and owns each Flutter process group with a
+90-second controller deadline, recording its identity and verifying retirement after a stop.
+Build setup is separately bounded and reported. OLD must submit the premature normal
+notification and fail the named assertion
+`necessary weekly capacity blocks premature normal notification`. Setup, compilation,
+loading, transport and timeout failures are infrastructure failures, never semantic RED.
+
+This procedure is unexecuted source guidance. Execution and unchanged full `just check-phone`
+remain HOST-owned after whole CODE completion, owning CLI exit when used, scoped retirement,
+separate fresh public idle and Root admission. Native completion does not await HOST. Normal
+Android builds, preserving install, active APK/ABI/FFI/startup and scoped device evidence
+remain pending at that checkpoint too; no historical proof or acceptance is reused.
 
 The cache regression `late older Codex report retains newer normalized cache` in
 `test/connection_snapshot_cache_test.dart` also uses the production Rust

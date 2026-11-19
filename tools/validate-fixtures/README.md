@@ -36,7 +36,9 @@ change runtime DateTimeUtc parsing.
 
 The checker reads the keyword subset these schemas use (`type`, `$ref`, `properties`,
 `additionalProperties`, `required`, `items`, `enum`, `const`, `anyOf`, `allOf`, `minimum`,
-`maximum`, `minLength`, `maxLength`, `maxItems`, `pattern`, and `date-time` for `format`). Every
+`maximum`, `minLength`, `maxLength`, `minItems`, `maxItems`, `uniqueItems`, `pattern`, and
+`date-time` for `format`). Array uniqueness uses JSON equality: booleans differ from numbers,
+numerically equal values match, and object property order does not matter. Every
 schema is swept for anything outside that set before the fixtures are checked — branches no
 fixture walks into included — so a rule cannot be added that the gate reads past.
 
@@ -47,6 +49,9 @@ just validate-fixtures
 ```
 
 ## Isolated regressions
+
+`ArrayConstraintTests` checks the actual recovery-requirements schema against empty,
+duplicate and valid allowance IDs, plus nested JSON equality for `uniqueItems`.
 
 The standard-library suite in [`test_validate_json.py`](test_validate_json.py),
 `FixtureValidatorTests`, imports the actual production module and calls its unchanged `main`

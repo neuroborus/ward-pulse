@@ -128,6 +128,20 @@ This feature tells you when a plan window that was exhausted becomes usable agai
 independent of Alert notifications and needs no threshold rule. Detection depends on reporting
 and scheduling, so it is not an exact reset alarm or an exactly-once delivery guarantee.
 
+A five-hour window can reset while a necessary weekly allowance is still exhausted or
+Unknown. The displayed usage and reset time still describe that window, but WardPulse keeps
+its recovery pending until a fresh report shows usable included capacity across its necessary
+allowances. That pending state survives app restarts. A later usable report can then trigger
+the normal notification; reporting delays and Android scheduling can delay it. Independent
+allowances do not have to recover together. Purchased credits do not restore included quota.
+
+For Codex, WardPulse recognizes a qualified main-quota report with both windows, or one window
+whose sibling is explicitly absent. A previously necessary sibling remains required even when
+a later report says it is absent. Missing or unclear information, or denied/reached status in
+that bucket, cannot establish recovery from percentages alone. These are compatibility
+inferences about the reported included quota, not a guarantee that every model or API request
+will run. Uncertainty about a separate feature does not silence a qualified main-quota target.
+
 The **Notifications are blocked** warning applies to both switches, including saved Off choices.
 **Enable notifications** opens Android settings; it does not grant permission or change either
 switch. WardPulse rechecks when you return. Android's channel settings and Do Not Disturb can

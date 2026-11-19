@@ -30,8 +30,10 @@ optional `requirements: {allowanceIds, complete}`. Allowances carry the same des
 context is Unknown, and legacy key-only records remain readable.
 
 The phone persists Rust-returned pending context through owner-partitioned storage, retaining
-reset scheduling metadata separately. This adoption stage retains per-window eligibility;
-applicable-capacity evaluation is activated separately behind the same reconciliation API.
+reset scheduling metadata separately. Rust evaluates complete applicable Plan capacity after
+merging current and saved requirements; a blocked target remains pending even with own-window
+room. Legacy key-only callers use the same evaluator, while contextual callers also retain
+necessary constraints across reports. The external reconciliation API and types are unchanged.
 Rebuild and identify actual loaded libraries on HOST before runtime acceptance.
 
 ## Threshold condition observations

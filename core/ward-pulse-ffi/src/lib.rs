@@ -724,8 +724,15 @@ mod tests {
         let request = serde_json::json!({"snapshot": applied, "exhausted": exhausted});
         let recoveries: serde_json::Value =
             serde_json::from_str(&plan_recoveries_json(&request.to_string()).unwrap()).unwrap();
-        assert_eq!(recoveries.as_array().unwrap().len(), 1);
-        assert_eq!(recoveries[0]["historyOwner"], owner);
+        assert!(recoveries.as_array().unwrap().is_empty());
+        let mut usable = request;
+        usable["snapshot"]["accounts"][0]["allowances"][1]["usedPercent"] = serde_json::json!(20.0);
+        let recoveries: serde_json::Value =
+            serde_json::from_str(&plan_recoveries_json(&usable.to_string()).unwrap()).unwrap();
+        assert_eq!(recoveries.as_array().unwrap().len(), 2);
+        for recovery in recoveries.as_array().unwrap() {
+            assert_eq!(recovery["historyOwner"], owner);
+        }
     }
 
     /// A one-account dashboard whose weekly window sits at `used_percent`.
@@ -745,6 +752,7 @@ mod tests {
             "allowances": [
                 {
                     "id": "claude-weekly",
+                    "recoveryRequirements": {"allowanceIds":["claude-weekly","claude-session"],"complete":true},
                     "source": "plan",
                     "label": "Weekly plan",
                     "usedPercent": used_percent,
@@ -757,6 +765,7 @@ mod tests {
                 },
                 {
                     "id": "claude-session",
+                    "recoveryRequirements": {"allowanceIds":["claude-session","claude-weekly"],"complete":true},
                     "source": "plan",
                     "label": "5-hour session",
                     "usedPercent": 100.0,

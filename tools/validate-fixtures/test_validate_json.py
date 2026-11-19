@@ -23,6 +23,44 @@ SCHEMA = "watch_dashboard_summary.schema.json"
 CONSTANTS = ("NaN", "Infinity", "-Infinity")
 
 
+class ArrayConstraintTests(unittest.TestCase):
+    def test_recovery_requirements_enforce_nonempty_unique_ids(self):
+        schemas = validator.load_schemas()
+        owner = "dashboard_snapshot.schema.json"
+        schema = schemas[owner]["$defs"]["recoveryRequirements"]
+        self.assertEqual(validator.check_keywords(owner, schema), [])
+        for ids, diagnostic in (
+            ([], "minItems"),
+            (["session", "session"], "uniqueItems"),
+            (["session", "weekly"], None),
+        ):
+            with self.subTest(ids=ids):
+                errors = validator.check(
+                    {"allowanceIds": ids, "complete": True},
+                    schema, schemas, owner, "requirements",
+                )
+                if diagnostic is None:
+                    self.assertEqual(errors, [])
+                else:
+                    self.assertIn(diagnostic, "\n".join(errors))
+
+    def test_unique_items_uses_json_equality(self):
+        schema = {"type": "array", "uniqueItems": True}
+        for value, duplicate in (
+            ([True, 1], False),
+            ([1, 1.0], True),
+            ([{"a": [True]}, {"a": [1]}], False),
+            ([{"a": [1], "b": 2}, {"b": 2.0, "a": [1.0]}], True),
+        ):
+            with self.subTest(value=value):
+                errors = validator.check(value, schema, {}, "array", "items")
+                self.assertEqual(bool(errors), duplicate)
+        self.assertEqual(
+            validator.check([1, 1], {"uniqueItems": False}, {}, "array", "items"),
+            [],
+        )
+
+
 class FixtureValidatorTests(unittest.TestCase):
     def setUp(self):
         scratch = tempfile.TemporaryDirectory(prefix="wardpulse-fixture-test-")

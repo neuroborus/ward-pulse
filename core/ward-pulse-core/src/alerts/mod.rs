@@ -207,8 +207,29 @@ fn raise_crossed_thresholds(
         return account;
     };
 
+    // Threshold decoration can outrank Stale/Unknown. Keep that uncertainty in
+    // affected recovery scopes before display statuses are raised to Warning.
+    let uncertain: Vec<_> = account
+        .allowances
+        .iter()
+        .filter(|allowance| {
+            allowance.status == ProviderStatus::Stale
+                || (allowance.status == ProviderStatus::Unknown && !allowance.unlimited)
+        })
+        .map(|allowance| allowance.id.clone())
+        .collect();
     let mut window_crossed = false;
     for allowance in &mut account.allowances {
+        if let Some(requirements) = &mut allowance.recovery_requirements {
+            if account.status == ProviderStatus::Stale
+                || requirements
+                    .allowance_ids
+                    .iter()
+                    .any(|id| uncertain.contains(id))
+            {
+                requirements.complete = false;
+            }
+        }
         let threshold = connection.for_allowance(allowance);
         if crossed(allowance.used_percent, threshold.at) {
             allowance.status = ProviderStatus::worst([allowance.status, ProviderStatus::Warning]);

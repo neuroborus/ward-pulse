@@ -158,6 +158,21 @@ This independent feature is for an exhausted plan becoming usable again; use
 **Alert notifications** for configured thresholds. It needs a later report to detect recovery, so
 its delivery is not an exact reset alarm.
 
+If the five-hour window has reset but a necessary weekly allowance is exhausted or Unknown,
+WardPulse keeps the recovery pending, including across app restarts. The reported usage
+and reset time apply to that window; they do not show that every necessary
+allowance is usable. A fresh report showing usable included capacity allows the later normal
+notification. Provider reporting delays and Android scheduling can delay detection. Purchased
+credits do not clear an exhausted included allowance.
+
+Codex main-quota recovery needs a qualified two-window report or a qualified single window
+with an explicitly absent sibling. A previously necessary sibling is retained when later
+absent. Omitted, malformed or ambiguous evidence, or denied/reached status for the bucket,
+cannot establish recovery from apparent room. This compatibility interpretation covers the
+reported included quota, not arbitrary model/API access; uncertainty about separate features
+does not block a qualified main-quota target. Also check Android's channel settings and Do Not
+Disturb. Phone-to-watch notification bridging remains Android-controlled and best effort.
+
 ## Asking for help
 
 Use the [issue format](/guide/report-an-issue), then [open a GitHub issue](https://github.com/neuroborus/ward-pulse/issues/new).

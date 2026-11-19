@@ -89,7 +89,8 @@ SUPPORTED = {
     "$schema", "$id", "$defs", "$ref", "title", "description",
     "type", "properties", "additionalProperties", "required", "items",
     "enum", "const", "anyOf", "allOf",
-    "minimum", "maximum", "minLength", "maxLength", "maxItems", "pattern",
+    "minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems",
+    "uniqueItems", "pattern",
     "format",
 }
 
@@ -176,8 +177,16 @@ def check(
         if "maximum" in schema and value > schema["maximum"]:
             errors.append(f"{where}: {value} is above maximum {schema['maximum']}")
     if isinstance(value, list):
+        if "minItems" in schema and len(value) < schema["minItems"]:
+            errors.append(f"{where}: {len(value)} items fall below minItems {schema['minItems']}")
         if "maxItems" in schema and len(value) > schema["maxItems"]:
             errors.append(f"{where}: {len(value)} items exceed maxItems {schema['maxItems']}")
+        if schema.get("uniqueItems") and any(
+            json_equal(item, previous)
+            for index, item in enumerate(value)
+            for previous in value[:index]
+        ):
+            errors.append(f"{where}: duplicate items violate uniqueItems")
         item_schema = schema.get("items")
         if item_schema is not None:
             for index, item in enumerate(value):
@@ -186,6 +195,21 @@ def check(
         errors += check_object(value, schema, schemas, current, where)
 
     return errors
+
+
+def json_equal(left: Any, right: Any) -> bool:
+    """JSON equality keeps booleans distinct from numbers, including in containers."""
+    if isinstance(left, bool) or isinstance(right, bool):
+        return type(left) is type(right) and left == right
+    if isinstance(left, dict) and isinstance(right, dict):
+        return left.keys() == right.keys() and all(
+            json_equal(value, right[key]) for key, value in left.items()
+        )
+    if isinstance(left, list) and isinstance(right, list):
+        return len(left) == len(right) and all(
+            json_equal(a, b) for a, b in zip(left, right)
+        )
+    return left == right
 
 
 def check_string(value: str, schema: Any, where: str) -> list[str]:

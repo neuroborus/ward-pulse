@@ -9,12 +9,15 @@
 //! that does not survive between polls. It stores [`PendingRecovery`] entries,
 //! keeping each [`WindowKey`] and its known constraints rather than a whole
 //! snapshot. The shell never decides what "exhausted" means.
+//! Recovery requires fresh usable included capacity across the target's complete
+//! applicable scope, even after its own raw window resets.
 
 use serde::{Deserialize, Serialize};
 
 use crate::model::{
     deserialize_recovery_requirements, AccountId, AllowanceSource, AllowanceState,
-    DashboardSnapshot, HistoryOwner, ProviderKind, RecoveryRequirements,
+    DashboardSnapshot, HistoryOwner, ProviderKind, ProviderSnapshot, ProviderStatus,
+    RecoveryRequirements,
 };
 use crate::time::DateTimeUtc;
 
@@ -51,9 +54,8 @@ pub struct RecoveryReconciliation {
     pub recoveries: Vec<PlanRecovery>,
 }
 
-/// Reconcile the phone's history in one deterministic operation. This staged
-/// boundary still uses per-window eligibility; applicable-capacity evaluation
-/// is activated separately without changing this API or its wire types.
+/// Reconcile history before evaluating fresh included capacity. A target stays
+/// pending until all its known necessary Plan constraints are usable together.
 pub fn reconcile_plan_recoveries(
     snapshot: &DashboardSnapshot,
     pending: &[PendingRecovery],
@@ -92,26 +94,40 @@ pub fn reconcile_plan_recoveries(
             .and_then(|allowance| allowance.recovery_requirements.as_ref());
         entry.requirements = merge_requirements(entry.requirements.as_ref(), current);
         if let Some(requirements) = &mut entry.requirements {
-            if !requirements.allowance_ids.contains(&entry.key.allowance_id) {
+            if !current.is_some_and(|scope| scope.allowance_ids.contains(&entry.key.allowance_id)) {
                 requirements.complete = false;
             }
         }
     }
-    let keys: Vec<_> = pending.iter().map(|entry| entry.key.clone()).collect();
-    let mut recoveries = plan_recoveries(&keys, snapshot);
-    let mut delivered = Vec::new();
-    recoveries.retain(|recovery| {
-        let key = WindowKey {
-            account_id: recovery.account_id.clone(),
-            history_owner: recovery.history_owner.clone(),
-            allowance_id: recovery.allowance_id.clone(),
-        };
-        if delivered.contains(&key) {
-            return false;
+    let mut recoveries = Vec::new();
+    for entry in &remembered {
+        if !pending.iter().any(|previous| previous.key == entry.key) {
+            continue;
         }
-        delivered.push(key);
-        true
-    });
+        let mut accounts = snapshot.accounts.iter().filter(|account| {
+            account.account_id == entry.key.account_id
+                && account.history_owner == entry.key.history_owner
+        });
+        let Some(account) = accounts.next() else {
+            continue;
+        };
+        if accounts.next().is_some() || !applicable_capacity_is_usable(account, entry) {
+            continue;
+        }
+        let allowance = account
+            .allowances
+            .iter()
+            .find(|allowance| allowance.id == entry.key.allowance_id)
+            .expect("complete requirements include the target");
+        recoveries.push(PlanRecovery {
+            account_id: account.account_id.clone(),
+            history_owner: account.history_owner.clone(),
+            provider: account.provider,
+            allowance_id: allowance.id.clone(),
+            label: allowance.label.clone(),
+            resets_at: allowance.resets_at.clone(),
+        });
+    }
     remembered.retain(|entry| {
         !recoveries.iter().any(|recovery| {
             recovery.account_id == entry.key.account_id
@@ -123,6 +139,29 @@ pub fn reconcile_plan_recoveries(
         pending: remembered,
         recoveries,
     }
+}
+
+fn applicable_capacity_is_usable(account: &ProviderSnapshot, entry: &PendingRecovery) -> bool {
+    // Stale retained reports are not fresh evidence. Aggregate exhaustion or
+    // Unknown from an unrelated meter does not veto a qualified target.
+    if matches!(
+        account.status,
+        ProviderStatus::Stale | ProviderStatus::Error | ProviderStatus::AuthRequired
+    ) {
+        return false;
+    }
+    let Some(requirements) = &entry.requirements else {
+        return false;
+    };
+    requirements.complete
+        && requirements.allowance_ids.contains(&entry.key.allowance_id)
+        && requirements.allowance_ids.iter().all(|id| {
+            let mut matches = account
+                .allowances
+                .iter()
+                .filter(|allowance| allowance.id == *id);
+            matches.next().is_some_and(has_room) && matches.next().is_none()
+        })
 }
 
 fn merge_requirements(
@@ -142,10 +181,22 @@ fn merge_requirements(
     if ids.is_empty() {
         return None;
     }
-    // A current complete scope cannot retire previously necessary constraints.
+    // A narrowed current scope cannot qualify or retire remembered constraints.
+    let complete = current.is_some_and(|requirements| {
+        requirements.complete
+            && !requirements.allowance_ids.is_empty()
+            && ids.iter().all(|id| requirements.allowance_ids.contains(id))
+            && requirements
+                .allowance_ids
+                .iter()
+                .enumerate()
+                .all(|(index, id)| {
+                    !id.is_empty() && !requirements.allowance_ids[..index].contains(id)
+                })
+    });
     Some(RecoveryRequirements {
         allowance_ids: ids,
-        complete: current.is_some_and(|requirements| requirements.complete),
+        complete,
     })
 }
 
@@ -193,28 +244,17 @@ pub fn exhausted_windows(snapshot: &DashboardSnapshot) -> Vec<WindowKey> {
 /// Purchased allowances stay silent even when their keys are remembered.
 /// A window the snapshot no longer reports stays silent: a disconnected
 /// provider has not recovered, it has stopped saying anything.
+/// Key-only callers use current applicability; contextual callers should use
+/// [`reconcile_plan_recoveries`] to retain necessary constraints across reports.
 pub fn plan_recoveries(exhausted: &[WindowKey], next: &DashboardSnapshot) -> Vec<PlanRecovery> {
-    let mut recoveries = Vec::new();
-    for account in &next.accounts {
-        for allowance in &account.allowances {
-            let was_exhausted = exhausted.iter().any(|key| {
-                key.account_id == account.account_id
-                    && key.allowance_id == allowance.id
-                    && key.history_owner == account.history_owner
-            });
-            if was_exhausted && has_room(allowance) {
-                recoveries.push(PlanRecovery {
-                    account_id: account.account_id.clone(),
-                    history_owner: account.history_owner.clone(),
-                    provider: account.provider,
-                    allowance_id: allowance.id.clone(),
-                    label: allowance.label.clone(),
-                    resets_at: allowance.resets_at.clone(),
-                });
-            }
-        }
-    }
-    recoveries
+    let pending: Vec<_> = exhausted
+        .iter()
+        .map(|key| PendingRecovery {
+            key: key.clone(),
+            requirements: None,
+        })
+        .collect();
+    reconcile_plan_recoveries(next, &pending).recoveries
 }
 
 /// A plan window with nothing left. An unlimited window can never be here, and one
@@ -229,11 +269,22 @@ fn is_exhausted(allowance: &AllowanceState) -> bool {
 
 /// A plan window a user can spend against again.
 fn has_room(allowance: &AllowanceState) -> bool {
-    allowance.source == AllowanceSource::Plan
-        && (allowance.unlimited
-            || allowance
-                .used_percent
-                .is_some_and(|percent| percent < 100.0))
+    if allowance.source != AllowanceSource::Plan
+        || matches!(
+            allowance.status,
+            ProviderStatus::Stale | ProviderStatus::Error | ProviderStatus::AuthRequired
+        )
+    {
+        return false;
+    }
+    // An explicit unlimited Plan report needs no usage percentage.
+    allowance.unlimited
+        || (matches!(
+            allowance.status,
+            ProviderStatus::Ok | ProviderStatus::Warning
+        ) && allowance
+            .used_percent
+            .is_some_and(|percent| (0.0..100.0).contains(&percent)))
 }
 
 #[cfg(test)]
@@ -245,7 +296,10 @@ mod tests {
 
     fn allowance(id: &str, used_percent: Option<f64>) -> AllowanceState {
         AllowanceState {
-            recovery_requirements: None,
+            recovery_requirements: Some(RecoveryRequirements {
+                allowance_ids: vec![id.into()],
+                complete: true,
+            }),
             id: id.to_string(),
             source: AllowanceSource::Plan,
             label: format!("{id} window"),
@@ -296,7 +350,7 @@ mod tests {
     }
 
     #[test]
-    fn reconciliation_remembers_context_and_keeps_staged_per_window_eligibility() {
+    fn reconciliation_persists_new_constraints_until_capacity_recovers_after_reload() {
         let mut session = allowance("session", Some(100.0));
         session.recovery_requirements = Some(RecoveryRequirements {
             allowance_ids: vec!["session".into(), "weekly".into()],
@@ -331,6 +385,7 @@ mod tests {
             complete: true,
         });
         let singleton = reconcile_plan_recoveries(&singleton, &retained.pending);
+        assert!(!singleton.pending[0].requirements.as_ref().unwrap().complete);
         assert_eq!(
             singleton.pending[0]
                 .requirements
@@ -340,17 +395,241 @@ mod tests {
             ["session", "weekly"]
         );
 
-        // Commit 1 deliberately still permits the premature own-window edge.
-        // Its production module is the API-compatible OLD for policy activation.
+        // Own-window room must persist the newly observed exhausted dependency.
         session.used_percent = Some(0.0);
-        let room = snapshot(vec![account(
+        let mut room = snapshot(vec![account(
             "claude",
             vec![session, allowance("weekly", Some(100.0))],
         )]);
         let next = reconcile_plan_recoveries(&room, &retained.pending);
-        assert_eq!(next.recoveries.len(), 1);
-        assert_eq!(next.recoveries[0].allowance_id, "session");
-        assert_eq!(next.pending[0].key.allowance_id, "weekly");
+        assert!(next.recoveries.is_empty());
+        assert_eq!(next.pending.len(), 2);
+        assert_eq!(next.pending[0].requirements, result.pending[0].requirements);
+        let reloaded: Vec<PendingRecovery> =
+            serde_json::from_str(&serde_json::to_string(&next.pending).unwrap()).unwrap();
+        room.accounts[0].allowances[1].used_percent = Some(10.0);
+        let recovered = reconcile_plan_recoveries(&room, &reloaded);
+        assert_eq!(recovered.recoveries.len(), 2);
+        assert!(recovered.pending.is_empty());
+        assert!(reconcile_plan_recoveries(&room, &recovered.pending)
+            .recoveries
+            .is_empty());
+        room.accounts[0].allowances[0].used_percent = Some(100.0);
+        let rearmed = reconcile_plan_recoveries(&room, &[]);
+        assert_eq!(rearmed.pending.len(), 1);
+        room.accounts[0].allowances[0].used_percent = Some(10.0);
+        assert_eq!(
+            reconcile_plan_recoveries(&room, &rearmed.pending)
+                .recoveries
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn only_necessary_fresh_valid_plan_capacity_can_clear_a_pending_target() {
+        let mut target = allowance("session", Some(10.0));
+        target.recovery_requirements = Some(RecoveryRequirements {
+            allowance_ids: vec!["session".into(), "weekly".into()],
+            complete: true,
+        });
+        let snap = snapshot(vec![account(
+            "a",
+            vec![target, allowance("weekly", Some(20.0))],
+        )]);
+        let pending = [PendingRecovery {
+            key: key("a", "session"),
+            requirements: Some(RecoveryRequirements {
+                allowance_ids: vec!["session".into()],
+                complete: false,
+            }),
+        }];
+        let mut blocked = Vec::new();
+        for percent in [None, Some(-1.0), Some(f64::NAN), Some(100.0)] {
+            let mut value = snap.clone();
+            value.accounts[0].allowances[1].used_percent = percent;
+            blocked.push(value);
+        }
+        for status in [
+            ProviderStatus::Unknown,
+            ProviderStatus::Stale,
+            ProviderStatus::Error,
+        ] {
+            let mut value = snap.clone();
+            value.accounts[0].allowances[1].status = status;
+            blocked.push(value);
+        }
+        let mut missing = snap.clone();
+        missing.accounts[0].allowances.pop();
+        blocked.push(missing);
+        let mut purchased = snap.clone();
+        purchased.accounts[0].allowances[1].source = AllowanceSource::Purchased;
+        blocked.push(purchased);
+        let mut stale = snap.clone();
+        stale.accounts[0].status = ProviderStatus::Stale;
+        blocked.push(stale);
+        let mut unknown_scope = snap.clone();
+        unknown_scope.accounts[0].allowances[0].recovery_requirements = None;
+        blocked.push(unknown_scope);
+        let mut malformed_scope = snap.clone();
+        malformed_scope.accounts[0].allowances[0]
+            .recovery_requirements
+            .as_mut()
+            .unwrap()
+            .allowance_ids = vec!["weekly".into()];
+        blocked.push(malformed_scope);
+        for value in blocked {
+            let result = reconcile_plan_recoveries(&value, &pending);
+            assert!(result.recoveries.is_empty());
+            assert!(result
+                .pending
+                .iter()
+                .any(|entry| entry.key == pending[0].key));
+            assert_eq!(
+                reconcile_plan_recoveries(&snap, &result.pending).recoveries[0].allowance_id,
+                "session"
+            );
+        }
+        let mut unlimited = snap.clone();
+        unlimited.accounts[0].allowances[1].unlimited = true;
+        unlimited.accounts[0].allowances[1].used_percent = None;
+        unlimited.accounts[0].allowances[1].status = ProviderStatus::Unknown;
+        assert_eq!(
+            reconcile_plan_recoveries(&unlimited, &pending)
+                .recoveries
+                .len(),
+            1
+        );
+        // Aggregate Unknown and an unrelated exhausted meter are not global policy.
+        let mut independent = snap;
+        independent.accounts[0].status = ProviderStatus::Unknown;
+        independent.accounts[0]
+            .allowances
+            .push(allowance("other", Some(100.0)));
+        assert_eq!(
+            reconcile_plan_recoveries(&independent, &pending)
+                .recoveries
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn threshold_decoration_preserves_scoped_recovery_uncertainty() {
+        let mut target = allowance("session", Some(10.0));
+        target.recovery_requirements = Some(RecoveryRequirements {
+            allowance_ids: vec!["session".into(), "weekly".into()],
+            complete: true,
+        });
+        let fresh = snapshot(vec![account(
+            "a",
+            vec![target, allowance("weekly", Some(20.0))],
+        )]);
+        let pending = [PendingRecovery {
+            key: key("a", "session"),
+            requirements: None,
+        }];
+        let settings = serde_json::from_value(serde_json::json!({
+            "connections": {"anthropic.plan": {"plan": {"at": 0}}}
+        }))
+        .unwrap();
+        for (account_status, weekly_status) in [
+            (ProviderStatus::Stale, ProviderStatus::Ok),
+            (ProviderStatus::Ok, ProviderStatus::Stale),
+            (ProviderStatus::Ok, ProviderStatus::Unknown),
+        ] {
+            let mut uncertain = fresh.clone();
+            uncertain.accounts[0].status = account_status;
+            uncertain.accounts[0].allowances[1].status = weekly_status;
+            let applied = crate::apply_alert_settings(uncertain, &settings);
+            assert_eq!(applied.accounts[0].status, ProviderStatus::Warning);
+            let result = reconcile_plan_recoveries(&applied, &pending);
+            assert!(result.recoveries.is_empty());
+            assert_eq!(result.pending[0].key, pending[0].key);
+            let applied = crate::apply_alert_settings(fresh.clone(), &settings);
+            assert_eq!(
+                reconcile_plan_recoveries(&applied, &result.pending)
+                    .recoveries
+                    .len(),
+                1
+            );
+        }
+        // An unrelated Unknown meter cannot veto a qualified target.
+        let mut independent = fresh.clone();
+        independent.accounts[0].allowances[1].status = ProviderStatus::Unknown;
+        independent.accounts[0].allowances[0]
+            .recovery_requirements
+            .as_mut()
+            .unwrap()
+            .allowance_ids = vec!["session".into()];
+        let applied = crate::apply_alert_settings(independent, &settings);
+        assert_eq!(
+            reconcile_plan_recoveries(&applied, &pending)
+                .recoveries
+                .len(),
+            1
+        );
+
+        let mut unlimited = fresh;
+        unlimited.accounts[0].allowances[1].unlimited = true;
+        unlimited.accounts[0].allowances[1].status = ProviderStatus::Unknown;
+        let applied = crate::apply_alert_settings(unlimited, &settings);
+        assert_eq!(
+            reconcile_plan_recoveries(&applied, &pending)
+                .recoveries
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn narrowed_scope_cannot_qualify_remembered_capacity_after_status_decoration() {
+        let mut current = snapshot(vec![account(
+            "a",
+            vec![
+                allowance("session", Some(10.0)),
+                allowance("weekly", Some(20.0)),
+            ],
+        )]);
+        current.accounts[0].allowances[1].status = ProviderStatus::Unknown;
+        let scope = RecoveryRequirements {
+            allowance_ids: vec!["session".into(), "weekly".into()],
+            complete: true,
+        };
+        let pending = [PendingRecovery {
+            key: key("a", "session"),
+            requirements: Some(scope.clone()),
+        }];
+        let settings = serde_json::from_value(serde_json::json!({
+            "connections": {"anthropic.plan": {"plan": {"at": 0}}}
+        }))
+        .unwrap();
+        let applied = crate::apply_alert_settings(current.clone(), &settings);
+        assert_eq!(
+            applied.accounts[0].allowances[1].status,
+            ProviderStatus::Warning
+        );
+        let result = reconcile_plan_recoveries(&applied, &pending);
+        assert!(result.recoveries.is_empty());
+        assert_eq!(result.pending[0].key, pending[0].key);
+        let retained = result.pending[0].requirements.as_ref().unwrap();
+        assert_eq!(retained.allowance_ids, scope.allowance_ids);
+        assert!(!retained.complete);
+        let reloaded: Vec<PendingRecovery> =
+            serde_json::from_str(&serde_json::to_string(&result.pending).unwrap()).unwrap();
+
+        // Room alone cannot qualify a scope that still omits a remembered dependency.
+        current.accounts[0].allowances[1].status = ProviderStatus::Ok;
+        let applied = crate::apply_alert_settings(current.clone(), &settings);
+        assert!(reconcile_plan_recoveries(&applied, &reloaded)
+            .recoveries
+            .is_empty());
+        current.accounts[0].allowances[0].recovery_requirements = Some(scope);
+        let applied = crate::apply_alert_settings(current, &settings);
+        let recovered = reconcile_plan_recoveries(&applied, &reloaded);
+        assert_eq!(recovered.recoveries.len(), 1);
+        assert_eq!(recovered.recoveries[0].allowance_id, "session");
+        assert!(recovered.pending.is_empty());
     }
 
     #[test]

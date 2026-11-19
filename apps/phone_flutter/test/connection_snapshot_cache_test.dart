@@ -3388,6 +3388,8 @@ final class _HistoryCodexTransport implements CodexHttpTransport {
       response = {
         'plan_type': 'plus',
         'rate_limit': {
+          'allowed': true,
+          'limit_reached': false,
           'primary_window': {
             'used_percent': 20,
             'limit_window_seconds': 18000,

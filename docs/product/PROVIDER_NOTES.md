@@ -337,8 +337,16 @@ owner, plus `complete`. A complete scope includes its target. Missing or malform
 means targeted Unknown; it does not change raw consumption, quantities, status or resets.
 `reconcile_plan_recoveries` in `core/ward-pulse-core/src/recovery/mod.rs` returns both
 `pending` and `recoveries`. `PendingRecovery` saves flat window identity with optional
-requirements. This boundary-adoption stage still uses per-window room for delivery;
-applicable-capacity gating is a separate activation, not a claim of current runtime acceptance.
+requirements. Reconciliation merges saved and current requirements before evaluating fresh
+usable capacity across that complete scope. A narrowed current descriptor leaves the merged
+scope incomplete until it again accounts for every remembered necessary allowance; display
+threshold decoration cannot qualify those omitted constraints. Exhausted, missing, invalid,
+stale or Unknown necessary evidence retains the target, even after its own raw window has
+room. A later fresh complete report permits its ordinary notification. Unrelated meters and aggregate
+exhaustion/Unknown do not veto a qualified target. Purchased capacity cannot satisfy a Plan
+requirement; explicit unlimited Plan capacity remains usable. Raw exhaustion and reset
+metadata stay separate from effective recovery and wake scheduling. Runtime acceptance
+remains HOST-owned; source implementation is not execution evidence.
 
 The phone retains sanitized bucket qualification evidence before its fixed JSON boundary:
 root/recognized-feature bucket identity, typed `allowed`/`limit_reached`, distinct valid/null/omitted/

@@ -135,11 +135,17 @@ void main() {
     expect(different.single, isNot(keys.single));
 
     final recovery = planRecoveryFromJson({
-      ...(golden['recoveries'] as List).first as Map<String, dynamic>,
+      'accountId': 'claude-local',
+      'provider': 'claude',
+      'allowanceId': 'claude-weekly',
+      'label': 'Weekly plan',
+      'resetsAt': null,
       'historyOwner': ownerJson,
     });
     expect(recovery.historyOwner, owner);
-    expect(recovery.label, (golden['recoveries'] as List).first['label']);
+    expect(recovery.label, 'Weekly plan');
+    // Weekly room does not restore a plan whose necessary session is exhausted.
+    expect(golden['recoveries'], isEmpty);
   });
 
   test('a recovery keeps its label when the reset instant is unreadable', () {

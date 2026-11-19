@@ -51,6 +51,10 @@ DashboardSnapshot _source(double used) {
     allowances: [
       AllowanceState(
         id: 'notification-integration-weekly',
+        recoveryRequirements: const RecoveryRequirements(
+          allowanceIds: ['notification-integration-weekly'],
+          complete: true,
+        ),
         source: AllowanceSource.plan,
         label: 'Weekly plan',
         usedPercent: used,

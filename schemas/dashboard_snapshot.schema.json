@@ -169,6 +169,8 @@
         "allowanceIds": {
           "type": "array",
           "description": "Nonempty unique Plan allowance IDs within the same account and owner; complete scope includes the target.",
+          "minItems": 1,
+          "uniqueItems": true,
           "items": { "type": "string", "minLength": 1 }
         },
         "complete": { "type": "boolean" }

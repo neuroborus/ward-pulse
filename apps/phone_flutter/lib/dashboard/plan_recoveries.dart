@@ -87,13 +87,12 @@ typedef PlanRecovery =
       DateTime? resetsAt,
     });
 
-/// Windows `snapshot` reports as spent (Rust core in production; a test seam
-/// everywhere else, since host tests load no `.so`).
+/// Windows `snapshot` reports as spent (Rust core by default; injectable in tests).
 typedef ReadExhaustedWindows =
     List<WindowKey> Function(DashboardSnapshot snapshot);
 
-/// Windows from `exhausted` that `snapshot` reports usable again (Rust core in
-/// production; a test seam everywhere else, since host tests load no `.so`).
+/// Remembered targets whose applicable Plan capacity is usable (Rust core by
+/// default; injectable in tests).
 typedef ReadPlanRecoveries =
     List<PlanRecovery> Function(
       DashboardSnapshot snapshot,
@@ -108,7 +107,7 @@ List<WindowKey> exhaustedWindows(DashboardSnapshot snapshot) {
   return _decodeWindowKeys(exhaustedWindowsJson(snapshot.toJsonString()));
 }
 
-/// Asks the core which of [exhausted] have room again in [snapshot].
+/// Asks the core which of [exhausted] have usable applicable capacity in [snapshot].
 List<PlanRecovery> planRecoveries(
   DashboardSnapshot snapshot,
   List<WindowKey> exhausted,
