@@ -70,6 +70,10 @@ For physical phones and watches over USB/wireless ADB, use
   [Preserving emulator state](../../../docs/ANDROID_TOOLCHAIN.md#preserving-emulator-state)
   for bounded recovery, task-end checkpoint retirement and authorized AVD or system-image cleanup;
   inspection/captures alone need no new snapshot.
+- From the repository root, run
+  `python3 .agents/skills/android-emulators/scripts/avd_storage_inventory.py --help`
+  for bounded host metadata accounting. Apply the linked retention guidance for recovery and
+  disposal decisions.
 - Never delete or recreate an AVD as a troubleshooting step. That loses sign-in, browser
   sessions, system settings, keyboard layout, and pairing state.
 - Never clear `com.google.android.gms` data on the watch; doing so destroys the pairing.
