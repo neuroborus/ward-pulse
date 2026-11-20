@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../providers/connection_lifecycle.dart';
+import '../providers/provider_connection.dart';
 import 'dashboard_models.dart';
 
 final class CapturedConnectionCache {
@@ -66,13 +67,8 @@ final class ConnectionSnapshotCache {
     (account) =>
         account.connection == connection && account.provider == _provider,
   );
-  String get _provider => switch (connection) {
-    'openai.plan' => 'codex',
-    'openai.platform' => 'openai',
-    'anthropic.plan' || 'anthropic.platform' => 'claude',
-    'cursor.plan' || 'cursor.platform' => 'cursor',
-    _ => '',
-  };
+  String get _provider =>
+      ProviderConnectionId.fromStorageKey(connection)?.legacyProvider ?? '';
   DashboardSnapshot parse(String encoded) {
     final json = jsonDecode(encoded);
     _validate(json);

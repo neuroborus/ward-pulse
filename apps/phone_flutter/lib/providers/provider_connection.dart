@@ -42,6 +42,14 @@ final class ProviderConnectionId {
     return ProviderConnectionId(provider: provider, kind: kind);
   }
 
+  /// Compatibility provider token carried by accounts this connection owns.
+  String get legacyProvider => switch ((provider, kind)) {
+    (ProviderFamily.openai, ConnectionKind.plan) => 'codex',
+    (ProviderFamily.openai, ConnectionKind.platform) => 'openai',
+    (ProviderFamily.anthropic, _) => 'claude',
+    (ProviderFamily.cursor, _) => 'cursor',
+  };
+
   @override
   bool operator ==(Object other) =>
       other is ProviderConnectionId &&

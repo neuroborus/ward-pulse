@@ -6,8 +6,8 @@ use crate::budget::calculate_budget_state;
 use crate::dashboard::build_dashboard_snapshot;
 use crate::model::{
     Alert, AlertCondition, AlertConditionKey, AlertConditionState, AlertConditionTarget,
-    AlertSeverity, AllowanceSource, AllowanceState, BudgetPeriod, DashboardSnapshot, Money,
-    ProviderSnapshot, ProviderStatus,
+    AlertSeverity, AllowanceSource, AllowanceState, BudgetPeriod, ConnectionKind,
+    DashboardSnapshot, Money, ProviderSnapshot, ProviderStatus, SourceOrigin,
 };
 
 /// Opt-in used-% threshold. `None` means the rule is off.
@@ -273,6 +273,16 @@ fn conditions_for_account(
 
     let mut conditions = Vec::new();
     let provider_label = account.source.provider().display_label();
+    // Only a positively identified reporting connection earns its family name.
+    let budget_label = match (
+        account.source.explicit_connection(),
+        account.source.origin(),
+    ) {
+        (Some(_), SourceOrigin::Connection(id)) if id.kind == ConnectionKind::Platform => {
+            id.family.display_label()
+        }
+        _ => provider_label,
+    };
     for (period, label, state, threshold) in [
         (
             BudgetPeriod::Today,
@@ -300,9 +310,7 @@ fn conditions_for_account(
             threshold,
             || Alert {
                 severity: AlertSeverity::Warning,
-                message: format!(
-                    "{provider_label} budget for {label} reached the alert threshold."
-                ),
+                message: format!("{budget_label} budget for {label} reached the alert threshold."),
             },
         ));
     }
@@ -377,8 +385,9 @@ fn crossed(used_percent: Option<f64>, at: Option<u8>) -> bool {
 mod tests {
     use super::*;
     use crate::model::{
-        connection, BudgetPeriod, BudgetState, HistoryOwner, Money, ProviderKind, ProviderSnapshot,
-        ProviderSource, ProviderStatus, Quantity, QuantityUnit, WatchSummary,
+        connection, BudgetPeriod, BudgetState, HistoryOwner, Money, ProviderConnectionId,
+        ProviderKind, ProviderSnapshot, ProviderSource, ProviderStatus, Quantity, QuantityUnit,
+        WatchSummary,
     };
     use crate::time::DateTimeUtc;
 
@@ -828,6 +837,54 @@ mod tests {
         assert!(applied.alerts[0]
             .message
             .contains("Claude budget for today"));
+    }
+
+    #[test]
+    fn platform_budget_alert_names_the_family_only_for_a_canonical_connection() {
+        fn monthly_messages(source: ProviderSource) -> Vec<String> {
+            let mut account = claude_account(purchased(0.0));
+            account.allowances.clear();
+            account.source = source;
+            account.month = calculate_budget_state(
+                BudgetPeriod::Month,
+                Some(Money::minor_units(124, "USD")),
+                None,
+                None,
+            );
+            let settings = AlertSettings {
+                connections: HashMap::from([(
+                    account.source.alert_connection().to_string(),
+                    ConnectionAlertThresholds {
+                        month: PercentThreshold { at: Some(80) },
+                        budget: ConnectionBudget {
+                            month: Some(124),
+                            ..ConnectionBudget::default()
+                        },
+                        ..ConnectionAlertThresholds::default()
+                    },
+                )]),
+            };
+            apply_alert_settings(snapshot_with(account, budget(0.0)), &settings)
+                .alerts
+                .into_iter()
+                .map(|alert| alert.message)
+                .collect()
+        }
+
+        let canonical = ProviderSource::connection(ProviderConnectionId::ANTHROPIC_PLATFORM);
+        assert_eq!(
+            monthly_messages(canonical),
+            ["Anthropic budget for this month reached the alert threshold."]
+        );
+        // A platform key with a mismatched same-family token proves no source.
+        let mismatched = ProviderSource::from_legacy(
+            ProviderKind::Codex,
+            Some(connection::OPENAI_PLATFORM.into()),
+        );
+        assert_eq!(
+            monthly_messages(mismatched),
+            ["Codex budget for this month reached the alert threshold."]
+        );
     }
 
     #[test]

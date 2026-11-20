@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/dashboard/apply_alert_settings.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/settings/alert_notification_preferences.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
@@ -528,6 +529,78 @@ void main() {
     expect(
       alertNotificationBodyFor(exactKey, _planRules(80)),
       alertNotificationBody,
+    );
+  });
+
+  test('a canonical platform budget title names its family', () async {
+    final empty = DashboardSnapshot.empty(
+      generatedAt: DateTime.utc(2026, 11, 2),
+    );
+    final account = ProviderSnapshot(
+      accountId: 'reporting-account-a',
+      provider: 'claude',
+      connection: 'anthropic.platform',
+      status: ProviderStatus.ok,
+      today: empty.todayTotal,
+      week: empty.weekTotal,
+      month: const BudgetState(
+        period: 'month',
+        spent: Money(minorUnits: 124, currency: 'USD'),
+        limit: null,
+        remaining: null,
+        usedPercent: null,
+        projectedTotal: null,
+        status: ProviderStatus.unknown,
+      ),
+      credits: const [],
+      allowances: const [],
+      buckets: const [],
+      modelBreakdown: const [],
+      lastSuccessfulSyncAt: null,
+    );
+    DashboardSnapshot withAccount(Map<String, dynamic> changes) {
+      return DashboardSnapshot.fromJson({
+        ...empty.toJson(),
+        'accounts': [
+          {...account.toJson(), ...changes},
+        ],
+      });
+    }
+
+    const rules = AlertThresholdPreferences(
+      connections: {
+        'anthropic.platform': ConnectionAlertThresholds(
+          month: AlertPercentThreshold(at: 80),
+          budget: ConnectionBudget(month: 124),
+        ),
+      },
+    );
+    final applied = applyUserAlertSettings(withAccount(const {}), rules);
+    final notifier = _Notifier();
+    await AlertNotificationDelivery(
+      preferences: _Preferences(),
+      conditions: _Conditions(),
+      notifier: notifier,
+    ).sync(applied, alertThresholds: rules);
+    expect(notifier.titles, ['Anthropic · Monthly budget']);
+
+    // A legacy sibling is no explicit owner of a platform budget.
+    final key = notifier.posts.single;
+    expect(
+      alertNotificationTitle(withAccount(const {'connection': null}), key),
+      'Claude · Monthly budget',
+    );
+    // A platform key with a mismatched same-family token proves no source.
+    const mismatch = {'provider': 'codex', 'connection': 'openai.platform'};
+    final mismatchedKey = AlertConditionKey(
+      provider: 'codex',
+      accountId: key.accountId,
+      connection: 'openai.platform',
+      target: key.target,
+    );
+    expect(
+      alertNotificationTitle(withAccount(mismatch), mismatchedKey),
+      'Codex · Monthly budget',
     );
   });
 

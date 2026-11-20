@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../dashboard/dashboard_models.dart';
+import '../providers/provider_connection.dart';
 import '../settings/alert_notification_preferences.dart';
 import '../settings/alert_threshold_preferences.dart';
 import 'notification_coordinator.dart';
@@ -190,7 +191,27 @@ String alertNotificationTitle(
       }
     }
   }
-  return '${providerDisplayLabel(key.provider)} · $label';
+  return '${_alertProviderLabel(snapshot, key)} · $label';
+}
+
+/// Names a budget by its family (`Anthropic`) only when its platform
+/// connection, legacy token and an exactly matching account agree.
+String _alertProviderLabel(DashboardSnapshot snapshot, AlertConditionKey key) {
+  final legacy = providerDisplayLabel(key.provider);
+  final connection = ProviderConnectionId.fromStorageKey(key.connection);
+  if (key.target is! BudgetAlertTarget ||
+      connection == null ||
+      connection.kind != ConnectionKind.platform ||
+      connection.legacyProvider != key.provider)
+    return legacy;
+  for (final account in snapshot.accounts) {
+    if (account.provider == key.provider &&
+        account.accountId == key.accountId &&
+        account.historyOwner == key.historyOwner &&
+        account.connection == key.connection)
+      return providerFamilyLabel(connection.provider);
+  }
+  return legacy;
 }
 
 Future<bool> _alwaysCurrent() async => true;

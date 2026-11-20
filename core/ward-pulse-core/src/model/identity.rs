@@ -10,6 +10,16 @@ pub enum ProviderFamily {
     Cursor,
 }
 
+impl ProviderFamily {
+    pub const fn display_label(self) -> &'static str {
+        match self {
+            Self::OpenAi => "OpenAI",
+            Self::Anthropic => "Anthropic",
+            Self::Cursor => "Cursor",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConnectionKind {
     Plan,
