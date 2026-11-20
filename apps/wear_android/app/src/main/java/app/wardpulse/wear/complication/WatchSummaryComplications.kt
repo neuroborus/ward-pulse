@@ -12,9 +12,14 @@ import androidx.wear.watchface.complications.data.NoDataComplicationData
 import androidx.wear.watchface.complications.data.PlainComplicationText
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import androidx.wear.watchface.complications.data.ShortTextComplicationData
+import androidx.wear.watchface.complications.data.TimeRange
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
+import androidx.wear.watchface.complications.datasource.ComplicationDataTimeline
 import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.SuspendingComplicationDataSourceService
+import androidx.wear.watchface.complications.datasource.SuspendingTimelineComplicationDataSourceService
+import androidx.wear.watchface.complications.datasource.TimeInterval
+import androidx.wear.watchface.complications.datasource.TimelineEntry
 import app.wardpulse.wear.BuildConfig
 import app.wardpulse.wear.MainActivity
 import app.wardpulse.wear.data.WatchSummaryStore
@@ -29,32 +34,9 @@ import app.wardpulse.wear.ui.formatPercentAmount
 import app.wardpulse.wear.ui.formatPercentLabel
 import app.wardpulse.wear.ui.formatBudgetStripLabel
 import app.wardpulse.wear.ui.purchasedCreditsCompact
+import java.time.Clock
 import java.time.Instant
 import java.util.Locale
-
-abstract class ShortTextComplicationDataSourceService :
-    SuspendingComplicationDataSourceService() {
-    protected abstract val previewText: String
-
-    protected abstract fun text(summary: WatchDashboardSummary): String
-
-    override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
-        if (request.complicationType != ComplicationType.SHORT_TEXT) {
-            return null
-        }
-        val value = WatchSummaryStore(this).load()?.let(::text) ?: NO_DATA
-        return shortText(value)
-    }
-
-    override fun getPreviewData(type: ComplicationType): ComplicationData? =
-        if (type == ComplicationType.SHORT_TEXT) shortText(previewText) else null
-
-    private fun shortText(value: String) = ComplicationBuilders.shortText(this, value)
-
-    private companion object {
-        const val NO_DATA = "—"
-    }
-}
 
 /**
  * The outer half of a split band: the other pool of a plan that shares one band
@@ -402,6 +384,7 @@ private object ComplicationBuilders {
         value: String,
         contentDescription: String = value,
         title: String? = null,
+        validTimeRange: TimeRange? = null,
     ): ComplicationData =
         ShortTextComplicationData.Builder(
             text = PlainComplicationText.Builder(value).build(),
@@ -410,7 +393,7 @@ private object ComplicationBuilders {
             if (!title.isNullOrBlank()) {
                 setTitle(PlainComplicationText.Builder(title).build())
             }
-        }.setTapAction(tapAction(context)).build()
+        }.setValidTimeRange(validTimeRange).setTapAction(tapAction(context)).build()
 
     /**
      * A ring slot's data. [text] is the legend row this slot now paints below
@@ -508,11 +491,65 @@ class Ring3ComplicationDataSourceService : RingComplicationDataSourceService() {
     override val previewLabel = "Ring 3"
 }
 
-class StatusComplicationDataSourceService : ShortTextComplicationDataSourceService() {
-    override val previewText = "SYNC"
+/**
+ * The Status cell ages without a new summary: a fresh default expires just before the
+ * stale cutoff, and one stale entry takes over from that second until replaced.
+ * Timeline-aware clients play the entry; older clients read only the default.
+ */
+class StatusComplicationDataSourceService : SuspendingTimelineComplicationDataSourceService() {
+    /** Request clock; the device regression fixes it without changing the service. */
+    internal var clock: Clock = Clock.systemUTC()
 
-    override fun text(summary: WatchDashboardSummary) =
-        WatchComplicationText.status(summary)
+    override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationDataTimeline? {
+        if (request.complicationType != ComplicationType.SHORT_TEXT) {
+            return null
+        }
+        val summary = WatchSummaryStore(this).load()
+            ?: return ComplicationDataTimeline(ComplicationBuilders.shortText(this, NO_DATA), emptyList())
+        val now = clock.instant()
+        val cutoff = staleCutoff(summary, now)
+            ?: return ComplicationDataTimeline(status(summary, now), emptyList())
+        return ComplicationDataTimeline(
+            status(summary, now, TimeRange.before(cutoff.minusMillis(1))),
+            listOf(TimelineEntry(TimeInterval(cutoff, TIMELINE_END), status(summary, cutoff))),
+        )
+    }
+
+    override fun getPreviewData(type: ComplicationType): ComplicationData? =
+        if (type == ComplicationType.SHORT_TEXT) ComplicationBuilders.shortText(this, PREVIEW) else null
+
+    private fun status(summary: WatchDashboardSummary, at: Instant, validity: TimeRange? = null) =
+        ComplicationBuilders.shortText(
+            this,
+            WatchComplicationText.compactStatus(summary, at),
+            contentDescription = WatchComplicationText.status(summary, at),
+            validTimeRange = validity,
+        )
+
+    private companion object {
+        const val NO_DATA = "—"
+        const val PREVIEW = "SYNC"
+
+        /**
+         * Open end of the stale entry. A whole second whose milliseconds still fit a
+         * Long, so millisecond-based readers of the wire timeline cannot overflow.
+         */
+        val TIMELINE_END: Instant = Instant.ofEpochSecond(Long.MAX_VALUE / 1000)
+
+        /**
+         * The first whole second at or after a fresh summary's stale deadline: timeline
+         * endpoints travel as epoch seconds. Null keeps the request-time reading static
+         * when the Status is already stale or no endpoint can carry the cutoff.
+         */
+        fun staleCutoff(summary: WatchDashboardSummary, now: Instant): Instant? {
+            if (WatchComplicationText.statusPulse(summary, now) == PulseStatus.STALE) {
+                return null
+            }
+            val deadline = summary.staleDeadline()?.takeIf { it.isBefore(TIMELINE_END) } ?: return null
+            val cutoff = if (deadline.nano == 0) deadline else Instant.ofEpochSecond(deadline.epochSecond + 1)
+            return cutoff.takeIf { it.isAfter(Instant.EPOCH) && it.isBefore(TIMELINE_END) }
+        }
+    }
 }
 
 /**
@@ -696,13 +733,30 @@ object WatchComplicationText {
                 summary.providers.single().providerLabel.uppercase(Locale.US)
             else -> "${summary.providers.size} PRV"
         }
-        val pulse = when {
+        return "$source · ${shortStatus(statusPulse(summary, now))}"
+    }
+
+    /**
+     * The Status cell's text. Healthy and stale readings drop the source to fit the
+     * cell; `tst` keeps Mock visibly demo data within seven characters. Every other
+     * status keeps the full [status] reading.
+     */
+    fun compactStatus(summary: WatchDashboardSummary, now: Instant): String {
+        val mock = summary.dataMode == WatchDataMode.MOCK
+        return when (statusPulse(summary, now)) {
+            PulseStatus.OK -> if (mock) "tst ok" else "OK"
+            PulseStatus.STALE -> if (mock) "tst old" else "STALE"
+            else -> status(summary, now)
+        }
+    }
+
+    /** The Status reading's precedence: age or the stale flag, then the provider status. */
+    internal fun statusPulse(summary: WatchDashboardSummary, now: Instant): PulseStatus =
+        when {
             summary.isStaleAt(now) -> PulseStatus.STALE
             summary.providers.size == 1 -> summary.providers.single().status
             else -> summary.overallStatus
         }
-        return "$source · ${shortStatus(pulse)}"
-    }
 
     /** Short labels so the round chin does not clip the status line. */
     fun shortStatus(status: PulseStatus): String = when (status) {

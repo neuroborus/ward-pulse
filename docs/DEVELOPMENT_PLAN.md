@@ -3638,6 +3638,12 @@ Credits. Corrected HOST/native acceptance remains pending; raw Money and Extra u
 widget rows stay in the next approved runtime task. This adds no release date, positive
 live-expense proof or completed widget/release claim.
 
+**Status complication aging, 2026-11-20.** The optional Wear Status complication supplies
+an expiring fresh reading and a stale timeline entry. The Wear build and device regression
+passed on HOST. Legacy API 34 showed a Live transition in active mode without a new summary.
+Broader renderer acceptance remains open. See
+[Status complication aging](../apps/wear_android/README.md#status-complication-aging).
+
 Owner direction recorded on 2026-10-15. These are planned milestones, not shipped features
 or release acceptance. The public summary is owned by
 [Roadmap](product/user-guide/ROADMAP.md).

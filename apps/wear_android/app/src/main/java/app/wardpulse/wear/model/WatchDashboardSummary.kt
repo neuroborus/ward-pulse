@@ -1,5 +1,6 @@
 package app.wardpulse.wear.model
 
+import java.time.DateTimeException
 import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeParseException
@@ -181,6 +182,16 @@ data class WatchDashboardSummary(
             true
         }
     }
+
+    /** The first instant [isStaleAt] reports age alone; null when it cannot be represented. */
+    fun staleDeadline(): Instant? =
+        try {
+            Instant.parse(generatedAt).plus(STALE_AFTER)
+        } catch (_: DateTimeException) {
+            null
+        } catch (_: ArithmeticException) {
+            null
+        }
 
     private companion object {
         val STALE_AFTER: Duration = Duration.ofHours(2)

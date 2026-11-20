@@ -337,6 +337,34 @@ downgrade, reset or invented button success is authorized.
 Later retained-Push selection/rendering is separate HOST work. Item12 stays open and both
 extras queued; this allocation claims no check, device, public or release result.
 
+## Status complication aging
+
+`StatusComplicationDataSourceService` evaluates each request with `WatchDashboardSummary.isStaleAt`
+and uses `WatchDashboardSummary.staleDeadline` to schedule the transition. A fresh summary gets
+a default valid through 1 ms before the first whole second at or after its deadline, and a stale
+entry beginning at that second. Timeline endpoints travel as epoch seconds, so the scheduled
+stale entry can begin less than a second after a fractional deadline. On a client that reads
+only the default and honors validity, the fresh reading ceases to be eligible after expiry.
+Default-only presentation after expiry remains pending HOST verification. An
+already-stale Status, including an explicit stale flag or a recent stale reported status, is
+static stale text; an unusable store is `—`; an unrepresentable cutoff keeps the static
+request-time reading.
+
+`WatchComplicationText.compactStatus` shows `OK`/`STALE` for Live and `tst ok`/`tst old` for
+Mock; every other status keeps the full `WatchComplicationText.status` reading, which also
+remains the content description. Service identity, zero update period, refresh routing, `SYNC`
+preview and tap action are unchanged.
+`StatusComplicationTimelineTest`, included in `just test-wear-device`, binds the real service
+with an isolated fixture-backed store and checks its clock-controlled reply after Parcel
+transport. On HOST, `just check-wear`, `just check-docs`, and `just test-wear-device` passed.
+The device suite passed all 55 tests, including both Status cases. The same test APK against
+the pre-fix service failed first on the missing stale entry (`expected:<1> but was:<0>`).
+
+On Legacy API 34 in active mode, Live Status changed from `OK` to `STALE` after a deadline
+aligned with a minute tick, with the WardPulse UI closed and no new stored summary. In a
+separate run with an unaligned deadline, the face still showed `OK` 11 seconds after the
+cutoff. Renderer redraw can lag the scheduled timeline transition.
+
 ## Watch face setup
 
 Scroll past the complete Plan windows list and tap **Watch face**. Before the first phone
