@@ -90,9 +90,8 @@ class WatchDashboardSummaryPayload {
     DateTime? clock,
     bool mockDataMode = false,
   }) {
-    final capacityReason = watchRingCapacityReason(
-      watchRingSelectionIds(snapshot, ringPreferences),
-    );
+    final selectionIds = watchRingSelectionIds(snapshot, ringPreferences);
+    final capacityReason = watchRingCapacityReason(selectionIds);
     if (capacityReason != null) {
       throw StateError(capacityReason);
     }
@@ -132,6 +131,10 @@ class WatchDashboardSummaryPayload {
             'split': split == null ? null : _splitToJson(split),
           },
       ],
+      // Rings were chosen but none has a usable percentage; Wear says so
+      // instead of asking the owner to choose rings again.
+      if (selectionIds.isNotEmpty && rings.isEmpty)
+        'selectedRingDataUnavailable': true,
       'creditsGlance': creditsGlance?.toJson(),
       'today': _budgetToJson(snapshot.todayTotal),
       'week': _budgetToJson(snapshot.weekTotal),

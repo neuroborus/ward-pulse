@@ -87,6 +87,10 @@
         }
       }
     },
+    "selectedRingDataUnavailable": {
+      "type": "boolean",
+      "description": "True when a nonempty effective ring selection yields no usable percent rings, so Glance reports unavailable data instead of the ring chooser. Omitted otherwise; absent reads as false."
+    },
     "creditsGlance": {
       "description": "SHORT_TEXT remaining purchased credits for the watch strip. Null when unavailable or deliberately suppressed by an explicit empty ring selection.",
       "anyOf": [

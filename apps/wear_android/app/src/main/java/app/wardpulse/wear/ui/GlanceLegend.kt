@@ -326,7 +326,7 @@ internal fun glanceEmptyLines(summary: WatchDashboardSummary): List<String> =
     when {
         summary.providers.isEmpty() && summary.rings.isEmpty() ->
             listOf("Connect a provider", "on your phone")
-        summary.rings.isEmpty() ->
+        summary.rings.isEmpty() && !summary.selectedRingDataUnavailable ->
             listOf("Choose percent rings", "in the phone app")
         else -> listOf("Ring data unavailable")
     }

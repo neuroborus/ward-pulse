@@ -95,6 +95,9 @@ private fun WatchDashboardSummary.toJson() = JSONObject().apply {
     put("generatedAt", generatedAt)
     put("overallStatus", overallStatus.wireName)
     put("rings", JSONArray().apply { rings.forEach { put(it.toJson()) } })
+    if (selectedRingDataUnavailable) {
+        put(SELECTED_RING_DATA_UNAVAILABLE, true)
+    }
     put("creditsGlance", creditsGlance?.toJson() ?: JSONObject.NULL)
     put("today", today.toJson())
     put("week", week.toJson())
@@ -197,6 +200,7 @@ private fun JSONObject.toWatchDashboardSummary(): WatchDashboardSummary {
         isStale = getBoolean("isStale"),
         manualRefreshAllowed = getBoolean("manualRefreshAllowed"),
         manualRefreshAvailableAt = nullableString("manualRefreshAvailableAt"),
+        selectedRingDataUnavailable = optionalBoolean(SELECTED_RING_DATA_UNAVAILABLE),
     )
 }
 
@@ -307,6 +311,16 @@ private fun JSONObject.nullableDouble(key: String): Double? =
 private fun JSONObject.nullableString(key: String): String? =
     if (isNull(key)) null else getString(key)
 
+/** Absent reads as false; a present value must be a JSON boolean, never a coerced string. */
+private fun JSONObject.optionalBoolean(key: String): Boolean {
+    if (!has(key)) {
+        return false
+    }
+    val value = get(key)
+    require(value is Boolean)
+    return value
+}
+
 private inline fun <T> JSONArray.mapObjects(transform: (JSONObject) -> T): List<T> =
     List(length()) { index -> transform(getJSONObject(index)) }
 
@@ -314,6 +328,7 @@ private fun String.toPulseStatus(): PulseStatus = requireNotNull(PulseStatus.fro
 
 private const val SCHEMA_VERSION = 9
 private const val MAX_RINGS = 3
+private const val SELECTED_RING_DATA_UNAVAILABLE = "selectedRingDataUnavailable"
 private val CURRENCY_PATTERN = Regex("^[A-Z]{3}$")
 private val PROVIDERS = setOf("openai", "codex", "claude", "cursor", "mock")
 private val ALLOWANCE_SOURCES = setOf("plan", "purchased")

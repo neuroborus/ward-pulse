@@ -36,6 +36,7 @@ FIXTURE_SCHEMAS = {
     "snapshots/watch_dashboard_summary_fractional.json": "watch_dashboard_summary.schema.json",
     "snapshots/watch_dashboard_summary_fractional_pair.json": "watch_dashboard_summary.schema.json",
     "snapshots/watch_dashboard_summary_credits_only.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_selected_ring_unavailable.json": "watch_dashboard_summary.schema.json",
     "snapshots/watch_dashboard_summary_plan_credits.json": "watch_dashboard_summary.schema.json",
     "snapshots/watch_dashboard_summary_n1_full_below.json": "watch_dashboard_summary.schema.json",
     "snapshots/watch_dashboard_summary_n1_full_above.json": "watch_dashboard_summary.schema.json",

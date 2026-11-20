@@ -397,7 +397,12 @@ class GlanceModelsTest {
             providers = listOf(app.wardpulse.wear.model.ProviderSummary("claude", PulseStatus.OK, null)),
         )
         assertEquals(listOf("Choose percent rings", "in the phone app"), glanceEmptyLines(selectedEmpty))
-        assertEquals(listOf("Connect a provider", "on your phone"), glanceEmptyLines(selectedEmpty.copy(providers = emptyList())))
+        for (flagged in listOf(false, true)) {
+            assertEquals(
+                listOf("Connect a provider", "on your phone"),
+                glanceEmptyLines(selectedEmpty.copy(providers = emptyList(), selectedRingDataUnavailable = flagged)),
+            )
+        }
     }
 
     @Test

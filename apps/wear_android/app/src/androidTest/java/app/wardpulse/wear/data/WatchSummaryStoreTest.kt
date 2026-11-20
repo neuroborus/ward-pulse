@@ -24,6 +24,7 @@ import app.wardpulse.wear.model.RingHalf
 import app.wardpulse.wear.model.RingSummary
 import app.wardpulse.wear.model.WatchDataMode
 import app.wardpulse.wear.ui.RingFamily
+import app.wardpulse.wear.ui.glanceEmptyLines
 import app.wardpulse.wear.ui.glanceLegendRows
 import java.time.Instant
 import org.junit.After
@@ -1515,6 +1516,39 @@ class WatchSummaryStoreTest {
             } is NoDataComplicationData)
             assertNull(WatchComplicationText.stripLabel(summary, 3))
         }
+    }
+
+    /**
+     * The phone's own publication (`watch_sync_service_test.dart`) for a selected ring with no
+     * usable data; its all-off publication is the same payload without the flag.
+     */
+    @Test
+    fun selectedRingDataUnavailableSurvivesStaleCopiesAndOmissionMeansChooser() {
+        val encoded = testContext.assets.open("watch_dashboard_summary_selected_ring_unavailable.json")
+            .bufferedReader()
+            .use { it.readText() }
+
+        assertTrue(store.saveEncoded(encoded))
+        val received = requireNotNull(store.load())
+        store.save(received.copy(isStale = true))
+        val stale = requireNotNull(store.load())
+        assertTrue(stale.isStale)
+        for (summary in listOf(received, stale)) {
+            assertTrue(summary.selectedRingDataUnavailable)
+            assertTrue(glanceLegendRows(summary).isEmpty())
+            assertEquals(listOf("Ring data unavailable"), glanceEmptyLines(summary))
+        }
+
+        val chooser = listOf("Choose percent rings", "in the phone app")
+        val allOff = JSONObject(encoded).apply { remove("selectedRingDataUnavailable") }.toString()
+        assertTrue(store.saveEncoded(allOff))
+        assertEquals(chooser, glanceEmptyLines(requireNotNull(store.load())))
+
+        val creditsOnly = testContext.assets.open("watch_dashboard_summary_credits_only.json")
+            .bufferedReader()
+            .use { it.readText() }
+        assertTrue(store.saveEncoded(creditsOnly))
+        assertEquals(chooser, glanceEmptyLines(requireNotNull(store.load())))
     }
 
     @Test

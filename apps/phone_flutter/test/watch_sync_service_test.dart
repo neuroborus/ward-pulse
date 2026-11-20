@@ -387,6 +387,7 @@ void main() {
           expect(band['usedPercent'], claudeUsed ?? fableUsed);
           expect(band['split'], isNull);
         }
+        expect(payload.containsKey('selectedRingDataUnavailable'), isFalse);
         final allowances = payload['allowances'] as List;
         expect(
           allowances.firstWhere(
@@ -549,6 +550,7 @@ void main() {
     await service.sync(unknown, const WatchRingPreferences());
     expect(published, hasLength(4));
     expect(published.last['rings'], isEmpty);
+    expect(published.last.containsKey('selectedRingDataUnavailable'), isFalse);
     expect(published.last['creditsGlance'], credits);
 
     for (final id in [claudePlanRingId, 'allowance.claude.missing']) {
@@ -586,22 +588,10 @@ void main() {
   });
 
   test('sends budget rings keyed by connection', () {
-    final json =
-        jsonDecode(
-              File(
-                '../../fixtures/snapshots/dashboard_today.json',
-              ).readAsStringSync(),
-            )
-            as Map<String, dynamic>;
-    final account = (json['accounts'] as List).first as Map<String, dynamic>;
-    // Mock accounts hold no rings, so only the connection differs here.
-    account['provider'] = 'claude';
-    account['connection'] = 'anthropic.platform';
-
     final payload =
         jsonDecode(
               WatchDashboardSummaryPayload.fromSnapshot(
-                DashboardSnapshot.fromJson(json),
+                DashboardSnapshot.fromJson(_anthropicPlatformJson()),
                 const WatchRingPreferences(),
               ).encode(),
             )
@@ -620,6 +610,50 @@ void main() {
     // symbol itself instead of assuming every connection bills in dollars.
     expect(rings.first['spent'], {'minorUnits': 7130, 'currency': 'USD'});
     expect(rings.first['limit'], {'minorUnits': 25000, 'currency': 'USD'});
+  });
+
+  // The golden is also what `WatchSummaryStoreTest.kt` decodes, so Wear reads
+  // the phone's own publication rather than a literal written to match it.
+  test('flags a selected ring whose data is unavailable', () async {
+    final published = _captureWatchPublications();
+    final json = _anthropicPlatformJson();
+    final account = (json['accounts'] as List).first as Map<String, dynamic>;
+    // Spend is still reported; the month's limit is gone, so no percentage.
+    account['month'] = {
+      ...account['month'] as Map<String, dynamic>,
+      'limit': null,
+      'remaining': null,
+      'usedPercent': null,
+      'status': 'unknown',
+    };
+    final dashboard = DashboardSnapshot.fromJson(json);
+    const service = MethodChannelWatchSyncService();
+
+    await service.sync(
+      dashboard,
+      const WatchRingPreferences(
+        selectedIds: ['budget.anthropic.platform.month'],
+      ),
+    );
+    await service.sync(dashboard, const WatchRingPreferences(selectedIds: []));
+
+    final expected =
+        jsonDecode(
+              File(
+                '../../fixtures/snapshots/watch_dashboard_summary_selected_ring_unavailable.json',
+              ).readAsStringSync(),
+            )
+            as Map<String, dynamic>;
+    expect(published.map((call) => call.method), [
+      'syncWatchSummary',
+      'syncWatchSummary',
+    ]);
+    expect(jsonDecode(published.first.arguments as String), expected);
+    // Choosing no rings is not missing data: the same payload, flag omitted.
+    expect(
+      jsonDecode(published.last.arguments as String),
+      {...expected}..remove('selectedRingDataUnavailable'),
+    );
   });
 
   for (final sparkUsed in [59.0, 100.0]) {
@@ -1148,6 +1182,22 @@ List<MethodCall> _captureWatchPublications() {
   });
   addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
   return published;
+}
+
+/// The mock account as an Anthropic platform connection with budget limits.
+Map<String, dynamic> _anthropicPlatformJson() {
+  final json =
+      jsonDecode(
+            File(
+              '../../fixtures/snapshots/dashboard_today.json',
+            ).readAsStringSync(),
+          )
+          as Map<String, dynamic>;
+  final account = (json['accounts'] as List).first as Map<String, dynamic>;
+  // Mock accounts hold no rings, so only the connection differs here.
+  account['provider'] = 'claude';
+  account['connection'] = 'anthropic.platform';
+  return json;
 }
 
 /// Synthetic values exercise three pair identities without provider calls.

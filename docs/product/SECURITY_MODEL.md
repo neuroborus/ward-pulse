@@ -192,7 +192,9 @@ network exclusion and does not hold a credential/storage transaction over networ
 ## Phone-to-Watch Sync
 
 - The Data Layer payload follows `schemas/watch_dashboard_summary.schema.json`, which owns its
-  version number, and contains only derived ring metrics, optional compact remaining-credits
+  version number, and contains only derived ring metrics, the optional aggregate boolean
+  `selectedRingDataUnavailable` (`true` when a nonempty effective selection of percent rings
+  yields no usable ring metrics, omitted otherwise), optional compact remaining-credits
   glance (`creditsGlance`), budget, selected allowance, provider-status, alert, freshness, and
   phone-owned manual-refresh allowance fields (`manualRefreshAllowed` /
   `manualRefreshAvailableAt`, driven by the PollCadence hard floor). Ring entries and credits

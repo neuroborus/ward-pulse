@@ -154,6 +154,8 @@ data class WatchDashboardSummary(
     val manualRefreshAllowed: Boolean,
     /** ISO-8601 instant when refresh becomes allowed; null when already allowed. */
     val manualRefreshAvailableAt: String?,
+    /** Percent rings were selected on the phone, but none has usable data. */
+    val selectedRingDataUnavailable: Boolean = false,
 ) {
     /** Phone flags plus local wall clock (re-enable when [manualRefreshAvailableAt] passes). */
     fun isManualRefreshAllowed(now: Instant = Instant.now()): Boolean {
