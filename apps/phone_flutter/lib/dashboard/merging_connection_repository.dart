@@ -100,6 +100,9 @@ final class MergingConnectionRepository extends DashboardRepository {
       _cache?.connection ?? id?.storageKey,
     );
     var provenance = <String, Map<String, String>>{};
+    // A positive read stays private provenance until this connection returns
+    // its own result, so a retired read cannot vanish from the aggregate.
+    var positiveRead = const <String, Map<String, String>>{};
     var ownOutcomes = const <ConnectionReportingOutcome>[];
     Future<Map<String, Map<String, String>>> captureProvenance({
       bool includeOutcomes = false,
@@ -107,6 +110,7 @@ final class MergingConnectionRepository extends DashboardRepository {
       final other = await fallback;
       return mergeConnectionVersions([
         provenance,
+        positiveRead,
         other.connectionVersions,
         readObservation.versions,
         if (includeOutcomes)
@@ -168,6 +172,7 @@ final class MergingConnectionRepository extends DashboardRepository {
         return (snapshot: null, failure: null, cached: null, skipped: null);
       }
       final version = read?.version;
+      if (version != null) positiveRead = {id.storageKey: version.values};
       if (!await _current(revision, version, access))
         return (snapshot: null, failure: null, cached: null, skipped: null);
       return _loadOwned(revision, () async {
@@ -198,6 +203,8 @@ final class MergingConnectionRepository extends DashboardRepository {
       // unrelated held fallback must not queue the next saved-key check.
       final own =
           access == null ? await run() : await access.serializeFetch(run);
+      if (own.snapshot != null || own.failure != null || own.skipped != null)
+        positiveRead = const {};
       provenance = mergeConnectionVersions([
         own.snapshot?.connectionVersions ?? const {},
         own.failure?.connectionVersions ?? const {},
@@ -741,10 +748,13 @@ final class MergingConnectionRepository extends DashboardRepository {
     // await storage after this validation of the complete stamped provenance.
     if (cache != null) return cache.validSnapshot(snapshot);
     if (access != null) {
-      for (final outcome in snapshot.reportingOutcomes.where(
-        (outcome) => outcome.connection == id,
-      )) {
-        final version = outcome.credentialVersion;
+      final carried = snapshot.connectionVersions[id?.storageKey];
+      for (final version in [
+        if (carried != null && !CredentialVersion(carried).isAbsent)
+          CredentialVersion(carried),
+        for (final outcome in snapshot.reportingOutcomes)
+          if (outcome.connection == id) outcome.credentialVersion,
+      ]) {
         if (version != null && !await access.isCurrent(version)) return false;
       }
     }

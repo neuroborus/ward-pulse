@@ -66,13 +66,16 @@ void main() {
         storage: secure,
         platform: bridge.platform(owner),
       );
-  ConnectionSnapshotCache cache(String owner, String id) =>
-      ConnectionSnapshotCache(
-        connection: id,
-        platform: bridge.platform(owner),
-        readCredentialVersion:
-            () async => (await credentials(owner, id).read())?.version,
-      );
+  ConnectionSnapshotCache cache(
+    String owner,
+    String id, {
+    ConnectionCachePlatform? platform,
+  }) => ConnectionSnapshotCache(
+    connection: id,
+    platform: platform ?? bridge.platform(owner),
+    readCredentialVersion:
+        () async => (await credentials(owner, id).read())?.version,
+  );
   MergingConnectionRepository repository(
     String owner,
     String id,
@@ -95,13 +98,14 @@ void main() {
     String id,
     Future<String> Function(String) load, {
     DashboardRepository fallback = const NoProvidersDashboardRepository(),
+    ConnectionCachePlatform? cachePlatform,
   }) => MergingConnectionRepository(
     connection: ProviderConnectionId.fromStorageKey(id),
     credentialStore: SecureProviderCredentialStore(
       storage: secure,
       platform: bridge.platform(owner),
     ),
-    cache: cache(owner, id),
+    cache: cache(owner, id, platform: cachePlatform),
     fallback: fallback,
     loadCredentialReport: load,
     normalizeReport: (value) => value,
@@ -708,6 +712,162 @@ void main() {
       await keys('activation').writeSecret(a, 'synthetic-a');
       expect(await owner.isFailureCurrent(failure!), isTrue);
     });
+  });
+
+  test('late reporting replacement preserves the newer widget', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    const a = ProviderConnections.openAiPlatform;
+    const b = ProviderConnections.anthropicPlatform;
+    final keys = SecureProviderCredentialStore(
+      storage: secure,
+      platform: bridge.platform('ui'),
+    );
+    await keys.writeSecret(a, 'synthetic-a1');
+    await keys.writeSecret(b, 'synthetic-b');
+    final v1 = (await keys.readVersion(a))!;
+    final reportHeld = Completer<String>();
+    final releaseReport = Completer<void>();
+    final aggregateHeld = Completer<void>();
+    final releaseAggregate = Completer<void>();
+    // Only old A's cache pauses: its first aggregate check follows the native
+    // fetch release, whether the request carries B alone or A(v1)+B.
+    final oldCache = ObservingCachePlatform(bridge.platform('old'));
+    oldCache.beforeInvoke = (method, _) async {
+      if (method != 'validAll' || aggregateHeld.isCompleted) return;
+      aggregateHeld.complete();
+      await releaseAggregate.future;
+    };
+    final oldRepository = owned(
+      'old',
+      a.storageKey,
+      (secret) async {
+        reportHeld.complete(secret);
+        await releaseReport.future;
+        return _snapshot('openai', a.storageKey, firstAt, 500).toJsonString();
+      },
+      fallback: owned(
+        'old',
+        b.storageKey,
+        (_) async =>
+            _snapshot('claude', b.storageKey, firstAt, 900).toJsonString(),
+      ),
+      cachePlatform: oldCache,
+    );
+    final visible = <String, Object?>{};
+    final publications = <Map<String, Object?>>[];
+    final redraws = <Map<String, Object?>>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    const publication = MethodChannel('app.wardpulse/widget_publication');
+    const widget = MethodChannel('home_widget');
+    messenger.setMockMethodCallHandler(publication, (call) async {
+      if (call.method == 'publish') {
+        visible.addAll(Map<String, Object?>.from(call.arguments as Map));
+      } else if (call.method == 'markStale') {
+        visible['stale'] = '1';
+      } else {
+        throw MissingPluginException();
+      }
+      publications.add(Map.of(visible));
+      return true;
+    });
+    messenger.setMockMethodCallHandler(widget, (call) async {
+      if (call.method != 'updateWidget') throw MissingPluginException();
+      redraws.add(Map.of(visible));
+      return true;
+    });
+    const preferences = PhoneWidgetPreferences(
+      selectedIds: [
+        'budget.openai.platform.today',
+        'budget.anthropic.platform.today',
+      ],
+    );
+    PhoneWidgetSyncCoordinator coordinator() => PhoneWidgetSyncCoordinator(
+      write: HomeWidgetPhoneWidgetSyncService.writeHomeWidgetPayload,
+    );
+    final oldAttempt = CapturedDashboardLoad.capture(oldRepository.load);
+    Future<void> entered(Future<void> hold, String name) => Future.any([
+      hold,
+      oldAttempt.then<void>((result) {
+        result.value;
+        throw StateError('Old load completed before its $name hold.');
+      }),
+    ]);
+    try {
+      await entered(reportHeld.future, 'report');
+      expect(await reportHeld.future, 'synthetic-a1');
+      await SecureProviderCredentialStore(
+        storage: secure,
+        platform: bridge.platform('replace'),
+      ).writeSecret(a, 'synthetic-a2');
+      releaseReport.complete();
+      await entered(aggregateHeld.future, 'aggregate');
+      final newer = owned(
+        'new',
+        a.storageKey,
+        (_) async =>
+            _snapshot('openai', a.storageKey, nextAt, 700).toJsonString(),
+        fallback: owned(
+          'new',
+          b.storageKey,
+          (_) async =>
+              _snapshot('claude', b.storageKey, nextAt, 900).toJsonString(),
+        ),
+      );
+      final accepted = await newer.load();
+      await coordinator().sync(
+        accepted,
+        preferences,
+        isCurrent: () => newer.isSnapshotCurrent(accepted),
+      );
+      final acceptedVisible = Map.of(visible);
+      releaseAggregate.complete();
+      final settled = await oldAttempt;
+      DashboardLoadException? lateError;
+      try {
+        final old = settled.value;
+        await coordinator().sync(
+          old,
+          preferences,
+          isCurrent: () => oldRepository.isSnapshotCurrent(old),
+        );
+      } on DashboardLoadException catch (error) {
+        lateError = error;
+        await HomeWidgetPhoneWidgetSyncService.markExistingRowsStale(
+          isCurrent: () => oldRepository.isFailureCurrent(error),
+        );
+      }
+      final bCache = await cache('readback', b.storageKey).capture();
+      expect(accepted.accounts.map((row) => row.connection), [
+        b.storageKey,
+        a.storageKey,
+      ]);
+      expect(acceptedVisible['row_count'], 2);
+      expect([
+        acceptedVisible['row_0_spent_minor'],
+        acceptedVisible['row_1_spent_minor'],
+      ], unorderedEquals(['700', '900']));
+      expect(acceptedVisible['stale'], '0');
+      expect(
+        visible,
+        acceptedVisible,
+        reason: 'Late B-only work must not replace newer A+B',
+      );
+      expect(publications, [acceptedVisible]);
+      expect(redraws, [acceptedVisible]);
+      expect(lateError, isNotNull);
+      final retained = lateError!.connectionVersions[a.storageKey];
+      expect(retained, isNotNull);
+      expect(CredentialVersion(retained!).sameCache(v1), isTrue);
+      expect(bCache.snapshot!.accounts.single.status, ProviderStatus.ok);
+      expect(bCache.snapshot!.todayTotal.spent!.minorUnits, 900);
+    } finally {
+      if (!releaseReport.isCompleted) releaseReport.complete();
+      if (!releaseAggregate.isCompleted) releaseAggregate.complete();
+      await oldAttempt;
+      messenger.setMockMethodCallHandler(publication, null);
+      messenger.setMockMethodCallHandler(widget, null);
+    }
   });
 
   group('accepted connection history', () {
