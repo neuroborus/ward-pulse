@@ -38,6 +38,7 @@ jobs:
       - run: python3 tools/check-doc-citations.py
       - run: python3 tools/test-doc-citations.py
       - run: WARDPULSE_DOCS_BASE_PATH=/ward-pulse npm run docs:build
+      - run: python3 tools/test-doc-aliases.py --base-path /ward-pulse
       - uses: actions/upload-pages-artifact@v5.0.0
         if: >-
           github.ref == 'refs/heads/main' &&
