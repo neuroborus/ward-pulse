@@ -539,7 +539,10 @@ another connection's wake, until its own later start or successful load serves i
 Manual refresh/check/reconnect loads bypass admission without moving the anchor.
 Denied work rereads current cache and supplies no fresh success or recovery evidence,
 including skipped connections in partially fresh aggregates. Wholly skipped loads do not
-publish watch/widget data or deliver alerts. Scheduling remains subject to Android delays.
+deliver alerts. A wholly skipped foreground load can retry a pending watch or widget
+publication once the snapshot, local rules and that surface's selection are current.
+Wholly skipped headless loads publish neither surface. Scheduling remains subject to
+Android delays.
 
 `just check-phone` includes `just test-phone-cache`, which runs the production Java transaction
 engine's adversarial tests with the existing Android JDK (`javac` and `java`). Flutter tests also

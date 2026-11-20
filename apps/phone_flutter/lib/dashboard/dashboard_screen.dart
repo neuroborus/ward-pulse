@@ -53,8 +53,8 @@ class DashboardScreen extends StatefulWidget {
 
   final DashboardSnapshot snapshot;
 
-  /// Positive saved caps accepted with this snapshot, keyed by connection.
-  final Map<String, Set<String>> configuredBudgetPeriods;
+  /// Positive saved caps by connection. Null means local rules are unavailable.
+  final Map<String, Set<String>>? configuredBudgetPeriods;
   final VoidCallback? onOpenProviders;
   final void Function(ProviderConnectionId)? onEditReportingKey;
   final List<ConnectionRejectionNotice> rejectionNotices;
@@ -244,7 +244,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
         _SectionHeader(title: 'Alerts'),
         const SizedBox(height: 8),
-        _AlertsPanel(alerts: snapshot.alerts),
+        if (widget.configuredBudgetPeriods == null)
+          const Card(child: ListTile(title: Text('Alerts unavailable')))
+        else
+          _AlertsPanel(alerts: snapshot.alerts),
         if (caps.showSpendGap &&
             !snapshot.accounts.any(_showsSourceExpenses)) ...[
           const SizedBox(height: 16),
@@ -878,7 +881,7 @@ class _ProviderDashboardSections extends StatelessWidget {
   });
 
   final List<_ProviderDashboardSection> sections;
-  final Map<String, Set<String>> configuredBudgetPeriods;
+  final Map<String, Set<String>>? configuredBudgetPeriods;
 
   /// Owned by the screen's state so a key survives rebuilds and stays a valid
   /// scroll target between the tap and the frame that answers it.
@@ -913,11 +916,12 @@ class _ProviderDashboardSectionView extends StatelessWidget {
   });
 
   final _ProviderDashboardSection section;
-  final Map<String, Set<String>> configuredBudgetPeriods;
+  final Map<String, Set<String>>? configuredBudgetPeriods;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final configured = configuredBudgetPeriods;
     final chip = providerStatusChipColors(
       Theme.of(context).colorScheme,
       section.status,
@@ -976,7 +980,9 @@ class _ProviderDashboardSectionView extends StatelessWidget {
           _ProviderDashboardSourceView(
             account: account,
             configuredBudgetPeriods:
-                configuredBudgetPeriods[account.connection] ?? const {},
+                configured == null
+                    ? null
+                    : configured[account.connection] ?? const {},
             accent: accent,
             sourceTitle: sourceTitles[index],
             caption:
@@ -1034,12 +1040,13 @@ class _SourceExpenseBlock extends StatelessWidget {
 
   final ProviderSnapshot account;
   final String title;
-  final Set<String> configuredBudgetPeriods;
+  final Set<String>? configuredBudgetPeriods;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final budgets = [account.today, account.week, account.month];
+    final configured = configuredBudgetPeriods;
     Widget period(BudgetState budget, {required bool wide}) {
       final title = Text(budget.periodLabel, style: textTheme.titleSmall);
       final amount = Text(
@@ -1048,10 +1055,12 @@ class _SourceExpenseBlock extends StatelessWidget {
         textAlign: wide ? TextAlign.start : TextAlign.end,
       );
       final capLabel =
-          budget.limit?.label ??
-          (configuredBudgetPeriods.contains(budget.period)
-              ? 'Configured · Awaiting report'
-              : 'Not set');
+          configured == null
+              ? 'Unavailable'
+              : budget.limit?.label ??
+                  (configured.contains(budget.period)
+                      ? 'Configured · Awaiting report'
+                      : 'Not set');
       final cap = Text(
         'Local cap: $capLabel',
         style: textTheme.bodySmall,
@@ -1155,7 +1164,7 @@ class _ProviderDashboardSourceView extends StatelessWidget {
   });
 
   final ProviderSnapshot account;
-  final Set<String> configuredBudgetPeriods;
+  final Set<String>? configuredBudgetPeriods;
   final Color accent;
   final String sourceTitle;
   final String? caption;

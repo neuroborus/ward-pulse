@@ -57,8 +57,8 @@ class SettingsScreen extends StatefulWidget {
   final RefreshIntervalPreference refreshInterval;
   final Future<void> Function(RefreshIntervalPreference value)
   onRefreshIntervalChanged;
-  final WatchRingPreferences ringPreferences;
-  final PhoneWidgetPreferences widgetPreferences;
+  final WatchRingPreferences? ringPreferences;
+  final PhoneWidgetPreferences? widgetPreferences;
   final Future<void> Function() onSyncWatch;
   final bool debugDataAvailable;
   final bool mockDataEnabled;
@@ -80,18 +80,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _syncWatch() async {
     final snapshot = widget.snapshot;
+    final preferences = widget.ringPreferences;
     if (snapshot == null) {
       return;
     }
-    if (watchRingCapacityReason(
-          watchRingSelectionIds(snapshot, widget.ringPreferences),
-        ) !=
-        null) {
+    if (preferences != null &&
+        watchRingCapacityReason(watchRingSelectionIds(snapshot, preferences)) !=
+            null) {
       setState(() {
-        _syncResult = watchRingPayloadSubtitle(
-          snapshot,
-          widget.ringPreferences,
-        );
+        _syncResult = watchRingPayloadSubtitle(snapshot, preferences);
       });
       return;
     }
@@ -228,6 +225,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
+    final ringPreferences = widget.ringPreferences;
+    final widgetPreferences = widget.widgetPreferences;
     final colors = Theme.of(context).colorScheme;
     final shownRefreshMinutes = PollCadence.clampMinutes(
       _dragRefreshMinutes ?? widget.refreshInterval.minutes,
@@ -417,22 +416,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: const Icon(Icons.watch_outlined),
                   title: const Text('Watch summary'),
                   subtitle: Text(
-                    watchRingPayloadSubtitle(snapshot, widget.ringPreferences),
+                    ringPreferences == null
+                        ? 'Unavailable'
+                        : watchRingPayloadSubtitle(snapshot, ringPreferences),
                   ),
-                  trailing: StatusPill(
-                    status: snapshot.watchSummary.status,
-                    tooltip: snapshot.syncTooltip,
-                  ),
+                  trailing:
+                      ringPreferences == null
+                          ? null
+                          : StatusPill(
+                            status: snapshot.watchSummary.status,
+                            tooltip: snapshot.syncTooltip,
+                          ),
                 ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.widgets_outlined),
                   title: const Text('Widget summary'),
                   subtitle: Text(
-                    phoneWidgetPayloadSubtitle(
-                      snapshot,
-                      widget.widgetPreferences,
-                    ),
+                    widgetPreferences == null
+                        ? 'Unavailable'
+                        : phoneWidgetPayloadSubtitle(
+                          snapshot,
+                          widgetPreferences,
+                        ),
                   ),
                 ),
                 if (kDebugMode) ...[

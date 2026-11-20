@@ -59,6 +59,9 @@ final class ConnectionBudget {
 
   bool get isEmpty => today == null && week == null && month == null;
 
+  bool sameLimits(ConnectionBudget other) =>
+      (today, week, month) == (other.today, other.week, other.month);
+
   Map<String, Object?> toJson() => {
     if (today != null) 'today': today,
     if (week != null) 'week': week,
@@ -121,6 +124,20 @@ final class ConnectionAlertThresholds {
 
   /// Explicit Off overrides must survive even when nothing needs evaluation.
   bool get hasStoredSettings => isEnabled || planWindows.isNotEmpty;
+
+  bool samePlanAlerts(ConnectionAlertThresholds other) =>
+      plan.at == other.plan.at &&
+      purchased.at == other.purchased.at &&
+      planWindows.length == other.planWindows.length &&
+      planWindows.entries.every(
+        (entry) =>
+            other.planWindows.containsKey(entry.key) &&
+            other.planWindows[entry.key]?.at == entry.value.at,
+      );
+
+  bool sameBudgetAlerts(ConnectionAlertThresholds other) =>
+      (today.at, week.at, month.at) ==
+      (other.today.at, other.week.at, other.month.at);
 
   ConnectionAlertThresholds copyWith({
     AlertPercentThreshold? plan,
@@ -194,6 +211,23 @@ final class AlertThresholdPreferences {
 
   bool get hasEnabledRules =>
       connections.values.any((value) => value.isEnabled);
+
+  bool sameSettings(AlertThresholdPreferences other) {
+    final saved = connections.values.where((value) => value.hasStoredSettings);
+    return saved.length ==
+            other.connections.values
+                .where((value) => value.hasStoredSettings)
+                .length &&
+        connections.entries.every((entry) {
+          final rules = entry.value;
+          if (!rules.hasStoredSettings) return true;
+          final previous = other.connections[entry.key];
+          return previous != null &&
+              rules.samePlanAlerts(previous) &&
+              rules.sameBudgetAlerts(previous) &&
+              rules.budget.sameLimits(previous.budget);
+        });
+  }
 
   ConnectionAlertThresholds forConnection(ProviderConnectionId id) {
     return connections[id.storageKey] ?? const ConnectionAlertThresholds();

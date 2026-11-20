@@ -58,7 +58,7 @@ class ProvidersScreen extends StatefulWidget {
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
   final VoidCallback onCredentialsChanged;
-  final AlertThresholdPreferences alertThresholds;
+  final AlertThresholdPreferences? alertThresholds;
   final Future<void> Function(
     AlertThresholdPreferences Function(AlertThresholdPreferences current)
     update,
@@ -492,7 +492,11 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     final revision = widget.alertContextRevision;
     final store = widget.credentialStore;
     final snapshot = widget.snapshot;
-    final thresholds = widget.alertThresholds.forConnection(connection.id);
+    final thresholds = widget.alertThresholds?.forConnection(connection.id);
+    if (thresholds == null) {
+      _showMessage('Could not update alert thresholds');
+      return;
+    }
     final windows = ValueNotifier(_planWindows(connection.id));
     _alertConnection = connection.id;
     _alertWindows = windows;
@@ -540,7 +544,28 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
           !identical(store, widget.credentialStore)) {
         throw StateError('Connection changed during alert editing');
       }
-      return current.withConnection(connection.id, result);
+      final latest = current.forConnection(connection.id);
+      final ConnectionAlertThresholds next;
+      if (connection.id.kind == ConnectionKind.plan) {
+        if (!latest.samePlanAlerts(thresholds)) {
+          throw StateError('Plan alerts changed during editing');
+        }
+        next = latest.copyWith(
+          plan: result.plan,
+          planWindows: result.planWindows,
+          purchased: result.purchased,
+        );
+      } else {
+        if (!latest.sameBudgetAlerts(thresholds)) {
+          throw StateError('Budget alerts changed during editing');
+        }
+        next = latest.copyWith(
+          today: result.today,
+          week: result.week,
+          month: result.month,
+        );
+      }
+      return current.withConnection(connection.id, next);
     });
   }
 
@@ -563,23 +588,37 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
       };
 
   Future<void> _editConnectionBudget(ProviderConnection connection) async {
+    final revision = widget.alertContextRevision;
+    final store = widget.credentialStore;
+    final budget = widget.alertThresholds?.forConnection(connection.id).budget;
+    if (budget == null) {
+      _showMessage('Could not update alert thresholds');
+      return;
+    }
     final saved = await showDialog<ConnectionBudget>(
       context: context,
       builder:
           (context) => ConnectionBudgetDialog(
             connectionTitle: connection.sourceTitle,
-            budget: widget.alertThresholds.forConnection(connection.id).budget,
+            budget: budget,
           ),
     );
     if (saved == null || !mounted) {
       return;
     }
-    await _saveAlertThresholds(
-      (current) => current.withConnection(
+    await _saveAlertThresholds((current) {
+      final latest = current.forConnection(connection.id);
+      if (!mounted ||
+          revision != widget.alertContextRevision ||
+          !identical(store, widget.credentialStore) ||
+          !latest.budget.sameLimits(budget)) {
+        throw StateError('Budget limits changed during editing');
+      }
+      return current.withConnection(
         connection.id,
-        current.forConnection(connection.id).copyWith(budget: saved),
-      ),
-    );
+        latest.copyWith(budget: saved),
+      );
+    });
   }
 
   Future<void> _saveAlertThresholds(
@@ -607,7 +646,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     required Widget status,
     List<Widget> leading = const [],
   }) {
-    final settings = widget.alertThresholds.forConnection(connection.id);
+    final settings = widget.alertThresholds?.forConnection(connection.id);
     // Only a connection that reports spend can be held to a limit.
     final offersBudget = connection.id.kind == ConnectionKind.platform;
 
@@ -619,14 +658,16 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
             tooltip: 'Budget limits',
             onPressed: () => _editConnectionBudget(connection),
             icon: Icon(
-              settings.budget.isEmpty ? Icons.savings_outlined : Icons.savings,
+              settings?.budget.isEmpty == false
+                  ? Icons.savings
+                  : Icons.savings_outlined,
             ),
           ),
         IconButton(
           tooltip: 'Alert thresholds',
           onPressed: () => _editConnectionAlerts(connection),
           icon: Icon(
-            settings.hasAlertRules
+            settings?.hasAlertRules == true
                 ? Icons.notifications_active_outlined
                 : Icons.notifications_none_outlined,
           ),
@@ -798,6 +839,13 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     return PullToRefreshList(
       onRefresh: widget.onRefresh,
       children: [
+        if (widget.alertThresholds == null)
+          const Card(
+            child: ListTile(
+              leading: Icon(Icons.info_outline),
+              title: Text('Alert thresholds and budget limits unavailable'),
+            ),
+          ),
         for (final provider in families) ...[
           Card(
             child: Column(

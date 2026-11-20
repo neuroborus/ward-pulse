@@ -87,7 +87,7 @@ void main() {
         );
         expect(screen.snapshot.toJson(), source.toJson());
         expect(screen.snapshot.alertConditions, isEmpty);
-        expect(screen.configuredBudgetPeriods['openai.platform'], {'today'});
+        expect(screen.configuredBudgetPeriods?['openai.platform'], {'today'});
         expect(find.byType(ConnectProviderPrompt), findsOneWidget);
         expect(find.text('Connect a provider'), findsOneWidget);
         expect(find.byType(Badge), findsNothing);

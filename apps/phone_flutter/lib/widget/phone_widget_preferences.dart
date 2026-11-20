@@ -69,6 +69,7 @@ List<String> migratePhoneWidgetSelectedIds(List<String> ids) {
 List<WatchRingMetric> phoneWidgetCatalog(
   DashboardSnapshot? snapshot, {
   Iterable<ConnectionReportingOutcome> reportingOutcomes = const [],
+  bool localCapsAvailable = true,
 }) {
   return watchRingCatalog(
     snapshot,
@@ -76,6 +77,7 @@ List<WatchRingMetric> phoneWidgetCatalog(
     includePurchased: true,
     collapseClaudePlan: false,
     collapseCodexPlan: false,
+    localCapsAvailable: localCapsAvailable,
     // The widget has rows, not bands: nothing to split, so both Cursor pools
     // stay selectable on their own.
   );
@@ -140,8 +142,17 @@ String phoneWidgetMoneyText(Money money) {
       '${absolute ~/ hundred}.${(absolute % hundred).toString().padLeft(2, '0')}';
 }
 
-String phoneWidgetMetricSubtitle(WatchRingMetric metric) {
+String phoneWidgetMetricSubtitle(
+  WatchRingMetric metric, {
+  bool localCapsAvailable = true,
+}) {
   if (connectionFromBudgetRingId(metric.id) != null) {
+    if (!localCapsAvailable) {
+      final spent = metric.spent;
+      return spent == null
+          ? 'Spend and local cap unavailable'
+          : '${phoneWidgetMoneyText(spent)} spent · Cap unavailable';
+    }
     return '${phoneWidgetMetricValue(metric)} · ${metric.status.label}';
   }
   return phoneWidgetMetricIsAvailable(metric)

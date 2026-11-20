@@ -15,15 +15,19 @@ class WatchfaceScreen extends StatefulWidget {
     required this.onRefresh,
     this.reportingOutcomes = const [],
     this.saving = false,
+    this.localCapsAvailable = true,
   });
 
   final DashboardSnapshot? snapshot;
   final Iterable<ConnectionReportingOutcome> reportingOutcomes;
-  final WatchRingPreferences ringPreferences;
+  final WatchRingPreferences? ringPreferences;
   final bool saving;
+  final bool localCapsAvailable;
   final Future<void> Function(
-    WatchRingPreferences Function(WatchRingPreferences current) update,
-  )
+    WatchRingPreferences Function(WatchRingPreferences current) update, {
+    required String ringId,
+    required bool selected,
+  })
   onRingPreferencesChanged;
 
   /// Pull-to-refresh reload, shared with the app-bar action.
@@ -34,28 +38,31 @@ class WatchfaceScreen extends StatefulWidget {
 }
 
 class _WatchfaceScreenState extends State<WatchfaceScreen> {
-  /// Saved/catalogue choices, including missing data that must remain removable.
-  List<String> get _effectiveRingIds =>
-      watchRingSelectionIds(widget.snapshot, widget.ringPreferences);
-
-  Future<void> _toggleRing(WatchRingMetric metric, bool selected) async {
+  Future<void> _toggleRing(
+    WatchfaceScreen picker,
+    WatchRingMetric metric,
+    bool selected,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
-    final snapshot = widget.snapshot;
     try {
-      await widget.onRingPreferencesChanged((current) {
-        final ids = [...watchRingSelectionIds(snapshot, current)];
-        if (selected) {
-          if (!metric.isAvailable ||
-              ids.contains(metric.id) ||
-              watchRingCapacityReason([...ids, metric.id]) != null) {
+      await picker.onRingPreferencesChanged(
+        (current) {
+          final ids = [...watchRingSelectionIds(picker.snapshot, current)];
+          if (selected) {
+            if (!metric.isAvailable ||
+                ids.contains(metric.id) ||
+                watchRingCapacityReason([...ids, metric.id]) != null) {
+              return current;
+            }
+            ids.add(metric.id);
+          } else if (!ids.remove(metric.id)) {
             return current;
           }
-          ids.add(metric.id);
-        } else if (!ids.remove(metric.id)) {
-          return current;
-        }
-        return WatchRingPreferences(selectedIds: ids);
-      });
+          return WatchRingPreferences(selectedIds: ids);
+        },
+        ringId: metric.id,
+        selected: selected,
+      );
     } catch (_) {
       if (messenger.mounted) {
         messenger.showSnackBar(
@@ -67,11 +74,21 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final snapshot = widget.snapshot;
-    final selectedIds = _effectiveRingIds;
+    final picker = widget;
+    final snapshot = picker.snapshot;
+    final preferences = picker.ringPreferences;
+    final defaultsUnavailable =
+        preferences?.usesDefaults == true &&
+        snapshot != null &&
+        !picker.localCapsAvailable;
+    final selectedIds =
+        preferences == null || defaultsUnavailable
+            ? const <String>[]
+            : watchRingSelectionIds(snapshot, preferences);
     final reported = watchRingCatalog(
       snapshot,
-      reportingOutcomes: widget.reportingOutcomes,
+      reportingOutcomes: picker.reportingOutcomes,
+      localCapsAvailable: picker.localCapsAvailable,
     );
     final reportedIds = reported.map((metric) => metric.id).toSet();
     final catalog = [
@@ -106,8 +123,12 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
                   // The count, not the cap: a full stack greys every unpicked
                   // row, and without it that reads as a fault rather than a
                   // slot to free.
-                  '$usedSlots of $watchRingSlotCount slots used · '
-                  'unavailable ones stay off the watch',
+                  preferences == null
+                      ? 'Ring preferences unavailable'
+                      : defaultsUnavailable
+                      ? 'Default ring choices unavailable'
+                      : '$usedSlots of $watchRingSlotCount slots used · '
+                          'unavailable ones stay off the watch',
                 ),
               ),
               if (capacityReason != null) ...[
@@ -121,7 +142,7 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
                   ),
                 ),
               ],
-              if (reported.isEmpty) ...[
+              if (preferences != null && reported.isEmpty) ...[
                 const Divider(height: 1),
                 const ListTile(
                   title: Text('No metrics yet'),
@@ -131,20 +152,22 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
                   ),
                 ),
               ],
-              CatalogOutline(
-                catalog: catalog,
-                rowBuilder:
-                    (metric, title) => _WatchRingTile(
-                      metric: metric,
-                      title: title,
-                      selected: selectedIds.contains(metric.id),
-                      capacityReason: watchRingCapacityReason([
-                        ...selectedIds,
-                        metric.id,
-                      ]),
-                      onChanged: (value) => _toggleRing(metric, value),
-                    ),
-              ),
+              if (preferences != null)
+                CatalogOutline(
+                  catalog: catalog,
+                  rowBuilder:
+                      (metric, title) => _WatchRingTile(
+                        metric: metric,
+                        title: title,
+                        selected: selectedIds.contains(metric.id),
+                        capacityReason: watchRingCapacityReason([
+                          ...selectedIds,
+                          metric.id,
+                        ]),
+                        onChanged:
+                            (value) => _toggleRing(picker, metric, value),
+                      ),
+                ),
             ],
           ),
         ),
@@ -156,7 +179,9 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
               leading: const Icon(Icons.preview_outlined),
               title: const Text('Next watch payload'),
               subtitle: Text(
-                watchRingPayloadSubtitle(snapshot, widget.ringPreferences),
+                preferences == null || !picker.localCapsAvailable
+                    ? 'Unavailable'
+                    : watchRingPayloadSubtitle(snapshot, preferences),
               ),
             ),
           ),

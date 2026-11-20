@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../dashboard/apply_alert_settings.dart';
@@ -211,6 +212,28 @@ class DashboardHost extends StatefulWidget {
   State<DashboardHost> createState() => _DashboardHostState();
 }
 
+/// One accepted load or reevaluation, even when it reuses the snapshot object.
+final class _SnapshotAcceptance {
+  _SnapshotAcceptance({
+    required this.observationRevision,
+    required this.input,
+    required this.snapshot,
+    required this.rules,
+    required this.ruleGeneration,
+    required this.surfaceRevision,
+    required this.poll,
+  });
+
+  // Rule edits replace the acceptance while retaining the provider observation.
+  final int observationRevision;
+  final DashboardSnapshot input;
+  final DashboardSnapshot snapshot;
+  final AlertThresholdPreferences? rules;
+  final int ruleGeneration;
+  final int surfaceRevision;
+  final AutomaticPollContext? poll;
+}
+
 class _DashboardHostState extends State<DashboardHost>
     with WidgetsBindingObserver {
   static const _dashboardIndex = 0;
@@ -222,12 +245,7 @@ class _DashboardHostState extends State<DashboardHost>
   var _loadRevision = 0;
   var _surfaceRevision = 0;
   late Future<DashboardSnapshot> _snapshot = _loadSnapshot(automatic: true);
-  AutomaticPollContext? _acceptedPoll;
-  DashboardSnapshot? _currentSnapshot;
-  // The effective rules that produced this accepted snapshot's observations.
-  AlertThresholdPreferences? _acceptedAlertThresholds;
-  // The accepted repository input, before applying phone-local alert rules.
-  DashboardSnapshot? _repositorySnapshot;
+  _SnapshotAcceptance? _acceptance;
   final _reportingUpdates = <ProviderConnectionId, ConnectionReportingUpdate>{};
   ProviderConnectionId? _editReportingConnection;
   ({ProviderConnectionId connection, int token})? _connectionReveal;
@@ -275,16 +293,20 @@ class _DashboardHostState extends State<DashboardHost>
   final _dashboardOrder = FrozenOrder();
   RefreshIntervalPreference _refreshInterval =
       const RefreshIntervalPreference();
-  WatchRingPreferences _ringPreferences = const WatchRingPreferences();
-  PhoneWidgetPreferences _widgetPreferences = const PhoneWidgetPreferences();
+  WatchRingPreferences? _ringPreferences;
+  PhoneWidgetPreferences? _widgetPreferences;
+  // Held exports survive a skipped poll that replaces their acceptance.
+  var _watchPublicationPending = false;
+  var _widgetPublicationPending = false;
+  var _widgetPublicationRevision = 0;
   WatchRingPreferences? _pendingRingPreferences;
   PhoneWidgetPreferences? _pendingWidgetPreferences;
   Future<void> _ringPreferenceWork = Future<void>.value();
   Future<void> _widgetPreferenceWork = Future<void>.value();
   var _ringPreferenceRevision = 0;
   var _widgetPreferenceRevision = 0;
-  AlertThresholdPreferences _alertThresholds =
-      const AlertThresholdPreferences();
+  AlertThresholdPreferences? _alertThresholds;
+  var _ruleGeneration = 0;
   Future<void> _snapshotSettingsWork = Future<void>.value();
   bool _mockDataEnabled = false;
   bool _recoveryNotificationsEnabled = true;
@@ -493,23 +515,23 @@ class _DashboardHostState extends State<DashboardHost>
     if (!mounted) {
       return;
     }
-    final snapshot = _currentSnapshot;
-    if (snapshot == null) {
+    final acceptance = _acceptance;
+    if (acceptance == null) {
       // Load in flight / failed — reload; a later empty snapshot clears Wear.
       _reload();
       return;
     }
     final window = ManualRefreshWindow.fromLastSync(
-      lastSyncAt: _manualRefreshAnchorAt(snapshot),
+      lastSyncAt: _manualRefreshAnchorAt(acceptance.snapshot),
     );
     if (!window.allowed) {
       // Re-push flags so Wear chrome matches the phone floor without a wasted sync.
-      unawaited(_syncWatch(snapshot));
+      unawaited(_syncWatch(acceptance));
       return;
     }
     _wearRefreshAnchorAt = DateTime.now().toUtc();
     // Push disabled chrome immediately; the reload will push again with fresh data.
-    unawaited(_syncWatch(snapshot));
+    unawaited(_syncWatch(acceptance));
     _reload();
   }
 
@@ -540,14 +562,23 @@ class _DashboardHostState extends State<DashboardHost>
     final revision = _ringPreferenceRevision;
     return _ringPreferenceWork = _ringPreferenceWork.then((_) async {
       if (!mounted || revision != _ringPreferenceRevision) return;
-      var value = const WatchRingPreferences();
       try {
-        value = await widget.watchRingPreferenceStore.read();
+        final value = await widget.watchRingPreferenceStore.read();
+        final previous = _ringPreferences;
+        if (mounted &&
+            revision == _ringPreferenceRevision &&
+            (previous?.usesDefaults != value.usesDefaults ||
+                !listEquals(previous?.migratedIds, value.migratedIds))) {
+          setState(() {
+            _ringPreferences = value;
+            if (previous != null) _watchPublicationPending = true;
+          });
+        }
       } catch (_) {
-        // Only a read that still owns this revision may restore defaults.
-      }
-      if (mounted && revision == _ringPreferenceRevision) {
-        _ringPreferences = value;
+        // Retain the last confirmed selection.
+        if (mounted && _ringPreferences == null) {
+          _watchPublicationPending = true;
+        }
       }
     });
   }
@@ -558,24 +589,51 @@ class _DashboardHostState extends State<DashboardHost>
     final revision = _widgetPreferenceRevision;
     return _widgetPreferenceWork = _widgetPreferenceWork.then((_) async {
       if (!mounted || revision != _widgetPreferenceRevision) return;
-      var value = const PhoneWidgetPreferences();
       try {
-        value = await widget.phoneWidgetPreferenceStore.read();
+        final value = await widget.phoneWidgetPreferenceStore.read();
+        final previous = _widgetPreferences;
+        if (mounted &&
+            revision == _widgetPreferenceRevision &&
+            (previous?.usesDefaults != value.usesDefaults ||
+                !listEquals(previous?.migratedIds, value.migratedIds))) {
+          setState(() {
+            _widgetPreferences = value;
+            if (previous != null) _widgetPublicationPending = true;
+          });
+        }
       } catch (_) {
-        // Only a read that still owns this revision may restore defaults.
-      }
-      if (mounted && revision == _widgetPreferenceRevision) {
-        _widgetPreferences = value;
+        // Retain the last confirmed selection.
+        if (mounted && _widgetPreferences == null) {
+          _widgetPublicationPending = true;
+        }
       }
     });
   }
 
   Future<void> _readAlertThresholds() async {
     try {
-      _alertThresholds = await widget.alertThresholdStore.read();
+      _confirmAlertThresholds(await widget.alertThresholdStore.read());
     } catch (_) {
-      _alertThresholds = const AlertThresholdPreferences();
+      // Retain the last confirmed rules.
+      if (mounted && _alertThresholds == null) {
+        _watchPublicationPending = true;
+        _widgetPublicationPending = true;
+      }
     }
+  }
+
+  void _confirmAlertThresholds(AlertThresholdPreferences value) {
+    final previous = _alertThresholds;
+    if (!mounted || previous?.sameSettings(value) == true) return;
+    setState(() {
+      _alertThresholds = value;
+      _ruleGeneration++;
+      // A later acceptance must replace publications made with the old rules.
+      if (previous != null) {
+        _watchPublicationPending = true;
+        _widgetPublicationPending = true;
+      }
+    });
   }
 
   Future<void> _readNotificationPreferences(int loadRevision) async {
@@ -719,12 +777,22 @@ class _DashboardHostState extends State<DashboardHost>
   }
 
   Future<void> _updateRingPreferences(
-    WatchRingPreferences Function(WatchRingPreferences current) update,
-  ) {
-    if (!mounted) return Future<void>.value();
+    _SnapshotAcceptance? acceptance,
+    WatchRingPreferences Function(WatchRingPreferences current) update, {
+    required String ringId,
+    required bool selected,
+  }) async {
+    if (!mounted) return;
     final current = _pendingRingPreferences ?? _ringPreferences;
+    final requiresCurrentRules =
+        current?.usesDefaults == true ||
+        (selected && ringId.startsWith('budget.'));
+    if (current == null ||
+        (requiresCurrentRules && !_hasCurrentRules(acceptance))) {
+      throw StateError('Ring preferences are unavailable.');
+    }
     final value = update(current);
-    if (identical(value, current)) return Future<void>.value();
+    if (identical(value, current)) return;
     final revision = ++_ringPreferenceRevision;
     final store = widget.watchRingPreferenceStore;
     setState(() => _pendingRingPreferences = value);
@@ -740,10 +808,11 @@ class _DashboardHostState extends State<DashboardHost>
       if (!mounted) return;
       setState(() {
         _ringPreferences = value;
+        _watchPublicationPending = true;
         if (revision == _ringPreferenceRevision) _pendingRingPreferences = null;
       });
-      final snapshot = _currentSnapshot;
-      if (snapshot != null) unawaited(_syncWatch(snapshot));
+      final acceptance = _acceptance;
+      if (acceptance != null) unawaited(_syncWatch(acceptance));
     });
     // A failed save is reported to its picker but cannot poison later work.
     _ringPreferenceWork = work.then<void>(
@@ -754,12 +823,18 @@ class _DashboardHostState extends State<DashboardHost>
   }
 
   Future<void> _updateWidgetPreferences(
+    _SnapshotAcceptance? acceptance,
     PhoneWidgetPreferences Function(PhoneWidgetPreferences current) update,
-  ) {
-    if (!mounted) return Future<void>.value();
+  ) async {
+    if (!mounted) return;
     final current = _pendingWidgetPreferences ?? _widgetPreferences;
+    if (current == null ||
+        (current.usesDefaults &&
+            (acceptance == null || !_isAccepted(acceptance)))) {
+      throw StateError('Widget preferences are unavailable.');
+    }
     final value = update(current);
-    if (identical(value, current)) return Future<void>.value();
+    if (identical(value, current)) return;
     final revision = ++_widgetPreferenceRevision;
     final store = widget.phoneWidgetPreferenceStore;
     setState(() => _pendingWidgetPreferences = value);
@@ -775,11 +850,12 @@ class _DashboardHostState extends State<DashboardHost>
       if (!mounted) return;
       setState(() {
         _widgetPreferences = value;
+        _widgetPublicationPending = true;
         if (revision == _widgetPreferenceRevision)
           _pendingWidgetPreferences = null;
       });
-      final snapshot = _currentSnapshot;
-      if (snapshot != null) unawaited(_syncPhoneWidget(snapshot));
+      final acceptance = _acceptance;
+      if (acceptance != null) unawaited(_syncPhoneWidget(acceptance));
     });
     _widgetPreferenceWork = work.then<void>(
       (_) {},
@@ -808,71 +884,87 @@ class _DashboardHostState extends State<DashboardHost>
     AlertThresholdPreferences Function(AlertThresholdPreferences current)
     update,
   ) => _serializeSnapshotSettings(() async {
-    final value = update(_alertThresholds);
-    final snapshot = _repositorySnapshot;
+    final current = _alertThresholds;
+    if (!mounted || current == null) {
+      throw StateError('Alert thresholds are unavailable.');
+    }
+    final value = update(current);
+    final previous = _acceptance;
     final surfaceRevision = _surfaceRevision;
     // Evaluate before persisting so a core/FFI failure does not leave the
     // store ahead of in-memory prefs / dashboard alerts.
     final withAlerts =
-        snapshot == null ? null : widget.applyAlertSettings(snapshot, value);
+        previous == null
+            ? null
+            : widget.applyAlertSettings(previous.input, value);
     await widget.alertThresholdStore.write(value);
-    var owned = withAlerts == null;
-    if (withAlerts != null) {
-      try {
-        owned = await widget.repository.isSnapshotCurrent(withAlerts);
-      } catch (_) {
-        /* Preferences are saved; unavailable ownership cannot replace dashboard data. */
-      }
+    if (!mounted) return;
+    _confirmAlertThresholds(value);
+    if (previous == null || withAlerts == null) return;
+    try {
+      if (!await widget.repository.isSnapshotCurrent(withAlerts)) return;
+    } catch (_) {
+      // The write is saved even if ownership cannot be confirmed.
+      return;
     }
     // A new load request may retain this accepted input as its owned fallback.
-    final publish =
-        mounted &&
-        owned &&
-        surfaceRevision == _surfaceRevision &&
-        identical(snapshot, _repositorySnapshot);
-    if (mounted) {
-      setState(() {
-        _alertThresholds = value;
-        if (publish && withAlerts != null) {
-          _currentSnapshot = withAlerts;
-          _acceptedAlertThresholds = value;
-        }
-      });
-    } else {
-      _alertThresholds = value;
-      if (publish && withAlerts != null) {
-        _currentSnapshot = withAlerts;
-        _acceptedAlertThresholds = value;
-      }
+    if (!mounted ||
+        surfaceRevision != _surfaceRevision ||
+        !identical(previous, _acceptance)) {
+      return;
     }
-    if (publish && withAlerts != null) {
-      unawaited(_syncWatch(withAlerts));
-      unawaited(_syncPhoneWidget(withAlerts));
-      unawaited(_syncAlerts(withAlerts));
-    }
+    final acceptance = _SnapshotAcceptance(
+      observationRevision: previous.observationRevision,
+      input: previous.input,
+      snapshot: withAlerts,
+      rules: _alertThresholds,
+      ruleGeneration: _ruleGeneration,
+      surfaceRevision: surfaceRevision,
+      poll: previous.poll,
+    );
+    setState(() => _acceptance = acceptance);
+    unawaited(_syncWatch(acceptance));
+    unawaited(_syncPhoneWidget(acceptance));
+    unawaited(_syncAlerts(acceptance));
   });
 
-  Future<DashboardSnapshot> _acceptSnapshot(
+  Future<_SnapshotAcceptance> _acceptSnapshot(
     DashboardSnapshot repositorySnapshot,
     int revision,
+    AutomaticPollContext? poll,
   ) => _serializeSnapshotSettings(() async {
     if (!mounted || revision != _loadRevision) {
       throw const DashboardLoadException(details: 'Refresh superseded.');
     }
-    final snapshot = widget.applyAlertSettings(
-      repositorySnapshot,
-      _alertThresholds,
-    );
+    final rules = _alertThresholds;
+    final snapshot =
+        rules == null
+            ? repositorySnapshot
+            : widget.applyAlertSettings(repositorySnapshot, rules);
     final current = await widget.repository.isSnapshotCurrent(snapshot);
     if (!mounted || revision != _loadRevision || !current) {
       throw const DashboardLoadException(
         details: 'Connection changed during refresh.',
       );
     }
-    _repositorySnapshot = repositorySnapshot;
-    _currentSnapshot = snapshot;
-    _acceptedAlertThresholds = _alertThresholds;
-    return snapshot;
+    final acceptance = _SnapshotAcceptance(
+      observationRevision: revision,
+      input: repositorySnapshot,
+      snapshot: snapshot,
+      rules: rules,
+      ruleGeneration: _ruleGeneration,
+      surfaceRevision: _surfaceRevision,
+      poll: poll,
+    );
+    setState(() {
+      _acceptance = acceptance;
+      // Either surface may have to wait while a newer load takes over.
+      if (poll?.whollySkipped != true) {
+        _watchPublicationPending = true;
+        _widgetPublicationPending = true;
+      }
+    });
+    return acceptance;
   });
 
   Future<DashboardSnapshot> _loadSnapshot({bool automatic = false}) {
@@ -910,22 +1002,25 @@ class _DashboardHostState extends State<DashboardHost>
           await (poll == null
               ? _observedLoad(revision)
               : poll.run(() => _observedLoad(revision)));
-      final snapshot = await _acceptSnapshot(repositorySnapshot, revision);
-      _acceptedPoll = poll;
-      unawaited(_syncRecoveries(snapshot, poll: poll));
-      if (poll?.whollySkipped != true) {
-        unawaited(_syncWatch(snapshot));
-        unawaited(_syncPhoneWidget(snapshot));
-        unawaited(_syncAlerts(snapshot));
+      final acceptance = await _acceptSnapshot(
+        repositorySnapshot,
+        revision,
+        poll,
+      );
+      unawaited(_syncRecoveries(acceptance));
+      if (_watchPublicationPending) {
+        unawaited(_syncWatch(acceptance));
       }
-      return snapshot;
+      if (_widgetPublicationPending) {
+        unawaited(_syncPhoneWidget(acceptance));
+      }
+      if (poll?.whollySkipped != true) unawaited(_syncAlerts(acceptance));
+      return acceptance.snapshot;
     } catch (_) {
       // A failed foreground load leaves an error-only Dashboard. Successful
       // fallback loads return normally and retain their usable data.
       if (mounted && revision == _loadRevision) {
-        _repositorySnapshot = null;
-        _currentSnapshot = null;
-        _acceptedAlertThresholds = null;
+        _acceptance = null;
       }
       rethrow;
     } finally {
@@ -1016,23 +1111,35 @@ class _DashboardHostState extends State<DashboardHost>
     }
   }
 
-  Future<void> _syncRecoveries(
-    DashboardSnapshot snapshot, {
-    AutomaticPollContext? poll,
-  }) async {
+  bool _isAccepted(_SnapshotAcceptance acceptance) =>
+      mounted &&
+      acceptance.surfaceRevision == _surfaceRevision &&
+      identical(acceptance, _acceptance);
+
+  bool _hasCurrentRules(_SnapshotAcceptance? acceptance) =>
+      acceptance != null &&
+      acceptance.rules != null &&
+      acceptance.ruleGeneration == _ruleGeneration &&
+      _isAccepted(acceptance);
+
+  Future<void> _syncRecoveries(_SnapshotAcceptance acceptance) async {
+    final snapshot = acceptance.snapshot;
+    bool observesCurrentInput() =>
+        mounted &&
+        acceptance.surfaceRevision == _surfaceRevision &&
+        acceptance.observationRevision == _acceptance?.observationRevision;
+    Future<bool> isCurrent() async =>
+        observesCurrentInput() &&
+        await widget.repository.isSnapshotCurrent(snapshot) &&
+        observesCurrentInput();
     try {
-      final revision = _surfaceRevision;
       var notifications = false;
       try {
         notifications = await widget.recoveryNotificationStore.read();
       } catch (_) {
         // Preference failure mutes posting, not tracking or wake scheduling.
       }
-      if (!await widget.repository.isSnapshotCurrent(snapshot) ||
-          !mounted ||
-          revision != _surfaceRevision ||
-          !identical(snapshot, _currentSnapshot))
-        return;
+      if (!await isCurrent()) return;
       await syncPlanRecoveries(
         snapshot,
         widget.recoveryWatchlistStore,
@@ -1042,40 +1149,28 @@ class _DashboardHostState extends State<DashboardHost>
         notifications: notifications && _recoveryNotificationsEnabled,
         readRecoveries: widget.readPlanRecoveries,
         readWindows: widget.readExhaustedWindows,
-        poll: poll,
-        isCurrent: () async {
-          final current = await widget.repository.isSnapshotCurrent(snapshot);
-          return current &&
-              mounted &&
-              revision == _surfaceRevision &&
-              identical(snapshot, _currentSnapshot);
-        },
+        poll: acceptance.poll,
+        isCurrent: isCurrent,
       );
     } catch (_) {
       // Recovery bookkeeping cannot publish retired data or block the dashboard.
     }
   }
 
-  Future<void> _syncAlerts(DashboardSnapshot snapshot) async {
-    final revision = _surfaceRevision;
-    final rules = _acceptedAlertThresholds;
-    bool accepted() =>
-        rules != null &&
-        mounted &&
-        !_mockDataEnabled &&
-        revision == _surfaceRevision &&
-        identical(snapshot, _currentSnapshot) &&
-        identical(rules, _alertThresholds);
+  Future<void> _syncAlerts(_SnapshotAcceptance acceptance) async {
+    final snapshot = acceptance.snapshot;
+    bool accepted() => _hasCurrentRules(acceptance) && !_mockDataEnabled;
+    if (!accepted()) return;
     await AlertNotificationDelivery(
       preferences: widget.alertNotificationStore,
       conditions: widget.alertConditionStore,
       notifier: widget.alertNotifier,
     ).sync(
       snapshot,
-      poll: _acceptedPoll,
+      poll: acceptance.poll,
       mockData: _mockDataEnabled,
       isAccepted: accepted,
-      alertThresholds: rules,
+      alertThresholds: acceptance.rules,
       isDeliveryEnabled: () => _alertNotificationsEnabled,
       isCurrent: () async {
         if (!accepted()) return false;
@@ -1098,27 +1193,39 @@ class _DashboardHostState extends State<DashboardHost>
     final revision = ++_loadRevision;
     final poll = _automaticPoll();
     try {
+      if (_ringPreferences == null) await _readRingPreferences();
+      if (_widgetPreferences == null) await _readWidgetPreferences();
+      if (_alertThresholds == null) {
+        await _serializeSnapshotSettings(() async {
+          if (_alertThresholds == null) await _readAlertThresholds();
+        });
+      }
       // Do not invalidate: load() already refetches, and clearing caches would
       // drop stale-with-issue recovery on a failed automatic tick.
       final repositorySnapshot = await poll.run(() => _observedLoad(revision));
-      final snapshot = await _acceptSnapshot(repositorySnapshot, revision);
-      _acceptedPoll = poll;
+      final acceptance = await _acceptSnapshot(
+        repositorySnapshot,
+        revision,
+        poll,
+      );
       if (mounted && revision == _loadRevision) {
         setState(() {
-          _snapshot = Future.value(snapshot);
+          _snapshot = Future.value(acceptance.snapshot);
         });
       }
-      if (!poll.whollySkipped) {
-        await _syncWatch(snapshot);
-        await _syncPhoneWidget(snapshot);
+      if (_watchPublicationPending) {
+        await _syncWatch(acceptance);
       }
-      await _syncRecoveries(snapshot, poll: poll);
-      if (!poll.whollySkipped) await _syncAlerts(snapshot);
+      if (_widgetPublicationPending) {
+        await _syncPhoneWidget(acceptance);
+      }
+      await _syncRecoveries(acceptance);
+      if (!poll.whollySkipped) await _syncAlerts(acceptance);
     } on DashboardLoadException catch (failure) {
       // Keep successful data, but an error-only dashboard must follow the most
       // recent guarded result rather than the exception from its first load.
       try {
-        final previous = _currentSnapshot;
+        final previous = _acceptance?.snapshot;
         if (previous != null &&
             await widget.repository.isSnapshotCurrent(previous))
           return;
@@ -1129,9 +1236,7 @@ class _DashboardHostState extends State<DashboardHost>
           // FutureBuilder attaches on the next build; observe errors meanwhile.
           failed.ignore();
           setState(() {
-            _repositorySnapshot = null;
-            _currentSnapshot = null;
-            _acceptedAlertThresholds = null;
+            _acceptance = null;
             _snapshot = failed;
           });
         }
@@ -1154,14 +1259,12 @@ class _DashboardHostState extends State<DashboardHost>
       await widget.repository.clearPersistentSnapshots();
       await widget.debugDataPreferenceStore.writeMockDataEnabled(value);
     } catch (_) {
-      final snapshot = _currentSnapshot;
-      final repositorySnapshot = _repositorySnapshot;
+      final previous = _acceptance;
       var owned = false;
       try {
         owned =
-            snapshot != null &&
-            repositorySnapshot != null &&
-            await widget.repository.isSnapshotCurrent(repositorySnapshot);
+            previous != null &&
+            await widget.repository.isSnapshotCurrent(previous.input);
       } catch (_) {
         // Unavailable ownership cannot restore reader-visible data.
       }
@@ -1169,12 +1272,19 @@ class _DashboardHostState extends State<DashboardHost>
           revision == _loadRevision &&
           surfaceRevision == _surfaceRevision) {
         setState(() {
-          if (owned) {
-            _snapshot = Future.value(snapshot!);
+          if (owned && previous != null) {
+            _acceptance = _SnapshotAcceptance(
+              observationRevision: previous.observationRevision,
+              input: previous.input,
+              snapshot: previous.snapshot,
+              rules: previous.rules,
+              ruleGeneration: previous.ruleGeneration,
+              surfaceRevision: surfaceRevision,
+              poll: previous.poll,
+            );
+            _snapshot = Future.value(previous.snapshot);
           } else {
-            _repositorySnapshot = null;
-            _currentSnapshot = null;
-            _acceptedAlertThresholds = null;
+            _acceptance = null;
             final failed = Future<DashboardSnapshot>.error(
               const DashboardLoadException(),
             );
@@ -1193,32 +1303,47 @@ class _DashboardHostState extends State<DashboardHost>
     _surfaceRevision++;
     widget.repository.invalidate();
     setState(() {
-      _repositorySnapshot = null;
-      _currentSnapshot = null;
-      _acceptedAlertThresholds = null;
+      _acceptance = null;
       _mockDataEnabled = value;
       _snapshot = _loadSnapshot();
     });
   });
 
-  Future<void> _syncWatch(DashboardSnapshot snapshot) async {
+  Future<void> _syncWatch(_SnapshotAcceptance acceptance) async {
+    if (!_isAccepted(acceptance)) return;
+    _watchPublicationPending = true;
     try {
-      await _queueWatchSummary(snapshot);
+      await _queueWatchSummary(acceptance);
     } catch (_) {
       // Watch availability must not block the phone dashboard.
     }
   }
 
-  Future<void> _syncPhoneWidget(DashboardSnapshot snapshot) async {
-    final revision = _surfaceRevision;
+  Future<void> _syncPhoneWidget(_SnapshotAcceptance acceptance) async {
+    if (!_isAccepted(acceptance)) return;
+    _widgetPublicationPending = true;
+    final publicationRevision = ++_widgetPublicationRevision;
+    final preferences = _widgetPreferences;
+    if (preferences == null) return;
+    final snapshot = acceptance.snapshot;
+    bool accepted() =>
+        publicationRevision == _widgetPublicationRevision &&
+        _hasCurrentRules(acceptance) &&
+        identical(preferences, _widgetPreferences);
+    Future<bool> isCurrent() async =>
+        accepted() &&
+        await widget.repository.isSnapshotCurrent(snapshot) &&
+        accepted();
     try {
-      if (!await widget.repository.isSnapshotCurrent(snapshot) ||
-          !mounted ||
-          revision != _surfaceRevision ||
-          !identical(snapshot, _currentSnapshot))
-        return;
-      await widget.phoneWidgetSyncService.sync(snapshot, _widgetPreferences);
-    } catch (error) {
+      if (!await isCurrent() || !accepted()) return;
+      var dispatchAllowed = false;
+      await widget.phoneWidgetSyncService.sync(
+        snapshot,
+        preferences,
+        isCurrent: () async => dispatchAllowed = await isCurrent(),
+      );
+      if (dispatchAllowed && accepted()) _widgetPublicationPending = false;
+    } catch (_) {
       // Launcher widget updates must not block the phone dashboard.
       developer.log(
         'Dashboard refresh could not update the widget.',
@@ -1227,27 +1352,33 @@ class _DashboardHostState extends State<DashboardHost>
     }
   }
 
-  Future<void> _queueWatchSummary(DashboardSnapshot snapshot) async {
-    final revision = _surfaceRevision;
-    if (!await widget.repository.isSnapshotCurrent(snapshot) ||
-        !mounted ||
-        revision != _surfaceRevision ||
-        !identical(snapshot, _currentSnapshot))
-      return;
+  Future<bool> _queueWatchSummary(_SnapshotAcceptance acceptance) async {
+    final preferences = _ringPreferences;
+    if (preferences == null) return false;
+    final snapshot = acceptance.snapshot;
+    bool accepted() =>
+        _hasCurrentRules(acceptance) &&
+        identical(preferences, _ringPreferences);
+    if (!accepted() ||
+        !await widget.repository.isSnapshotCurrent(snapshot) ||
+        !accepted()) {
+      return false;
+    }
     await widget.watchSyncService.sync(
       snapshot,
-      _ringPreferences,
+      preferences,
       manualRefreshAnchorAt: _manualRefreshAnchorAt(snapshot),
       mockDataMode: _mockDataEnabled,
     );
+    if (accepted()) _watchPublicationPending = false;
+    return true;
   }
 
   Future<void> _onSettingsSyncWatch() async {
-    final snapshot = _currentSnapshot;
-    if (snapshot == null) {
-      return;
+    final acceptance = _acceptance;
+    if (acceptance == null || !await _queueWatchSummary(acceptance)) {
+      throw StateError('Watch sync unavailable');
     }
-    await _queueWatchSummary(snapshot);
   }
 
   /// Pull-to-refresh runs the same reload the app-bar action does; the gesture
@@ -1380,9 +1511,7 @@ class _DashboardHostState extends State<DashboardHost>
   void _onCredentialsChanged() {
     _loadRevision++;
     _surfaceRevision++;
-    _repositorySnapshot = null;
-    _currentSnapshot = null;
-    _acceptedAlertThresholds = null;
+    _acceptance = null;
     widget.repository.invalidate();
     _reload(forCredentialChange: true);
   }
@@ -1413,7 +1542,10 @@ class _DashboardHostState extends State<DashboardHost>
       builder: (context, state) {
         // Credential changes retire visible data immediately while preserving
         // the active tab, its scroll position and any app-owned save operation.
-        final data = _currentSnapshot;
+        final acceptance = _acceptance;
+        final data = acceptance?.snapshot;
+        final acceptedRules = acceptance?.rules;
+        final rulesCurrent = _hasCurrentRules(acceptance);
         final snapshot =
             data == null || _mockDataEnabled
                 ? data
@@ -1466,7 +1598,15 @@ class _DashboardHostState extends State<DashboardHost>
                 reportingOutcomes: reportingOutcomes,
                 ringPreferences: _pendingRingPreferences ?? _ringPreferences,
                 saving: _pendingRingPreferences != null,
-                onRingPreferencesChanged: _updateRingPreferences,
+                localCapsAvailable: rulesCurrent,
+                onRingPreferencesChanged:
+                    (update, {required ringId, required selected}) =>
+                        _updateRingPreferences(
+                          acceptance,
+                          update,
+                          ringId: ringId,
+                          selected: selected,
+                        ),
               ),
               _ when _selectedIndex == _widgetIndex => WidgetScreen(
                 key: const ValueKey('widget'),
@@ -1475,7 +1615,9 @@ class _DashboardHostState extends State<DashboardHost>
                 reportingOutcomes: reportingOutcomes,
                 preferences: _pendingWidgetPreferences ?? _widgetPreferences,
                 saving: _pendingWidgetPreferences != null,
-                onPreferencesChanged: _updateWidgetPreferences,
+                localCapsAvailable: rulesCurrent,
+                onPreferencesChanged:
+                    (update) => _updateWidgetPreferences(acceptance, update),
               ),
               _ when _selectedIndex == _providersIndex => ProvidersScreen(
                 key: const ValueKey('providers'),
@@ -1508,8 +1650,8 @@ class _DashboardHostState extends State<DashboardHost>
                 snapshot: snapshot,
                 refreshInterval: _refreshInterval,
                 onRefreshIntervalChanged: _updateRefreshInterval,
-                ringPreferences: _ringPreferences,
-                widgetPreferences: _widgetPreferences,
+                ringPreferences: rulesCurrent ? _ringPreferences : null,
+                widgetPreferences: rulesCurrent ? _widgetPreferences : null,
                 onSyncWatch: _onSettingsSyncWatch,
                 recoveryNotificationsEnabled: _recoveryNotificationsEnabled,
                 onRecoveryNotificationsChanged: _updateRecoveryNotifications,
@@ -1555,15 +1697,17 @@ class _DashboardHostState extends State<DashboardHost>
               _ when snapshot != null => DashboardScreen(
                 onRefresh: _pullToRefresh,
                 snapshot: snapshot,
-                configuredBudgetPeriods: {
-                  if (_acceptedAlertThresholds case final thresholds?)
-                    for (final entry in thresholds.connections.entries)
-                      entry.key: {
-                        if ((entry.value.budget.today ?? 0) > 0) 'today',
-                        if ((entry.value.budget.week ?? 0) > 0) 'week',
-                        if ((entry.value.budget.month ?? 0) > 0) 'month',
-                      },
-                },
+                configuredBudgetPeriods:
+                    acceptedRules == null
+                        ? null
+                        : {
+                          for (final entry in acceptedRules.connections.entries)
+                            entry.key: {
+                              if ((entry.value.budget.today ?? 0) > 0) 'today',
+                              if ((entry.value.budget.week ?? 0) > 0) 'week',
+                              if ((entry.value.budget.month ?? 0) > 0) 'month',
+                            },
+                        },
                 onOpenProviders: _openProviders,
                 onEditReportingKey: _editReportingKey,
                 rejectionNotices: _rejectionNotices,

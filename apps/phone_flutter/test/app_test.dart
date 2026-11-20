@@ -43,6 +43,7 @@ import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
 import 'package:ward_pulse_phone/settings/refresh_interval_preferences.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_payload.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_sync.dart';
 import 'package:ward_pulse_phone/sync/poll_cadence.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_scheduler.dart';
@@ -2319,7 +2320,7 @@ void main() {
     );
     final settings = tester.widget<SettingsScreen>(find.byType(SettingsScreen));
     expect(
-      settings.widgetPreferences.selectedIds,
+      settings.widgetPreferences?.selectedIds,
       preferences.value.selectedIds,
     );
     final tile = tester.widget<ListTile>(summary);
@@ -2925,7 +2926,7 @@ void main() {
       expect(
         tester
             .widget<ProvidersScreen>(find.byType(ProvidersScreen))
-            .alertThresholds
+            .alertThresholds!
             .toJson(),
         store.value.toJson(),
       );
@@ -3133,7 +3134,7 @@ void main() {
       expect(
         tester
             .widget<ProvidersScreen>(find.byType(ProvidersScreen))
-            .alertThresholds
+            .alertThresholds!
             .forConnection(ProviderConnections.codexPlan)
             .plan
             .at,
@@ -3587,6 +3588,1123 @@ void main() {
         for (final release in [ringRead, widgetRead, ringWrite, widgetWrite]) {
           if (!release.isCompleted) release.complete();
         }
+        await tester.pumpAndSettle();
+      }
+    },
+  );
+
+  testWidgets(
+    'a failed warm rules read keeps the cap and crossing through a budget edit',
+    (tester) async {
+      final repository = _PublicationRepository(_surfaceSelectionSnapshot());
+      final rules = _MemoryAlertThresholdStore()..value = _savedExpenseRules;
+      final rings =
+          _MemoryWatchRingStore()
+            ..value = const WatchRingPreferences(selectedIds: []);
+      final widgets =
+          _MemoryPhoneWidgetStore()
+            ..value = const PhoneWidgetPreferences(selectedIds: []);
+      final watch = _FakeWatchSyncService();
+      final launcher = _FakePhoneWidgetSyncService();
+      final markers = _MemoryAlertConditions();
+      final notifier = _FakeAlertNotifier();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          alertThresholdStore: rules,
+          watchRingPreferenceStore: rings,
+          phoneWidgetPreferenceStore: widgets,
+          applyAlertSettings: _applyExpenseRules,
+          watchSyncService: watch,
+          phoneWidgetSyncService: launcher,
+          alertConditionStore: markers,
+          alertNotifier: notifier,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(markers.values, {_expenseAlertKey: false});
+      for (final tab in ['Watchface', 'Widget']) {
+        await tester.tap(find.text(tab));
+        await tester.pumpAndSettle();
+        final today = find.widgetWithText(CheckboxListTile, 'Today');
+        await tester.ensureVisible(today);
+        await tester.tap(today);
+        await tester.pumpAndSettle();
+      }
+      expect(rings.value.selectedIds, [_expenseRingId]);
+      expect(widgets.value.selectedIds, [_expenseRingId]);
+
+      rules.failRead = true;
+      repository.snapshot = _surfaceSelectionSnapshot(spent: 850);
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      expect(rules.reads, 2);
+      expect(notifier.posts, [_expenseAlertKey]);
+      expect(notifier.bodies, ['Reached your alert threshold: 20% left.']);
+      expect(watch.payload['rings'], [
+        containsPair('limit', {'minorUnits': 1000, 'currency': 'USD'}),
+      ]);
+      expect(launcher.payload.rows.single.cap?.minorUnits, 1000);
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      expect(find.text('Local cap: USD 10.00'), findsOneWidget);
+
+      await _openPlatformBudgetAction(tester);
+      final fields = find.descendant(
+        of: find.byType(ConnectionBudgetDialog),
+        matching: find.byType(TextField),
+      );
+      expect(tester.widget<TextField>(fields.first).controller!.text, '10.00');
+      await tester.enterText(fields.first, '10.50');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(rules.writes, 1);
+      expect(
+        rules.value.toJson(),
+        _savedExpenseRules
+            .withConnection(
+              ProviderConnections.openAiPlatform,
+              _savedExpenseRules
+                  .forConnection(ProviderConnections.openAiPlatform)
+                  .copyWith(
+                    budget: const ConnectionBudget(
+                      today: 1050,
+                      week: 2600,
+                      month: 4000,
+                    ),
+                  ),
+            )
+            .toJson(),
+      );
+      expect(markers.values, {_expenseAlertKey: true});
+      expect(notifier.posts, [_expenseAlertKey]);
+      expect(watch.payload['rings'], [
+        containsPair('limit', {'minorUnits': 1050, 'currency': 'USD'}),
+      ]);
+      expect(launcher.payload.rows.single.cap?.minorUnits, 1050);
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      expect(find.text('Local cap: USD 10.50'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a skipped poll publishes a saved cap after edit ownership is rejected',
+    (tester) async {
+      final source = _surfaceSelectionSnapshot();
+      final polls = <AutomaticPollContext>[];
+      var rejectEditedCap = false;
+      var rejectedValidations = 0;
+      final repository = _CountingDashboardRepository(
+        () {
+          if (AutomaticPollContext.current case final poll?) {
+            if (polls.isNotEmpty) {
+              const connection = 'openai.platform';
+              poll.skipped[connection] = AutomaticPollSkipped(
+                connection,
+                CredentialVersion({}),
+                DateTime.utc(2026, 11, 6),
+              );
+            }
+            polls.add(poll);
+          }
+          return source;
+        },
+        validateSnapshot: (snapshot) async {
+          if (rejectEditedCap &&
+              snapshot.accounts.first.today.limit?.minorUnits == 2000) {
+            rejectedValidations++;
+            return false;
+          }
+          return true;
+        },
+      );
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final rules = _MemoryAlertThresholdStore()..value = _savedExpenseRules;
+      final watch = _FakeWatchSyncService();
+      final launcher = _FakePhoneWidgetSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          syncScheduler: scheduler,
+          alertThresholdStore: rules,
+          applyAlertSettings: _applyExpenseRules,
+          watchRingPreferenceStore:
+              _MemoryWatchRingStore()
+                ..value = const WatchRingPreferences(
+                  selectedIds: [_expenseRingId],
+                ),
+          phoneWidgetPreferenceStore:
+              _MemoryPhoneWidgetStore()
+                ..value = const PhoneWidgetPreferences(
+                  selectedIds: [_expenseRingId],
+                ),
+          watchSyncService: watch,
+          phoneWidgetSyncService: launcher,
+          readExhaustedWindows: (_) => const [],
+          readPlanRecoveries: (_, _) => const [],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(polls.single.whollySkipped, isFalse);
+      expect(find.text('Local cap: USD 10.00'), findsOneWidget);
+      expect(watch.payload['rings'], [
+        containsPair('limit', {'minorUnits': 1000, 'currency': 'USD'}),
+      ]);
+      expect(launcher.payload.rows.single.cap?.minorUnits, 1000);
+
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(polls, hasLength(2));
+      expect(polls.last.whollySkipped, isTrue);
+      expect(watch.syncedSnapshots, hasLength(1));
+      expect(launcher.syncedSnapshots, hasLength(1));
+
+      await _openPlatformBudgetAction(tester);
+      final fields = find.descendant(
+        of: find.byType(ConnectionBudgetDialog),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(fields.first, '20.00');
+      rejectEditedCap = true;
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(rejectedValidations, 1);
+      expect(rules.writes, 1);
+      final saved = rules.value.forConnection(
+        ProviderConnections.openAiPlatform,
+      );
+      expect(saved.budget.today, 2000);
+      expect(watch.syncedSnapshots, hasLength(1));
+      expect(launcher.syncedSnapshots, hasLength(1));
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      expect(find.text('Local cap: USD 10.00'), findsOneWidget);
+
+      rejectEditedCap = false;
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(polls, hasLength(3));
+      expect(polls.last.whollySkipped, isTrue);
+      expect(find.text('Local cap: USD 20.00'), findsOneWidget);
+      expect(watch.syncedSnapshots, hasLength(2));
+      expect(watch.payload['rings'], [
+        containsPair('limit', {'minorUnits': 2000, 'currency': 'USD'}),
+      ]);
+      expect(launcher.syncedSnapshots, hasLength(2));
+      expect(launcher.payload.rows.single.cap?.minorUnits, 2000);
+
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(polls, hasLength(4));
+      expect(polls.last.whollySkipped, isTrue);
+      expect(watch.syncedSnapshots, hasLength(2));
+      expect(launcher.syncedSnapshots, hasLength(2));
+    },
+  );
+
+  testWidgets('a skipped poll publishes rules reread before a failed refresh', (
+    tester,
+  ) async {
+    const connection = 'openai.platform';
+    final source = _surfaceSelectionSnapshot();
+    final polls = <AutomaticPollContext>[];
+    var failRefresh = false;
+    final repository = _CountingDashboardRepository(() {
+      if (AutomaticPollContext.current case final poll?) {
+        if (polls.isNotEmpty) {
+          poll.skipped[connection] = AutomaticPollSkipped(
+            connection,
+            CredentialVersion({}),
+            DateTime.utc(2026, 11, 6),
+          );
+        }
+        polls.add(poll);
+      } else if (failRefresh) {
+        throw const DashboardLoadException();
+      }
+      return source;
+    });
+    final rules = _MemoryAlertThresholdStore()..value = _savedExpenseRules;
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    final watch = _FakeWatchSyncService();
+    final launcher = _FakePhoneWidgetSyncService();
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: repository,
+        syncScheduler: scheduler,
+        alertThresholdStore: rules,
+        applyAlertSettings: _applyExpenseRules,
+        watchRingPreferenceStore:
+            _MemoryWatchRingStore()
+              ..value = const WatchRingPreferences(
+                selectedIds: [_expenseRingId],
+              ),
+        phoneWidgetPreferenceStore:
+            _MemoryPhoneWidgetStore()
+              ..value = const PhoneWidgetPreferences(
+                selectedIds: [_expenseRingId],
+              ),
+        watchSyncService: watch,
+        phoneWidgetSyncService: launcher,
+        readExhaustedWindows: (_) => const [],
+        readPlanRecoveries: (_, _) => const [],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Local cap: USD 10.00'), findsOneWidget);
+    expect(watch.syncedSnapshots, hasLength(1));
+    expect(launcher.syncedSnapshots, hasLength(1));
+
+    rules.value = _savedExpenseRules.withConnection(
+      ProviderConnections.openAiPlatform,
+      const ConnectionAlertThresholds(budget: ConnectionBudget(today: 2000)),
+    );
+    failRefresh = true;
+    await tester.tap(find.byTooltip('Refresh'));
+    await tester.pumpAndSettle();
+    expect(rules.reads, 2);
+    expect(find.byType(DashboardScreen), findsNothing);
+    expect(watch.syncedSnapshots, hasLength(1));
+    expect(launcher.syncedSnapshots, hasLength(1));
+
+    scheduler.tick();
+    await tester.pumpAndSettle();
+    expect(polls, hasLength(2));
+    expect(polls.last.whollySkipped, isTrue);
+    expect(find.text('Local cap: USD 20.00'), findsOneWidget);
+    expect(watch.payload['rings'], [
+      containsPair('limit', {'minorUnits': 2000, 'currency': 'USD'}),
+    ]);
+    expect(launcher.payload.rows.single.cap?.minorUnits, 2000);
+  });
+
+  testWidgets(
+    'cold rules failure holds edits and exports while usage and recoveries advance',
+    (tester) async {
+      final planAccount = ProviderSnapshot.fromJson({
+        ..._alertTestSnapshot().primaryAccount!.toJson(),
+        'today': const BudgetState.unknownPeriod('today').toJson(),
+      });
+      DashboardSnapshot observations(int spent) {
+        final reporting = _applyExpenseRules(
+          _surfaceSelectionSnapshot(spent: spent),
+          _savedExpenseRules,
+        );
+        return reporting.withAccounts([...reporting.accounts, planAccount]);
+      }
+
+      final repository = _PublicationRepository(observations(100));
+      final rules =
+          _MemoryAlertThresholdStore()
+            ..value = _savedExpenseRules
+            ..failRead = true;
+      final watchlist = _MemoryRecoveryWatchlistStore();
+      final rings = _MemoryWatchRingStore();
+      final watch = _FakeWatchSyncService();
+      final launcher = _FakePhoneWidgetSyncService();
+      final markers = _MemoryAlertConditions();
+      final notifier = _FakeAlertNotifier();
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final window = (
+        accountId: planAccount.accountId,
+        allowanceId: planAccount.allowances.single.id,
+        historyOwner: null,
+      );
+      var exhausted = true;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          alertThresholdStore: rules,
+          watchRingPreferenceStore: rings,
+          applyAlertSettings: _applyExpenseRules,
+          watchSyncService: watch,
+          phoneWidgetSyncService: launcher,
+          recoveryWatchlistStore: watchlist,
+          readExhaustedWindows: (_) => exhausted ? [window] : [],
+          readPlanRecoveries: (_, _) => const [],
+          alertConditionStore: markers,
+          alertNotifier: notifier,
+          syncScheduler: scheduler,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('USD 1.00'), findsWidgets);
+      expect(find.text('Local cap: Unavailable'), findsWidgets);
+      expect(watchlist.keys, [window]);
+
+      exhausted = false;
+      repository.snapshot = observations(850);
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      expect(find.text('USD 8.50'), findsWidgets);
+      expect(watchlist.reads, 2);
+      expect(watchlist.keys, isEmpty);
+      await tester.scrollUntilVisible(
+        find.text('Alerts unavailable'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Alerts unavailable'), findsOneWidget);
+
+      await _openPlatformBudgetAction(tester);
+      expect(find.byType(ConnectionBudgetDialog), findsNothing);
+      expect(find.text('Could not update alert thresholds'), findsOneWidget);
+      var edited = false;
+      await expectLater(
+        tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .onAlertThresholdsChanged((current) {
+              edited = true;
+              return current;
+            }),
+        throwsStateError,
+      );
+      expect(edited, isFalse);
+      expect(rules.writes, 0);
+      expect(rules.value, same(_savedExpenseRules));
+      ScaffoldMessenger.of(
+        tester.element(find.byType(ProvidersScreen)),
+      ).removeCurrentSnackBar();
+
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      final plan = find.widgetWithText(CheckboxListTile, 'Window A');
+      await tester.ensureVisible(plan);
+      await tester.tap(plan);
+      await tester.pumpAndSettle();
+      expect(find.text('Could not update ring slots'), findsOneWidget);
+      expect(rings.writes, isEmpty);
+      expect(rings.value.selectedIds, isNull);
+      final today = find.widgetWithText(CheckboxListTile, 'Today');
+      expect(tester.widget<CheckboxListTile>(today).onChanged, isNull);
+      expect(find.text('Local cap unavailable.'), findsWidgets);
+      ScaffoldMessenger.of(
+        tester.element(find.byType(WatchfaceScreen)),
+      ).removeCurrentSnackBar();
+
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      final sync = find.widgetWithText(FilledButton, 'Sync');
+      await tester.scrollUntilVisible(
+        sync,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(sync.hitTestable(), findsOneWidget);
+      await tester.tap(sync);
+      await tester.pumpAndSettle();
+      expect(find.text('Watch sync unavailable'), findsOneWidget);
+      for (final title in ['Watch summary', 'Widget summary']) {
+        expect(
+          find.descendant(
+            of: find.widgetWithText(ListTile, title),
+            matching: find.text('Unavailable'),
+          ),
+          findsOneWidget,
+        );
+      }
+      expect(markers.values, isEmpty);
+      expect(markers.reads, isEmpty);
+      expect(notifier.posts, isEmpty);
+      expect(watch.syncedSnapshots, isEmpty);
+      expect(launcher.syncedSnapshots, isEmpty);
+
+      rules.failRead = false;
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(rules.reads, 3);
+      expect(
+        watch.payload['rings'],
+        contains(containsPair('id', _expenseRingId)),
+      );
+      expect(launcher.payload.rows, isNotEmpty);
+      expect(rings.value.selectedIds, isNull);
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<CheckboxListTile>(today).value, isTrue);
+    },
+  );
+
+  testWidgets('Watchface rejects stale picker edits for legacy budgets', (
+    tester,
+  ) async {
+    const connection = 'openai.legacy';
+    final rings =
+        _MemoryWatchRingStore()
+          ..value = const WatchRingPreferences(selectedIds: []);
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(
+          _surfaceSelectionSnapshot(connection: connection),
+        ),
+        watchRingPreferenceStore: rings,
+        watchSyncService: _FakeWatchSyncService(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Watchface'));
+    await tester.pumpAndSettle();
+    final today = find.widgetWithText(CheckboxListTile, 'Today');
+    final staleToggle = tester.widget<CheckboxListTile>(today).onChanged!;
+
+    await tester.tap(find.byTooltip('Refresh'));
+    await tester.pumpAndSettle();
+    staleToggle(true);
+    await tester.pumpAndSettle();
+    expect(rings.writes, isEmpty);
+    expect(find.text('Could not update ring slots'), findsOneWidget);
+
+    tester.widget<CheckboxListTile>(today).onChanged!(true);
+    await tester.pumpAndSettle();
+    expect(rings.writes.single.selectedIds, ['budget.$connection.today']);
+  });
+
+  testWidgets(
+    'failed warm selection reads retain explicitly empty exports and picker bases',
+    (tester) async {
+      final snapshot = _surfaceSelectionSnapshot(purchased: true);
+      final rings =
+          _MemoryWatchRingStore()
+            ..value = const WatchRingPreferences(selectedIds: []);
+      final widgets =
+          _MemoryPhoneWidgetStore()
+            ..value = const PhoneWidgetPreferences(selectedIds: []);
+      final watch = _FakeWatchSyncService();
+      final launcher = _FakePhoneWidgetSyncService();
+      final defaults =
+          jsonDecode(
+                WatchDashboardSummaryPayload.fromSnapshot(
+                  snapshot,
+                  const WatchRingPreferences(),
+                ).encode(),
+              )
+              as Map<String, dynamic>;
+      expect(defaults['rings'], isNotEmpty);
+      expect(defaults['creditsGlance'], isNotNull);
+      expect(
+        buildPhoneWidgetPayload(snapshot, const PhoneWidgetPreferences()).rows,
+        isNotEmpty,
+      );
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: ValueDashboardRepository(snapshot),
+          watchRingPreferenceStore: rings,
+          phoneWidgetPreferenceStore: widgets,
+          watchSyncService: watch,
+          phoneWidgetSyncService: launcher,
+        ),
+      );
+      await tester.pumpAndSettle();
+      rings.beforeRead = _unavailablePreference;
+      widgets.beforeRead = _unavailablePreference;
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      expect(rings.reads, 2);
+      expect(widgets.reads, 2);
+      expect(watch.syncedSnapshots, hasLength(2));
+      expect(launcher.syncedSnapshots, hasLength(2));
+      expect(watch.payload['rings'], isEmpty);
+      expect(watch.payload['creditsGlance'], isNull);
+      expect(launcher.payload.rows, isEmpty);
+      for (final tab in ['Watchface', 'Widget']) {
+        await tester.tap(find.text(tab));
+        await tester.pumpAndSettle();
+        final today = find.widgetWithText(CheckboxListTile, 'Today');
+        expect(
+          tester
+              .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
+              .map((tile) => tile.value),
+          everyElement(isFalse),
+        );
+        await tester.ensureVisible(today);
+        await tester.tap(today);
+        await tester.pumpAndSettle();
+      }
+      expect(rings.writes.single.selectedIds, [_expenseRingId]);
+      expect(widgets.writes.single.selectedIds, [_expenseRingId]);
+    },
+  );
+
+  for (final watchFails in [true, false]) {
+    testWidgets(
+      '${watchFails ? 'watch' : 'widget'} selection recovery and removal survive failed loads and skipped polls',
+      (tester) async {
+        const month = 'budget.openai.platform.month';
+        const connection = 'openai.platform';
+        final snapshot = _surfaceSelectionSnapshot();
+        final polls = <AutomaticPollContext>[];
+        final repository = _CountingDashboardRepository(() {
+          final poll = AutomaticPollContext.current;
+          if (poll == null) throw const DashboardLoadException();
+          polls.add(poll);
+          if (polls.length == 2) throw const DashboardLoadException();
+          if (polls.length >= 3) {
+            poll.skipped[connection] = AutomaticPollSkipped(
+              connection,
+              CredentialVersion({}),
+              DateTime.utc(2026, 11, 6),
+            );
+          }
+          return snapshot;
+        });
+        final rings = _MemoryWatchRingStore();
+        final widgets = _MemoryPhoneWidgetStore();
+        if (watchFails) {
+          rings.value = const WatchRingPreferences(selectedIds: [month]);
+          rings.beforeRead = _unavailablePreference;
+        } else {
+          widgets.value = const PhoneWidgetPreferences(selectedIds: [month]);
+          widgets.beforeRead = _unavailablePreference;
+        }
+        final watch = _FakeWatchSyncService();
+        final launcher = _FakePhoneWidgetSyncService();
+        final scheduler = _ManualProviderSyncScheduler();
+        addTearDown(scheduler.dispose);
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            watchRingPreferenceStore: rings,
+            phoneWidgetPreferenceStore: widgets,
+            watchSyncService: watch,
+            phoneWidgetSyncService: launcher,
+            syncScheduler: scheduler,
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(watchFails ? 'Watchface' : 'Widget'));
+        await tester.pumpAndSettle();
+        expect(watch.syncedSnapshots, hasLength(watchFails ? 0 : 1));
+        expect(launcher.syncedSnapshots, hasLength(watchFails ? 1 : 0));
+        expect(
+          find.text(
+            watchFails
+                ? 'Ring preferences unavailable'
+                : 'Widget preferences unavailable',
+          ),
+          findsOneWidget,
+        );
+        expect(find.byType(CheckboxListTile), findsNothing);
+        if (watchFails) {
+          expect(launcher.syncedPreferences.single.usesDefaults, isTrue);
+          expect(launcher.payload.rows, hasLength(3));
+        } else {
+          expect(watch.syncedPreferences.single.usesDefaults, isTrue);
+          expect(watch.payload['rings'], hasLength(3));
+        }
+
+        rings.beforeRead = null;
+        widgets.beforeRead = null;
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(rings.reads, watchFails ? 2 : 1);
+        expect(widgets.reads, watchFails ? 1 : 2);
+        expect(polls, hasLength(2));
+        expect(watch.syncedSnapshots, hasLength(watchFails ? 0 : 1));
+        expect(launcher.syncedSnapshots, hasLength(watchFails ? 1 : 0));
+
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(polls, hasLength(3));
+        expect(polls.last.whollySkipped, isTrue);
+        expect(rings.reads, watchFails ? 2 : 1);
+        expect(widgets.reads, watchFails ? 1 : 2);
+        final monthChoice = find.widgetWithText(CheckboxListTile, 'Month');
+        expect(tester.widget<CheckboxListTile>(monthChoice).value, isTrue);
+        if (watchFails) {
+          expect(watch.syncedPreferences.single.selectedIds, [month]);
+          expect(watch.payload['rings'], [containsPair('id', month)]);
+        } else {
+          expect(launcher.syncedPreferences.single.selectedIds, [month]);
+          expect(launcher.payload.rows.single.poolLabel, 'Month');
+        }
+
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(polls, hasLength(4));
+        expect(watch.syncedSnapshots, hasLength(1));
+        expect(launcher.syncedSnapshots, hasLength(1));
+
+        // A confirmed choice remains removable after a failed manual load.
+        await tester.tap(find.byTooltip('Refresh'));
+        await tester.pumpAndSettle();
+        final savedChoice = find.byWidgetPredicate(
+          (widget) => widget is CheckboxListTile && widget.value == true,
+        );
+        expect(savedChoice, findsOneWidget);
+        await tester.ensureVisible(savedChoice);
+        await tester.tap(savedChoice);
+        await tester.pumpAndSettle();
+        expect(watch.syncedSnapshots, hasLength(1));
+        expect(launcher.syncedSnapshots, hasLength(1));
+        if (watchFails) {
+          expect(rings.writes.single.selectedIds, isEmpty);
+        } else {
+          expect(widgets.writes.single.selectedIds, isEmpty);
+        }
+
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(polls, hasLength(5));
+        expect(polls.last.whollySkipped, isTrue);
+        expect(watch.syncedSnapshots, hasLength(watchFails ? 2 : 1));
+        expect(launcher.syncedSnapshots, hasLength(watchFails ? 1 : 2));
+        if (watchFails) {
+          expect(watch.payload['rings'], isEmpty);
+        } else {
+          expect(launcher.payload.rows, isEmpty);
+        }
+      },
+    );
+  }
+
+  for (final rulesChangedByRead in [true, false]) {
+    testWidgets(
+      'a queued widget request retires on a changed rules ${rulesChangedByRead ? 'read' : 'write'}',
+      (tester) async {
+        final source = _surfaceSelectionSnapshot();
+        final repository = _PublicationRepository(source);
+        final rules = _MemoryAlertThresholdStore()..value = _savedExpenseRules;
+        final newer = _savedExpenseRules.withConnection(
+          ProviderConnections.openAiPlatform,
+          const ConnectionAlertThresholds(
+            budget: ConnectionBudget(today: 2000),
+          ),
+        );
+        final firstWrite = Completer<void>();
+        final replacementLoad = Completer<DashboardSnapshot>();
+        final written = <PhoneWidgetPayload>[];
+        final launcher = _QueuedPhoneWidgetSyncService(
+          PhoneWidgetSyncCoordinator(
+            write: (payload, {required isCurrent}) async {
+              written.add(payload);
+              if (written.length == 1) await firstWrite.future;
+            },
+          ),
+        );
+        Future<void>? save;
+        try {
+          await tester.pumpWidget(
+            WardPulseApp(
+              repository: repository,
+              alertThresholdStore: rules,
+              phoneWidgetPreferenceStore:
+                  _MemoryPhoneWidgetStore()
+                    ..value = const PhoneWidgetPreferences(
+                      selectedIds: [_expenseRingId],
+                    ),
+              applyAlertSettings: _applyExpenseRules,
+              watchSyncService: _FakeWatchSyncService(),
+              phoneWidgetSyncService: launcher,
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(written.single.rows.single.cap?.minorUnits, 1000);
+          expect(firstWrite.isCompleted, isFalse);
+          await tester.tap(find.byTooltip('Refresh'));
+          await tester.pumpAndSettle();
+          expect(launcher.requests, hasLength(2));
+          expect(written, hasLength(1));
+          var queuedSettled = false;
+          unawaited(
+            launcher.requests[1].then<void>((_) {
+              queuedSettled = true;
+            }),
+          );
+          expect(queuedSettled, isFalse);
+
+          if (rulesChangedByRead) {
+            rules.value = newer;
+            repository.response = replacementLoad.future;
+            await tester.tap(find.byTooltip('Refresh'));
+            await tester.pump();
+            expect(repository.loads, 3);
+            expect(rules.reads, 3);
+          } else {
+            await tester.tap(find.text('Providers'));
+            await tester.pumpAndSettle();
+            repository.delayNextValidation = true;
+            save = tester
+                .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+                .onAlertThresholdsChanged((_) => newer);
+            await tester.pump();
+            expect(repository.validationStarted, isTrue);
+            expect(repository.validation.isCompleted, isFalse);
+            expect(rules.writes, 1);
+            expect(rules.value, same(newer));
+          }
+          expect(launcher.requests, hasLength(2));
+          firstWrite.complete();
+          await tester.pump();
+          expect(queuedSettled, isTrue);
+          expect(written, hasLength(1));
+          expect(launcher.requests, hasLength(2));
+
+          if (rulesChangedByRead) {
+            replacementLoad.complete(source);
+          } else {
+            repository.validation.complete(true);
+          }
+          await tester.pumpAndSettle();
+          await save;
+          expect(launcher.requests, hasLength(3));
+          expect(
+            written.map((payload) => payload.rows.single.cap?.minorUnits),
+            [1000, 2000],
+          );
+        } finally {
+          await tester.pumpWidget(const SizedBox());
+          if (!firstWrite.isCompleted) firstWrite.complete();
+          if (!replacementLoad.isCompleted) replacementLoad.complete(source);
+          if (!repository.validation.isCompleted)
+            repository.validation.complete(true);
+          await tester.pumpAndSettle();
+          await save;
+          await Future.wait(launcher.requests);
+        }
+      },
+    );
+  }
+
+  testWidgets('a skipped poll carries forward pending surface updates', (
+    tester,
+  ) async {
+    final first = _surfaceSelectionSnapshot();
+    final newer = _surfaceSelectionSnapshot(spent: 350);
+    final polls = <AutomaticPollContext>[];
+    final watchValidation = Completer<bool>();
+    var newerValidations = 0;
+    var source = first;
+    final repository = _CountingDashboardRepository(
+      () {
+        if (AutomaticPollContext.current case final poll?) {
+          polls.add(poll);
+          if (polls.length > 1) {
+            const connection = 'openai.platform';
+            poll.skipped[connection] = AutomaticPollSkipped(
+              connection,
+              CredentialVersion({}),
+              DateTime.utc(2026, 11, 6),
+            );
+          }
+        }
+        return source;
+      },
+      validateSnapshot: (snapshot) async {
+        // After load and acceptance validate, hold the watch dispatch check.
+        if (identical(snapshot, newer) && ++newerValidations == 3) {
+          return watchValidation.future;
+        }
+        return true;
+      },
+    );
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    final firstWrite = Completer<void>();
+    final watch = _FakeWatchSyncService();
+    final spent = <int?>[];
+    final launcher = _QueuedPhoneWidgetSyncService(
+      PhoneWidgetSyncCoordinator(
+        write: (payload, {required isCurrent}) async {
+          spent.add(payload.rows.single.spent?.minorUnits);
+          if (spent.length == 1) await firstWrite.future;
+        },
+      ),
+    );
+    try {
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          syncScheduler: scheduler,
+          watchSyncService: watch,
+          phoneWidgetPreferenceStore:
+              _MemoryPhoneWidgetStore()
+                ..value = const PhoneWidgetPreferences(
+                  selectedIds: [_expenseRingId],
+                ),
+          phoneWidgetSyncService: launcher,
+          readExhaustedWindows: (_) => const [],
+          readPlanRecoveries: (_, _) => const [],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(spent, [100]);
+      expect(watch.syncedSnapshots, [same(first)]);
+
+      source = newer;
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      expect(launcher.requests, hasLength(2));
+      expect(spent, [100]);
+      expect(watch.syncedSnapshots, [same(first)]);
+
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(polls, hasLength(2));
+      expect(polls.last.whollySkipped, isTrue);
+      expect(launcher.requests, hasLength(3));
+      expect(spent, [100]);
+      expect(watch.syncedSnapshots, [same(first), same(newer)]);
+
+      watchValidation.complete(true);
+      firstWrite.complete();
+      await tester.pumpAndSettle();
+      expect(spent, [100, 350]);
+
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(polls, hasLength(3));
+      expect(launcher.requests, hasLength(3));
+      expect(spent, [100, 350]);
+      expect(watch.syncedSnapshots, [same(first), same(newer)]);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      if (!watchValidation.isCompleted) watchValidation.complete(true);
+      if (!firstWrite.isCompleted) firstWrite.complete();
+      await tester.pumpAndSettle();
+      await Future.wait(launcher.requests);
+    }
+  });
+
+  testWidgets('a coalesced widget request leaves its replacement pending', (
+    tester,
+  ) async {
+    final source = _surfaceSelectionSnapshot();
+    final watch = _HoldingWatchSyncService();
+    final firstGuard = Completer<bool>();
+    final rowCounts = <int>[];
+    final launcher = _QueuedPhoneWidgetSyncService(
+      PhoneWidgetSyncCoordinator(
+        write: (payload, {required isCurrent}) async {
+          rowCounts.add(payload.rows.length);
+        },
+      ),
+    );
+    final polls = <AutomaticPollContext>[];
+    var firstGuardEntered = false;
+    var replacementRejected = false;
+    final repository = _CountingDashboardRepository(
+      () {
+        final poll = AutomaticPollContext.current!;
+        polls.add(poll);
+        if (polls.length == 3) {
+          const connection = 'openai.platform';
+          poll.skipped[connection] = AutomaticPollSkipped(
+            connection,
+            CredentialVersion({}),
+            DateTime.utc(2026, 11, 6),
+          );
+        }
+        return source;
+      },
+      validateSnapshot: (_) async {
+        if (launcher.requests.length == 2 && !firstGuardEntered) {
+          firstGuardEntered = true;
+          return firstGuard.future;
+        }
+        if (launcher.requests.length == 3 && !replacementRejected) {
+          replacementRejected = true;
+          return false;
+        }
+        return true;
+      },
+    );
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    try {
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          syncScheduler: scheduler,
+          watchSyncService: watch,
+          phoneWidgetPreferenceStore:
+              _MemoryPhoneWidgetStore()
+                ..value = const PhoneWidgetPreferences(
+                  selectedIds: [_expenseRingId],
+                ),
+          phoneWidgetSyncService: launcher,
+          readExhaustedWindows: (_) => const [],
+          readPlanRecoveries: (_, _) => const [],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(rowCounts, [1]);
+
+      watch.hold = true;
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(watch.entered.isCompleted, isTrue);
+      expect(polls, hasLength(2));
+
+      await tester.tap(find.text('Widget'));
+      await tester.pumpAndSettle();
+      final today = find.widgetWithText(CheckboxListTile, 'Today');
+      await tester.ensureVisible(today);
+      await tester.tap(today);
+      await tester.pumpAndSettle();
+      expect(launcher.requests, hasLength(2));
+      expect(firstGuardEntered, isTrue);
+
+      // The scheduled send queues the same selection behind the picker send.
+      watch.hold = false;
+      watch.release.complete();
+      await tester.pumpAndSettle();
+      expect(launcher.requests, hasLength(3));
+      expect(rowCounts, [1]);
+
+      firstGuard.complete(true);
+      await tester.pumpAndSettle();
+      expect(replacementRejected, isTrue);
+      expect(rowCounts, [1]);
+
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(polls, hasLength(3));
+      expect(polls.last.whollySkipped, isTrue);
+      expect(launcher.requests, hasLength(4));
+      expect(rowCounts, [1, 0]);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      if (!watch.release.isCompleted) watch.release.complete();
+      if (!firstGuard.isCompleted) firstGuard.complete(true);
+      await tester.pumpAndSettle();
+      await Future.wait(launcher.requests);
+    }
+  });
+
+  testWidgets('a rule save preserves in-flight tracking for its observation', (
+    tester,
+  ) async {
+    final account = _alertTestSnapshot(usedPercent: 100).accounts.first;
+    final source = DashboardSnapshot.empty().withAccounts([account]);
+    final window = (
+      accountId: account.accountId,
+      allowanceId: account.allowances.single.id,
+      historyOwner: account.historyOwner,
+    );
+    final read = Completer<void>();
+    final watchlist =
+        _MemoryRecoveryWatchlistStore()..beforeRead = () => read.future;
+    final wake = _RecordingRecoveryWake();
+    final rules = _MemoryAlertThresholdStore();
+    final repository = _PublicationRepository(source);
+    final watch = _FakeWatchSyncService();
+    try {
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          alertThresholdStore: rules,
+          recoveryWatchlistStore: watchlist,
+          recoveryWake: wake,
+          readExhaustedWindows: (_) => [window],
+          readPlanRecoveries: (_, _) => const [],
+          watchSyncService: watch,
+          applyAlertSettings:
+              (snapshot, _) => snapshot.withAccounts(snapshot.accounts),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(watchlist.reads, 1);
+      expect(watchlist.keys, isEmpty);
+      final initial = watch.syncedSnapshots.single;
+
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      await tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onAlertThresholdsChanged((_) => _savedExpenseRules);
+      await tester.pumpAndSettle();
+      expect(rules.writes, 1);
+      expect(repository.loads, 1);
+      expect(watch.syncedSnapshots, hasLength(2));
+      expect(watch.syncedSnapshots.last, isNot(same(initial)));
+      expect(watchlist.keys, isEmpty);
+
+      read.complete();
+      await tester.pumpAndSettle();
+      expect(watchlist.reads, 1);
+      expect(watchlist.keys, [window]);
+      expect(wake.cancelled, 1);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      if (!read.isCompleted) read.complete();
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets(
+    'a skipped poll retires alert work for the same snapshot object',
+    (tester) async {
+      final source = _applyExpenseRules(
+        _surfaceSelectionSnapshot(spent: 850),
+        _savedExpenseRules,
+      );
+      final rules = _MemoryAlertThresholdStore()..value = _savedExpenseRules;
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final markers = _MemoryAlertConditions();
+      final markerRead = Completer<void>();
+      markers.beforeRead = (_) => markerRead.future;
+      final notifier = _FakeAlertNotifier();
+      final recoveries = _MemoryRecoveryWatchlistStore();
+      final watch = _FakeWatchSyncService();
+      final applied = <DashboardSnapshot>[];
+      final polls = <AutomaticPollContext>[];
+      final repository = _CountingDashboardRepository(() {
+        final poll = AutomaticPollContext.current!;
+        polls.add(poll);
+        if (polls.length == 2) {
+          final connection = _expenseAlertKey.connection;
+          poll.skipped[connection] = AutomaticPollSkipped(
+            connection,
+            CredentialVersion({}),
+            DateTime.utc(2026, 11, 6),
+          );
+        }
+        return source;
+      });
+      try {
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            alertThresholdStore: rules,
+            alertConditionStore: markers,
+            alertNotifier: notifier,
+            watchSyncService: watch,
+            recoveryWatchlistStore: recoveries,
+            readExhaustedWindows: (_) => const [],
+            readPlanRecoveries: (_, _) => const [],
+            syncScheduler: scheduler,
+            applyAlertSettings: (snapshot, _) {
+              applied.add(snapshot);
+              return snapshot;
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(markers.reads, [_expenseAlertKey]);
+        expect(recoveries.reads, 1);
+        expect(markers.values, isEmpty);
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(applied, [same(source), same(source)]);
+        expect(polls.last.whollySkipped, isTrue);
+        expect(polls.last.observes(_expenseAlertKey.connection), isFalse);
+        expect(recoveries.reads, 2);
+        expect(rules.reads, 1);
+        expect(watch.syncedSnapshots, [same(source)]);
+        markerRead.complete();
+        await tester.pumpAndSettle();
+        expect(markers.reads, [_expenseAlertKey]);
+        expect(markers.values, isEmpty);
+        expect(notifier.posts, isEmpty);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        if (!markerRead.isCompleted) markerRead.complete();
         await tester.pumpAndSettle();
       }
     },
@@ -6348,7 +7466,103 @@ DashboardSnapshot _asConnection(DashboardSnapshot snapshot) {
   });
 }
 
-DashboardSnapshot _surfaceSelectionSnapshot() {
+const _expenseRingId = 'budget.openai.platform.today';
+const _expenseAlertKey = AlertConditionKey(
+  provider: 'openai',
+  accountId: 'openai-report',
+  connection: 'openai.platform',
+  target: BudgetAlertTarget(period: AlertBudgetPeriod.today),
+);
+const _savedExpenseRules = AlertThresholdPreferences(
+  connections: {
+    'openai.platform': ConnectionAlertThresholds(
+      today: AlertPercentThreshold(at: 80),
+      week: AlertPercentThreshold(at: 85),
+      month: AlertPercentThreshold(at: 95),
+      budget: ConnectionBudget(today: 1000, week: 2600, month: 4000),
+    ),
+    'openai.plan': ConnectionAlertThresholds(
+      plan: AlertPercentThreshold(at: 90),
+    ),
+  },
+);
+
+Future<void> _unavailablePreference() async =>
+    throw StateError('Preference unavailable');
+
+Future<void> _openPlatformBudgetAction(WidgetTester tester) async {
+  await tester.tap(find.text('Providers'));
+  await tester.pumpAndSettle();
+  final button = find.descendant(
+    of: find.widgetWithText(ProviderConnectionRow, 'Platform reporting'),
+    matching: find.byTooltip('Budget limits'),
+  );
+  await tester.scrollUntilVisible(
+    button,
+    300,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+  expect(button.hitTestable(), findsOneWidget);
+  await tester.tap(button);
+  await tester.pumpAndSettle();
+}
+
+// Supply only the test's reporting connection and Today's alert observation
+// through the app's core evaluation seam.
+DashboardSnapshot _applyExpenseRules(
+  DashboardSnapshot source,
+  AlertThresholdPreferences preferences,
+) {
+  final rules = preferences.forConnection(ProviderConnections.openAiPlatform);
+  final reporting = source.accounts.first;
+  Map<String, Object?> budget(BudgetState actual, int? cap) {
+    final spent = actual.spent!.minorUnits;
+    return {
+      ...actual.toJson(),
+      'limit': cap == null ? null : {'minorUnits': cap, 'currency': 'USD'},
+      'remaining':
+          cap == null ? null : {'minorUnits': cap - spent, 'currency': 'USD'},
+      'usedPercent': cap == null ? null : spent * 100 / cap,
+    };
+  }
+
+  final today = budget(reporting.today, rules.budget.today);
+  final at = rules.today.at;
+  final used = today['usedPercent'] as double?;
+  const alert = AlertSummary(
+    severity: 'warning',
+    message: 'Configured threshold',
+  );
+  final condition =
+      at == null || used == null
+          ? null
+          : used >= at
+          ? const AlertCondition.crossed(key: _expenseAlertKey, alert: alert)
+          : const AlertCondition.clear(key: _expenseAlertKey);
+  return DashboardSnapshot.fromJson({
+    ...source.toJson(),
+    'accounts': [
+      {
+        ...reporting.toJson(),
+        'today': today,
+        'week': budget(reporting.week, rules.budget.week),
+        'month': budget(reporting.month, rules.budget.month),
+      },
+      for (final account in source.accounts.skip(1)) account.toJson(),
+    ],
+    'alertConditions': [if (condition != null) condition.toJson()],
+    'alerts': [
+      if (condition?.state == AlertConditionState.crossed) alert.toJson(),
+    ],
+  });
+}
+
+DashboardSnapshot _surfaceSelectionSnapshot({
+  int spent = 100,
+  bool purchased = false,
+  String connection = 'openai.platform',
+}) {
   final empty = DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 6));
   return DashboardSnapshot.fromJson({
     ...empty.toJson(),
@@ -6356,19 +7570,29 @@ DashboardSnapshot _surfaceSelectionSnapshot() {
       {
         'accountId': 'openai-report',
         'provider': 'openai',
-        'connection': 'openai.platform',
+        'connection': connection,
         'status': 'ok',
         'credits': <Object>[],
-        'allowances': <Object>[],
+        'allowances': [
+          if (purchased)
+            {
+              'id': 'purchased',
+              'source': 'purchased',
+              'label': 'Purchased',
+              'usedPercent': 40.0,
+              'remaining': {'value': '60', 'unit': 'credits'},
+              'status': 'ok',
+            },
+        ],
         'buckets': <Object>[],
         'modelBreakdown': <Object>[],
         for (final period in ['today', 'week', 'month'])
           period: {
             ...BudgetState.unknownPeriod(period).toJson(),
-            'spent': {'minorUnits': 100, 'currency': 'USD'},
+            'spent': {'minorUnits': spent, 'currency': 'USD'},
             'limit': {'minorUnits': 1000, 'currency': 'USD'},
-            'remaining': {'minorUnits': 900, 'currency': 'USD'},
-            'usedPercent': 10.0,
+            'remaining': {'minorUnits': 1000 - spent, 'currency': 'USD'},
+            'usedPercent': spent / 10,
             'status': 'ok',
           },
       },
@@ -6482,10 +7706,12 @@ class _BlockedRecoveryNotifier implements RecoveryNotifier {
 class _MemoryRecoveryWatchlistStore implements RecoveryWatchlistStore {
   List<WindowKey> keys = const [];
   int reads = 0;
+  Future<void> Function()? beforeRead;
 
   @override
   Future<List<WindowKey>> read() async {
     reads++;
+    await beforeRead?.call();
     return keys;
   }
 
@@ -6534,8 +7760,16 @@ class _DelayedAlertPreferenceStore implements AlertNotificationPreferenceStore {
 
 class _MemoryAlertConditions implements AlertConditionStore {
   final values = <AlertConditionKey, bool>{};
+  final reads = <AlertConditionKey>[];
+  Future<void> Function(AlertConditionKey)? beforeRead;
+
   @override
-  Future<bool> read(AlertConditionKey key) async => values[key] ?? false;
+  Future<bool> read(AlertConditionKey key) async {
+    reads.add(key);
+    if (beforeRead case final hook?) await hook(key);
+    return values[key] ?? false;
+  }
+
   @override
   Future<void> write(AlertConditionKey key, bool value) async =>
       values[key] = value;
@@ -6567,6 +7801,14 @@ class _FakeAlertNotifier implements AlertNotifier {
 class _FakeWatchSyncService implements WatchSyncService {
   final syncedSnapshots = <DashboardSnapshot>[];
   final syncedPreferences = <WatchRingPreferences>[];
+  Map<String, dynamic> get payload =>
+      jsonDecode(
+            WatchDashboardSummaryPayload.fromSnapshot(
+              syncedSnapshots.last,
+              syncedPreferences.last,
+            ).encode(),
+          )
+          as Map<String, dynamic>;
   final mockModes = <bool>[];
   bool fail = false;
   void Function()? refreshHandler;
@@ -6622,16 +7864,41 @@ class _HoldingWatchSyncService extends _FakeWatchSyncService {
 class _FakePhoneWidgetSyncService implements PhoneWidgetSyncService {
   final syncedSnapshots = <DashboardSnapshot>[];
   final syncedPreferences = <PhoneWidgetPreferences>[];
+  PhoneWidgetPayload get payload =>
+      buildPhoneWidgetPayload(syncedSnapshots.last, syncedPreferences.last);
   bool fail = false;
 
   @override
   Future<void> sync(
     DashboardSnapshot snapshot,
-    PhoneWidgetPreferences preferences,
-  ) async {
+    PhoneWidgetPreferences preferences, {
+    PhoneWidgetSyncGuard? isCurrent,
+  }) async {
+    if (isCurrent != null && !await isCurrent()) return;
     syncedSnapshots.add(snapshot);
     syncedPreferences.add(preferences);
     if (fail) throw StateError('Widget unavailable');
+  }
+}
+
+final class _QueuedPhoneWidgetSyncService implements PhoneWidgetSyncService {
+  _QueuedPhoneWidgetSyncService(this.coordinator);
+
+  final PhoneWidgetSyncCoordinator coordinator;
+  final requests = <Future<void>>[];
+
+  @override
+  Future<void> sync(
+    DashboardSnapshot snapshot,
+    PhoneWidgetPreferences preferences, {
+    PhoneWidgetSyncGuard? isCurrent,
+  }) {
+    final request =
+        isCurrent == null
+            ? coordinator.sync(snapshot, preferences)
+            : coordinator.sync(snapshot, preferences, isCurrent: isCurrent);
+    requests.add(request);
+    return request;
   }
 }
 
@@ -6675,12 +7942,17 @@ final class _FailingDashboardRepository extends DashboardRepository {
 }
 
 final class _CountingDashboardRepository extends DashboardRepository {
-  _CountingDashboardRepository(this._load);
+  _CountingDashboardRepository(this._load, {this.validateSnapshot});
 
   final DashboardSnapshot Function() _load;
+  final Future<bool> Function(DashboardSnapshot)? validateSnapshot;
 
   @override
   Future<DashboardSnapshot> load() async => _load();
+
+  @override
+  Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) =>
+      validateSnapshot?.call(snapshot) ?? super.isSnapshotCurrent(snapshot);
 }
 
 class _MemoryPhoneWidgetStore implements PhoneWidgetPreferenceStore {
@@ -6720,7 +7992,11 @@ Widget _watchPicker({
               snapshot: snapshot,
               ringPreferences: preferences,
               onRefresh: () async {},
-              onRingPreferencesChanged: (update) async {
+              onRingPreferencesChanged: (
+                update, {
+                String? ringId,
+                bool? selected,
+              }) async {
                 final next = update(preferences);
                 if (identical(next, preferences)) return;
                 onChanged(next);
@@ -6810,11 +8086,17 @@ class _MemoryWatchRingStore implements WatchRingPreferenceStore {
 
 class _MemoryAlertThresholdStore implements AlertThresholdPreferenceStore {
   AlertThresholdPreferences value = const AlertThresholdPreferences();
+  int reads = 0;
   int writes = 0;
+  bool failRead = false;
   bool failNextWrite = false;
 
   @override
-  Future<AlertThresholdPreferences> read() async => value;
+  Future<AlertThresholdPreferences> read() async {
+    reads++;
+    if (failRead) throw StateError('Storage unavailable');
+    return value;
+  }
 
   @override
   Future<void> write(AlertThresholdPreferences next) async {

@@ -106,15 +106,17 @@ void main() {
             onRefresh: () async {},
           );
         } else {
+          const ringPrefs = WatchRingPreferences(selectedIds: selected);
           picker = WatchfaceScreen(
             snapshot: snapshot,
             reportingOutcomes: reportingOutcomes,
-            ringPreferences: const WatchRingPreferences(selectedIds: selected),
-            onRingPreferencesChanged: (update) async {
-              saved =
-                  update(
-                    const WatchRingPreferences(selectedIds: selected),
-                  ).selectedIds;
+            ringPreferences: ringPrefs,
+            onRingPreferencesChanged: (
+              update, {
+              String? ringId,
+              bool? selected,
+            }) async {
+              saved = update(ringPrefs).selectedIds;
             },
             onRefresh: () async {},
           );

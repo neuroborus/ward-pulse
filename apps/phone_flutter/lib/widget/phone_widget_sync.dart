@@ -22,8 +22,9 @@ const phoneWidgetLogName = 'WardPulse.PhoneWidget';
 abstract interface class PhoneWidgetSyncService {
   Future<void> sync(
     DashboardSnapshot snapshot,
-    PhoneWidgetPreferences preferences,
-  );
+    PhoneWidgetPreferences preferences, {
+    PhoneWidgetSyncGuard isCurrent = _alwaysCurrent,
+  });
 }
 
 /// No-op for widget tests and hosts without a launcher surface.
@@ -33,8 +34,9 @@ final class DisabledPhoneWidgetSyncService implements PhoneWidgetSyncService {
   @override
   Future<void> sync(
     DashboardSnapshot snapshot,
-    PhoneWidgetPreferences preferences,
-  ) async {}
+    PhoneWidgetPreferences preferences, {
+    PhoneWidgetSyncGuard isCurrent = _alwaysCurrent,
+  }) async {}
 }
 
 /// Whether a request still owns the widget; checked before each plugin call.
@@ -149,7 +151,6 @@ final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
     }
   }
 
-  /// Headless callers pass [isCurrent]; foreground requests stay current.
   @override
   Future<void> sync(
     DashboardSnapshot snapshot,

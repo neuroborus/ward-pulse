@@ -384,6 +384,7 @@ List<WatchRingMetric> watchRingCatalog(
   bool includePurchased = false,
   bool collapseClaudePlan = true,
   bool collapseCodexPlan = true,
+  bool localCapsAvailable = true,
 }) {
   final accounts = snapshot?.accounts ?? const <ProviderSnapshot>[];
   final metrics = <WatchRingMetric>[];
@@ -441,7 +442,7 @@ List<WatchRingMetric> watchRingCatalog(
     if (account.provider == 'mock') {
       continue;
     }
-    metrics.addAll(_connectionBudgetMetrics(account));
+    metrics.addAll(_connectionBudgetMetrics(account, localCapsAvailable));
   }
   // A cold reporting failure can have neither an account nor a dashboard snapshot.
   final outcomes = [...?snapshot?.reportingOutcomes, ...reportingOutcomes];
@@ -458,6 +459,7 @@ List<WatchRingMetric> watchRingCatalog(
           _budgetMetric(
             connection.storageKey,
             BudgetState.unknownPeriod(period),
+            localCapsAvailable: localCapsAvailable,
           ),
         );
       }
@@ -715,7 +717,10 @@ WatchRingMetric _allowanceMetric(
 ///
 /// Reported spend is what makes a ceiling meaningful — subscription plans
 /// report none, and a connection may report only some periods.
-List<WatchRingMetric> _connectionBudgetMetrics(ProviderSnapshot account) {
+List<WatchRingMetric> _connectionBudgetMetrics(
+  ProviderSnapshot account,
+  bool localCapsAvailable,
+) {
   final connection = account.connection;
   if (connection == null) {
     return const [];
@@ -725,7 +730,12 @@ List<WatchRingMetric> _connectionBudgetMetrics(ProviderSnapshot account) {
       if (budget.spent != null ||
           connection == 'anthropic.platform' ||
           connection == 'cursor.platform')
-        _budgetMetric(connection, budget, account: account),
+        _budgetMetric(
+          connection,
+          budget,
+          account: account,
+          localCapsAvailable: localCapsAvailable,
+        ),
   ];
 }
 
@@ -733,11 +743,14 @@ WatchRingMetric _budgetMetric(
   String connection,
   BudgetState budget, {
   ProviderSnapshot? account,
+  required bool localCapsAvailable,
 }) {
   final spent = budget.spent;
-  final limit = budget.limit;
+  final limit = localCapsAvailable ? budget.limit : null;
   final String? unavailableReason;
-  if (spent == null) {
+  if (!localCapsAvailable) {
+    unavailableReason = 'Local cap unavailable.';
+  } else if (spent == null) {
     unavailableReason = 'Reported spend is unavailable for this period.';
   } else if (limit == null) {
     unavailableReason =
@@ -758,7 +771,7 @@ WatchRingMetric _budgetMetric(
     status: budget.status,
     account: account,
     spent: budget.spent,
-    limit: budget.limit,
+    limit: limit,
     unavailableReason: unavailableReason,
   );
 }
