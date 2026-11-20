@@ -4,11 +4,11 @@ The owner's 2026-11-06 direction supersedes the 2026-10-31 Lazy instruction:
 use Combined for fresh planning and code runs, use Opus as Worker while its quota
 is available, and switch all roles to Sol when that quota is exhausted.
 
-Explicitly request supported `combined` mode for EVERY fresh pipeline, including
-`plan-authoring`, `plan-execution`, `polishing` and `audit`, and their replacements. The managing operator
-verifies the actual publicly resolved mode and role selections before acceptance;
-a requested value or descriptor default is insufficient. Use a supported stop and
-reconcile a mismatch rather than silently selecting another mode.
+Explicitly request `combined` for fresh `plan-authoring`, `plan-execution` and
+`polishing` runs and their replacements. The owner's 2026-11-19 direction
+requires `independent` for every fresh `audit` and audit replacement. The managing
+operator verifies the publicly resolved mode and role selections before
+acceptance. Use a supported stop and reconcile any mismatch.
 
 For a Worker role, request backend `claude`, native model selector `opus` and
 profile `current` while available. The public native CLI advertises `opus`; treat
@@ -24,13 +24,15 @@ The current local catalogue and official launch were verified; `xhigh` is suppor
 This changes neither the Opus availability/fallback rule nor historical/frozen selections.
 
 On actual Opus quota exhaustion, reconcile the owning lifecycle through supported
-controls, preserve work and receipts, and start a fresh all-Sol Combined route
-within the approved scope. The owner authorizes this fallback; it does not permit
-mutating frozen role configuration or claiming an automatic in-run hot swap.
-The final audit also uses Combined. Keep its Fable-discovery/Sol-reviewer role
-preference while that backend is available. After actual Opus quota exhaustion,
-the newer all-Sol fallback also applies to that audit; the older Fable preference
-must not prevent it. No quota state is assumed here.
+controls and preserve work and receipts. Apply the authorized all-Sol fallback
+by starting a fresh run in the approved scope and required pipeline mode. Keep
+the frozen role configuration for existing runs.
+
+Use Fable for audit discovery and Sol for audit review while Fable is available.
+After actual Opus quota exhaustion, apply the same all-Sol fallback to audits
+in Independent mode. Record any owner-selected audit model or effort override
+in the fresh launch inputs for that run. Use the standing role selections for
+other runs.
 
 Combined adds primary convergence and read-only clean confirmation before the
 full independent review gate in coding pipelines. Require and report its actual
