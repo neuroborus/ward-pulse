@@ -29,7 +29,7 @@ background sync, transport, storage, diagnostics and build work.
   widget updates remain independent; six expanded widget rows have no watch capacity rule.
 - Show today, week, month, provider plaques on Dashboard, charts, budgets, credits, sync
   status, Providers connection hub, and Settings.
-- Phase 14 primary tabs: Dashboard → Watchface → Widget → Providers → Settings. Watchface owns
+- Primary tabs: Dashboard → Watchface → Widget → Providers → Settings. Watchface owns
   Wear/WFF ring-slot prefs; Widget owns phone home-widget prefs and the Android App Widget
   (`PHONE_WIDGET_DESIGN.md`, revised 2026-11-03). Preserve the full launcher allocation
   and tap area while centering an intrinsic card inside a transparent root. The existing

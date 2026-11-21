@@ -87,8 +87,8 @@ services and build work.
   also below the no-summary sync prompt, opens a separate setup utility route, not another
   home page. Follow the dated baseline
   [Revision 2026-10-16 — watch-face utility entry](../../../../docs/product/WEAR_GLANCE_DESIGN.md#revision-2026-10-16--watch-face-utility-entry).
-  The today, week, usage, providers, and last sync screens were removed in
-  Phase 17; do not bring a currency total back to the watch.
+  Today, Week, Usage, Providers and Last sync detail stay on the phone. The phone Dashboard
+  owns currency totals.
 - Store and render the latest successful watch summary.
 - Make stale data explicit.
 - Do not enter, display, or store provider credentials.

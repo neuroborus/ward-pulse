@@ -4,7 +4,8 @@ Complete these sections through [finalization](../SKILL.md).
 
 ## 1. Scope Review
 
-- [ ] Changes match the current product phase in `docs/DEVELOPMENT_PLAN.md`.
+- [ ] Changes match the approved task and applicable product requirements indexed in
+      `docs/README.md`.
 - [ ] Root files stay short and operational; durable requirements stay under `docs/`.
 - [ ] No generated platform project noise was added unless the user asked for it.
 - [ ] No unrelated local or user changes were reverted.

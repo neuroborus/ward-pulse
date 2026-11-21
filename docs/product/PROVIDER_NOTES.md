@@ -186,11 +186,11 @@ per-provider capability tables below are the source of truth for what each conne
   stale or error input keeps its status when settings are applied.
 - Debug **Mock data** loads a seeded multi-provider demo (OpenAI, Codex, Claude plan + platform,
   Cursor plan + platform) so the full dashboard stays reviewable without live credentials.
-  Utilization reshuffles on toggle/refresh (not on automatic sync ticks); the Phase 1 single
-  `provider: mock` golden remains for CLI/FFI regression only. Platform accounts come from the
-  real adapters, which report spend but never a limit, so the demo derives a stand-in ceiling
-  from the fixture's own spend and keeps it short of exhaustion — an invented limit must not
-  stage an `Error`.
+  Toggling Mock data or refreshing manually reshuffles utilization. Automatic sync keeps the
+  current sample. The single-provider `provider: mock` golden is a shared regression fixture.
+  Platform accounts come from the real adapters, which report spend without limits. The demo
+  derives a stand-in ceiling from the fixture's own spend and keeps it short of exhaustion.
+  An invented limit must never stage an `Error`.
 
 ## Polling cadence
 
@@ -318,7 +318,10 @@ Implementation status as of 2026-07-19:
 - Cost amounts accept both JSON numbers and decimal strings because the live Costs API may use either representation.
 - Sync diagnostics contain only the endpoint label, HTTP status, provider error code, request ID, or a sanitized parser reason. Provider response bodies are processed in memory and are not logged.
 - Authentication, permission, rate-limit, availability, and response-shape failures are mapped to fixed UI-safe messages without response bodies or credentials.
-- Sanitized fixtures cover report parsing; live acceptance requires a user-supplied Admin API key.
+- Sanitized fixtures cover report parsing. For live acceptance, save a valid organization Admin
+  API key in Providers on an Android phone or emulator. Refresh and verify Today, Week and
+  Month spend, usage and model data on the Dashboard. Confirm the saved key stays masked and
+  Android logs omit sensitive values.
 
 Official references:
 
@@ -328,27 +331,16 @@ Official references:
 
 ## Codex subscription reporting
 
-Status: implemented as an experimental on-device integration on 2026-07-19; Android end-to-end
-acceptance taken **2026-10-12** on the canonical emulator pair, `wardpulse_phone_play_api36` and
-`wardpulse_wear_round_api36_1`.
+The experimental on-device integration was implemented on 2026-07-19. The **2026-10-12** live
+read check used an existing session on the canonical emulator pair, `wardpulse_phone_play_api36`
+and `wardpulse_wear_round_api36_1`. The phone showed Weekly plan, purchased credits and a
+31-bucket Usage history. A provider-side change reached the phone Dashboard, home widget and
+watch-face band and strip automatically.
 
-What was seen: a live Codex connection feeding the phone Dashboard — the `Weekly plan` window,
-the purchased credit balance, and a 31-bucket `Usage history`, which is exactly the *Latest 31
-daily buckets* the capability table below promises — while the same payload reached the home
-widget and the watch face's third band and strip, and a provider-side change propagated to all
-of them with nothing touched. That is the read path end to end across the Android stack, so the
-line is no longer pending.
-
-Two things it does not cover, and neither is a reason to hold this line open. The device-code
-sign-in was already established rather than re-exercised in that session, so the authentication
-path has its own evidence from 2026-07-19 and not this reading. And both ends were emulators;
-shipped watch and phone hardware remain untested, which is Phase 8's *real device smoke tests*
-rather than this integration's.
-
-Phase 7's acceptance line in `docs/DEVELOPMENT_PLAN.md` asks for more than this one does — it
-bundles signing in from the Providers connection catalog with verifying the live phone and watch
-UI. The second half is what 2026-10-12 covers; the first is why that phase still reads as
-pending.
+**Remaining end-to-end acceptance.** Start a fresh device-code sign-in from the Codex plan row
+in Providers, then verify live reporting on the phone and paired watch in the same run. The
+2026-07-19 authentication evidence and 2026-10-12 read check cover separate parts of that flow.
+Track physical-device checks in the [release checklist](RELEASE_CHECKLIST.md#acceptance-gates).
 
 The OpenAI Platform Admin API does not represent personal Codex subscription limits. WardPulse
 therefore treats Codex as a separate provider. The phone reproduces only the narrow authentication

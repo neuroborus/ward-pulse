@@ -2,10 +2,10 @@
 
 Flutter phone app shell for the primary WardPulse dashboard.
 
-Phase 3 is complete. The app loads a Rust-generated dashboard snapshot at runtime through
-the narrow JSON FFI bridge and renders the phone dashboard, usage history, provider list,
-provider detail, and settings surfaces. Its Android application ID is `app.wardpulse`; the
-runner builds and runs on the canonical phone emulator.
+The app loads a Rust-generated dashboard snapshot at runtime through the narrow JSON FFI
+bridge. The Dashboard shows usage history and per-source details. The Providers and Settings
+tabs handle connection setup and app preferences. Its Android application ID is `app.wardpulse`.
+The runner builds and runs on the canonical phone emulator.
 
 The verified Flutter and Android SDK baseline is documented in
 [`docs/ANDROID_TOOLCHAIN.md`](https://github.com/neuroborus/ward-pulse/blob/main/docs/ANDROID_TOOLCHAIN.md).
@@ -647,8 +647,10 @@ Source review and the earlier normalization-only precision probe supply no runti
 
 Final-APK emulator acceptance on 2026-10-13 covered three real plan connections (Codex,
 Claude and Cursor), a production periodic WorkManager task in a fresh background process,
-offline cold-start recovery with unchanged cached data/success times, and restored live
-phone-to-watch delivery. Hardware and whole-phase release acceptance remain separate gates.
+an offline cold start that restored cached connections as stale without changing their data
+or success times, and restored live phone-to-watch delivery. The release checklist's
+[Phone and Wear recovery](../../docs/product/RELEASE_CHECKLIST.md#phone-and-wear-recovery)
+section tracks the remaining recovery review and physical-device smoke tests.
 
 ### Codex encrypted-read removal regression (HOST only)
 
