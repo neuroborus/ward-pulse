@@ -156,10 +156,12 @@ class PublicationTests(unittest.TestCase):
                     if (path.partition("?")[0] == target and method == verb
                             and self.api.release["draft"] is draft):
                         failed_at.append(len(self.api.calls))
-                        raise urllib.error.HTTPError(
+                        error = urllib.error.HTTPError(
                             "https://example.invalid" + path, status, "synthetic response text",
                             {"X-Test": "synthetic header value"}, BytesIO(b"synthetic response body"),
                         )
+                        self.addCleanup(error.close)
+                        raise error
 
                 self.api.after = fail
                 self.assert_cli_failure(f"stage={stage} operation={operation} http_status={status}")
@@ -299,9 +301,11 @@ class PublicationTests(unittest.TestCase):
         self.api.create_ref = False
         path = "/git/ref/tags/" + TAG
         api, open_response = self.mock_http_operation(path, "GET")
-        open_response.side_effect = urllib.error.HTTPError(
+        error = urllib.error.HTTPError(
             "https://example.invalid" + path, 404, "synthetic response text", {}, None,
         )
+        self.addCleanup(error.close)
+        open_response.side_effect = error
         self.assert_cli_failure("stage=final-verification operation=read-tag-ref http_status=404", api=api)
         self.assertEqual(self.api.calls[-1][:2], (path, "GET"))
         self.assertEqual(len(self.mutations()), 11)
