@@ -2,6 +2,8 @@
 
 from copy import deepcopy
 import hashlib
+import http.client
+from io import BytesIO, StringIO
 import itertools
 import json
 import os
@@ -12,6 +14,7 @@ import tempfile
 import textwrap
 import unittest
 from unittest.mock import Mock, patch
+import urllib.error
 import urllib.parse
 import zipfile
 
@@ -31,7 +34,7 @@ class FakeGitHub:
         self.create_ref = True
         self.after = lambda path, method, result: None
 
-    def __call__(self, path, method="GET", payload=None, missing=False, upload=None):
+    def __call__(self, path, method="GET", payload=None, missing=False, upload=None, *, on_response=None):
         self.calls.append((path, method, deepcopy(payload)))
         url = urllib.parse.urlsplit(path)
         query = urllib.parse.parse_qs(url.query)
@@ -65,6 +68,8 @@ class FakeGitHub:
             raise AssertionError((path, method))
         result = deepcopy(result)
         self.after(path, method, result)
+        if on_response is not None:
+            on_response()
         return result
 
 
@@ -72,7 +77,8 @@ class PublicationTests(unittest.TestCase):
     def setUp(self):
         scratch = tempfile.TemporaryDirectory(prefix="wardpulse-publisher-test-")
         self.addCleanup(scratch.cleanup)
-        self.directory = Path(scratch.name)
+        self.directory = Path(scratch.name) / "transfer"
+        self.directory.mkdir()
         self.manifest = {}
         for name in ["wardpulse-phone-0.1.0-code1.aab", "WardPulse-0.1.0-Android.apk",
                      "wardpulse-wear-0.1.0-code2.aab", "WardPulse-0.1.0-WearOS.apk",
@@ -88,6 +94,122 @@ class PublicationTests(unittest.TestCase):
 
     def mutations(self):
         return [call for call in self.api.calls if call[1] != "GET"]
+
+    def mock_http_operation(self, target, verb):
+        with patch.object(release.urllib.request, "build_opener") as build_opener:
+            api = release.GitHub("synthetic-token", "example/project")
+
+        def request(path, method="GET", *args, **kwargs):
+            if path.partition("?")[0] != target or method != verb:
+                return self.api(path, method, *args, **kwargs)
+            # Apply the fake server effect, with status confirmation left to the real transport.
+            fake_kwargs = kwargs.copy()
+            fake_kwargs.pop("on_response", None)
+            self.api(path, method, *args, **fake_kwargs)
+            return api(path, method, *args, **kwargs)
+
+        return request, build_opener.return_value.open
+
+    def assert_cli_failure(self, detail, api=None):
+        manifest = self.directory.parent / "verified-transfer.json"
+        manifest.write_text(json.dumps(self.manifest))
+        env = {
+            "RELEASE_DRAFT": "false", "RELEASE_PRERELEASE": "false", "RELEASE_LATEST": "false",
+            "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REF": "refs/heads/main",
+            "SOURCE_SHA": SHA, "RELEASE_TAG": TAG, "RELEASE_VERSION": TAG[1:],
+            "VERIFIED_TRANSFER": str(manifest), "TRANSFER_DIR": str(self.directory),
+            "GH_TOKEN": "synthetic-token", "GITHUB_REPOSITORY": "example/project",
+        }
+        with (
+            patch.dict(release.os.environ, env, clear=True),
+            patch.object(release, "readiness", return_value={"version": TAG[1:], "notes": NOTES}),
+            patch.object(release, "GitHub", return_value=self.api if api is None else api),
+            patch.object(release.subprocess, "check_output", return_value=SHA + "\n"),
+            patch("sys.stdout", new_callable=StringIO) as stdout,
+            patch("sys.stderr", new_callable=StringIO) as stderr,
+            self.assertRaises(SystemExit) as failure,
+        ):
+            release.main()
+        self.assertEqual((stdout.getvalue(), stderr.getvalue()), ("", ""))
+        self.assertEqual(
+            str(failure.exception),
+            "Publication failed; preserve all release/tag/asset state, including any partial or public "
+            "release, for Owner reconciliation. Do not blindly retry.\n"
+            f"Publication diagnostic {detail}",
+        )
+
+    def test_http_failures_report_only_stage_operation_and_status_and_preserve_effects(self):
+        cases = (
+            ("/releases", "POST", "draft-creation", "create-draft", 422, 0, True),
+            ("/releases/31", "GET", "draft-observation", "read-release", 404, 0, True),
+            ("/releases/31/assets", "POST", "asset-upload", "upload-asset", 502, 1, True),
+            ("/releases/31/assets", "GET", "asset-verification", "list-release-assets", 503, 9, True),
+            ("/releases/31", "PATCH", "publish-transition", "publish-release", 403, 9, False),
+            ("/releases/31", "GET", "final-verification", "read-release", 500, 9, False),
+        )
+        for target, verb, stage, operation, status, asset_count, draft in cases:
+            with self.subTest(stage=stage):
+                self.api = FakeGitHub()
+                failed_at = []
+
+                def fail(path, method, result):
+                    if (path.partition("?")[0] == target and method == verb
+                            and self.api.release["draft"] is draft):
+                        failed_at.append(len(self.api.calls))
+                        raise urllib.error.HTTPError(
+                            "https://example.invalid" + path, status, "synthetic response text",
+                            {"X-Test": "synthetic header value"}, BytesIO(b"synthetic response body"),
+                        )
+
+                self.api.after = fail
+                self.assert_cli_failure(f"stage={stage} operation={operation} http_status={status}")
+                self.assertEqual(failed_at, [len(self.api.calls)])
+                self.assertEqual(len(self.mutations()), 1 + asset_count + (0 if draft else 1))
+                self.assertEqual(len(self.api.assets), asset_count)
+                self.assertIs(self.api.release["draft"], draft)
+                self.assertEqual(self.api.release["body"], NOTES)
+                self.assertEqual(self.api.ref is None, draft)
+
+    def test_unexpected_success_status_is_reported_before_body_is_read(self):
+        api, open_response = self.mock_http_operation("/releases", "GET")
+        response = open_response.return_value.__enter__.return_value
+        response.status = 202
+        self.assert_cli_failure("stage=preflight operation=list-releases http_status=202", api=api)
+        response.read.assert_not_called()
+
+    def test_mutation_response_body_failures_report_response_stage(self):
+        cases = (
+            ("/releases", "draft-creation-response", b"synthetic invalid JSON", "invalid-data", 0),
+            ("/releases/31/assets", "asset-upload-response", b"\xff", "invalid-data", 1),
+            ("/releases", "draft-creation-response", http.client.IncompleteRead(b"synthetic body"),
+             "transport-error", 0),
+            ("/releases/31/assets", "asset-upload-response", TimeoutError("synthetic timeout"), "io-error", 1),
+        )
+        for target, stage, body_or_error, category, asset_count in cases:
+            with self.subTest(stage=stage, category=category):
+                self.api = FakeGitHub()
+                api, open_response = self.mock_http_operation(target, "POST")
+                response = open_response.return_value.__enter__.return_value
+                response.status = 201
+                response.read.side_effect = [body_or_error]
+                self.assert_cli_failure(f"stage={stage} category={category}", api=api)
+                response.read.assert_called_once_with()
+                self.assertEqual(len(self.mutations()), 1 + asset_count)
+                self.assertEqual(len(self.api.assets), asset_count)
+                self.assertIs(self.api.release["draft"], True)
+                self.assertIsNone(self.api.ref)
+
+    def test_upload_response_validation_failure_preserves_first_stored_asset(self):
+        def corrupt(path, method, result):
+            if path.startswith("/releases/31/assets?") and method == "POST":
+                result["name"] = "unexpected.apk"
+
+        self.api.after = corrupt
+        self.assert_cli_failure("stage=asset-upload-response category=validation-failed")
+        self.assertEqual(len(self.mutations()), 2)
+        self.assertEqual([asset["name"] for asset in self.api.assets], [sorted(self.manifest)[0]])
+        self.assertIs(self.api.release["draft"], True)
+        self.assertIsNone(self.api.ref)
 
     def test_all_state_options_stage_before_transition_and_observe_real_fields(self):
         for draft, prerelease, latest in itertools.product(("true", "false"), ("true", "false"), ("true", "false", "automatic")):
@@ -173,13 +295,20 @@ class PublicationTests(unittest.TestCase):
                 self.publisher().publish()
             self.assertEqual(self.mutations(), [])
 
-    def test_missing_public_tag_fails_and_preserves_published_state(self):
+    def test_missing_public_tag_reports_http_status_and_preserves_published_state(self):
         self.api.create_ref = False
-        with self.assertRaises(ValueError):
-            self.publisher().publish()
+        path = "/git/ref/tags/" + TAG
+        api, open_response = self.mock_http_operation(path, "GET")
+        open_response.side_effect = urllib.error.HTTPError(
+            "https://example.invalid" + path, 404, "synthetic response text", {}, None,
+        )
+        self.assert_cli_failure("stage=final-verification operation=read-tag-ref http_status=404", api=api)
+        self.assertEqual(self.api.calls[-1][:2], (path, "GET"))
+        self.assertEqual(len(self.mutations()), 11)
         self.assertIs(self.api.release["draft"], False)
         self.assertEqual(len(self.api.assets), 9)
         self.assertEqual(self.mutations()[-1][1], "PATCH")
+        self.assertIsNone(self.api.ref)
 
     def test_final_observation_refuses_changed_body_markers_or_identity(self):
         for key, value in (("body", "changed"), ("tag_name", "untagged-default"), ("name", "changed"),
@@ -202,9 +331,24 @@ class PublicationTests(unittest.TestCase):
                 if path == "/releases" and method == "POST":
                     result[key] = value
             self.api.after = corrupt
-            with self.subTest(key=key), self.assertRaises(ValueError):
-                self.publisher().publish()
-            self.assertEqual(len(self.mutations()), 1)
+            with self.subTest(key=key):
+                self.assert_cli_failure("stage=draft-creation-response category=validation-failed")
+                self.assertEqual(len(self.mutations()), 1)
+                self.assertEqual(self.api.assets, [])
+                self.assertIs(self.api.release["draft"], True)
+                self.assertIsNone(self.api.ref)
+
+    def test_draft_absent_from_immediate_listing_stops_before_first_upload(self):
+        def hide(path, method, result):
+            if self.api.release is not None and path.startswith("/releases?"):
+                result.clear()
+
+        self.api.after = hide
+        self.assert_cli_failure("stage=draft-observation category=validation-failed")
+        self.assertEqual(len(self.mutations()), 1)
+        self.assertEqual(self.api.assets, [])
+        self.assertIs(self.api.release["draft"], True)
+        self.assertIsNone(self.api.ref)
 
     def test_fresh_observation_detects_metadata_or_tag_mutation_after_upload(self):
         for change in ("body", "tag"):
@@ -252,28 +396,34 @@ class PublicationTests(unittest.TestCase):
                 path.symlink_to(target)
             else:
                 path.write_bytes(b"corrupt")
-            with self.subTest(symlink=symlink), self.assertRaises(ValueError):
-                self.publisher().publish()
-            self.assertEqual(len(self.mutations()), 1)
+            with self.subTest(symlink=symlink):
+                self.assert_cli_failure("stage=asset-file-verification category=validation-failed")
+                self.assertEqual(len(self.mutations()), 1)
+                self.assertEqual(self.api.assets, [])
 
     def test_uncertain_create_upload_and_transition_effects_are_never_retried_or_erased(self):
-        for stage in ("create", "upload", "transition"):
-            self.api = FakeGitHub()
-            def uncertain(path, method, result):
-                if ((stage == "create" and path == "/releases" and method == "POST")
-                        or (stage == "upload" and "assets?name=" in path and method == "POST")
-                        or (stage == "transition" and method == "PATCH")):
-                    raise OSError("Outcome unknown")
-            self.api.after = uncertain
-            with self.subTest(stage=stage), self.assertRaises(OSError):
-                self.publisher().publish()
-            effects = self.mutations()
-            self.assertIsNotNone(self.api.release)
-            self.assertEqual(sum(path == "/releases" and method == "POST" for path, method, _ in effects), 1)
-            self.assertEqual(len(self.api.assets), {"create": 0, "upload": 1, "transition": 9}[stage])
-            self.assertIs(self.api.release["draft"], stage != "transition")
-            self.assertTrue(all(method in ("POST", "PATCH") for _, method, _ in effects))
-            self.assertEqual(len(effects), {"create": 1, "upload": 2, "transition": 11}[stage])
+        cases = (
+            ("draft-creation", "/releases", "POST", 0, True),
+            ("asset-upload", "/releases/31/assets", "POST", 1, True),
+            ("publish-transition", "/releases/31", "PATCH", 9, False),
+        )
+        for stage, target, verb, asset_count, draft in cases:
+            with self.subTest(stage=stage):
+                self.api = FakeGitHub()
+
+                def uncertain(path, method, result):
+                    if path.partition("?")[0] == target and method == verb:
+                        raise OSError("Synthetic transport detail")
+
+                self.api.after = uncertain
+                self.assert_cli_failure(f"stage={stage} category=io-error")
+                effects = self.mutations()
+                self.assertIsNotNone(self.api.release)
+                self.assertEqual(sum(path == "/releases" and method == "POST" for path, method, _ in effects), 1)
+                self.assertEqual(len(self.api.assets), asset_count)
+                self.assertIs(self.api.release["draft"], draft)
+                self.assertTrue(all(method in ("POST", "PATCH") for _, method, _ in effects))
+                self.assertEqual(len(effects), 1 + asset_count + (0 if draft else 1))
 
 
 class WorkflowTransferTests(unittest.TestCase):
