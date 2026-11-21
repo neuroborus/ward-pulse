@@ -10,6 +10,7 @@ on:
       - "fixtures/**"
       - "schemas/**"
       - "tools/build-android-rust/**"
+      - "tools/test-cursor-sign-in/**"
       - "tools/test-phone-cache/**"
       - "tools/test-phone-widget/**"
       - ".github/workflows/phone-android.yml"
@@ -32,6 +33,9 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: gradle
+      - name: Test Cursor sign-in
+        run: python3 -B tools/test-cursor-sign-in/run.py
+        working-directory: .
       - name: Test phone cache
         run: tools/test-phone-cache/run.sh
         working-directory: .

@@ -1,0 +1,49 @@
+name: Release Checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "tools/release/**"
+      - "tools/release-google-play/**"
+      - ".github/workflows/release-github.yml"
+      - ".github/workflows/release-google-play.yml"
+      - ".changeset/**"
+      - "apps/phone_flutter/pubspec.yaml"
+      - "apps/wear_android/app/build.gradle.kts"
+      - "apps/watchface_wff/build.gradle.kts"
+      - "apps/wear_android/watchface_push/build.gradle.kts"
+      - "docs/site/package.json"
+      - "package.json"
+      - "package-lock.json"
+      - ".npmrc"
+      - ".nvmrc"
+      - ".github/workflows/release-checks.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  release-checks:
+    name: Test release tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Test release tools with the pinned Changesets CLI
+        shell: bash
+        run: |
+          release_cache=$(mktemp -d)
+          release_prefix=$(mktemp -d)
+          npm exec --prefix "$release_prefix" --cache "$release_cache" \
+            --registry=https://registry.npmjs.org --ignore-scripts --yes \
+            --package=@changesets/cli@3.0.3 -- changeset --version
+          npm_config_cache="$release_cache" \
+            python3 -B -m unittest discover -s tools/release -p 'test_*.py'
+      - name: Test Google Play release tools
+        run: python3 -B -m unittest discover -s tools/release-google-play -p 'test_*.py'
