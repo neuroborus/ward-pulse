@@ -4,6 +4,12 @@ See your AI plan capacity, purchased balances and API spend on Android. WardPuls
 reporting from OpenAI, Anthropic and Cursor into one phone dashboard, with an optional
 Wear OS summary, watch face and home-screen widget.
 
+<table>
+  <tr>
+    <td><a href="https://neuroborus.github.io/ward-pulse/"><img src="brand/icons/previews/wardpulse.png" width="28" height="28" align="middle" alt="">&nbsp; <strong>User Guide →</strong></a></td>
+  </tr>
+</table>
+
 Gallery screenshots show demo usage data.
 
 <table width="100%">
@@ -25,8 +31,6 @@ Gallery screenshots show demo usage data.
     </td>
   </tr>
 </table>
-
-[Read the user guide](https://neuroborus.github.io/ward-pulse/).
 
 ## Start using WardPulse
 
