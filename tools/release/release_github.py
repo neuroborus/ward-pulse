@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+from time import sleep
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -16,9 +17,18 @@ import urllib.request
 from prepare_release import readiness
 
 
-def require(condition):
+NOT_FOUND = object()
+
+
+class ValidationError(ValueError):
+    def __init__(self, category):
+        super().__init__("Release publication invariant failed")
+        self.category = category
+
+
+def require(condition, category="validation-failed"):
     if not condition:
-        raise ValueError("Release publication invariant failed")
+        raise ValidationError(category)
 
 
 def options(draft, prerelease, latest):
@@ -43,15 +53,20 @@ class UnexpectedHTTPStatus(ValueError):
 
 
 class GitHub:
-    def __init__(self, token, repository):
+    def __init__(self, token, repository, repository_id):
         require(token and re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository))
+        require(re.fullmatch(r"[1-9][0-9]*", repository_id))
         self.token, self.repository = token, repository
+        self.repository_id = repository_id
         self.opener = urllib.request.build_opener(NoRedirect())
 
-    def __call__(self, path, method="GET", payload=None, missing=False, upload=None, *, on_response=None):
+    def __call__(self, path, method="GET", payload=None, missing=False, upload=None, *,
+                 on_response=None, page=None):
         host = "https://uploads.github.com" if upload is not None else "https://api.github.com"
         headers = {"Authorization": "Bearer " + self.token, "Accept": "application/vnd.github+json",
                    "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "WardPulse-release"}
+        if method == "GET":
+            headers["Cache-Control"] = "no-cache"
         data = None if payload is None else json.dumps(payload).encode()
         if payload is not None:
             headers["Content-Type"] = "application/json"
@@ -66,11 +81,36 @@ class GitHub:
                     raise UnexpectedHTTPStatus(response.status)
                 if on_response is not None:
                     on_response()
-                return json.load(response)
+                result = json.load(response)
+                if page is not None:
+                    return result, self.page_links(response.headers, path.partition("?")[0], page)
+                return result
         except urllib.error.HTTPError as error:
             if missing and error.code == 404:
-                return None
+                return NOT_FOUND
             raise
+
+    def page_links(self, headers, path, page):
+        links = headers.get_all("Link", [])
+        if not links:
+            return {}
+        category = "pagination-invalid"
+        repository = rf"(?:/repos/(?i:{re.escape(self.repository)})|/repositories/{self.repository_id})"
+        endpoint = rf"https://api\.github\.com{repository}{re.escape(path)}"
+        number = r"([1-9][0-9]{0,8})"
+        query = rf"(?:per_page=100&page={number}|page={number}&per_page=100)"
+        pattern = re.compile(rf'<{endpoint}\?{query}>\s*;\s*rel="(first|prev|next|last)"')
+        targets = {}
+        for header in links:
+            for link in header.split(","):
+                match = pattern.fullmatch(link.strip())
+                require(match is not None, category)
+                first_number, second_number, relation = match.groups()
+                require(relation not in targets, category)
+                targets[relation] = int(first_number or second_number)
+        require(targets.get("first", 1) == 1 and targets.get("prev", page - 1) == page - 1, category)
+        require(targets.get("next", page + 1) == page + 1, category)
+        return targets
 
 
 class Publisher:
@@ -98,61 +138,93 @@ class Publisher:
         self.operation = None
         return result
 
-    def pages(self, operation, path):
+    def pages(self, operation, path, *, category="validation-failed"):
         seen = set()
-        for page in range(1, 1001):
-            items = self.request(operation, f"{path}?per_page=100&page={page}")
-            require(type(items) is list and len(items) <= 100)
+        last_page, page_limit = None, 1000
+        linked_page = False
+        for page in range(1, page_limit + 1):
+            items, links = self.request(operation, f"{path}?per_page=100&page={page}", page=page)
+            require(type(items) is list and len(items) <= 100, category)
+            has_next = "next" in links
+            require(items or not (linked_page or has_next), "pagination-invalid")
+            advertised_last = links.get("last")
+            if advertised_last is not None:
+                first_possible_last = page if linked_page else max(1, page - 1)
+                require(first_possible_last <= advertised_last <= page_limit
+                        and last_page in (None, advertised_last), "pagination-invalid")
+                last_page = advertised_last
+            if last_page is not None:
+                require(has_next == (page < last_page), "pagination-invalid")
+                if page > last_page:
+                    require(not items, "pagination-invalid")
+                    return
             for item in items:
-                require(type(item) is dict and type(item.get("id")) is int and item["id"] > 0)
-                require(item["id"] not in seen)
+                require(type(item) is dict and type(item.get("id")) is int and item["id"] > 0, category)
+                require(item["id"] not in seen, category)
                 seen.add(item["id"])
                 yield item
-            if len(items) < 100:
+            # A full page needs another read even at the advertised end.
+            if not has_next and len(items) < 100:
                 return
-        raise ValueError("Pagination did not finish")
+            linked_page = has_next
+        raise ValidationError(category)
 
-    def binding(self, release, release_id, draft):
-        require(type(release.get("id")) is int and release["id"] == release_id)
-        require(release.get("draft") is draft and release.get("prerelease") is self.prerelease)
-        require(release.get("tag_name") == self.tag and release.get("name") == self.tag)
-        require(release.get("target_commitish") == self.sha and release.get("body") == self.notes)
+    def binding(self, release, release_id, draft, *, category="validation-failed"):
+        require(type(release) is dict and type(release.get("id")) is int and release["id"] == release_id, category)
+        require(release.get("draft") is draft and release.get("prerelease") is self.prerelease, category)
+        require(release.get("tag_name") == self.tag and release.get("name") == self.tag, category)
+        require(release.get("target_commitish") == self.sha and release.get("body") == self.notes, category)
 
     def conflicts(self, allowed=None, draft=True):
-        matches = []
-        for release in self.pages("list-releases", "/releases"):
-            require(type(release.get("tag_name")) is str)
-            if release["tag_name"] == self.tag:
-                require(release["id"] == allowed)
-                self.binding(release, allowed, draft)
-                matches.append(release["id"])
-        require(matches == ([] if allowed is None else [allowed]))
+        listed = False
+        for release in self.pages("list-releases", "/releases", category="release-listing-invalid"):
+            if release["id"] == allowed:
+                self.binding(release, allowed, draft, category="listed-release-binding-mismatch")
+                listed = True
+            else:
+                require(type(release.get("tag_name")) is str, "release-listing-invalid")
+                require(release["tag_name"] != self.tag, "conflicting-release")
+        return listed
 
     def tag_binding(self, required=False):
+        category = "tag-binding-mismatch"
         ref = self.request("read-tag-ref", "/git/ref/tags/" + urllib.parse.quote(self.tag, safe=""),
                            missing=not required)
-        if ref is None:
-            require(not required)  # Only a draft may lack a real Git ref.
+        if ref is NOT_FOUND:
+            require(not required, category)  # Only a draft may lack a real Git ref.
             return
-        require(ref.get("ref") == "refs/tags/" + self.tag)
-        obj, seen = ref["object"], set()
+        require(type(ref) is dict and ref.get("ref") == "refs/tags/" + self.tag, category)
+        obj, seen = ref.get("object"), set()
         for _ in range(16):
-            target = obj["sha"]
-            require(re.fullmatch(r"[0-9a-f]{40}", target) and target not in seen)
+            require(type(obj) is dict, category)
+            target = obj.get("sha")
+            require(type(target) is str and re.fullmatch(r"[0-9a-f]{40}", target) and target not in seen, category)
             seen.add(target)
-            if obj["type"] == "commit":
-                require(target == self.sha)
+            if obj.get("type") == "commit":
+                require(target == self.sha, category)
                 return
-            require(obj["type"] == "tag")
+            require(obj.get("type") == "tag", category)
             annotation = self.request("read-annotated-tag", "/git/tags/" + target)
-            require(annotation["sha"] == target)
-            obj = annotation["object"]
-        raise ValueError("Tag could not be peeled")
+            require(type(annotation) is dict and annotation.get("sha") == target, category)
+            obj = annotation.get("object")
+        raise ValidationError(category)
 
-    def observe(self, release_id, draft):
-        self.binding(self.request("read-release", f"/releases/{release_id}"), release_id, draft)
-        self.conflicts(release_id, draft)
+    def observe(self, release_id, draft, *, allow_unlisted=False):
+        self.binding(self.request("read-release", f"/releases/{release_id}"), release_id, draft,
+                     category="release-by-id-binding-mismatch")
+        listed = self.conflicts(release_id, draft)
+        require(listed or allow_unlisted, "bound-release-not-listed")
         self.tag_binding(required=not draft)
+        return listed
+
+    def observe_created_draft(self, release_id):
+        # Allow up to 60 seconds of waiting for the authenticated listing cache to expire.
+        for delay in (0, 5, 15, 40):
+            if delay:
+                sleep(delay)
+            if self.observe(release_id, True, allow_unlisted=True):
+                return
+        raise ValidationError("draft-listing-absent")
 
     def asset_binding(self, asset, name):
         expected = self.manifest[name]
@@ -185,7 +257,7 @@ class Publisher:
         require(type(release_id) is int and release_id > 0)
         self.binding(created, release_id, True)
         self.stage = "draft-observation"
-        self.observe(release_id, True)
+        self.observe_created_draft(release_id)
         uploaded = {}
         for name, expected in sorted(self.manifest.items()):
             self.stage = "asset-file-verification"
@@ -235,6 +307,8 @@ def failure_detail(error, stage, operation):
         category = "io-error"
     elif isinstance(error, (json.JSONDecodeError, UnicodeError)):
         category = "invalid-data"
+    elif isinstance(error, ValidationError):
+        category = error.category
     elif isinstance(error, (ValueError, AttributeError, KeyError, TypeError)):
         category = "validation-failed"
     else:
@@ -255,7 +329,8 @@ def main():
         ready = readiness(root, env["RELEASE_TAG"])
         require(ready["version"] == env["RELEASE_VERSION"])
         manifest = json.loads(Path(env["VERIFIED_TRANSFER"]).read_text())
-        publisher = Publisher(GitHub(env["GH_TOKEN"], env["GITHUB_REPOSITORY"]), env["SOURCE_SHA"],
+        api = GitHub(env["GH_TOKEN"], env["GITHUB_REPOSITORY"], env["GITHUB_REPOSITORY_ID"])
+        publisher = Publisher(api, env["SOURCE_SHA"],
                               env["RELEASE_TAG"], ready["notes"], manifest, Path(env["TRANSFER_DIR"]), *flags)
         release_id = publisher.publish()
         print(f"Release {release_id} confirmed with requested draft/prerelease state and all nine assets.")

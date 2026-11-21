@@ -13,7 +13,7 @@ import shutil
 import tempfile
 import textwrap
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 import urllib.error
 import urllib.parse
 import zipfile
@@ -24,6 +24,7 @@ import release_github as release
 SHA = "a" * 40
 TAG = "v0.1.0"
 NOTES = '### Minor Changes\n\n- Keep `$value` and $(command) literal.'
+REPOSITORY_ID = "123"
 
 
 class FakeGitHub:
@@ -34,7 +35,8 @@ class FakeGitHub:
         self.create_ref = True
         self.after = lambda path, method, result: None
 
-    def __call__(self, path, method="GET", payload=None, missing=False, upload=None, *, on_response=None):
+    def __call__(self, path, method="GET", payload=None, missing=False, upload=None, *,
+                 on_response=None, page=None):
         self.calls.append((path, method, deepcopy(payload)))
         url = urllib.parse.urlsplit(path)
         query = urllib.parse.parse_qs(url.query)
@@ -70,11 +72,16 @@ class FakeGitHub:
         self.after(path, method, result)
         if on_response is not None:
             on_response()
+        if missing and result is None:
+            return release.NOT_FOUND
+        if page is not None:
+            return result, {}
         return result
 
 
 class PublicationTests(unittest.TestCase):
     def setUp(self):
+        self.sleep = self.enterContext(patch.object(release, "sleep"))
         scratch = tempfile.TemporaryDirectory(prefix="wardpulse-publisher-test-")
         self.addCleanup(scratch.cleanup)
         self.directory = Path(scratch.name) / "transfer"
@@ -89,18 +96,20 @@ class PublicationTests(unittest.TestCase):
             self.manifest[name] = {"size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
         self.api = FakeGitHub()
 
-    def publisher(self, draft="false", prerelease="false", latest="false"):
-        return release.Publisher(self.api, SHA, TAG, NOTES, self.manifest, self.directory, draft, prerelease, latest)
+    def publisher(self, draft="false", prerelease="false", latest="false", *, api=None):
+        return release.Publisher(self.api if api is None else api, SHA, TAG, NOTES, self.manifest,
+                                 self.directory, draft, prerelease, latest)
 
     def mutations(self):
         return [call for call in self.api.calls if call[1] != "GET"]
 
-    def mock_http_operation(self, target, verb):
+    def mock_http_operation(self, target, verb, *, after_creation=False):
         with patch.object(release.urllib.request, "build_opener") as build_opener:
-            api = release.GitHub("synthetic-token", "example/project")
+            api = release.GitHub("synthetic-token", "example/project", REPOSITORY_ID)
 
         def request(path, method="GET", *args, **kwargs):
-            if path.partition("?")[0] != target or method != verb:
+            if (path.partition("?")[0] != target or method != verb
+                    or (after_creation and self.api.release is None)):
                 return self.api(path, method, *args, **kwargs)
             # Apply the fake server effect, with status confirmation left to the real transport.
             fake_kwargs = kwargs.copy()
@@ -119,17 +128,19 @@ class PublicationTests(unittest.TestCase):
             "SOURCE_SHA": SHA, "RELEASE_TAG": TAG, "RELEASE_VERSION": TAG[1:],
             "VERIFIED_TRANSFER": str(manifest), "TRANSFER_DIR": str(self.directory),
             "GH_TOKEN": "synthetic-token", "GITHUB_REPOSITORY": "example/project",
+            "GITHUB_REPOSITORY_ID": REPOSITORY_ID,
         }
         with (
             patch.dict(release.os.environ, env, clear=True),
             patch.object(release, "readiness", return_value={"version": TAG[1:], "notes": NOTES}),
-            patch.object(release, "GitHub", return_value=self.api if api is None else api),
+            patch.object(release, "GitHub", return_value=self.api if api is None else api) as github,
             patch.object(release.subprocess, "check_output", return_value=SHA + "\n"),
             patch("sys.stdout", new_callable=StringIO) as stdout,
             patch("sys.stderr", new_callable=StringIO) as stderr,
             self.assertRaises(SystemExit) as failure,
         ):
             release.main()
+        github.assert_called_once_with("synthetic-token", "example/project", REPOSITORY_ID)
         self.assertEqual((stdout.getvalue(), stderr.getvalue()), ("", ""))
         self.assertEqual(
             str(failure.exception),
@@ -142,6 +153,8 @@ class PublicationTests(unittest.TestCase):
         cases = (
             ("/releases", "POST", "draft-creation", "create-draft", 422, 0, True),
             ("/releases/31", "GET", "draft-observation", "read-release", 404, 0, True),
+            ("/releases", "GET", "draft-observation", "list-releases", 503, 0, True),
+            ("/git/ref/tags/" + TAG, "GET", "draft-observation", "read-tag-ref", 403, 0, True),
             ("/releases/31/assets", "POST", "asset-upload", "upload-asset", 502, 1, True),
             ("/releases/31/assets", "GET", "asset-verification", "list-release-assets", 503, 9, True),
             ("/releases/31", "PATCH", "publish-transition", "publish-release", 403, 9, False),
@@ -154,7 +167,7 @@ class PublicationTests(unittest.TestCase):
 
                 def fail(path, method, result):
                     if (path.partition("?")[0] == target and method == verb
-                            and self.api.release["draft"] is draft):
+                            and self.api.release is not None and self.api.release["draft"] is draft):
                         failed_at.append(len(self.api.calls))
                         error = urllib.error.HTTPError(
                             "https://example.invalid" + path, status, "synthetic response text",
@@ -171,6 +184,21 @@ class PublicationTests(unittest.TestCase):
                 self.assertIs(self.api.release["draft"], draft)
                 self.assertEqual(self.api.release["body"], NOTES)
                 self.assertEqual(self.api.ref is None, draft)
+                self.sleep.assert_not_called()
+
+    def test_get_requests_require_cache_revalidation(self):
+        with patch.object(release.urllib.request, "build_opener") as build_opener:
+            api = release.GitHub("synthetic-token", "example/project", REPOSITORY_ID)
+        open_response = build_opener.return_value.open
+        response = open_response.return_value.__enter__.return_value
+        response.read.return_value = b"{}"
+        for method, path in (("GET", "/releases?per_page=100&page=1"), ("GET", "/releases/31"),
+                             ("GET", "/git/ref/tags/" + TAG), ("POST", "/releases"), ("PATCH", "/releases/31")):
+            with self.subTest(method=method, path=path):
+                response.status = 201 if method == "POST" else 200
+                api(path, method)
+                request = open_response.call_args.args[0]
+                self.assertEqual(request.get_header("Cache-control"), "no-cache" if method == "GET" else None)
 
     def test_unexpected_success_status_is_reported_before_body_is_read(self):
         api, open_response = self.mock_http_operation("/releases", "GET")
@@ -223,6 +251,7 @@ class PublicationTests(unittest.TestCase):
                     self.assertEqual(self.api.calls, [])
                     continue
                 self.assertEqual(self.publisher(draft, prerelease, latest).publish(), 31)
+                self.sleep.assert_not_called()
                 effects = self.mutations()
                 creation = effects[0][2]
                 self.assertEqual(creation, {"tag_name": TAG, "target_commitish": SHA, "name": TAG,
@@ -272,6 +301,47 @@ class PublicationTests(unittest.TestCase):
                 self.publisher().publish()
             self.assertEqual(self.mutations(), [])
             self.assertIn(("/releases?per_page=100&page=2", "GET", None), self.api.calls)
+
+    def test_empty_first_page_with_next_link_stops_preflight(self):
+        api, open_response = self.mock_http_operation("/releases", "GET")
+        response = open_response.return_value.__enter__.return_value
+        response.status = 200
+        response.headers = http.client.HTTPMessage()
+        response.headers.add_header(
+            "Link", f'<https://api.github.com/repositories/{REPOSITORY_ID}/releases?per_page=100&page=2>; rel="next"',
+        )
+        response.read.return_value = b"[]"
+        self.assert_cli_failure("stage=preflight category=pagination-invalid", api=api)
+        self.assertEqual(self.api.calls, [("/releases?per_page=100&page=1", "GET", None)])
+        self.assertEqual(self.mutations(), [])
+
+    def test_full_page_with_only_backward_links_still_checks_next_page_for_conflicts(self):
+        self.api.unrelated = [{"id": index + 1000, "tag_name": "other"} for index in range(200)]
+        self.api.release = {"id": 31, "tag_name": TAG, "draft": True}
+
+        def request(path, *args, **kwargs):
+            result = self.api(path, *args, **kwargs)
+            if path == "/releases?per_page=100&page=2":
+                items, _ = result
+                return items, {"prev": 1, "first": 1}
+            return result
+
+        self.assert_cli_failure("stage=preflight category=conflicting-release", api=request)
+        self.assertEqual(self.api.calls[-1], ("/releases?per_page=100&page=3", "GET", None))
+        self.assertEqual(self.mutations(), [])
+
+    def test_full_terminal_page_checks_and_accepts_empty_next_page(self):
+        self.api.unrelated = [{"id": index + 1000, "tag_name": "other"} for index in range(100)]
+        api, open_response = self.mock_http_operation("/releases", "GET")
+        response = open_response.return_value.__enter__.return_value
+        response.status = 200
+        response.headers = http.client.HTTPMessage()
+        response.headers.add_header(
+            "Link", f'<https://api.github.com/repositories/{REPOSITORY_ID}/releases?per_page=100&page=1>; rel="last"',
+        )
+        response.read.side_effect = [json.dumps(self.api.unrelated).encode(), b"[]"]
+        self.assertFalse(self.publisher(api=api).conflicts())
+        self.assertEqual(self.api.calls, [(f"/releases?per_page=100&page={page}", "GET", None) for page in (1, 2)])
 
     def test_conflict_appearing_at_repeated_check_refuses_creation(self):
         def appear(path, method, result):
@@ -338,19 +408,175 @@ class PublicationTests(unittest.TestCase):
             with self.subTest(key=key):
                 self.assert_cli_failure("stage=draft-creation-response category=validation-failed")
                 self.assertEqual(len(self.mutations()), 1)
+                self.assertEqual(self.api.calls[-1][:2], ("/releases", "POST"))
+                self.sleep.assert_not_called()
                 self.assertEqual(self.api.assets, [])
                 self.assertIs(self.api.release["draft"], True)
                 self.assertIsNone(self.api.ref)
 
-    def test_draft_absent_from_immediate_listing_stops_before_first_upload(self):
+    def test_draft_observation_rechecks_every_page_and_tag_before_upload(self):
+        first_page, second_page = (f"/releases?per_page=100&page={page}" for page in (1, 2))
+        self.api.unrelated = [{"id": index + 1000, "tag_name": "other"} for index in range(100)]
+
+        def hide(path, method, result):
+            if path == second_page and self.sleep.call_count < 3:
+                result.clear()
+
+        wait_boundaries = []
+        self.sleep.side_effect = lambda _: wait_boundaries.append(len(self.api.calls))
+        self.api.after = hide
+        self.assertEqual(self.publisher().publish(), 31)
+        effects = self.mutations()
+        self.assertEqual([effect[:2] for effect in effects], [
+            ("/releases", "POST"),
+            *(("/releases/31/assets?name=" + name, "POST") for name in sorted(self.manifest)),
+            ("/releases/31", "PATCH"),
+        ])
+        start = self.api.calls.index(effects[0]) + 1
+        first_upload = self.api.calls.index(effects[1])
+        reads = ("/releases/31", first_page, second_page, "/git/ref/tags/" + TAG)
+        observation = [(path, "GET", None) for path in reads]
+        self.assertEqual(self.api.calls[start:first_upload], observation * 4)
+        self.assertEqual(wait_boundaries, [start + count * len(observation) for count in (1, 2, 3)])
+        self.assertEqual(self.sleep.call_args_list, [call(5), call(15), call(40)])
+
+    def test_draft_listing_absence_exhausts_wait_before_first_upload(self):
         def hide(path, method, result):
             if self.api.release is not None and path.startswith("/releases?"):
                 result.clear()
 
         self.api.after = hide
-        self.assert_cli_failure("stage=draft-observation category=validation-failed")
+        self.assert_cli_failure("stage=draft-observation category=draft-listing-absent")
+        self.assertEqual(self.sleep.call_args_list, [call(5), call(15), call(40)])
         self.assertEqual(len(self.mutations()), 1)
+        start = self.api.calls.index(self.mutations()[0]) + 1
+        reads = ("/releases/31", "/releases?per_page=100&page=1", "/git/ref/tags/" + TAG)
+        observation = [(path, "GET", None) for path in reads]
+        self.assertEqual(self.api.calls[start:], observation * 4)
         self.assertEqual(self.api.assets, [])
+        self.assertIs(self.api.release["draft"], True)
+        self.assertIsNone(self.api.ref)
+
+    def test_draft_observation_validates_pagination_before_upload(self):
+        canonical = f"https://api.github.com/repositories/{REPOSITORY_ID}/releases"
+        next_link = f'<{canonical}?page=2&per_page=100>; rel="next"'
+        last_link = f'<{canonical}?per_page=100&page=2>; rel="last"'
+        bound = {"id": 31, "tag_name": TAG, "name": TAG, "target_commitish": SHA,
+                 "body": NOTES, "draft": True, "prerelease": False}
+        short_page = [bound]
+        full_page = [bound, *({"id": index + 1000, "tag_name": "other"} for index in range(99))]
+        conflict_page = [{**bound, "id": 32}]
+        wrong_repository = "https://api.github.com/repositories/124/releases"
+        cases = (
+            ("short page with continuation", [short_page, conflict_page], [f"{next_link}, {last_link}"],
+             "conflicting-release"),
+            ("empty first page with continuation", [[]], [next_link], "pagination-invalid"),
+            ("empty advertised continuation", [short_page, []], [next_link, last_link], "pagination-invalid"),
+            ("malformed link", [short_page], ["synthetic malformed header"], "pagination-invalid"),
+            ("wrong destination", [short_page], [next_link.replace("api.github.com", "example.invalid")],
+             "pagination-invalid"),
+            ("wrong repository", [short_page], [next_link.replace(canonical, wrong_repository)], "pagination-invalid"),
+            ("mixed repository IDs", [short_page], [next_link, last_link.replace(canonical, wrong_repository)],
+             "pagination-invalid"),
+            ("skipped page", [short_page], [next_link.replace("page=2", "page=3")], "pagination-invalid"),
+            ("missing continuation", [short_page], [last_link], "pagination-invalid"),
+            ("early terminal page", [short_page, conflict_page], [next_link, last_link.replace("page=2", "page=3")],
+             "pagination-invalid"),
+            ("conflict after advertised end", [full_page, conflict_page], [last_link.replace("page=2", "page=1")],
+             "pagination-invalid"),
+        )
+        for scenario, pages, links, category in cases:
+            with self.subTest(scenario=scenario):
+                self.api = FakeGitHub()
+                api, open_response = self.mock_http_operation("/releases", "GET", after_creation=True)
+                response = open_response.return_value.__enter__.return_value
+                response.status = 200
+                first_headers, second_headers = http.client.HTTPMessage(), http.client.HTTPMessage()
+                for link in links:
+                    first_headers.add_header("Link", link)
+                second_headers.add_header(
+                    "Link", '<https://api.github.com/repos/example/project/releases?per_page=100&page=1>; rel="prev"',
+                )
+
+                def respond(request, *, timeout):
+                    first = request.full_url.endswith("&page=1")
+                    response.headers = first_headers if first else second_headers
+                    response.read.return_value = json.dumps(pages[0 if first else 1]).encode()
+                    return open_response.return_value
+
+                open_response.side_effect = respond
+                self.assert_cli_failure(f"stage=draft-observation category={category}", api=api)
+                self.assertEqual([entry.args[0].full_url for entry in open_response.call_args_list], [
+                    f"https://api.github.com/repos/example/project/releases?per_page=100&page={page}"
+                    for page in range(1, len(pages) + 1)
+                ])
+                self.sleep.assert_not_called()
+                self.assertEqual([effect[:2] for effect in self.mutations()], [("/releases", "POST")])
+                self.assertEqual(self.api.assets, [])
+                self.assertIs(self.api.release["draft"], True)
+                self.assertIsNone(self.api.ref)
+
+    def test_draft_observation_rejects_binding_and_pagination_discrepancies_without_waiting(self):
+        by_id, tag_ref = "/releases/31", "/git/ref/tags/" + TAG
+        first_page, second_page = (f"/releases?per_page=100&page={page}" for page in (1, 2))
+        bound = {"id": 31, "tag_name": TAG, "name": TAG, "target_commitish": SHA,
+                 "body": NOTES, "draft": True, "prerelease": False}
+        conflicting = {**bound, "id": 32}
+        full_page = [bound, *({"id": index + 1000, "tag_name": "other"} for index in range(99))]
+        wrong_tag = {"ref": "refs/tags/" + TAG, "object": {"type": "commit", "sha": "c" * 40}}
+        cases = (
+            ("wrong direct ID", {by_id: conflicting}, "release-by-id-binding-mismatch"),
+            ("changed direct notes", {by_id: {**bound, "body": "other"}}, "release-by-id-binding-mismatch"),
+            ("changed listed notes", {first_page: [{**bound, "body": "other"}]}, "listed-release-binding-mismatch"),
+            ("changed listed tag", {first_page: [{**bound, "tag_name": "other"}]}, "listed-release-binding-mismatch"),
+            ("wrong listed ID", {first_page: [conflicting]}, "conflicting-release"),
+            ("second matching ID", {first_page: [bound, conflicting]}, "conflicting-release"),
+            ("duplicate on next page", {first_page: full_page, second_page: [bound]}, "release-listing-invalid"),
+            ("invalid page", {first_page: {"items": []}}, "release-listing-invalid"),
+            ("conflicting tag during absence", {first_page: [], tag_ref: wrong_tag}, "tag-binding-mismatch"),
+            ("invalid tag during absence", {first_page: [], tag_ref: None}, "tag-binding-mismatch"),
+        )
+        for scenario, responses, category in cases:
+            with self.subTest(scenario=scenario):
+                self.api = FakeGitHub()
+
+                def request(path, method="GET", *args, **kwargs):
+                    result = self.api(path, method, *args, **kwargs)
+                    if method == "GET" and self.api.release is not None and path in responses:
+                        if kwargs.get("page") is not None:
+                            return responses[path], {}
+                        return responses[path]
+                    return result
+
+                self.assert_cli_failure(f"stage=draft-observation category={category}", api=request)
+                self.sleep.assert_not_called()
+                self.assertEqual([effect[:2] for effect in self.mutations()], [("/releases", "POST")])
+                self.assertEqual(self.api.assets, [])
+                self.assertIs(self.api.release["draft"], True)
+                self.assertIsNone(self.api.ref)
+
+    def test_draft_observation_stops_on_transport_failure_during_recheck(self):
+        def fail_after_wait(path, method, result):
+            if self.api.release is not None and path.startswith("/releases?"):
+                if self.sleep.called:
+                    raise urllib.error.URLError("synthetic transport detail")
+                result.clear()
+
+        self.api.after = fail_after_wait
+        self.assert_cli_failure("stage=draft-observation category=transport-error")
+        self.sleep.assert_called_once_with(5)
+        self.assertEqual([effect[:2] for effect in self.mutations()], [("/releases", "POST")])
+        self.assertEqual(self.api.assets, [])
+
+    def test_draft_missing_from_later_observation_stops_without_waiting(self):
+        def hide_after_upload(path, method, result):
+            if path.startswith("/releases?") and len(self.api.assets) == 9:
+                result.clear()
+
+        self.api.after = hide_after_upload
+        self.assert_cli_failure("stage=asset-verification category=bound-release-not-listed")
+        self.sleep.assert_not_called()
+        self.assertEqual(len(self.mutations()), 10)
         self.assertIs(self.api.release["draft"], True)
         self.assertIsNone(self.api.ref)
 
