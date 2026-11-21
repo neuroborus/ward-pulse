@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/plan_recoveries.dart';
+import 'notification_coordinator.dart';
 
 /// Tells the reader a plan window is usable again.
 ///
@@ -13,8 +16,8 @@ abstract interface class RecoveryNotifier {
   /// Asks Android for permission to post at all (13+), and answers whether it
   /// may now.
   ///
-  /// Only a foreground Activity may ask, so this is called from the Settings
-  /// switch and never from the poll that posts.
+  /// Foreground transport only. DashboardHost coordinates startup and explicit
+  /// Settings retries; the poll that posts never requests permission.
   Future<bool> requestPermission();
 }
 
@@ -37,35 +40,39 @@ final class SilentRecoveryNotifier implements RecoveryNotifier {
 /// are registered there. An app-level channel lives in the Activity's engine
 /// alone.
 final class LocalRecoveryNotifier implements RecoveryNotifier {
-  LocalRecoveryNotifier({FlutterLocalNotificationsPlugin? plugin})
-    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+  LocalRecoveryNotifier({
+    FlutterLocalNotificationsPlugin? plugin,
+    PhoneNotificationCoordinator? coordinator,
+  }) : _coordinator =
+           coordinator ?? PhoneNotificationCoordinator(plugin: plugin);
 
-  /// One channel for the one thing this product interrupts a reader for.
-  static const _channelId = 'wardpulse.plan_recovery';
-  static const _channelName = 'Plan recovery';
-  static const _channelDescription =
-      'A plan window you had run out of is usable again.';
-
-  final FlutterLocalNotificationsPlugin _plugin;
-  bool _ready = false;
+  final PhoneNotificationCoordinator _coordinator;
 
   @override
   Future<void> notify(PlanRecovery recovery) async {
-    await _ensureReady();
-    await _plugin.show(
+    await notifyIfCurrent(recovery, () async => true);
+  }
+
+  /// Initialization can await platform work; validate again before submitting.
+  Future<void> notifyIfCurrent(
+    PlanRecovery recovery,
+    Future<bool> Function() isCurrent,
+  ) async {
+    await _coordinator.ensureReady();
+    if (!await isCurrent()) return;
+    await _coordinator.plugin.show(
       id: recoveryNotificationId(recovery),
       title: recoveryNotificationTitle(recovery),
       body: recoveryNotificationBody,
-      notificationDetails: const NotificationDetails(
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
-          _channelId,
-          _channelName,
-          channelDescription: _channelDescription,
+          recoveryNotificationChannel.id,
+          recoveryNotificationChannel.name,
+          channelDescription: recoveryNotificationChannel.description,
+          sound: phoneNotificationSound,
           category: AndroidNotificationCategory.status,
-          // High, because this is the one thing the product interrupts for: a
-          // window the reader has been waiting on is usable again. At the
-          // default the notification would wait quietly in the shade, which is
-          // the opposite of what the phase decided it is worth.
+          // Preserve the recovery channel's existing importance: a window the
+          // reader had exhausted is usable again.
           importance: Importance.high,
           priority: Priority.high,
         ),
@@ -75,29 +82,12 @@ final class LocalRecoveryNotifier implements RecoveryNotifier {
 
   @override
   Future<bool> requestPermission() async {
-    await _ensureReady();
+    await _coordinator.ensureReady();
     final granted =
-        await _plugin
-            .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin
-            >()
-            ?.requestNotificationsPermission();
+        await _coordinator.android?.requestNotificationsPermission();
     // Null means no Android implementation answered — nothing was refused, so
     // the switch has no bad news to report.
     return granted ?? true;
-  }
-
-  Future<void> _ensureReady() async {
-    if (_ready) {
-      return;
-    }
-    await _plugin.initialize(
-      settings: const InitializationSettings(
-        // The launcher mark, because the product has no separate status icon.
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-      ),
-    );
-    _ready = true;
   }
 }
 
@@ -117,8 +107,8 @@ String recoveryNotificationTitle(PlanRecovery recovery) {
 const recoveryNotificationBody = 'Usable again.';
 
 /// The notification a window owns, so a second telling replaces the first
-/// rather than stacking beside it — which is what makes a repeat harmless, and
-/// a repeat is what the reporting order deliberately risks.
+/// rather than stacking beside it. A replacement can still alert again; a
+/// stable identity does not prove no repost or exactly-once delivery.
 ///
 /// Computed here rather than taken from `hashCode`: Dart does not promise a
 /// string keeps its hash between runs, and an id that drifted across launches
@@ -126,7 +116,15 @@ const recoveryNotificationBody = 'Usable again.';
 int recoveryNotificationId(PlanRecovery recovery) {
   // FNV-1a, folded into the positive 31 bits an Android notification id uses.
   var hash = 0x811c9dc5;
-  final key = '${recovery.accountId}|${recovery.allowanceId}';
+  final owner = recovery.historyOwner;
+  final key =
+      owner == null
+          ? '${recovery.accountId}|${recovery.allowanceId}'
+          : jsonEncode([
+            owner.toJson(),
+            recovery.accountId,
+            recovery.allowanceId,
+          ]);
   for (final unit in key.codeUnits) {
     hash = ((hash ^ unit) * 0x01000193) & 0xffffffff;
   }

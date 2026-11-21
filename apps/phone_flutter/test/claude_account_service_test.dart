@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
 import 'package:ward_pulse_phone/providers/claude_account_store.dart';
 import 'package:ward_pulse_phone/sync/claude_account_client.dart';
@@ -38,6 +39,52 @@ void main() {
 
     expect(store.value?.refreshToken, 'sk-ant-ort01-rotated');
   });
+
+  for (final rejection in [
+    (
+      code: 'invalid_grant',
+      failure: ClaudeAccountFailure.authentication,
+      deletesSession: true,
+    ),
+    (
+      code: 'invalid_request',
+      failure: ClaudeAccountFailure.invalidResponse,
+      deletesSession: false,
+    ),
+  ]) {
+    test('handles refresh HTTP 400 ${rejection.code}', () async {
+      final session = ClaudeAccountSession(
+        accessToken: 'old-access',
+        refreshToken: 'old-refresh',
+        expiresAt: now.add(const Duration(minutes: 1)),
+        accountId: 'acct-1',
+      );
+      final store = _MemoryStore(session);
+      final transport = _QueueTransport([
+        ClaudeHttpResponse(
+          statusCode: 400,
+          body: jsonEncode({'error': rejection.code}),
+        ),
+      ]);
+      final service = MobileClaudeAccountService(
+        store: store,
+        client: ClaudeAccountClient(transport: transport, clock: () => now),
+      );
+
+      await expectLater(
+        service.fetchReport(),
+        throwsA(
+          isA<ClaudeAccountException>().having(
+            (error) => error.failure,
+            'failure',
+            rejection.failure,
+          ),
+        ),
+      );
+
+      expect(store.value, rejection.deletesSession ? isNull : same(session));
+    });
+  }
 
   test('completes PKCE login into secure storage', () async {
     final store = _MemoryStore(null);
@@ -80,7 +127,7 @@ class _MemoryStore implements ClaudeAccountStore {
   }
 
   @override
-  Future<void> delete() async {
+  Future<void> delete({void Function(CredentialVersion)? onRetired}) async {
     value = null;
   }
 }

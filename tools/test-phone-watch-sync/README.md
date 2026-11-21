@@ -3,7 +3,8 @@
 The ordinary `just test-phone-watch-sync` entry point owns the complete paired-emulator
 acceptance gate. It orchestrates the Flutter debug build, full Wear instrumentation,
 update installs, real Data Layer delivery, and saved-summary retention. Source review,
-manual sync, screenshots, old receipts and partial test suites do not establish acceptance.
+an isolated manual sync, screenshots, old receipts and partial test suites do not establish
+acceptance.
 
 ## Bounded foreground observation
 
@@ -199,7 +200,8 @@ measurement access remain separate work.
 ## Prerequisites
 
 - Bash 4.4 or newer, GNU `timeout` (including `--kill-after`), `sha256sum`, `mktemp`,
-  `mkfifo`, and the usual `awk`, `sort`, `sed`, `grep`, `tr`, `cut`, `wc` utilities.
+  `mkfifo`, Python 3 (standard library only), and the usual `awk`, `sort`, `sed`, `grep`,
+  `tr`, `cut`, `wc` utilities.
 - An existing Android SDK selected by `ANDROID_HOME`, or `ANDROID_SDK_ROOT` when
   `ANDROID_HOME` is unset. Its `platform-tools/adb` must be executable.
 - Executable Flutter on `PATH`, or its executable path in `WARDPULSE_FLUTTER_BIN`.
@@ -293,6 +295,134 @@ All of the following are required for a future Pass:
 6. Stable final persistence and work-preservation evidence. Only then may the script print
    Pass, successful phone/watch role/serial identification and the final summary hash.
 
+### Conditional current-summary publication
+
+The existing `wait_for_summary` in [run.sh](run.sh) retains the prelaunch measurement
+boundaries and separate real publication/receipt flags. When no fresh phone publication
+has been observed, it qualifies rendered Dashboard data, opens Settings through its
+visible navigation destination, confirms **Mock data is off without changing it**, and
+seeks **Diagnostics → Send to watch → Sync** by bounded upward content scrolling. There
+is at most one Sync attempt. Publication observed before navigation or at the final
+monitored boundary skips the action; the script never retries Sync. After UI acquisition
+and parsing, event, process and deadline qualification must finish successfully. Both
+accepted events then complete delivery immediately, including just before expiry, without
+further targeting, phone barriers or input-only freshness checks. Publication alone moves
+to distinct-receipt observation and suppresses further targeting and input. The retained
+pre-input boundary also recognizes completion immediately. Encountered process, monitor
+and deadline failures still HOLD, even if both event flags are set. A clipped row/control
+is revealed only far enough for usable bounds, allowing for Flutter's drag threshold at the
+observed display density; seeking stops when the control is usable.
+
+This reaches `_onSettingsSyncWatch` in
+[ward_pulse_app.dart](../../apps/phone_flutter/lib/app/ward_pulse_app.dart), which passes
+owned current data through the existing repository currentness, revision and identity
+guards without calling `repository.load`. It does not force a provider fetch, change
+Mock/preferences/selections, inject a summary, cancel work or use a private app caller.
+A rendered timestamp qualifies the Dashboard route; it does not replace those app guards.
+
+Every input requires fresh boot/UID/PID/start identity, the exact foreground package and
+MainActivity, stable native window frames, the selected page, hierarchy semantics and
+actual viewport bounds. Labels match both text and content descriptions, including
+merged multiline semantics. Navigation and Sync require unique enabled visible controls;
+Sync must belong to its Send to watch row or merged Diagnostics card in the Settings list;
+the card must own the complete Diagnostics label group and its sole action. Scrolling uses
+that qualified list's viewport and moves content upward, avoiding pull-to-refresh. Each scroll
+requires a new capture. Wrong/ambiguous hosts or pages, disabled controls, unknown bounds and
+unresolved obstructions HOLD before input. UI evidence must also be fewer than five clock
+ticks old, counted from the start of its hierarchy capture, once qualification completes and
+again immediately before each tap or scroll. An older snapshot is discarded without input;
+its target is never reused or re-stamped. The next pass requalifies from a new complete
+capture under the same original deadline, and a discarded scroll consumes no scrolling bound.
+Persistent staleness therefore ends in the original-deadline HOLD without input. Five ticks
+is a deliberate engineering bound, not Android timing guidance. Its tradeoff is that input
+may act on a capture up to four integral ticks old, rather than discarding every capture
+whose acquisition, qualification and pre-input work cross three or four tick boundaries. It
+claims neither an atomic native snapshot nor a passing native gate, and it is not raised
+further to obtain one. Retention's separate three-tick gap rule is unchanged. Native
+frames from the full WindowManager service bracket the hierarchy capture; per-window records
+are qualified separately from global/display records. Every surfaced visible window other
+than the focused host is an obstruction, whatever its type. A tap uses the center of its hit
+area: the semantic box less only a fringe, where an obstruction spans one whole side and
+stops short of the box's would-be center. Any other overlap stays in the hit area and blocks
+the tap. The hit area needs at least 24 pixels in each dimension and only places the tap; it
+establishes no uniqueness, ownership, association or visibility. Frame/display containment
+and unrelated-control checks still use the whole semantic box, and scroll strips and the
+Mock proof remain whole-box. Raw UI/native captures stay in owned scratch, and owned device
+hierarchy staging is removed during cleanup. Python 3 parses these bounded observations
+using its standard library; no new package is installed.
+
+Readiness, navigation, scrolling, stale-evidence requalification, Sync and both event
+observations consume the **same original 30-second delivery deadline**, including
+subprocess kill grace. The prospective 300-second native-work exclusion and
+observation-age margin remain unchanged; due or unknown work still HOLDs before delivery.
+All 51 connected cases, canonical cohort, normal builds, preserving `install -r`,
+lifecycle/cold-load/quiet handoffs, UID coverage, logical/native work, exact selections and
+protected Push/Legacy identities remain required.
+
+Delivery HOLD diagnostics run before cleanup, using retained parent-shell facts rather
+than new reads after expiry: `FRESH_PUBLICATION` and `FRESH_RECEIPT` separately, finite
+phase, elapsed/remaining time, process-proof status, Sync-attempt flag, the number of stale
+UI snapshots discarded before input (`stale_ui_snapshots`) and each role's last completed
+event boundary (`cursor@tick`). A nonzero count keeps persistent staleness identifiable
+behind the deadline HOLD; discard records below attribute each aged capture. Coverage is
+`CompleteThroughBoundary`, `Incomplete` for an unfinished drain, or `Unknown` when no
+boundary is available. Completion through a recorded boundary is not coverage after it. A
+zero flag means no accepted observation; missing/incomplete coverage and causal absence
+remain Unknown. Settings result text, equal payloads and saved-summary hashes establish
+neither DataClient success nor a Wear `TYPE_CHANGED` receipt. Both distinct real events
+remain mandatory. Historical HOLD causes remain undiagnosed; these changes claim no
+HOST/device or finding6 acceptance. Failed delivery-diagnostic writes preserve the failure
+and let owned cleanup continue. The delivery report, a delivery HOLD reason and owned
+staging-removal failure reports each use a bounded, best-effort write, so a closed or full
+undrained stderr cannot stall staging cleanup or monitor retirement. A failed removal
+still fails the run and is never reported as removed.
+
+Each discarded snapshot keeps one closed `Delivery UI discard:` record in parent-shell
+memory; only the delivery report writes these records. A record names the host
+PID/invocation number, route (`dashboard`, `mock` or `sync`) and check site
+(`after_qualification`, `before_tap` or `before_scroll`). It then gives the original capture
+tick and the durations of `acquisition` (hierarchy and NativeAfter reads), `parse` (target
+parser), `qualification` (both roles' event/process proof and its deadline check) and
+`pre_input` (the phone event barrier, process proof and deadline check before a tap or
+scroll), followed by the checking tick, the computed age and the original deadline's
+remaining ticks at that check. All use the integral `SECONDS` clock of the age check: each
+duration counts the tick boundaries its stage crossed, so a short stage reads 0 or 1, and a
+discard's durations sum to its age. An unreached stage, such as `pre_input` for a
+post-qualification discard, remains `Unknown`. A HOLD or other failing exit during a UI
+attempt, whose route is then the reported phase, adds one `Delivery UI attempt:` line with
+the same facts so far (`captured=Unknown` before the capture tick), its `unfinished` stage,
+that stage's start tick and the remaining ticks there. That stage is `preparation` before
+the capture, a measured stage, or `input` after a passing input check, and it never
+receives a duration. An attempt publishes its route only after its new invocation, facts
+and stage, and one assignment command publishes each capture tick, stage change or discard.
+Bash never runs a signal trap inside one assignment command, so a report after an
+interrupting signal never pairs a route with another attempt's facts, or a closed duration
+with that unfinished stage. Each discard needs its own capture at least five ticks old, so
+the original budget bounds these records to six. Retention adds no write, pacing or retry
+inside the delivery loop and changes no predicate, deadline, recapture or input. A later
+complete ordinary HOST gate passed all 51 Wear cases, both preserving updates and the quiet
+handoff, then held with `Delivery deadline expired.` after six discarded snapshots, without
+accepted publication, receipt or Sync attempt. Its captures, routes, check sites, ages and
+stage durations remain Unknown. These records are prospective: they neither explain that
+HOLD nor establish runtime freshness acceptance, and a fresh complete ordinary HOST gate
+remains required.
+
+UI qualification also retains one failure record on stderr before cleanup. Literal guard
+identities distinguish predicate rejection from acquisition, parse and subprocess failures.
+The record includes the finite UI phase, host PID/invocation number, read and producer
+identity (with producer PID when measured), actual available exit/timeout status and an
+allowlisted error class. Parser facts include measured presence/unique-match counts,
+owner and semantic matches, validity booleans and available target, tap hit-area,
+viewport and blocking rectangles. A tap's target is its whole semantic box, while its
+obstruction overlap count and blocking window refer to its hit area; unmeasured facts remain
+`Unknown`. Control facts name their measured scope; rejecting a disabled Settings list
+cannot retain the navigation control's enabled state. UID acquisition retains the ADB
+exit/timeout status, while bounded UID inventory rejection is a separate predicate failure.
+The parser keeps stdout action-only. Records contain no raw capture, arbitrary
+label or exception payload, are capped at 2,048 detail characters and use a bounded,
+best-effort writer. Reporting failure neither retries input nor prevents owned staging
+removal and monitor retirement.
+
 ADB calls have five-second deadlines; discovery has a 30-second deadline. Flutter has
 900 seconds, full Wear instrumentation 1,200 seconds, and each install 90 seconds.
 Lifecycle observation loops have 15-second deadlines in addition to bounded background,
@@ -304,7 +434,14 @@ temporary pipes and sanitized event records are removed. Reader compilation and 
 conversion each have 30 seconds. Each observer has a six-second internal watchdog, a
 seven-second ADB timeout, a four-second observation budget and an eight-second host
 protocol deadline. Owned device staging is removed before completion; cleanup failures
-cannot produce Pass.
+cannot produce Pass. Whenever `timeout` is available, an ordinary or delivery HOLD writes
+its reason with the bounded, best-effort writer of the delivery diagnostics, so a closed or
+full undrained stderr can neither keep that failure from reaching owned cleanup nor change
+its status. Cleanup's reader-retirement and UID-reconciliation HOLDs use the same writer
+after their unchanged eight-second loops: unproved retirement still retains device staging,
+fails the run and reaches monitor and scratch retirement.
+Without `timeout`, a run fails before any owned cleanup exists and prints its HOLD reason
+directly.
 No subprocess failure can be overridden to obtain Pass.
 
 ## Preservation and bounded work evidence
@@ -348,7 +485,13 @@ CANCELLED=5; CONNECTED=1; exponential/linear backoff=0/1). The generated legacy 
 HOST must reconcile the resolved 2.11.2 generated schema/converters with the installed
 APK marker, current identity, columns and actual values. Unknown versions/schemas HOLD. It joins
 only the two logical WorkNames through WorkSpec to SystemIdInfo, matching both ID and
-generation. At most 32 rows and 12 KiB of metadata leave the reader. Allowed fields are
+current generation; an older mapping's job ID never substitutes for the current mapping.
+WorkManager 2.11.2's SystemIdInfo foreign key references WorkSpec by ID alone. UPDATE can
+legitimately retain an older-generation mapping. Every mapping still requires a canonical
+work ID and integer generation/job metadata in 0..2147483647; duplicate mapping keys or job
+IDs, invalid referenced generations and ambiguous WorkSpec IDs HOLD. A genuinely missing
+work ID remains `ORPHAN_SYSTEM_ID`; a future mapping generation gives `FUTURE_SYSTEM_ID`.
+At most 32 work rows and 12 KiB of metadata leave the reader. Allowed fields are
 logical name, opaque ID, worker, state, interval/flex, initial delay, network/constraint
 flags, generation/job ID, enqueue/schedule, attempt/period, backoff, override and stop
 markers, including schema24's nullable `backoff_on_system_interruptions` (null=-1,
@@ -356,6 +499,268 @@ false=0, true=1), which must remain unchanged for a retained work identity.
 Constraint blobs yield only absence flags; their contents are never exported.
 No input/output/progress, arbitrary tags, accounts, credentials, preferences or whole rows
 are read/exported. All exceptions become fixed, sanitized HOLD categories.
+
+Successful evidence has exactly one `SCHEMA`, `SQLITE`, `TIME`, then `MAPPINGS` record,
+followed by the `WORK` records and the identity-bound `END`. `MAPPINGS total missing current
+older future` contains five canonical decimal integers in 0..2147483647. The four classes
+must sum to the total; missing and future must be zero for acceptance. All counts come from
+the same read-only transaction as the generation-matched projection. The consumer requires
+the current count to equal the number of projected job mappings and rejects missing,
+duplicate, misplaced, unknown, malformed, inconsistent or overflowing evidence.
+
+After a safely completed snapshot rejected for missing/future mappings, the reader emits
+only `MAPPINGS` followed by the corresponding `HOLD` (missing takes precedence), exits 1
+and emits no `END`. After reader retirement and surrounding process/event checks, the
+consumer validates and prints this as **rejected** count-only evidence, then HOLDs without
+advancing the accepted pair. Invalid metadata or failed safety checks emit HOLD without
+counts. Counts never certify quietness or establish the cause of a prior device failure;
+HOST must classify the actual current rows through this guarded path.
+
+The standard-library regressions in [test_work_snapshot.py](test_work_snapshot.py) execute
+the production fixed SQL on neutral in-memory metadata and the production shell/AWK
+consumer. They protect the older/missing distinction, current-generation job selection,
+invalid/ambiguous/mixed metadata and closed count protocol, including rejection diagnostics.
+They also execute the production inventory functions and device-shell body against controlled
+process lists, start reads and absence results. Cases cover reader disappearance between
+listing and lookup and across reconciliation boundaries, strict pre-GO reads, real-app
+disappearance, PID reuse, unknown identities (including another process with the reader
+name), reappearance, malformed/oversized inventories and boot/UID guards. Representative
+rejections (an acquisition timeout with its caller phase, row validation, an app stat read in
+the second traversal, an invalid start value, a changed reader start, a new identity between
+list boundaries, boot continuity and the expected boot) must each exit nonzero with empty
+stdout and retain only their own closed record, without injected rows, stat records or boot
+identities. One rejected pre-update sample inside `update_install` must also reach production
+cleanup through the sampler's ordinary HOLD and the outer update HOLD while a full stderr
+pipe stays open but undrained: reader staging removal, monitor kill/wait and scratch removal
+precede its asserted status 1. Under that open full pipe, two production `work_snapshot`
+failures also reach cleanup with their reader flags still set: unproved absence of the
+handshake PID, and a pre-handshake reader HOLD that leaves a new app-UID identity. A
+controlled clock ends each unchanged eight-second loop after one retry. Staging stays
+retained; monitor kill/wait and scratch removal are asserted before the cleanup summary and
+status 1. The expected predecessor assertion failure, where either HOLD is written directly,
+is the missing monitor kill/wait after that loop. These controlled facts do not reproduce any
+historical HOLD.
+The enclosing reader path must still reject missing END, failed wrapper exit and unproved
+retirement, including during the reader-released separation phase. These sequences need no
+sleeps or timing retries. Run `python3 tools/test-phone-watch-sync/test_work_snapshot.py` to
+print the suite duration. These cheap regressions provide no Java/DEX/device acceptance.
+
+`DeliveryTests` also exercises the existing `wait_for_summary` entry with controlled clocks
+and fake ADB/event effects: accepted rendered data without automatic publication requires
+exactly one guarded Sync after scrolling and then both events; observed publication avoids
+another action; rejected UI guards prevent input; neither/send-only/receipt-only timeouts
+retain independent facts and the original deadline. Lost observations still HOLD with
+incomplete coverage. Acquisition fakes distinguish full-service focus from the windows
+subsection; a merged Diagnostics card must own Sync, and a nearby unrelated button is rejected.
+The one-pixel-clipped reveal uses a high-density display; undersized fake swipes leave
+content stationary, so successful scrolling must exceed the effective drag threshold.
+These tests execute the owning shell functions and UI parser, with no new harness or devices.
+A closed diagnostic stream must also leave owned cleanup and monitor retirement intact,
+including the new UI rejection path and when UI staging removal fails. A full stderr pipe
+left open but undrained must likewise let an expired delivery attempt both owned staging
+removals, keep reader staging `failed` and retire the monitor with status 1. The controlled-clock
+completion witness accepts events during UI qualification or the retained phone boundary,
+finishes proof at tick 29 of the original 30-second budget and makes any unnecessary next
+effect exhaust that budget. Adjacent publication-only and deadline-crossing cases protect
+distinct receipt and strict qualification. An obstructed-target witness uses the owning
+parser/wait and production cleanup, retaining only a trace outside removed scratch; a
+separate UID acquisition-timeout case protects subprocess-status attribution. A full-width
+window over only the Settings control's fringe still allows the guarded tap inside its
+unobstructed interior and then the one Sync; the same window reaching the would-be center
+HOLDs before input, recording both the semantic box and the selected hit area. The
+`test_disabled_scroll_reports_its_own_control_facts` and
+`test_uid_inventory_rejection_is_not_an_acquisition_failure` cases protect scoped control
+facts and the distinction between invalid inventory and failed acquisition. Stale-evidence
+fakes age evidence by five ticks, the first rejected age. One stale-evidence case ages the
+first Mock proof capture during its qualification, then the qualified reveal scroll and Sync
+tap at their pre-input boundaries. The Mock proof performs no input, so only the
+post-qualification check can discard it. Each aged snapshot gives way to a new complete
+capture without input, and delivery still completes with the one Sync inside the original
+budget; a fake input probe flags any input made on aged evidence. When evidence ages before
+every input, no input occurs and delivery HOLDs at the original deadline, reporting the
+discarded-snapshot count. Two attribution cases read that report itself. The persistent
+case retains five `before_tap` records, each with its own invocation and capture tick, five
+ticks of pre-input aging and fewer remaining ticks, then names the sixth attempt's
+unfinished `pre_input` stage without a duration. A window covering the revealed Sync
+control ends the once-stale sequence with its own `target_unobstructed` record after two
+discards: the Mock proof aged during acquisition and never reached pre-input, while the
+reveal scroll aged before input. A third case sends one real TERM from a Bash `DEBUG`
+trap, under function tracing, at the first command boundary where the attempt after the
+first persistent discard has exposed its route. That is where a signal can land between
+publication commands, and the report there reads every transition published before the
+route. The signal trap's exit status 143 reaches the failing EXIT cleanup, which removes
+owned staging, retires the monitor and reports once without a HOLD. The report pairs the
+second attempt's route only with its own invocation, Unknown facts and unfinished
+`preparation`, while the discard keeps its closed record. That one boundary covers the
+discard and attempt-reset publications. No case interrupts inside the capture or
+stage-change publications, so coherence there rests on single-command publication and Bash
+trap semantics. An age-boundary case ages one capture once, after every earlier check has
+accepted it: the first Dashboard capture during acquisition, or qualified evidence before
+the Settings tap or the second reveal scroll. At four ticks, that check accepts the capture
+and the input names its original capture tick, with no discard. At five, that check
+discards it with its own site record and no input uses it; replacement evidence still
+reaches the one Sync before the original-deadline HOLD that withheld events cause.
+Controlled ticks exercise only this representation and reproduce no HOST timing.
+
+After the entire owning run is DONE, its CLI exits, known processes retire and separate
+fresh idle is established, HOST runs the full owning regressions above and the causal
+assertion witnesses against old and fixed source. The only
+source override is `WARDPULSE_SYNC_TEST_SOURCE`; it defaults to the sibling `run.sh` and
+prints the selected source path and SHA256. The completion and rejected-guard witnesses
+use the unchanged Source05 artifact preserved before correction at
+`LOCAL_ARTIFACTS/paired-sync-witness/source05-49bf593b-run.sh`, SHA256
+`49bf593bae4a80f1151fa01a4515c5a7ff087fd3f863d85dfae99e133bc12bee`:
+
+```sh
+sha256sum LOCAL_ARTIFACTS/paired-sync-witness/source05-49bf593b-run.sh
+WARDPULSE_SYNC_TEST_SOURCE="$PWD/LOCAL_ARTIFACTS/paired-sync-witness/source05-49bf593b-run.sh" python3 tools/test-phone-watch-sync/test_work_snapshot.py DeliveryTests.test_qualified_delivery_completes_before_expiry_without_more_effects DeliveryTests.test_obstructed_target_retains_closed_facts_through_cleanup
+python3 tools/test-phone-watch-sync/test_work_snapshot.py DeliveryTests.test_qualified_delivery_completes_before_expiry_without_more_effects DeliveryTests.test_obstructed_target_retains_closed_facts_through_cleanup
+```
+
+Keep the exact test file, witness bodies and arguments unchanged between each old/fixed
+execution, and retain test/source digests, both outputs and actual exit statuses. Expected
+Source05 assertion failures are nonzero delivery status after accepted qualification and a
+missing measured UI failure record. These are expected outcomes, not executed proof.
+
+Keep the original common-entry publication witness separate, with its original baseline:
+
+```sh
+mkdir -p LOCAL_ARTIFACTS/paired-sync-witness
+git show 75fd9dadfe20c6413ae678426462fff1ad84156f:tools/test-phone-watch-sync/run.sh > LOCAL_ARTIFACTS/paired-sync-witness/old-run.sh
+sha256sum LOCAL_ARTIFACTS/paired-sync-witness/old-run.sh
+WARDPULSE_SYNC_TEST_SOURCE="$PWD/LOCAL_ARTIFACTS/paired-sync-witness/old-run.sh" python3 tools/test-phone-watch-sync/test_work_snapshot.py DeliveryTests.test_cached_data_gets_one_sync_then_distinct_events
+python3 tools/test-phone-watch-sync/test_work_snapshot.py DeliveryTests.test_cached_data_gets_one_sync_then_distinct_events
+```
+
+The baseline is the exact `run.sh` from commit
+`75fd9dadfe20c6413ae678426462fff1ad84156f`, SHA256
+`97a35454dfadea160421db5b675daf405fa38984b2c4c5b04925b47ba46cf6b5`.
+Verify that digest before comparison and retain both command outputs and exit statuses.
+The expected old-source assertion is zero Sync actions versus one required; the fixed
+source must satisfy the identical assertions and exit zero. Missing helpers, setup/parser
+errors and historical HOLDs do not establish assertion RED. No old behavior is repaired
+or adapted for the witness.
+
+The fringe hit-area correction has its own measured predecessor, the unchanged
+pre-correction `run.sh` preserved at
+`LOCAL_ARTIFACTS/paired-sync-witness/fringe-5cdc024a-run.sh`, SHA256
+`5cdc024aaafc8fe3c630edaf190fcdfdaf02209e9214feec2a25ad9fe169956d`. Neither baseline above
+proves this case. Run both fringe cases under the same digest, output and exit-status rules:
+
+```sh
+sha256sum LOCAL_ARTIFACTS/paired-sync-witness/fringe-5cdc024a-run.sh
+WARDPULSE_SYNC_TEST_SOURCE="$PWD/LOCAL_ARTIFACTS/paired-sync-witness/fringe-5cdc024a-run.sh" python3 tools/test-phone-watch-sync/test_work_snapshot.py DeliveryTests.test_fringe_overlap_taps_the_unobstructed_interior DeliveryTests.test_overlap_reaching_the_would_be_center_holds_before_input
+python3 tools/test-phone-watch-sync/test_work_snapshot.py DeliveryTests.test_fringe_overlap_taps_the_unobstructed_interior DeliveryTests.test_overlap_reaching_the_would_be_center_holds_before_input
+```
+
+Expected predecessor assertion failures are no guarded tap for the fringe positive, whose
+record names `target_unobstructed`, and only the missing hit-area fact for the negative,
+which still HOLDs before input. The fixed source must pass both and exit zero. These are
+expected outcomes, not executed proof.
+
+The stale-evidence requalification has its own measured predecessor, the unchanged
+staged-candidate `run.sh` preserved before this correction at
+`LOCAL_ARTIFACTS/paired-sync-witness/stale-d4c16035-run.sh`, SHA256
+`d4c160353c4a8a90e68f1afa450625942aaff13ab83e8f38a6b4790345e33a7c`. None of the baselines
+above proves this case. Run both stale-evidence cases under the same digest, output and
+exit-status rules:
+
+```sh
+sha256sum LOCAL_ARTIFACTS/paired-sync-witness/stale-d4c16035-run.sh
+WARDPULSE_SYNC_TEST_SOURCE="$PWD/LOCAL_ARTIFACTS/paired-sync-witness/stale-d4c16035-run.sh" python3 tools/test-phone-watch-sync/test_work_snapshot.py DeliveryTests.test_stale_evidence_requalifies_from_a_new_complete_capture DeliveryTests.test_persistent_stale_evidence_holds_without_input_at_the_original_deadline
+python3 tools/test-phone-watch-sync/test_work_snapshot.py DeliveryTests.test_stale_evidence_requalifies_from_a_new_complete_capture DeliveryTests.test_persistent_stale_evidence_holds_without_input_at_the_original_deadline
+```
+
+The first-stale-then-fresh case is the causal witness. Its expected predecessor assertion
+failure is zero Sync actions versus one required, because the predecessor HOLDs at the
+first aged snapshot. The persistent case's no-input assertions hold on both sources; its
+expected predecessor assertion failure is the original-deadline expectation, since the
+predecessor HOLDs at its first aged snapshot instead of requalifying until that deadline.
+The fixed source must pass both and exit zero. These are expected outcomes, not executed
+proof. The controlled clocks do not reconstruct the retained HOST HOLD, whose target, hit
+area, captured tick and firing age check remain Unknown.
+
+The open-backpressure liveness correction is a separate check, not one of the witness
+families above. Its predecessor is the unchanged candidate `run.sh` preserved before the
+correction at `LOCAL_ARTIFACTS/paired-sync-witness/bounded-report-e9eed4e7-run.sh`, SHA256
+`e9eed4e7503e374b009be8f480b0468174ab40fc47f1936459ecc2d9e3bce423`. Run it under the same
+digest, output and exit-status rules:
+
+```sh
+sha256sum LOCAL_ARTIFACTS/paired-sync-witness/bounded-report-e9eed4e7-run.sh
+WARDPULSE_SYNC_TEST_SOURCE="$PWD/LOCAL_ARTIFACTS/paired-sync-witness/bounded-report-e9eed4e7-run.sh" python3 tools/test-phone-watch-sync/test_work_snapshot.py DeliveryTests.test_undrained_stderr_cannot_stall_failed_delivery_cleanup
+python3 tools/test-phone-watch-sync/test_work_snapshot.py DeliveryTests.test_undrained_stderr_cannot_stall_failed_delivery_cleanup
+```
+
+The expected predecessor assertion failure is a missing delivery UI staging removal attempt
+in an empty trace: its first unbounded delivery-report write blocks on the full pipe before
+cleanup starts, until the test's five-second subprocess bound ends that run. Cleanup effects
+are asserted before the exit status, so the bound alone cannot supply this failure. The
+fixed source must pass and exit zero. These are expected outcomes, not executed proof.
+
+The ordinary process-rejection liveness correction is another separate check. Its
+predecessor is the unchanged candidate `run.sh` preserved before the correction at
+`LOCAL_ARTIFACTS/paired-sync-witness/ordinary-process-bbcfadd0-run.sh`, SHA256
+`bbcfadd0956904a78056144cabf58cf8d7497714b7533d023bcdd1f82b250334`. None of the baselines
+above proves this case. Run it under the same digest, output and exit-status rules:
+
+```sh
+sha256sum LOCAL_ARTIFACTS/paired-sync-witness/ordinary-process-bbcfadd0-run.sh
+WARDPULSE_SYNC_TEST_SOURCE="$PWD/LOCAL_ARTIFACTS/paired-sync-witness/ordinary-process-bbcfadd0-run.sh" python3 tools/test-phone-watch-sync/test_work_snapshot.py InventoryTests.test_undrained_stderr_cannot_stall_process_rejection_cleanup
+python3 tools/test-phone-watch-sync/test_work_snapshot.py InventoryTests.test_undrained_stderr_cannot_stall_process_rejection_cleanup
+```
+
+The expected predecessor assertion failure is a missing reader staging removal attempt
+after exactly one rejected sample. Its bounded `Process identity:` write ends, but the
+sampler's unbounded ordinary HOLD write blocks on the full pipe before the outer update
+HOLD and cleanup, until the five-second subprocess bound ends that run; closing the pipe
+then ends the blocked subshell. Cleanup effects are asserted before the exit status, so
+the bound alone cannot supply this failure, and a missing or repeated sample, an
+unexpected effect or a Python error is a setup failure instead. The fixed source must pass
+and exit zero. These are expected outcomes, not executed proof.
+
+The stale-discard attribution has its own measured predecessor, the unchanged candidate
+`run.sh` preserved before this correction at
+`LOCAL_ARTIFACTS/paired-sync-witness/delivery-attribution-934a7784-run.sh`, SHA256
+`934a778446781c10e331b62bb03bdbb915c12f6aca522dfac830f4294741ac66`. None of the baselines
+above proves this case. Run both attribution cases under the same digest, output and
+exit-status rules:
+
+```sh
+sha256sum LOCAL_ARTIFACTS/paired-sync-witness/delivery-attribution-934a7784-run.sh
+WARDPULSE_SYNC_TEST_SOURCE="$PWD/LOCAL_ARTIFACTS/paired-sync-witness/delivery-attribution-934a7784-run.sh" python3 tools/test-phone-watch-sync/test_work_snapshot.py DeliveryTests.test_persistent_stale_discards_retain_each_capture_and_the_unfinished_stage DeliveryTests.test_stale_discards_retain_their_check_site_and_aged_stage
+python3 tools/test-phone-watch-sync/test_work_snapshot.py DeliveryTests.test_persistent_stale_discards_retain_each_capture_and_the_unfinished_stage DeliveryTests.test_stale_discards_retain_their_check_site_and_aged_stage
+```
+
+Both sources reach the same deadline HOLD after five discards, and the same
+`target_unobstructed` rejection after two, without a Sync. The expected predecessor
+assertion failures are only the missing `Delivery UI discard:` records: zero versus five,
+and zero versus two. A missing helper, setup error or subprocess bound is a setup failure
+instead. The fixed source must pass both and exit zero. These are expected outcomes, not
+executed proof, and neither case reconstructs the six historical discards.
+
+The five-tick UI age bound has its own measured predecessor, the unchanged pre-revision
+`run.sh` blob `7e0e8615913177969d428b34bfab2fd60e69c441`, SHA256
+`cf7d43a9da521425c19a1073403d64a25859a24b4587c901a94f6fc4c4089d50`, which applies a
+three-tick bound at the same checks. None of the baselines above proves this case. The
+existing override reads that blob once from standard input, so no baseline copy is written.
+Run it under the same digest, output and exit-status rules:
+
+```sh
+git cat-file blob 7e0e8615913177969d428b34bfab2fd60e69c441 | sha256sum
+git cat-file blob 7e0e8615913177969d428b34bfab2fd60e69c441 | WARDPULSE_SYNC_TEST_SOURCE=/dev/stdin python3 tools/test-phone-watch-sync/test_work_snapshot.py DeliveryTests.test_each_age_check_accepts_four_ticks_and_discards_five
+python3 tools/test-phone-watch-sync/test_work_snapshot.py DeliveryTests.test_each_age_check_accepts_four_ticks_and_discards_five
+```
+
+The expected predecessor assertion failures are only the three age-4 subtests' missing input
+on the original capture: each check discards that capture and a replacement receives the
+input. The age-5 subtests pass on both sources. A missing helper, setup error, wording
+difference or subprocess bound is a setup failure instead. The fixed source must pass and
+exit zero. These are expected outcomes, not executed proof.
+
+HOST must subsequently run complete ordinary `just test-phone-watch-sync` with the existing
+preservation and cleanup contracts; regressions and Native checks alone do not establish
+paired acceptance. These executions remain pending until actual HOST evidence exists.
 
 The projection uses explicit `SQLiteDatabase.OPEN_READONLY | NO_LOCALIZED_COLLATORS` with a
 throwing, nondeleting corruption handler and a short `beginTransactionReadOnly` transaction.
@@ -424,6 +829,51 @@ under the app UID, checks normal exit and `/proc` absence, and reconciles surrou
 processes and events. A separate internal watchdog bounds even a lost ADB session. An
 observation-induced app start, publication or work change cannot be concealed as reader
 activity or phone absence. Unproved observer retirement or scoped cleanup is HOLD.
+
+Before GO, inventory verification is strict. Only after GO does the existing inventory
+account separately for the independently attested reader across its repeated before/after
+lists and identity traversals. UID records are validated and bounded before this accounting;
+a live reader must match its attested UID, PID, start and name. A failed reader start read
+permits retirement only with confirmed `/proc` absence. Unreadable-but-present identities,
+changed identity or UID, observed reappearance and another process using the reader name
+remain HOLD. Every other app identity is independently sampled and strictly reconciled.
+The reader-released separation check remains mandatory; tolerating retirement there does
+not accept a work sample. Matching END, normal wrapper exit, actual PID absence and all
+surrounding process/event checks are still required, followed by owned cleanup.
+
+A rejected UID-wide process sample leaves stdout empty and writes one closed
+`Process identity:` record to stderr before the existing HOLDs. It names the role, the owning
+lifecycle action (`none` or, for example, `phone:update`), the caller phase where known
+(`pre-update` or `post-update` around the preserving install, otherwise `Unknown`), the guard,
+the identity traversal (`first`/`second`) and list boundary (`before`/`after`) in progress,
+the subject (`app` or the attested `observer`) and the measured ADB/timeout pipeline status.
+Facts that were not measured are `Unknown`. `uid_input` and `observer_input` reject host
+inputs before any device read. `acquisition` means that no allowlisted device record arrived:
+its status (for example 124 when the ADB bound expires) is the only retained failure fact,
+and a nonzero status alone never establishes a race. The device guards are `boot_read`,
+`list_read`, `list_size`, `list_rows`, `observer_reappeared`, `stat_read`, `start_value`,
+`observer_start`, `observer_present`, `boundary_mismatch`, `traversal_mismatch` and
+`boot_continuity` (the final boot identity was unreadable or different); the device exits
+with status 1 after each. `expected_boot` is the separate host comparison with the bound
+boot after a successful read, so its status is 0. The device discards the stderr of its
+process-list, stat and boot reads. The record contains no list, stat record, boot identity,
+PID, start tick, process name, command line or environment. It uses the bounded, best-effort
+writer of the delivery diagnostics, and so do the existing HOLDs that follow it before
+cleanup, including the outer `update_install` HOLD: a failed or blocked write neither changes
+the failure nor delays cleanup and retirement. Process predicates, bounds and successful
+output are unchanged.
+
+The 2026-10-31 inventory failure remains historical HOLD: later successful cleanup does
+not reconstruct that inventory, exclude intervening reuse/app movement or supply its
+undrained END. This repair and its regressions claim neither an atomic snapshot nor zero
+races or completed device acceptance. A fresh complete ordinary HOST gate remains required.
+
+A later ordinary HOST gate completed all 51 Wear tests, then held after the preserving phone
+update. It retained only `Process identity read failed or raced.` and
+`Cannot observe post-update processes.` Its failed acquisition, list traversal, PID/stat
+sample and rejection remain Unknown, and later process observations cannot reconstruct that
+sample. The record above is prospective. It neither explains that HOLD nor establishes an
+app, race or Runner defect; a fresh complete ordinary HOST gate remains required.
 
 Logical work samples bracket full instrumentation, both updates, each initial death/launch,
 phone separation and the retention Wear death/relaunch, and completion. They preserve the

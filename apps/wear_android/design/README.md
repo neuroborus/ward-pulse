@@ -23,6 +23,13 @@ zero, ambient, positive fractions rounded to zero, zero credits, an unavailable 
 with a known survivor, and an exhausted budget. Their filenames and generated previews are
 listed in the same baseline table.
 
+The 2026-10-28 adaptive revision adds `round-1-plan-split`,
+`round-2-plan-two-pairs` and `round-{1,2}-budget-{d,7d,m}` with corresponding
+`round-ambient-{1,2}-budget-{d,7d,m}` boards and generated previews. Existing one/two-band
+boards widen; all N3 art stays unchanged. `adaptiveVariants` and `wffFiles` in the owning
+generator define the complete set. These fits are review art; native/transition acceptance
+and final public captures remain Pending under the dated baseline.
+
 ## App Glance legend (locked)
 
 **Baseline locked 2026-07-26** — accepted; see

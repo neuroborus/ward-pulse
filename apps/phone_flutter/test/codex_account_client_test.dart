@@ -7,6 +7,163 @@ import 'package:ward_pulse_phone/providers/codex_account_store.dart';
 import 'package:ward_pulse_phone/sync/codex_account_client.dart';
 
 void main() {
+  test(
+    'retains raw qualification, slot validity and repeated bucket evidence',
+    () async {
+      final raw =
+          jsonDecode(
+                File(
+                  '../../fixtures/providers/codex/recovery_usage_raw.json',
+                ).readAsStringSync(),
+              )
+              as Map<String, dynamic>;
+      final qualified = await _normalizeUsage(raw);
+      final expected = jsonDecode(
+        File(
+          '../../fixtures/providers/codex/recovery_report.json',
+        ).readAsStringSync(),
+      );
+      expect(qualified, expected);
+      final singletonRaw = jsonDecode(jsonEncode(raw)) as Map<String, dynamic>;
+      (singletonRaw['rate_limit'] as Map)['secondary_window'] = null;
+      singletonRaw.remove('additional_rate_limits');
+      final singleton = await _normalizeUsage(singletonRaw);
+      expect(
+        singleton,
+        jsonDecode(
+          File(
+            '../../fixtures/providers/codex/recovery_singleton_report.json',
+          ).readAsStringSync(),
+        ),
+      );
+
+      final root = raw['rate_limit'] as Map<String, dynamic>;
+      for (final state in ['null', 'omitted', 'malformed']) {
+        if (state == 'omitted') {
+          root.remove('secondary_window');
+        } else {
+          root['secondary_window'] =
+              state == 'null' ? null : {'used_percent': 'bad'};
+        }
+        final result = await _normalizeUsage(raw);
+        final main = (result['rateLimits'] as Map)['rateLimits'] as Map;
+        expect(main['secondary'], isNull);
+        expect((main['evidence'] as Map)['secondary'], state);
+        expect((main['evidence'] as Map)['allowed'], isTrue);
+      }
+      root['allowed'] = 'true';
+      final additional = raw['additional_rate_limits'] as List;
+      additional.add(additional.first);
+      final collided = await _normalizeUsage(raw);
+      final limits = collided['rateLimits'] as Map;
+      final main = limits['rateLimits'] as Map;
+      final spark = (limits['rateLimitsByLimitId'] as Map)['spark'] as Map;
+      expect((main['evidence'] as Map)['allowed'], isNull);
+      expect((spark['evidence'] as Map)['collision'], isTrue);
+      expect((spark['evidence'] as Map)['loss'], isTrue);
+      expect(limits['unknownFeatures'], isTrue);
+      expect((spark['primary'] as Map)['usedPercent'], 10);
+
+      final first =
+          jsonDecode(jsonEncode(additional.first)) as Map<String, dynamic>;
+      final later =
+          jsonDecode(jsonEncode(additional.first)) as Map<String, dynamic>;
+      (first['rate_limit'] as Map).remove('secondary_window');
+      ((later['rate_limit'] as Map)['primary_window'] as Map)['used_percent'] =
+          90;
+      raw['additional_rate_limits'] = [first, later];
+      final partialDuplicate = await _normalizeUsage(raw);
+      final retainedLimits =
+          (partialDuplicate['rateLimits'] as Map)['rateLimitsByLimitId'] as Map;
+      final retained = retainedLimits['spark'] as Map;
+      expect((retained['primary'] as Map)['usedPercent'], 10);
+      expect((retained['secondary'] as Map)['usedPercent'], 100);
+      expect((retained['evidence'] as Map)['secondary'], 'valid');
+      expect((retained['evidence'] as Map)['collision'], isTrue);
+      expect((retained['evidence'] as Map)['loss'], isTrue);
+
+      first['rate_limit'] = null;
+      final missingDuplicate = await _normalizeUsage(raw);
+      final restoredLimits =
+          (missingDuplicate['rateLimits'] as Map)['rateLimitsByLimitId'] as Map;
+      final restored = restoredLimits['spark'] as Map;
+      expect((restored['primary'] as Map)['usedPercent'], 90);
+      expect((restored['secondary'] as Map)['usedPercent'], 100);
+      expect((restored['evidence'] as Map)['collision'], isTrue);
+      expect((restored['evidence'] as Map)['loss'], isTrue);
+    },
+  );
+
+  test(
+    'retains reserved root collisions in both report representations',
+    () async {
+      const primary = {
+        'used_percent': 10,
+        'limit_window_seconds': 18000,
+        'reset_at': 1784480400,
+      };
+      const secondary = {
+        'used_percent': 100,
+        'limit_window_seconds': 604800,
+        'reset_at': 1784980800,
+      };
+      for (final firstSlot in ['primary', 'secondary']) {
+        final laterSlot = firstSlot == 'primary' ? 'secondary' : 'primary';
+        final raw = {
+          'rate_limit': {
+            'allowed': true,
+            'limit_reached': false,
+            '${firstSlot}_window': primary,
+            '${laterSlot}_window': null,
+          },
+          'additional_rate_limits': [
+            {
+              'metered_feature': 'codex',
+              'rate_limit': {'${laterSlot}_window': secondary},
+            },
+            {
+              'metered_feature': 'codex',
+              'limit_name': 'Ignored root alias',
+              'rate_limit': {
+                'primary_window': {...primary, 'used_percent': 90},
+                'secondary_window': {...secondary, 'used_percent': 5},
+              },
+            },
+          ],
+          'credits': {'has_credits': true, 'balance': '12.5'},
+        };
+        final report = await _normalizeUsage(raw);
+        final limits = report['rateLimits'] as Map;
+        final main = limits['rateLimits'] as Map;
+        final byId = (limits['rateLimitsByLimitId'] as Map)['codex'] as Map;
+        expect(main[firstSlot], {
+          'usedPercent': 10,
+          'windowDurationMins': 300,
+          'resetsAt': 1784480400,
+        });
+        expect(main[laterSlot], {
+          'usedPercent': 100,
+          'windowDurationMins': 10080,
+          'resetsAt': 1784980800,
+        });
+        expect(main['limitId'], 'codex');
+        expect(main['limitName'], isNull);
+        expect(main['evidence'], {
+          'bucketId': 'codex',
+          'allowed': true,
+          'limitReached': false,
+          'primary': 'valid',
+          'secondary': 'valid',
+          'collision': true,
+          'loss': true,
+        });
+        expect(byId, Map<String, dynamic>.from(main)..remove('credits'));
+        expect((main['credits'] as Map)['balance'], '12.5');
+        expect(limits['unknownFeatures'], isFalse);
+      }
+    },
+  );
+
   test('completes the Codex device-code flow', () async {
     final transport = _QueueTransport([
       _jsonResponse({
@@ -377,6 +534,28 @@ void main() {
       );
     },
   );
+}
+
+Future<Map<String, dynamic>> _normalizeUsage(Map<String, dynamic> raw) async {
+  final at = DateTime.utc(2026, 7, 19, 12);
+  final client = CodexAccountClient(
+    transport: _QueueTransport([
+      _jsonResponse(raw),
+      _jsonResponse({
+        'stats': {'daily_usage_buckets': []},
+      }),
+    ]),
+    clock: () => at,
+  );
+  final result = await client.fetchReport(
+    CodexAccountSession(
+      accessToken: _jwt(expiresAt: DateTime.utc(2026, 8)),
+      refreshToken: 'refresh-token',
+      accountId: 'account-1',
+      refreshedAt: at,
+    ),
+  );
+  return jsonDecode(result.reportJson) as Map<String, dynamic>;
 }
 
 final class _QueueTransport implements CodexHttpTransport {

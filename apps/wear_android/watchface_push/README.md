@@ -18,6 +18,12 @@ or PNGs. Both packages retain the explicit `app.wardpulse` complication and laun
 The host's affected complication services trust only these two own face packages through
 `android.support.wearable.complications.SAFE_WATCH_FACES`.
 
+The canonical generator's unsplit N1 backdrop restoration is shared by both packages; it
+does not change signing, versions or delivery. Its new-artifact native edge acceptance and
+separate recovery remain Pending under the
+[retained-extra repair](../../../docs/product/WATCH_RING_DESIGN.md#implementation-repair-2026-10-31--retained-extra-paint).
+Official WFF2 validation still does not replace pinned Push semantic validation.
+
 ## Signing inputs
 
 Root provisions/reuses authorized local identities after the Owner resolves existing keys
@@ -62,23 +68,36 @@ never permission to publish a debug-signed host. See the central
 
 ## Ordinary builds and versions
 
-From `apps/wear_android/`, after private development signing setup, these debug commands
-illustrate N/N+1 upgrade acceptance:
+From `apps/wear_android/`, after private development signing setup, this debug command
+builds the current bundled face:
 
 ```sh
-./gradlew :app:assembleDebug -PwardpulsePushVersionCode=1
-./gradlew :app:assembleDebug -PwardpulsePushVersionCode=2
+./gradlew :app:assembleDebug
 ```
 
-`wardpulsePushVersionCode` currently defaults to 1 and accepts a positive Kotlin/Android integer.
+`wardpulsePushVersionCode` currently defaults to 5 and accepts a positive Kotlin/Android integer.
 It controls the Push package's independent version history, not the Wear host version.
 The [local product bridge](../../../tools/release/README.md#local-version-preparation) advances
 its default by 1 for a genuine product transition, independently of legacy face codes, and
 mirrors the stable product versionName. An unchanged target does not increment it. Keep the
-package/certificate stable and check actual uploaded history before distribution. These
-development examples do not require Push code 2 for the RC: the central
-[0.1.0 version table](../../../docs/product/RELEASE_CHECKLIST.md#release-versions) retains
-Push code 1 while the Wear host uses code 2; every versionName remains 0.1.0.
+package/certificate stable and check actual uploaded history before distribution.
+The [current source versions](../../../docs/product/RELEASE_CHECKLIST.md#release-versions)
+are phone 3/Wear 4/legacy 2/Push 5, all versionName 0.1.0. This guarded integration allocation
+advances only Push's default 3→5, without a release cut. The earlier main-comparison correction
+allocated 2→3. In the adaptive HOST attempt, installing Wear 4 was followed by Push 2 before
+any explicit update; the trigger is unknown. New-Wear4/old-Push1 and explicit 1→2 were not
+observed. Preserve those
+receipts and unobserved 1→2/2→3 manager-update gaps, plus the real 3→4 journal. Preserve the
+installed Round Wear 4/asset 3/Push 4 baseline for the separately admitted capability/guard
+scope. A later explicit normal **Update watch face** 4→5 requires fresh installed hash/signer,
+owned slot, eight choices and quiet-writer proof while Legacy stays active; verify returned
+same-slot identity and separate settled retention. Unexpected advancement stops that witness:
+no code 6, replay, downgrade, reset or invented button success. Bundled installation proves
+no explicit update or activation; retained-Push selection/rendering is a separate HOST operation.
+The [current qualification](../../../docs/product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30)
+retains all six compatibility cells, Root-reviewed forward-only reconciliation for unavailable
+history, the sole Native FINALIZE inventory and all nine deferred HOST duties. Item12 stays
+open and both extras queued; this allocation claims no check, device, public or release result.
 For a release artifact, Root uses the existing guarded recipe from the repository root:
 
 ```sh
@@ -165,6 +184,73 @@ The generated assets and resources participate in AGP's variant source graph. Re
 version, signing, APK byte, validator, client-package, or Java-runtime changes invalidate
 the relevant inputs; a failed validation publishes no bundle. No APK or token is checked in,
 and no runtime validator or separate download helper is used.
+
+## Native integration candidate
+
+This section preserves the historical candidate 4 contract and 3→4 witness procedure, not a
+route to replay against retained Push 4 or deliver Source 5. Keep its flags, instrumentation
+and private journal unchanged. Current target provisioning remains held by the
+[guarded qualification](../../../docs/product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30).
+
+`PrepareNativePushCandidate` in the [host build script](../app/build.gradle.kts) is attached
+only to debug AndroidTest assets when **both** `-PwardpulseNativeCandidate=true` and
+`-PwardpulsePushVersionCode=4` are supplied. A different/missing version with opt-in is
+rejected. It consumes `PrepareDefaultWatchFace.outputDirectory` through the existing signed
+APK/official-validation dependency graph, without an APK/token input property or alternate
+validator. Ordinary builds have no candidate asset source. Returning to ordinary flags removes
+that source from the variant graph; do not install a host built with candidate flags.
+
+`PrepareDefaultWatchFace` also emits `identity.properties` outside the host's assets/resources.
+This minimal producer receipt binds package/code, APK and resource-table SHA-256, separate face
+and host signer hashes, pinned validator hash and token hash. A successful opt-in consumer
+copies the exact APK/token and receipt into generated test assets `native_push_candidate/`.
+Failed producer validation invalidates its whole output; failed consumer packaging removes
+its assets. The AGP source graph tracks these outputs and their producer inputs. No generated
+APK, receipt or token is checked in or printed. Resource equality plus complete installed APK
+byte equality binds the actual candidate; it is not a renderer observation.
+
+The test-local `NativePackage.read` in
+[NativePushState.kt](../app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativePushState.kt)
+uses a bounded, complete installed-path enumeration only to locate the installed Push APK
+and reject splits. Normal target-UID file/archive access supplies its actual full hash,
+package/code/single signer and resource table; candidate/asset receipts never replace that
+evidence. The later resource check uses the same verified installed-file result, without a
+visibility-sensitive application-info lookup. Unavailable archive/signing capability remains
+Pending, independently of candidate validation and file readability.
+
+Candidate 4 is strictly the historical integration input; the current guarded default is 5.
+Wear 4, phone 3, legacy 2 and common versionName 0.1.0 remain; no product release is prepared.
+A non-installing `:app:assembleDebugAndroidTest` may build local dependencies but never authorizes target
+installation. Follow the [stock-runner provisioning order](../../../docs/ANDROID_TOOLCHAIN.md#guarded-push-witness):
+only the test APK is installed before the actual baseline-host SDK witness. Keep the original
+installed host and asset 3 intact through the result and separate settled native evidence.
+Afterward retain intended Push 4, reconcile uncertain results without retry or downgrade,
+restore/verify normal data and retire the instrumentation owner before ordinary rebuilding
+and target provisioning. Test APK provisioning, SDK mutation and later target installation
+are distinct effects and evidence. Actual graph execution and native acceptance remain Pending.
+The SDK result or a retained legacy renderer does not prove retained Push selections. The
+updated Push face's own existing instance and independent actual provider-selection records
+are required; cached delivered-data sources and defaults are not selection records. The baseline
+reader queries the existing complications selection service and requires a sole stable active
+runtime instance before and after that component-scoped query. Unavailable, partial, denied or
+unmapped responses keep dispatch/retention Pending; actual service applicability requires HOST proof.
+Legacy-only evidence cannot complete the pre-replacement witness or admit target installation.
+The harness never creates, activates or reselects a face; the completed run's frozen ban is
+unchanged. The adopted **2026-10-29 post-DONE HOST scope** permits **one** ordinary system-picker
+selection of a pre-existing, configured, owned Push 3 instance on the canonical **Round AVD**
+under the [limited procedure](../../../docs/ANDROID_TOOLCHAIN.md#guarded-push-witness).
+Preserve original host 4/asset 3 through the stock witness; discover authoritative configuration
+after test-only provisioning and before dispatch, then restore the exact original configured
+Legacy selection, settings and normal data after the witness/whole original/owner retirement
+while retaining Push 4. No instance creation, SDK/app activation, new permission or binding/style change is
+included; missing configuration or witness evidence remains Pending.
+
+The later [client probe](../README.md#guarded-complication-client-probe) is test-only and
+requires that completed pre-replacement witness and subsequent ordinary target provisioning.
+It cannot create/activate an instance, bypass permissions or replace SDK-update/ordinary
+datasource evidence with a supplied bitmap. Its access, effective restoration and the full
+item12 matrix remain Pending. Neither that probe nor candidate 4 closes UNKNOWN causality,
+old-Push1 matrix gaps, missing 1→2/2→3 manager evidence or the utility-button gap.
 
 ## Local development acceptance
 

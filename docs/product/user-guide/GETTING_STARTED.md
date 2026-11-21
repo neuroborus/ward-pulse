@@ -8,6 +8,10 @@ You can use the phone without either optional surface.
 
 The WardPulse watch face is a separate package and requires **Wear OS 5 or later**.
 
+For direct APK downloads, choose `WardPulse-V-Android.apk` for your phone and
+`WardPulse-V-WearOS.apk` for the watch app; V is the release version. The optional face uses
+`WardPulse-V-WatchFace-WearOS5Plus.apk`. See [watch setup](/guide/watch#select-and-customize-the-face).
+
 Have an account or reporting credential for at least one supported provider. Connect the
 phone to the internet for sign-in and fresh reporting. WardPulse stores credentials encrypted
 on the phone and uses them directly with their provider; you do not enter them on the watch.
@@ -25,13 +29,11 @@ Read the [privacy policy](/product/privacy-policy) for what is stored and sent b
 5. Return to **Dashboard** to read balances and status. Use **Refresh** at the top, or pull
    down on the list, if you need another reporting attempt.
 
-![Providers connection choices in the light theme.](/screenshots/phone-providers-light.png)
-
-![Providers connection choices in the dark theme.](/screenshots/phone-providers-dark.png)
-
 Plan sign-in and reporting have separate rows under **Providers**. Reporting uses an OpenAI
-organization Admin key, an Anthropic key with organization reporting rights, or a Cursor
-key with team reporting access.
+organization Admin key, a qualifying non-workspace-scoped Anthropic key with organization
+reporting rights, or a Cursor Team key with reporting access. Claude Plan monthly Extra
+usage uses Claude plan sign-in and stays separate from Console API expenses. A personal plan
+alone does not grant organization/team reporting access.
 
 Until a connected provider reports successfully, WardPulse has no usage data to show. A
 provider may also omit a meter that your account does not expose. **Unknown** or **Balance
@@ -47,7 +49,7 @@ and [Troubleshooting](/guide/troubleshooting).
 | Watchface | Choose which known metrics fill the watch's ring slots. |
 | Widget | Choose the phone home widget's independent metric list. |
 | Providers | Connect accounts or keys, reconnect/remove them, and set alert thresholds or budget limits. |
-| Settings | Set refresh cadence and Plan recovery notifications; read sync information and legal information. |
+| Settings | Set refresh cadence, Alert notifications and Plan recovery delivery; read sync information and legal information. |
 
 Next, [set up the watch](/guide/watch), [add a home widget](/guide/widget), or adjust
 [sync and notifications](/guide/sync). WardPulse's budget limits help you track spending;

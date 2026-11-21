@@ -49,7 +49,7 @@ Use this skill before adding or moving project files.
 
 ## Checks
 
-- New files live under the narrowest owning directory.
+- New files live under the narrowest owning directory. Before freezing new owner paths, inspect effective ignore rules with `git check-ignore -v` (use `--no-index` when index state could mask a match); include any necessary minimal ignore exception among the declared owners instead of force-adding or relocating conventional source merely to evade ignores.
 - Empty directories have `.gitkeep` only when the directory is part of the planned structure.
 - Generated outputs are either ignored or placed under the documented generated folder.
 - Naming follows the plan: Rust crates `ward-pulse-*`, Dart package prefix `ward_pulse`, Kotlin package `app.wardpulse` or `io.wardpulse`.

@@ -7,6 +7,7 @@ import '../app/pull_to_refresh_list.dart';
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/status_pill.dart';
 import '../sync/poll_cadence.dart';
+import '../widget/phone_widget_preferences.dart';
 import 'refresh_interval_preferences.dart';
 import 'watch_ring_preferences.dart';
 
@@ -26,9 +27,14 @@ class SettingsScreen extends StatefulWidget {
     required this.refreshInterval,
     required this.onRefreshIntervalChanged,
     required this.ringPreferences,
+    required this.widgetPreferences,
     required this.onSyncWatch,
     required this.recoveryNotificationsEnabled,
     required this.onRecoveryNotificationsChanged,
+    required this.alertNotificationsEnabled,
+    required this.onAlertNotificationsChanged,
+    required this.androidNotificationsEnabled,
+    required this.onOpenNotificationSettings,
     required this.debugDataAvailable,
     required this.mockDataEnabled,
     required this.onMockDataEnabledChanged,
@@ -39,6 +45,10 @@ class SettingsScreen extends StatefulWidget {
 
   /// Whether a plan window coming back may interrupt the reader.
   final bool recoveryNotificationsEnabled;
+  final bool alertNotificationsEnabled;
+  final Future<bool> Function(bool enabled) onAlertNotificationsChanged;
+  final bool? androidNotificationsEnabled;
+  final Future<bool?> Function() onOpenNotificationSettings;
 
   /// Turning it on is also where Android is asked for the permission: only the
   /// foreground can ask, and the poll that posts runs without an Activity.
@@ -47,7 +57,8 @@ class SettingsScreen extends StatefulWidget {
   final RefreshIntervalPreference refreshInterval;
   final Future<void> Function(RefreshIntervalPreference value)
   onRefreshIntervalChanged;
-  final WatchRingPreferences ringPreferences;
+  final WatchRingPreferences? ringPreferences;
+  final PhoneWidgetPreferences? widgetPreferences;
   final Future<void> Function() onSyncWatch;
   final bool debugDataAvailable;
   final bool mockDataEnabled;
@@ -61,12 +72,24 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  bool _settingNotification = false;
+  bool _openingNotificationSettings = false;
   bool _isSyncing = false;
   String? _syncResult;
   int? _dragRefreshMinutes;
 
   Future<void> _syncWatch() async {
-    if (widget.snapshot == null) {
+    final snapshot = widget.snapshot;
+    final preferences = widget.ringPreferences;
+    if (snapshot == null) {
+      return;
+    }
+    if (preferences != null &&
+        watchRingCapacityReason(watchRingSelectionIds(snapshot, preferences)) !=
+            null) {
+      setState(() {
+        _syncResult = watchRingPayloadSubtitle(snapshot, preferences);
+      });
       return;
     }
 
@@ -106,9 +129,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _setRecoveryNotifications(bool value) async {
+  Future<void> _openNotificationSettings() async {
+    if (_openingNotificationSettings) return;
+    setState(() => _openingNotificationSettings = true);
+    var opened = false;
     try {
-      final granted = await widget.onRecoveryNotificationsChanged(value);
+      opened = await widget.onOpenNotificationSettings() == true;
+    } catch (_) {
+      // Navigation failures share retryable feedback below.
+    } finally {
+      if (mounted) setState(() => _openingNotificationSettings = false);
+    }
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open Android notification settings'),
+        ),
+      );
+    }
+  }
+
+  Future<void> _setNotification(
+    bool value,
+    Future<bool> Function(bool) save,
+  ) async {
+    setState(() => _settingNotification = true);
+    try {
+      final granted = await save(value);
       if (value && !granted && mounted) {
         // The reader said yes and Android said no; leaving the switch on
         // without a word would promise an interruption that cannot arrive.
@@ -126,6 +173,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         );
       }
+    } finally {
+      if (mounted) setState(() => _settingNotification = false);
     }
   }
 
@@ -176,6 +225,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
+    final ringPreferences = widget.ringPreferences;
+    final widgetPreferences = widget.widgetPreferences;
+    final colors = Theme.of(context).colorScheme;
     final shownRefreshMinutes = PollCadence.clampMinutes(
       _dragRefreshMinutes ?? widget.refreshInterval.minutes,
     );
@@ -243,16 +295,87 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 16),
         const _SettingsSectionHeader(title: 'Notifications'),
+        if (widget.androidNotificationsEnabled == false)
+          Card(
+            color: colors.errorContainer,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: colors.onErrorContainer,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Notifications are blocked',
+                              style: Theme.of(context).textTheme.titleSmall
+                                  ?.copyWith(color: colors.onErrorContainer),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Allow notifications for WardPulse in Android settings.',
+                              style: TextStyle(color: colors.onErrorContainer),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  TextButton(
+                    onPressed:
+                        _openingNotificationSettings
+                            ? null
+                            : _openNotificationSettings,
+                    style: TextButton.styleFrom(
+                      foregroundColor: colors.onErrorContainer,
+                    ),
+                    child: const Text('Enable notifications'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        Card(
+          child: SwitchListTile(
+            secondary: const Icon(Icons.notifications_outlined),
+            title: const Text('Alert notifications'),
+            subtitle: const Text(
+              'Your configured usage and budget thresholds · rules stay on Providers',
+            ),
+            value: widget.alertNotificationsEnabled,
+            onChanged:
+                _settingNotification
+                    ? null
+                    : (value) => _setNotification(
+                      value,
+                      widget.onAlertNotificationsChanged,
+                    ),
+          ),
+        ),
         Card(
           child: SwitchListTile(
             secondary: const Icon(Icons.notifications_active_outlined),
             title: const Text('Plan recovery'),
             subtitle: const Text(
-              'Tells you when a plan window you had run out of is usable again '
-              '· the only thing WardPulse interrupts for',
+              'Tells you when a plan window you had run out of is usable again',
             ),
             value: widget.recoveryNotificationsEnabled,
-            onChanged: _setRecoveryNotifications,
+            onChanged:
+                _settingNotification
+                    ? null
+                    : (value) => _setNotification(
+                      value,
+                      widget.onRecoveryNotificationsChanged,
+                    ),
           ),
         ),
         const SizedBox(height: 16),
@@ -293,11 +416,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: const Icon(Icons.watch_outlined),
                   title: const Text('Watch summary'),
                   subtitle: Text(
-                    watchRingPayloadSubtitle(snapshot, widget.ringPreferences),
+                    ringPreferences == null
+                        ? 'Unavailable'
+                        : watchRingPayloadSubtitle(snapshot, ringPreferences),
                   ),
-                  trailing: StatusPill(
-                    status: snapshot.watchSummary.status,
-                    tooltip: snapshot.syncTooltip,
+                  trailing:
+                      ringPreferences == null
+                          ? null
+                          : StatusPill(
+                            status: snapshot.watchSummary.status,
+                            tooltip: snapshot.syncTooltip,
+                          ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.widgets_outlined),
+                  title: const Text('Widget summary'),
+                  subtitle: Text(
+                    widgetPreferences == null
+                        ? 'Unavailable'
+                        : phoneWidgetPayloadSubtitle(
+                          snapshot,
+                          widgetPreferences,
+                        ),
                   ),
                 ),
                 if (kDebugMode) ...[

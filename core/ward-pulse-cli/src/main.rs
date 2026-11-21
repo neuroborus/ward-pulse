@@ -51,7 +51,7 @@ mod tests {
     }
 
     #[test]
-    fn mock_alert_dashboard_matches_golden_fixture() {
+    fn mock_alert_dashboard_extends_golden_fixture_with_typed_condition() {
         let snapshot = build_dashboard_snapshot(
             DateTimeUtc::from("2026-06-27T18:42:00Z"),
             vec![mock_provider_budget_warning_snapshot("mock-local")],
@@ -66,10 +66,27 @@ mod tests {
             )]),
         };
 
-        assert_snapshot_matches_fixture(
-            apply_alert_settings(snapshot, &settings),
-            include_str!("../../../fixtures/snapshots/dashboard_alerts.json"),
-        );
+        let actual = serde_json::to_value(apply_alert_settings(snapshot, &settings))
+            .expect("serialize alert snapshot");
+        let mut expected: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../fixtures/snapshots/dashboard_alerts.json"
+        ))
+        .expect("parse legacy alert snapshot fixture");
+        expected["alertConditions"] = serde_json::json!([{
+            "key": {
+                "provider": "mock",
+                "accountId": "mock-local",
+                "connection": "mock.plan",
+                "target": {"kind": "budget", "period": "today"}
+            },
+            "state": "crossed",
+            "alert": {
+                "severity": "warning",
+                "message": "Mock budget for today reached the alert threshold."
+            }
+        }]);
+
+        assert_eq!(actual, expected);
     }
 
     fn assert_snapshot_matches_fixture(snapshot: DashboardSnapshot, fixture: &str) {

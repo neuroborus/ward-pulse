@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 
 import '../settings/debug_data_preferences.dart';
+import '../providers/connection_lifecycle.dart';
 import 'dashboard_models.dart';
 
 typedef DashboardJsonLoader = String Function();
@@ -15,9 +17,12 @@ abstract class DashboardRepository {
 
   Future<bool> isFailureCurrent(DashboardLoadException failure) =>
       isSnapshotCurrent(
-        DashboardSnapshot.empty().withReportingOutcomes(
-          failure.reportingOutcomes,
-        ),
+        DashboardSnapshot.empty()
+            .withConnectionVersions(
+              failure.connectionVersions,
+              snapshotOrdering: failure.snapshotOrdering,
+            )
+            .withReportingOutcomes(failure.reportingOutcomes),
       );
 
   void invalidate() {}
@@ -32,17 +37,43 @@ final class DashboardLoadException implements Exception {
   const DashboardLoadException({
     this.issue = DashboardSyncIssue.dashboardUnavailable,
     this.details,
+    this.syncRejection,
+    this.connectionVersions = const {},
+    this.snapshotOrdering = const {},
   }) : reportingOutcomes = const [];
 
   DashboardLoadException.withOutcomes({
     this.issue = DashboardSyncIssue.dashboardUnavailable,
     this.details,
+    this.syncRejection,
     required Iterable<ConnectionReportingOutcome> reportingOutcomes,
-  }) : reportingOutcomes = List.unmodifiable(reportingOutcomes);
+    Map<String, Map<String, String>> connectionVersions = const {},
+    Map<String, SnapshotOrdering> snapshotOrdering = const {},
+  }) : reportingOutcomes = List.unmodifiable(reportingOutcomes),
+       connectionVersions = Map.unmodifiable({
+         for (final entry in connectionVersions.entries)
+           entry.key: Map<String, String>.unmodifiable(entry.value),
+       }),
+       snapshotOrdering = Map.unmodifiable(snapshotOrdering);
 
   final DashboardSyncIssue issue;
   final String? details;
+  final ConnectionRejection? syncRejection;
   final List<ConnectionReportingOutcome> reportingOutcomes;
+  final Map<String, Map<String, String>> connectionVersions;
+  final Map<String, SnapshotOrdering> snapshotOrdering;
+
+  DashboardLoadException withConnectionVersions(
+    Map<String, Map<String, String>> versions, {
+    Map<String, SnapshotOrdering>? snapshotOrdering,
+  }) => DashboardLoadException.withOutcomes(
+    issue: issue,
+    details: details,
+    syncRejection: syncRejection,
+    reportingOutcomes: reportingOutcomes,
+    connectionVersions: versions,
+    snapshotOrdering: snapshotOrdering ?? this.snapshotOrdering,
+  );
 
   @override
   String toString() => issue.message;
@@ -66,19 +97,38 @@ final class RustDashboardRepository extends DashboardRepository {
 }
 
 typedef DebugDashboardJsonLoader = String Function(int seed);
+typedef DatedDebugDashboardJsonLoader =
+    String Function(int seed, String anchor);
+
+String _loadDatedDebugDashboardJson(int seed, String anchor) =>
+    loadDebugDashboardSnapshotJson(seed, captureAnchor: anchor);
 
 /// Debug Mock data: full multi-provider fixture dashboard.
 ///
 /// Cached until [invalidate] so automatic sync ticks stay stable; phone refresh
 /// and the Mock data toggle clear the cache and draw a new seed.
+/// A valid debug seed starts a reproducible sequence instead of time-based seeds.
 final class DemoDashboardRepository extends DashboardRepository {
   DemoDashboardRepository({
     this.loadDebugDashboardJson = loadDebugDashboardSnapshotJson,
+    this.loadDatedDebugDashboardJson = _loadDatedDebugDashboardJson,
     this.seedForLoad,
-  });
+    String? debugSeed,
+    String? debugAnchor,
+    bool debugMode = kDebugMode,
+  }) : _captureAnchor = debugMode ? debugAnchor : null {
+    if (debugMode &&
+        debugSeed != null &&
+        !debugSeed.contains(RegExp(r'[^0-9]'))) {
+      _nextSeed = int.tryParse(debugSeed);
+    }
+  }
 
   final DebugDashboardJsonLoader loadDebugDashboardJson;
+  final DatedDebugDashboardJsonLoader loadDatedDebugDashboardJson;
   final int Function()? seedForLoad;
+  final String? _captureAnchor;
+  int? _nextSeed;
   DashboardSnapshot? _cached;
 
   @override
@@ -88,9 +138,15 @@ final class DemoDashboardRepository extends DashboardRepository {
       return cached;
     }
     try {
-      final seed = seedForLoad?.call() ?? DateTime.now().microsecondsSinceEpoch;
+      final seed =
+          _nextSeed ??
+          seedForLoad?.call() ??
+          DateTime.now().microsecondsSinceEpoch;
+      final anchor = _captureAnchor;
       final snapshot = DashboardSnapshot.fromJsonString(
-        loadDebugDashboardJson(seed),
+        anchor == null
+            ? loadDebugDashboardJson(seed)
+            : loadDatedDebugDashboardJson(seed, anchor),
       );
       _cached = snapshot;
       return snapshot;
@@ -101,6 +157,10 @@ final class DemoDashboardRepository extends DashboardRepository {
 
   @override
   void invalidate() {
+    final seed = _nextSeed;
+    if (_cached != null && seed != null) {
+      _nextSeed = seed == 9223372036854775807 ? 0 : seed + 1;
+    }
     _cached = null;
   }
 }

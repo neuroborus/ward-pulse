@@ -365,6 +365,28 @@ both `4` and `3` open the launcher, and `4` from the launcher lands back on the 
 keys leave you stranded in the launcher, `am force-stop com.google.android.wearable.sysui`
 restarts the system UI on the watch face.
 
+**Measured AVD-only editor workarounds, 2026-11-01/04.** These are bounded observations on
+canonical Round emulator-5556, 384×384/API36, not guarantees for another device or version.
+Periodic `adb -s "$WEAR_SERIAL" shell input keyevent 0` (`KEYCODE_UNKNOWN`) kept an editor open
+across 20 seconds on Nov 1, but a later 120-second holder sent 59 keys without preventing picker
+expiry; a fresh Edit guard found no target after an 18.639-second handoff. `screen_off_timeout`
+was already 2147483647 and power Awake; no OS setting changed, and the picker timer/cause is unproved.
+Prepare bounded control and its owned stop before transient entry; qualify the current canonical
+serial, viewport, actual SysUI host/page and fresh visible target rather than trusting the holder.
+Keep holder observations to foreground metadata and serialize UIAutomator transactions with each
+other. A prior concurrent-dump holder coincided with capture exit 137; that is a retained failure,
+not a proved cause. Retain actual command support, leaf result and failed predicate before diagnosis.
+After the selected device's `input` help confirms `motionevent DOWN x y` and `motionevent CANCEL x y`,
+a temporary DOWN→CANCEL pair at the current viewport centre, with no UP, is an observed alternative.
+Serialize each complete pair with semantic navigation through the same scoped host input lock;
+own the exact holder, its deadline and failure-safe cancellation. On Nov 4, a holder with a
+180-second deadline sent 51 pairs; an 18.319-second picker→Edit handoff succeeded, then editor/chooser
+navigation and Day restoration. This neither guarantees retention nor replaces fresh page/image guards.
+Stop owned input, await actual termination and retire its identity before Sleep/AMBIENT and before
+ending work; leave no background input or held touch. Never extend either workaround to a physical
+phone or watch, change persistent OS settings for it, or treat an unsupported command/unknown guard
+as permission to continue.
+
 To put a chosen summary on the face, write the app's prefs and then **start the app once**:
 
 ```sh
@@ -386,6 +408,78 @@ which looks like a rendering bug rather than an empty payload; start the app onc
 directory exists. And reinstalling the **face** package resets its slots the same way, so seed
 after the install, not before.
 
+**Controlled summary cases — debug Wear AVD only.** Verify the explicit ADB serial's canonical
+AVD identity with `emu avd name` and use reviewed mock XML matching the actual summary schema.
+Before replacement, preserve live bytes opaquely in a collision-free app-private device file
+at mode 600; keep only hashes, original mode/UID/GID and size on the host. Preserve the original
+file's metadata (660 in the measured cases), not the backup's mode. Leave SharedPreferences
+`.bak`/pending files untouched; do not erase them to force a quiet writer.
+
+Record the actual peer and exact owned mappings first. In the historical paired Round pilot,
+radio switches did not isolate its ADB bridge; removing its observed Wear `tcp:5601` reverse
+and using [the existing connection refresh](#restarting-a-paired-emulator-set) proved disconnection.
+That is not a current guarantee: this route requires a fresh disconnected-peer observation.
+Restore the exact mapping and refresh on cleanup. An unpaired Square with no reverse and no
+active peer must stay unpaired; do not create a mapping or require a connected peer on cleanup.
+Leave phone forwarding, jobs, settings and pairing alone. Neither route applies to physical devices.
+
+**2026-11-03 paired Round alternative — exclude the single listener.** A qualified own-UID
+PackageManager round trip on normal DEBUG Main can support this manual XML route while the
+actual peer remains connected. Requalify installed Source: the sole normal summary writer is
+[`WatchSummaryListenerService`](../apps/wear_android/app/src/main/java/app/wardpulse/wear/sync/WatchSummaryListenerService.kt)
+calling `WatchSummaryStore.saveEncoded`; Main startup and complication providers only read.
+If another writer exists, HOLD. Preserve OS/bridge state and record the exact raw component
+override separately from application state. DEFAULT inferred from a complete per-user override
+block must be labelled inferred; it is not a typed pre-getter. Do not normalize it to ENABLED.
+
+Before toggling, arm failure-safe exact-state undo and qualify the current app UID/caller with
+`adb -s "$WEAR_SERIAL" shell run-as app.wardpulse --user 0 id`. Use only the qualified own-UID
+route; the ordinary Shell component setter was denied. The existing disable command is:
+
+```sh
+adb -s "$WEAR_SERIAL" shell run-as app.wardpulse --user 0 /system/bin/cmd package disable \
+  --user 0 app.wardpulse/app.wardpulse.wear.sync.WatchSummaryListenerService
+```
+
+Require leaf exit0 with the expected getter-after, disabled override and effective service exclusion.
+Before backup or publication, prove all prior app-UID processes/in-flight callbacks retired,
+no summary `.bak`/pending work and three stable XML hashes. Setter success or absent service
+alone proves none of those. Hold on an unexpected process, writer or hash/state change; do not
+delete recovery files or escalate to force-stop/signals/reset. Keep the listener disabled for
+guarded backup, every controlled cold load and original-byte restoration. Peer1 remains peer1.
+This does not satisfy [Guarded datasource observations](#guarded-datasource-observations):
+never supply false `confirmed-unpaired` or weaken `NativeDatasourceTransitionTest` admission.
+
+Require a quiet writer and guards immediately before mutation; the historical disconnected
+pilot used three stable summary hashes plus its disconnected peer. Late delivery, pending
+writes or changed snapshot guards invalidate the case, not permission to overwrite newer live
+data. External preference writes need a genuine cold load: prove the old PID retired, use
+`am start -W`, then observe a nonempty new PID within a bound. An empty immediate `pidof` can
+be asynchronous startup, not proof of cold load. An invisible previous app can remain in LAST/
+OOM adjustment 700 after ordinary `am kill`; in that observed state, opening existing Settings
+without changes, returning Back and retrying `am kill` allowed retirement. Verify it; do not
+escalate to force-stop, process signals, reset or data clear when that conditional route fails.
+
+Use outer `try/finally`-equivalent cleanup: a failed byte/PID reload must not bypass restoration
+of touched component, recorded transport and touched OS/time state. Restore guarded original
+bytes/metadata through a fresh process. Reconcile newer live delivery rather than clobbering
+it with the old backup. On the listener-exclusion route ONLY, restore permitted original bytes
+while exclusion still holds, then undo the exact component state. For an original DEFAULT:
+
+```sh
+adb -s "$WEAR_SERIAL" shell run-as app.wardpulse --user 0 /system/bin/cmd package default-state \
+  --user 0 app.wardpulse/app.wardpulse.wear.sync.WatchSummaryListenerService
+```
+
+On that route, an original explicit ENABLED requires its qualified `enable` instead. Verify
+actual getter-after, restored override/effective resolution and application state. Then use
+normal phone Settings → Diagnostics → Send to watch / Sync with accepted current Live; require
+actual listener delivery/store readback, not queue success or assumed replay. Both routes verify
+the original peer/mappings, OS state and settled whole Glance/Face; keep Square unpaired.
+A copied file alone proves no recovery.
+Remove only the operation's temporary file after verified recovery; otherwise retain private
+recovery material and the unresolved result.
+
 Ambient is `KEYCODE_SLEEP`, not the power button — `keyevent 26` leaves this image
 interactive:
 
@@ -397,6 +491,48 @@ adb -s "$WEAR_SERIAL" shell input keyevent 224   # back to interactive
 `screencap` in doze captures the frame after the system's own dimming, which is neither a
 scale nor a gamma of the interactive one. Use it to check that ambient renders what it should;
 never read alpha levels off it.
+
+**Controlled clock cases — Wear AVD only.** Never change a physical watch's or the Owner's
+phone's clock for this route. Verify AVD identity before mutation; record host/watch epochs
+and offset, `auto_time`, `auto_time_zone`, timezone ID, effective DND policy and renderer mode.
+Arrange failure-safe cleanup first. Use existing `settings put global auto_time 0` and
+`cmd alarm set-time TIME`, with epoch milliseconds for the intended local date/time in the
+unchanged timezone. Do not replace live time with a Source change, mock or helper.
+
+Bind each original to artifact/instance, actual clock and renderer mode before and after.
+Sleep or `ambient=true` alone does not establish AMBIENT. For a chosen ambient minute,
+establish the interactive case, position time shortly before the target minute, use the sleep
+command above and bound observation around the actual minute tick/render. The measured
+five-second pre-tick route worked where a 13-second wait from minute 00 did not establish
+AMBIENT; neither duration is a universal timeout or completion receipt. Inspect a fresh
+settled whole frame; metadata or a narrow glyph ROI cannot validate a mixed/overlay frame.
+
+Check effective policy when a case requires normal INTERACTIVE/AMBIENT: a global `zen_mode`
+write alone did not change Square's interruption filter. The supported
+`cmd notification set_dnd off` route did; observe the effective filter and actual rendering.
+Restore the original policy through its effective control, not just the setting bytes;
+Square's original priority policy and MUTE renderer were valid restoration targets.
+
+Always restore time from the current host epoch plus the saved watch offset, accounting for
+elapsed time rather than replaying a frozen epoch; restore original automatic-time values,
+unchanged timezone and touched effective DND policy. Verify actual clock, policy and original
+renderer mode plus a fresh settled restored frame, even after a failed measurement. Missing
+restoration proof remains unresolved. Record actual day/weather/UV and metric inputs per
+frame: controlling time does not freeze them or certify a later candidate's fit.
+
+**A blocking system view is separate from the face.** For the recurring GMS “Reset your
+watch” view, temporary OS snooze of one exactly identified current notification was a bounded
+visibility-only route, not a reset or notification erasure. Use it only when that identified
+view blocks the authorized AVD case; retain the key privately and arrange unsnooze in outer
+cleanup. `adb shell` joins arguments: preserve proper device-shell quoting of the entire key,
+including pipes; host argument quoting alone is insufficient. Keep raw keys/payloads and
+authentication out of logs. After unsnooze, verify that same notification's presence with a
+fresh separate observation: an immediate false key-list result can be asynchronous. Do not
+declare restoration or accept a covered frame from that first result alone.
+Keep the private undo handle/recovery material until fresh recovery verification completes; a command return
+or failed/ambiguous bounded check does not retire it. If exact identity is unavailable, report that limit
+separately from independently proved effective manager-state recovery. Category/count evidence never
+proves the exact notification's identity; keep these observations under [Diagnostic output privacy](#diagnostic-output-privacy).
 
 Tap coordinates measured off a screenshot are a guess: the image is scaled, and a system dialog
 sits above whatever it covers, so a near miss lands on the screen underneath and quietly changes
@@ -410,6 +546,23 @@ adb -s "$PHONE_SERIAL" shell cat /sdcard/ui.xml | tr '<' '\n' | grep -i "don.t a
 
 The app compiles against Android SDK 37.1 but targets API 36 and runs on the Wear OS 6.1 /
 API 36.1 image. Compile SDK and runtime system image versions are intentionally independent.
+
+### Phone launcher widget resizing
+
+Before resizing, retain the settled launcher page's visible landmarks and widget host bounds.
+Long-press a freshly observed interior widget point away from screen edges, release, and
+confirm the current widget host and unique actual resize-frame/handle resource IDs in a fresh
+hierarchy against the fresh original before dragging. An optional container content description
+being absent alone does not prove the overlay is absent. After every drag, capture a fresh native
+original and hierarchy; do not assume the resize overlay persists or reuse old handle bounds.
+Missing required frame/handle nodes or disagreement with the original leaves the next drag
+unqualified: retain both observations without inferring a cause, then dismiss/reopen through
+the ordinary launcher UI from a verified interior point; do not retarget input or bypass the guard.
+Avoid an edge long-press as a way to
+recover resize controls. If the widget moves to another page, restore its original page and
+host bounds through ordinary launcher navigation/movement, then inspect the settled page and
+widget again. Matching width/height alone does not establish placement restoration; keep
+captures pending until both the original page and allocation are verified.
 
 ### Isolated Android Studio display
 
@@ -464,6 +617,26 @@ therefore does not contain compositor configuration the way it contains focus an
 input. Confirm the owner's global shortcuts still fire after a session on it, and re-register
 them with `systemctl --user restart plasma-kglobalaccel` rather than restarting the session.
 
+### Diagnostic output privacy
+
+Before service, window/task or environment inspection, including manual/read-only preflight
+and text captures, identify the exact question and allowlist the minimum facts needed. Project them before stdout/stderr reaches tool output,
+logs, saved artifacts or another agent; never return raw sensitive service/environment data
+for later redaction. Peer checks retain connection state, expected peer/role match and
+required bridge-presence results. Compare necessary identities privately and retain match,
+mismatch or unknown when their literals are unnecessary.
+
+A whole matching line or broad search/context excerpt can include authentication or
+push-registration data beside the intended fields. Do not echo full sensitive dumps,
+raw profiles/environments, or such lines; do not retain them through tee or tracing.
+Output limits, truncation and mode-600 files are not redaction. Missing, ambiguous or
+unrecognized fields stay unavailable; do not widen the excerpt or guess a match.
+
+Persist only the allowlisted facts. If an exposure occurs, stop reopening or copying its
+output, restrict the owned saved artifact to a safe summary and report only the category
+and containment performed. Do not recover/quote the credential or claim prior tool output
+was erased. This rule authorizes no account, credential or pairing changes.
+
 ### Pairing the canonical phone and Wear AVDs
 
 The canonical pair was established on **2026-10-06**. These are Wear network node IDs, not
@@ -502,17 +675,11 @@ Pair the two AVDs once. Emulator pairing does not require BLE:
 
    Repeat the tap after capturing the next screen. The coordinate is for a 1080×2400 display.
    Prefer the `uiautomator dump` bounds workflow described above over a fixed coordinate.
-4. After about 30 seconds, the companion reports **Connected**. Verify both services:
-
-   ```sh
-   adb -s "$WEAR_SERIAL" shell dumpsys activity service WearableService \
-     | grep -m1 'Name=network'
-   adb -s "$PHONE_SERIAL" shell dumpsys activity service WearableService \
-     | grep 'Peer:'
-   ```
-
-   The watch must report `IsConnected=true, PeerNodeId=f71537bc`. The phone must report
-   `Role=2, Address=EmulatorAddr-502cc269` and `IsConnected=true`.
+4. After the companion reports **Connected**, verify both `WearableService` views through
+   the [diagnostic output privacy](#diagnostic-output-privacy) guard. Retain connection state
+   and expected peer/role matches, not raw service bodies or whole matching lines. Both
+   sides must be connected to the intended saved pair; absent or conflicting observations
+   remain unproved. Keep literal peer identities private.
 5. ADB-driven consent skips the companion's notification-access prompt, so a pair that reports
    **Connected** still bridges no notifications. Grant the listener explicitly, before saving
    the snapshots:
@@ -546,7 +713,7 @@ their values must match the phone panel.
 
 The pairing record lives on `/data` and survives an emulator restart, including a cold boot
 with `-no-snapshot-load`. After boot, both devices still report their pairing configuration,
-including `Role=2, Address=EmulatorAddr-502cc269` on the phone, but initially report
+with the phone's expected stored peer/role match checked privately, but initially report
 `IsConnected=false` because the assistant's transient port forwarding ended with the previous
 emulator processes.
 
@@ -560,7 +727,8 @@ adb -s "$WEAR_SERIAL" shell am broadcast -a com.google.android.gms.wearable.EMUL
 ```
 
 Google Play services reports `Emulator connection refresh succeeded.` Within a few seconds,
-the watch must return to `IsConnected=true, PeerNodeId=f71537bc`; starting `app.wardpulse` on
+the watch must return to connected with its expected peer match through the safe diagnostic
+observation above; starting `app.wardpulse` on
 the phone must again produce the WardPulse receipt log on the watch. When a known pair reports
 `IsConnected=false`, restore this bridge first. Do not run the pairing flow again.
 
@@ -575,7 +743,9 @@ with `hw.gpu.mode=auto`. Start that AVD reliably with
 
 Treat the configured AVDs as persistent development devices:
 
-- Save a snapshot before any risky operation, with Vulkan disabled as described above.
+- Before risky operations, verify that suitable recovery protects the current state. Reuse an
+  existing compatible, verified restore point when it still covers that rollback scope;
+  otherwise save the necessary pre-change state, with Vulkan disabled as described above.
 - Do not delete or recreate an AVD to troubleshoot it. That discards Google sign-in, browser
   sessions, system settings, keyboard layout, and any existing phone-watch pairing.
 - Never run `pm clear com.google.android.gms` on the watch; it destroys the pairing record.
@@ -585,10 +755,94 @@ Treat the configured AVDs as persistent development devices:
   new process, while checking scheduled-work preservation. The gate's `stop_app` in
   `tools/test-phone-watch-sync/run.sh` re-evaluates ordinary kill within one overall
   15-second request/wait deadline and respects pending KILL intent; intent is not death.
+  For a phone-AVD cold-start case where HOME plus ordinary kill leaves the qualified app
+  UID alive, reversible navigation to resolved System Settings (verify its foreground), then
+  HOME and the same ordinary kill may be tried without changing settings. That navigation is a
+  separately managed bounded attempt: it does not extend a running stock gate's 15-second
+  deadline, add retries/navigation inside that gate or bypass its HOLD/pending-KILL contract.
+  Still require fresh UID-wide absence, old PID/start retirement and a new PID with native `COLD`; retain failed or
+  racing name/proc samples separately rather than turning them into a pass or a cause.
+  Preserve the normal artifact, preferences and scheduled work, retain cache-timestamp
+  observations and restore OS/navigation state. This conditional route permits no force-stop,
+  data/cache clearing or clock change and establishes no universal OEM behavior.
   If that proof is unavailable, report HOLD. This rule is scoped to WardPulse; the targeted
   `am force-stop com.google.android.wearable.sysui` recovery above remains valid.
 - Size `/data` before first boot. Its size is fixed once materialized, and snapshots prevent
   `qemu-img resize` from changing the image afterward.
+
+**Named snapshot retention.** Full-state snapshots preserve OS/app/user data and can include
+large RAM images; they are recovery points, not a permanent record of every test. Read-only
+inspection, screenshots and routine non-destructive navigation do not warrant a fresh whole-RAM
+snapshot each time. Keep durable sanitized QA evidence instead. Reuse qualified recovery while
+it still covers the current state and intended risk; neither its age nor a successful boot alone
+proves that compatibility.
+
+The WardPulse default for each needed AVD is **at most two named recovery points**: one verified
+current baseline and, when needed, one active pre-change snapshot. This is a retention bound,
+not a quota to fill or an automatic deletion threshold. Ordinary Quick Boot, when configured,
+is separate; do not change its settings for housekeeping. Paired anchors count toward the named
+bound unless recorded as an exception. Each additional active-case or other pinned checkpoint
+needs an identified owner, recovery purpose, protected dependency, compatibility limits and a
+retirement condition, such as task acceptance or a verified replacement. A review date prompts
+that qualification; it does not itself permit deletion.
+
+Retire a task's superseded checkpoints as part of that task's completion, after verified
+restoration or acceptance of its intended state. Do not defer this to completion of unrelated
+tests, the whole audit backlog or a later project phase. Retain an unresolved reproduction or
+rollback dependency as an owned exception with its retirement condition. Preserve the last
+required verified baseline; reaching the default bound does not authorize its removal.
+
+Before checkpoint creation, retirement or authorized AVD/system-image cleanup, record the
+affected identities, allocated and apparent bytes, and snapshot counts; retain the same
+measurements afterward. For bulk cleanup, include the affected aggregate totals. Distinguish named points from Quick Boot and,
+where both exist, snapshot directories from internal QCOW snapshots; a directory count alone
+does not prove backing references were retired. State the measurement producer and any Unknown
+or unavailable result. These measurements apply to checkpoint/storage work, not every screenshot
+or routine ADB inspection, and sizes or counts alone never establish disposal eligibility.
+
+Keep concise ignored notes with those measurements, purpose, verification limits, owner and
+active dependencies, retirement condition and keep/retire decision; no credentials or raw guest
+payloads. Use supported logical snapshot management, such as the emulator's Snapshots pane
+Delete action, and verify the resulting snapshot references and storage measurements. Never
+blindly remove RAM/image files or snapshot directories, make a new full-AVD copy, lower its RAM,
+resize partitions or change configuration merely to conceal growth. Configuration changes can
+also invalidate snapshots. Preserve running state, userdata, sign-ins and pairing, and avoid
+disturbing active work.
+
+For already-authorized retirement of a task's own superseded transient, the existing working
+notes and keep/retire check suffice; no fresh approval or independent agent review is needed.
+For bulk historical cleanup, review the exact keep/retire manifest under applicable authorization;
+a storage-diagnosis or policy request alone does not authorize deletion. Both paths require
+verified intended/restored state, suitable recovery kept, no active dependency or other-owner
+impact, and supported snapshot management. Without applicable authorization, report candidates.
+
+**AVD and system-image retirement.** Keep the currently needed phone, round and square watch,
+API 33 unsupported-path, API 34 legacy WFF and API 36 unpaired Push coverage AVDs while their
+roles remain necessary. An old name, age, lack of a running process or a completed screenshot
+does not make an AVD obsolete. Qualify its coverage role, active work, owner, sign-in/pairing
+state and recovery dependencies before proposing retirement.
+
+An AVD may be retired through supported Android management only when existing owner
+authorization covers that selected AVD and disposal of its userdata and recovery, its required
+coverage is retained, and no active work or other-owner dependency remains. Reuse authorization
+that already covers a task-owned temporary AVD's disposal. When authorization or shared use,
+authenticated/paired state, minimum-API coverage or required recovery is Unknown, retain it as
+a candidate and obtain the missing owner direction. Never wipe or recreate an AVD as a repair,
+or discard the last required recovery point to make a storage target fit.
+
+An SDK system image is unused only after positively accounting for all remaining AVD
+definitions, including stopped AVDs, snapshot/backing-image dependencies and other owners' or
+projects' needs. Never remove an image while any retained AVD or snapshot depends on it. The
+absence of a running emulator does not establish that its image is unused. Use supported SDK
+management only
+within actual cleanup authorization. Unknown dependencies require retention and clarification.
+Permission to remove an unused system image does not include unrelated SDK platforms, build
+tools or NDK installations.
+
+Respect the canonical phone's failed `paired` restore documented above: it is not verified
+rollback coverage. The cold-boot route preserves data across restart, not a prior version of
+mutated userdata. If suitable recovery for the intended risk is unavailable, report HOLD rather
+than proceeding without it or repeatedly creating unverified snapshots.
 
 ## Watch Face Format
 
@@ -722,18 +976,32 @@ APK certificate differs from the selected host certificate, including debug. The
 host `key.properties` / `wardpulseRequireReleaseKey` guard and shared phone/Wear identity
 still apply; Push release signing is additional. See [Signing](product/RELEASE_CHECKLIST.md#signing).
 
-From `apps/wear_android/`, after private development signing setup, these ordinary debug
-builds illustrate N/N+1 upgrade acceptance:
+From `apps/wear_android/`, after private development signing setup, build the current
+bundled face through the ordinary graph:
 
 ```sh
-./gradlew :app:assembleDebug -PwardpulsePushVersionCode=1
-./gradlew :app:assembleDebug -PwardpulsePushVersionCode=2
+./gradlew :app:assembleDebug
 ```
 
-`wardpulsePushVersionCode` defaults to 1 and accepts a positive Android integer. Keep the
+`wardpulsePushVersionCode` defaults to 5 and accepts a positive Android integer. Keep the
 Push package and certificate identical for N/N+1 development builds. This input belongs to
-the independent Push package; it does not set the Wear host version or require Push code 2
-for the 0.1.0 RC. Follow the central [release version scheme](product/RELEASE_CHECKLIST.md#release-versions)
+the independent Push package; it does not set the Wear host version. The adaptive
+compatibility allocation now uses phone 3/Wear 4/legacy 2/Push 5, all versionName 0.1.0;
+only the guarded Push default advances 3→5 without a release cut. Preserve historical
+candidate 4 flags/instrumentation, the actual 3→4 journal and all release-bridge guards.
+Preserve the actual old code 1 receipt and unobserved new-Wear4/old-Push1 and explicit 1→2
+steps. Installing Wear 4 was followed by Push 2 before explicit update, with an unknown
+trigger; the subsequent 2→3 manager update was also unobserved. The historical normal UI
+4→5 Update requirement needed fresh installed Push4/hash/signer, owned manager slot, eight
+choices and quiet-writer proof with Legacy kept active, returned same-slot identity and
+separate settled retention. The later full recipe advanced to actual Push5 before tests,
+leaving failed preservation and the ordinary UI witness gap. The recorded current host is
+Wear4/asset5. Current operations must retain actual Push5 and freshly verify installed
+identities; no code 6, replay,
+downgrade, reset or invented button success is authorized. Later retained-Push selection/rendering
+is separate HOST work; bundled installation proves no explicit update or activation.
+Follow the [current qualification](product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30);
+never rebuild a synthetic old baseline, downgrade, reinstall or reset. Follow the central [release version scheme](product/RELEASE_CHECKLIST.md#release-versions)
 and [ordinary release flow](#release-artifact-builds). Release needs both host release
 configuration and separate Push release configuration.
 The normal variant graph consumes a signed APK artifact from `:watchface_push`, validates
@@ -787,8 +1055,8 @@ These produce separate phone and Wear AABs for `app.wardpulse` and a legacy WFF 
 `app.wardpulse.watchface`. Each requires the existing ignored root `key.properties` through
 `wardpulseRequireReleaseKey`. Phone includes the Android Rust build. Wear additionally
 requires separate Push release configuration; its ordinary graph signs and validates the
-Push APK, then embeds the exact APK/token pair. The independent Push version defaults to
-1 for this RC; the debug N/N+1 examples above do not change release metadata. Do not bypass
+Push APK, then embeds the exact APK/token pair. The independent guarded Push default is
+5 for the current integration allocation; this does not prepare a release. Do not bypass
 the guards or override build-name/build-number to conceal source versions.
 
 Follow [local signed-RC acceptance](product/RELEASE_CHECKLIST.md#local-signed-rc) for fresh
@@ -834,8 +1102,10 @@ just build-android-rust
 ANDROID_SERIAL="$PHONE_SERIAL" just install-phone
 ```
 
-The default debug build includes every configured ABI. On a storage-constrained target, build
-only the matching architecture before running the same installation recipe:
+The default debug build includes every configured ABI. On a storage-constrained target, select
+the matching Flutter engine architecture before running the same installation recipe. The
+`--target-platform` selector alone does not exclude independently packaged JNI ABIs; qualify
+each native library against its owning build configuration and actual APK inventory:
 
 ```sh
 # x86_64 emulator
@@ -862,6 +1132,1120 @@ platform spend are on by default; any can be hidden via Settings consumption-dis
 if at least one surface remains. The OAuth session stays in phone-secure storage and does not
 require a Codex CLI, local server, or `adb reverse`.
 
+### Package UID and full-window focus preflight
+
+For a guard that requires installed package UID or current focus, including manual navigation,
+use the currently selected ADB server and explicit serial, and qualify the Android user scope. Acquire the relevant
+read-only shell payload through that target:
+
+```sh
+cmd package list packages -U app.wardpulse
+dumpsys window -a
+```
+
+Retain each command's actual status and bounded privacy-safe producer/field facts before guards,
+following [Diagnostic output privacy](#diagnostic-output-privacy). PackageManager's name filter
+is a substring filter: validate the current record format and require exactly one exact
+`package:app.wardpulse` match with a valid full `uid:` value. The existing
+[sync runner](../tools/test-phone-watch-sync/run.sh), in `package_uid`, implements the bounded
+exact-package check. Keep Android user ID, app ID and full UID distinct; do not assume
+`dumpsys package` contains `userId=` or equate that label with the required UID.
+
+Qualify the actual focus fields in the full WindowManager service result before projecting
+components. The `dumpsys window windows` subsection can omit service-level focus fields;
+its empty projection leaves focus Unknown and does not prove absent foreground or a product
+defect. Missing, malformed or ambiguous required fields hold dependent work. Preserve that HOLD and its failure-point facts; any
+corrected acquisition is a fresh sample, not reconstructed success.
+
+### Wear instrumentation provisioning order
+
+The default Wear runner is `IsolatedWearRunner`. It selects its test-owned application only
+through `newApplication` and requires a compatible target with the full `MainActivityDependencies` ABI.
+The [isolated default instrumentation](../apps/wear_android/README.md#isolated-default-instrumentation)
+keeps all original 40 tests, seven necessary fixture/API tests and the same-metric foreground
+publication regression (**48 defaults**), preserving real owner/lifecycle/durable-consent
+guarantees, with private fixture stores and a recording refresh
+sink. Test-APK installation alone does not provide
+the target seam. The earlier seam-unavailable observation belongs to its original baseline bytes;
+preserved Wear APK `8f3ec6b2…` defines `MainActivityDependencies` and both `WatchSummaryStore`
+constructors. Class presence proves neither the full required ABI/isolation nor candidate parity.
+Default 48 must validate new test bytes on the correctly provisioned owning candidate under
+its permitted target/artifact order. The later full recipe genuinely passed 47, with manual
+cases excluded, while advancing Push 4→5 before tests. Preserve that PASS separately from
+native/UI acceptance and from the failed preservation and absent ordinary UI 4→5 witness.
+That recorded Wear4/asset5 APK `097c337f…` and retained Push5 APK `4ed262fa…` do not replace
+the old host/asset3 or historical SDK 3→4 originals/receipts. No downgrade, reset, code6, replay
+or retroactive UI witness is authorized. Current native viewport, active artifact identity,
+geometry and broader item12 acceptance remain Pending.
+Its attribution regressions use private stand-ins for equal and newer normal-store values;
+byte equality is not evidence that a test published to normal storage. Actual backing-store
+identity, constructor routing and recording-sink dispatch remain the isolation evidence.
+
+The DEBUG-only `DebugRangedComplicationDataSourceService` (RANGED without TEXT) and
+`DebugMonoComplicationDataSourceService` (pure MONO) are disabled by default. After qualifying
+Main/test and protected embedded/retained Push/Legacy identities, record each component's exact
+PackageManager override and the original upper choice; explicitly opt in through the qualified
+own-UID PackageManager route, then select each source through the ordinary SystemChooser.
+Restore the original upper choice before restoring the exact component overrides, including
+DEFAULT versus explicitly DISABLED, and requalify all eight bindings and normal state while
+retaining newer live summary. Select only
+`-e class app.wardpulse.wear.complication.AdaptiveRangedComplicationTest#debugRangedWithoutTextSurvivesWireParcel`
+and, separately,
+`-e class app.wardpulse.wear.complication.AdaptiveRangedComplicationTest#debugMonoImageAndTintSurviveWireParcel`
+on `app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner`; never use unrestricted stock
+discovery. These cases prove constructed fixture validation and wire/Parcel transport only;
+installed dispatch, actual missing-TEXT rendering, MONO shape/tint/fit and true AMBIENT/return
+need separate native observations and exact recovery. Conventional debug source ownership
+intends release exclusion; claim absence only after an actual release build and inspection of
+its merged manifest, classes and APK. Full Wear/docs and native acceptance remain Root HOST
+work after the entire Runner lifecycle releases; they are not Native commit prerequisites.
+
+#### Same-metric foreground publication (2026-11-01)
+
+`WardPulseNavigationStateTest.productionForegroundPublicationRepaintsSameClaudeWindowWithoutRestartingOwner`
+uses the production Activity with private summary/consent storage and the recording refresh
+sink. It keeps `allowance.claude.plan`, label/window `5h` and selection/split configuration
+fixed while publishing known `75% left` → exhausted `0% left`. Both phases require
+`Claude plan · 5h`, the expected percentage and absence of the other percentage on settled
+Glance. The same RESUMED owner/task, one creation and a refresh count of exactly one bracket
+each capture, excluding another onStart, navigation or recreation as the update mechanism.
+Existing attribution and lifecycle/job/storage teardown remain in force; no real phone refresh
+or normal-store write is part of this case.
+
+Current source inventory is **48 defaults + 48 manual = 96**. This is source arithmetic,
+not packaged discovery or a new PASS. Preserve the historical 47-test PASS and dated native
+records. Test-only private publication establishes the accepted-summary store/observer/Compose
+contract, not actual OK-to-phone/provider/Data Layer completion, ordinary arrival or the
+original incident's cause. Ordinary scoped Glance acceptance and any arrival evidence must
+be reviewed separately and qualified by what was actually observed.
+
+HOST acceptance starts only after whole Runner DONE, actual owning CLI exit, all owned-process
+retirement and fresh separate quiescent ownership; it is not a Native commit prerequisite.
+Run unchanged `just check-wear`. Its fresh main APK is a check/compatibility comparison artifact
+only. The intended retained installed target SHA-256 is
+`babe573393a18de48ab0577d7035a09f409e298e3e40de630662d3997c88feb7`.
+Before provisioning, revalidate fresh test/production ABI and DEX closure, resource IDs/content,
+manifest/target and signing compatibility against the actual retained target. The earlier
+existing-built `716a5385…` comparison is feasibility evidence, not a fresh build or future PASS;
+its bounded embedded-asset/default-token differences do not authorize normalizing new parity
+differences. Unexpected fresh differences HOLD for Root reconciliation without waiver or
+retargeting. A demonstrated Source fault likewise requires preserved evidence and scope
+reconciliation before any production edit.
+
+Independently record exact current retained target/embedded-asset hashes and protected
+Legacy/owned-Push package, signer, instance and selection/choice identities before provisioning.
+After fresh test-APK provenance and compatibility admission, use only the existing test-only
+install operation from `apps/wear_android`, addressing the currently discovered Wear serial:
+
+```sh
+adb -s "$WEAR_SERIAL" install -r -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+```
+
+Recheck unchanged retained target/asset bytes and protected identities/choices after this
+operation. Never install the fresh main/WFF/Push APKs, replace the target or use
+`connectedDebugAndroidTest`, `just test-wear-device` or a paired-sync recipe as a shortcut:
+those routes can provision targets outside this scope. Keep candidate flags absent. No
+physical-device action, new AVD, reset/unpair, Push6 or historical replay is admitted.
+
+Inspect the actual fresh packaged test inventory independently: 96 total methods, including
+48 manual cases. Discover and execute the full default selection through the existing isolated
+entry, preserving its annotation exclusion. The stock second runner does not supply default
+isolation. From HOST, after the admission above:
+
+```sh
+adb -s "$WEAR_SERIAL" shell am instrument -w -r -e log true app.wardpulse.test/app.wardpulse.wear.IsolatedWearRunner
+adb -s "$WEAR_SERIAL" shell am instrument -w -r app.wardpulse.test/app.wardpulse.wear.IsolatedWearRunner
+```
+
+Verify actual discovery of all 48 defaults, successful results for all 48 and exclusion of all
+48 manual cases; a subset or shell exit 0 alone is insufficient. Failure remains evidence,
+not permission for retry-until-green, target replacement or a broader gate.
+
+The new case writes two fresh target-cache originals named
+`wear-claude-5h-foreground-<case UUID>-before.png` and
+`wear-claude-5h-foreground-<case UUID>-after.png`. Capture output under
+`WardPulseNavigation` / `privateForegroundPublication` reports actual filenames, original native
+dimensions and byte sizes; decoding must preserve PNG format and dimensions without scaling.
+These are planned output patterns, not existing witnesses. Root must review both actual native
+originals with their same-metric/private-publication attribution and ordinary scoped Glance
+acceptance. The existing Beta/NoSummary PNGs do not prove this case. Preserve historical
+originals, current phone credentials/data and newer writes; export no live provider payloads.
+
+#### Historical item12 provisioning context
+
+For item12, retain actual Push5 and preserve the old Round host/asset3/Push4 evidence, old
+Legacy originals and actual 3→4 journal unchanged. Do not replay that witness or install a
+new target as recovery. Before any later provisioning, reconcile its full direct/implicit
+package and platform-reaction footprint and candidate order, then admit actual test-APK
+provenance/installation, affected/new guards and full default-suite execution on its owning
+candidate. The empty Push-module AGP runner skip is established; app-only is not a proved
+remedy. Do not replace a target to bypass scope or manufacture capability. Current
+operation-specific order is documented under [datasource observations](#guarded-datasource-observations),
+[client metadata](#independent-client-metadata-observation), [typed configs](#typed-own-provider-config-observation)
+and [inventory/peers](#owned-push-inventory-and-connected-peers). Scoped 2026-10-30 owned-Push,
+connected-peer and typed own-provider reads succeeded. Client acquisition was **uninvoked** after
+ambiguous `beforeResource`; its exact failing suboperation/cause was not established. This is
+not an API denial, requester-mapping acceptance or native paint, and read receipts authorize no mutation.
+The [UI evidence](../.agents/skills/ui-verification/references/state-and-artifacts.md) and
+[finalization reference](../.agents/skills/finalization/references/commit-message.md) corrections were
+applied and reviewed in `5b6486e` and `5b5df97`. New current mapping, default-suite execution and
+native acceptance remain Pending, separately from the recorded 47-test PASS. Separately reviewed test-only
+provisioning does not authorize early seam-bearing target replacement; expose any genuine
+target dependency first. Phone-emulator sync and UI Update/selection still require their
+operation-specific authority and custody; physical-phone action remains forbidden. The earlier
+ordinary UI 4→5 requirement needed inactive Push4's full-eight choices and owned slot, retained
+Legacy activity and separate settled retention. Active Legacy's selections and the later stable
+owned-Push5 inventory do not fill that failed-preservation/UI-witness gap.
+
+**Historical nine-step allocation (2026-10-30).** The
+[qualification](product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30) retains
+all six compatibility cells, Root-reviewed forward-only reconciliation for unavailable history,
+that allocation's Native inventory and all nine mandatory HOST duties. Separate current runs
+use their own admitted Native inventory. All HOST starts follow the whole owning execution DONE,
+run-owned process retirement, owning CLI exit if used and fresh separate public/OS idle;
+they never gate Native commits. Nontarget full
+`just check-wear`, `just check-watchface`, pure complete `just check-phone` and final docs/
+fixtures/release checks may then run without install/adb or changing installed phone 1.
+Full device tests, both-shape first/separate-settled endpoints/transitions/true-AMBIENT,
+phone retention/sync, recovery and later healthy public guidance/captures remain mandatory.
+Physical-phone action remains forbidden and physical-watch acceptance deferred. Item12 stays
+open; this historical allocation does not claim current check/device acceptance.
+
+**Recorded dependency qualification (2026-10-30, Source `5b5df97`).** Full warm, empty-cache
+and same-cache reuse `just check-wear` completed successfully. Actual resolved client 1.2.1 AAR
+SHA-256 `3392836298972c6820c7a8179c89bb37fc97f461cc991368f4cb001c236bafa0` matched official bytes.
+Retain that evidence; do not repeat unchanged dependency checks for reassurance or infer native access.
+For a newly required qualification, run the complete check on a network-capable HOST with
+`GRADLE_USER_HOME` pointing to a **new, empty, task-owned cache** under `LOCAL_ARTIFACTS/`.
+Record its exact path and command. Verify the
+actual download/resolution of `androidx.wear.watchface:watchface-client:1.2.1`, the resolved
+AAR's SHA-256 against official artifact provenance and complete check success; repeat the
+same check with the same cache to prove reuse. Set `ITEM12_GRADLE_CACHE` to the absolute
+path of a newly created, verified empty task-owned directory. From the repository root:
+
+```sh
+GRADLE_USER_HOME="${ITEM12_GRADLE_CACHE:?Set the task-owned cache path}" just check-wear
+```
+
+After recording resolution, checksum and complete first-run success, execute that same
+command with the same path again and record the reuse outcome.
+
+Do not seed, delete or repurpose shared caches, substitute the saved sources/POM for Gradle
+resolution, or claim a successful build proves native access. Record resolution/checksum and
+both full outcomes, including failures. These non-installing HOST checks follow whole Runner
+DONE, process retirement, owning CLI exit where applicable and fresh idle ownership; they are
+not Native-commit prerequisites. New or changed qualification remains Pending until executed;
+the recorded completed cache checks above are not pending. After operation-specific identity,
+dependency and retention review admits the required provisioning,
+`just test-wear-device` explicitly provisions the rebuilt seam-bearing target and test APKs
+through `connectedDebugAndroidTest`; verify the retention policy below first, confirm the
+current 48 tests/manual exclusion, then recheck retained actual Push5, bindings and active state.
+This target-installing recipe is outside the foreground-publication scope above.
+
+#### Guarded Push witness
+
+**Historical candidate 4 / 3→4 contract.** Keep the flags, instrumentation, original receipts
+and actual one-dispatch journal below unchanged. Its subsequent Push4/Legacy-active baseline
+is also historical evidence; later provisioning reached Wear4/asset5 and actual Push5. These
+historical commands are not authorization to replay the operation, repeat its picker selection
+or replace the old host/asset3 evidence. Current operations must retain actual Push5, freshly
+verify installed identities and obtain separate admission under the qualification above.
+The missing ordinary UI 4→5 witness cannot be supplied retroactively. The original prospective
+procedure follows.
+
+This is HOST-only after whole Runner execution DONE, owned-process retirement, owning CLI
+exit where applicable and fresh separate idle ownership. Source/semantic review is not native
+acceptance. Keep the original target APK and asset 3 throughout this sequence; a failed or
+uncertain witness forbids subsequent target installation. Never run a connected/default suite,
+`run-wear`, sync recipe or other target installer first. Receiver disable, permission grant,
+reset, downgrade, candidate substitution and version loops remain forbidden. The harness
+never creates, activates or reselects a face. The completed execution's frozen operator
+no-activation inputs are unchanged; the adopted post-DONE scope below is a new HOST boundary.
+
+**Adopted HOST scope, 2026-10-29 — existing-Push baseline.** After whole DONE, owned-process/
+CLI retirement and fresh idle, HOST is permitted **one** ordinary system-picker selection of
+a pre-existing, configured, owned Push 3 instance on the verified canonical **Round AVD**.
+Record original Legacy identity/settings, available native state and private recovery/
+quiet-writer/bridge evidence, then the deliberate changed baseline. Preserve original host 4/
+asset 3 bytes. No new instance, SDK/app activation, permission, binding/style edit or reset is
+included. Unproved identity or safe exact restoration stays Pending; no route success is promised.
+
+Before test-only provisioning, independently record host/asset/APK/signer, selected existing
+package/instance and available native state with its limits. Provision only the test APK,
+recheck unchanged host/asset, then use read-only stock `probeBaseline`: its first eight rows
+omit the three slot/instance/configuration hashes discovered before SDK dispatch. Require
+complete authoritative selections and all actual guards; cached delivery/defaults are insufficient.
+The first post-provisioning fingerprint cannot prove earlier full selection retention. After
+the genuine stock result, separate later whole original, cleanup and instrumentation retirement,
+restore exact original configured Legacy selection/settings and normal effective data/bridge
+state while reconciling newer writes and retaining owned Push 4. The genuine witness must
+still precede target provisioning; retries, downgrades and an immediate-active oracle remain forbidden.
+
+From `apps/wear_android`, build the signed, officially validated candidate into the **test**
+APK without installing anything:
+
+```sh
+./gradlew --no-daemon :app:assembleDebugAndroidTest -PwardpulseNativeCandidate=true -PwardpulsePushVersionCode=4
+```
+
+Before provisioning, independently inspect the installed target APK/code/signer, its embedded
+asset's package/code/signer/hash, installed Push package/code/signer/hash, AVD name/image and
+physical display. Bind the actual selected serial to the canonical Wear AVD using `emu avd name`;
+the instrumentation independently checks QEMU, the AVD-name property, watch feature, API 36,
+image fingerprint and unoverridden 360×360 square or 384×384 round display. Preserve active
+runtime/instance, lower bindings, upper choices, summary, consent, settings and bridge state.
+Review compatible signing and the packaged test manifest's two instrumentation entries during
+HOST. Source keeps the configured isolated runner first and stock runner second: AGP rewrites
+the first instrumentation element with the configured runner name. If baseline SDK/classloader
+access is unavailable, leave Pending; never install the seam as recovery.
+
+Provision only the generated test APK (never the local target APK):
+
+```sh
+adb -s "$WEAR_SERIAL" install -r -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+```
+
+Re-observe target APK/asset hashes and identities after provisioning; require equality to the
+independent pre-provisioning receipt. The harness additionally checks those expected hashes
+before dispatch and through later observation. Use the stock entry
+`app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner`, with **one explicit method** of
+`app.wardpulse.wear.nativeintegration.NativePushUpdateTest`. The isolated entry would load an
+ABI absent from the baseline; it must not be used here. Never invoke stock discovery/default
+tests. The three `NativePushGuardTest` cases can separately be explicitly selected by class;
+they use memory, private temporary files/descriptors and fixed shell-output fixtures, without
+querying installed packages or accessing the manager/live stores.
+The three update-class cases are manual; together with the three Push guard, thirteen
+datasource, fourteen client, six typed-config and nine inventory cases, `IsolatedWearRunner`
+excludes all **48 manual cases** and keeps **48 default tests** (original40, seven
+necessary fixture/API tests and the foreground-publication case). This is source arithmetic,
+96 total;
+packaged discovery and execution of new bytes remain separate HOST duties.
+
+After the system-authority correction, require a fresh complete warm `just check-wear`
+after the last Source fix, rebuild candidate/test-APK provenance, then install only the test
+APK. Pass all seven existing private Android guards before exactly one corrected read-only
+stock `probeBaseline` within the existing continuous Push 3/wf16 witness. That probe itself
+exercises the changed observer; do not add another live observer invocation. Do not select the
+face again or replace the original host/asset 3. Prior dependency/cache/checksum receipts apply
+only to the unchanged dependency graph; they do not build or exercise corrected source.
+
+`NativePackage.read` in
+[NativePushState.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativePushState.kt)
+uses the existing UiAutomation owner only for a fixed Push package-path enumeration with a
+success-completion marker. Its bounded complete output must contain exactly one allowlisted
+base-APK path and no splits or extra records. Normal target-UID file access then supplies the
+full installed APK hash, real archive package/code/single signer and resource-table hash;
+rehashing and re-resolving detect changes without promising atomic observation. The same
+reader serves later datasource/client callers and post-update resource verification, without
+hidden-package metadata lookups or shell APK copying. A path/hash alone does not prove archive
+or signing capability: null, denied or unavailable evidence leaves the witness Pending before
+dispatch. Keep SDK manager calls on the unchanged target context and retain every slot,
+selection, active-instance, host/asset and one-dispatch guard.
+
+`NativeDiagnostics` reports closed phases/categories, contemporaneous bounded observation
+sizes/hashes/completeness, inventory flags and semantic matches. Caller wallpaper API
+null/match/mismatch/error is diagnostic only: even an error cannot bypass System proof or
+replace the first actual guard failure, which survives cleanup. Raw dumps, payloads, exception
+text/causes, tokens, opaque IDs and arbitrary guard strings are excluded. The old generic
+rejection's exact cause remains unproved; the unsupported retriever query was never reached.
+No query failure, server rejection or completed HOST acceptance is claimed. Fresh normal-UID
+archive/probe, the genuine single update, separate settled evidence, restoration (including
+original Legacy15 selection/settings) and owner retirement remain HOST obligations.
+
+Supply these fresh HOST expectations as `am instrument -e` strings. SHA-256 values use lowercase
+hex; fingerprint/instance/slot strings are hashed as UTF-8 **without** a trailing newline.
+
+| Argument | Expected input |
+| --- | --- |
+| `wardpulseNativeIntegration` | Literal `push-3-to-4` |
+| `expectedAvd` | Canonical `wardpulse_wear_square_api36_1` or `wardpulse_wear_round_api36_1` |
+| `expectedFingerprintSha256` | Hash of the actual `Build.FINGERPRINT` |
+| `expectedHostApkSha256`, `expectedHostSignerSha256` | Original installed host APK and single signer hashes |
+| `expectedAsset3Sha256` | Exact installed host's Push asset 3 APK hash |
+| `expectedPush3ApkSha256`, `expectedPushSignerSha256` | Installed Push 3 APK and single signer hashes |
+| `expectedRuntime` | Actual `DeclarativeWatchFaceRuntime0` or `DeclarativeWatchFaceRuntime1` |
+| `expectedResourcePackage` | Actual active package; legacy-only evidence leaves Push configuration retention Pending |
+| `expectedSlotSha256`, `expectedInstanceSha256`, `expectedConfigurationSha256` | Owned slot and Push-instance identities; configuration requires independent actual selection records, never cached delivery |
+
+First select `probeBaseline`. It requires the first eight rows, checks all applicable native
+records and reports slot/instance hashes and a separate cached-delivery provenance hash,
+without writing an attempt or changing the manager. That diagnostic line is not a passed
+binding/choice check. Successful selection discovery also emits a configuration hash.
+Configuration hashing uses user-style content followed by ascending
+slot rows `id|enabled=true-or-false|selected-package/class`, with `<none>` for an explicitly
+unselected provider, separated by newlines without a final newline. Selection records must
+cover every slot and identify the resource package and actual instance; see `NativeRenderer`
+and `NativeSelections` in
+[NativePushState.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativePushState.kt).
+Neither default policy nor a cached `ComplicationData.dataSource` is a current selection record:
+a chooser change/reset can leave old delivered data intact. `NativePushDevice.readRenderer`
+uses bounded read-only observations through the existing UiAutomation owner, rather than
+caller-visible wallpaper identity or the unsupported cross-package retriever. It reads the
+actual current user and System display/component with its matching live connection. Around
+`wear_service` active configuration it requires matching semantic System/native frames: scoped
+service user/display/component, one native registry/engine instance, resource package, style
+and enabled slots. Relative counters and cached delivery do not define semantic identity.
+This bracketing is not atomicity or a freshness guarantee; every shell descriptor/stream is
+owned and closed on success or failure.
+
+Only the controller's `activeConfigs` supplies selections. Its favorite/resource must join
+one IDLE non-fallback ANDROIDX active facade, the explicit current active engine and current
+wallpaper component, then the observed native resource/instance. Favorite and native instance
+are independent opaque identities; never construct `wfId` from a favorite. Configuration row
+IDs supply neither slot IDs nor canonical/requester IDs; C3 provenance remains separate.
+No new across-update favorite-ID guarantee is claimed. Expected inputs only compare with
+observations. Default/fallback or lock-only wallpaper, caches, databases, history and defaults
+cannot complete this chain.
+
+Declared size, actual count, unique complete slot coverage and enabled states must agree.
+Missing, duplicate, conflicting, transitional, pending-action, malformed or unresolved scoped
+evidence remains **Pending/HOLD**. Only explicit `provider=null` means an empty choice;
+missing provider evidence is unavailable. All five exact lower bindings and all three upper
+choices retain the existing fingerprint encoding. Configured selection type retains its
+configuration meaning; it is carried independently of delivered/NoData/overridden values and
+supported-type contracts, without a cross-domain equality or rejection guard. Actual native
+and SDK ownership proof still needs HOST execution. Never change choices or inject data to
+manufacture preconditions. Legacy-only evidence cannot verify the inactive Push configuration
+or authorize target replacement. The harness never creates, activates or reselects an instance.
+The single adopted picker selection established the historical Push 3/wf16 baseline;
+preserve the subsequent historical Push4/Legacy-active evidence and restoration receipts.
+Current operations retain actual Push5 with freshly verified installed identities; this
+historical allocation authorizes no new selection. Original Legacy15 settings/choice restoration
+still needs independent verification; active Legacy alone does not prove it.
+
+Only with the actual Push instance and authoritative selection preconditions established may
+one `updateOwnedPush3To4` invocation dispatch. Successful discovery supplies the selection
+fingerprint to the dispatch guard; unavailable evidence stays Pending. Never bypass a Pending
+probe. The command shape, with the values above independently populated in the named shell
+variables (the probe uses the same command with its method name and omits the last three
+hash arguments), is:
+
+```sh
+adb -s "$WEAR_SERIAL" shell am instrument -w -r \
+  -e class app.wardpulse.wear.nativeintegration.NativePushUpdateTest#updateOwnedPush3To4 \
+  -e wardpulseNativeIntegration push-3-to-4 \
+  -e expectedAvd "$NATIVE_AVD" -e expectedFingerprintSha256 "$NATIVE_FINGERPRINT_SHA256" \
+  -e expectedHostApkSha256 "$NATIVE_HOST_SHA256" -e expectedHostSignerSha256 "$NATIVE_HOST_SIGNER_SHA256" \
+  -e expectedAsset3Sha256 "$NATIVE_ASSET3_SHA256" -e expectedPush3ApkSha256 "$NATIVE_PUSH3_SHA256" \
+  -e expectedPushSignerSha256 "$NATIVE_PUSH_SIGNER_SHA256" -e expectedRuntime "$NATIVE_RUNTIME" \
+  -e expectedResourcePackage "$NATIVE_RESOURCE_PACKAGE" -e expectedSlotSha256 "$NATIVE_SLOT_SHA256" \
+  -e expectedInstanceSha256 "$NATIVE_INSTANCE_SHA256" -e expectedConfigurationSha256 "$NATIVE_CONFIG_SHA256" \
+  app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+`AttemptJournal` retains the dispatch boundary and returned identities privately; never delete
+it to retry. SDK failure/disconnection/crash can mean uncertain advancement. Preserve the host
+and record actual installed state; do not repeat the update. Await every owned SDK callback
+and descriptor cleanup. No timeout establishes remote completion, and a hanging owner is not
+retired. No immediate `isWatchFaceActive` query is made after updating.
+
+Keep the original host/asset through separate later native observations and select
+`observeSettledUpdate` once with the same expectations. It reads the verified journal, checks
+installed candidate bytes/resources, slot and retained native configuration, and captures one
+private original frame only when the updated Push face's own instance and independent actual
+selection records are available. The receipt keeps Push configuration retention and target
+replacement Pending until that proof; a legacy screenshot or SDK-result verification cannot
+substitute. Missing selection records or an unavailable inactive Push instance fail Pending,
+and no target replacement is admitted. Inspect the first complete unobscured PNG before batching;
+notification/editor overlays invalidate visual acceptance. Use this instrumentation's single
+UiAutomation; no concurrent `uiautomator` hierarchy owner. Supplied/last-frame substitutes,
+sleeps, timing retries and hidden state normalization are excluded. An absent verified result
+or missing native provenance remains Pending. The harness changes no summary/consent/settings,
+choices or bridge; do not blindly restore older values over legitimate producer writes. Verify
+normal effective data/restoration independently, retain intended version advancement, close
+this instrumentation owner and preserve private receipts. See
+[native integration ownership](../apps/wear_android/README.md#guarded-native-push-integration).
+
+The historical provisioning gate required successful witness, separate settled evidence,
+restoration and owner retirement before ordinary rebuilding **without candidate flags** and
+Wear4/asset3/signing verification. Those preservation requirements describe the historical
+cohort; later provisioning reached Wear4/asset5 and actual Push5. Current capability work must
+retain actual Push5, freshly verify installed identities and follow separate admission under
+the qualification above. Preserve original host/asset evidence; later rebuilt-host evidence
+cannot replace pre-replacement evidence. The 3→4 witness closes neither the utility button nor
+missing 1→2/2→3 manager evidence, old-Push1 matrix gaps or UNKNOWN historical causality. All
+unexecuted builds, native routes, effective restoration and visual acceptance remain Pending.
+
+#### Guarded datasource observations
+
+These are later HOST-only observations, after whole execution DONE, all owned-process
+retirement, owning CLI exit if used and separate fresh idle. Compilation, guard execution and
+any seam-bearing target provisioning require the full footprint/candidate-order reconciliation
+above. Retain actual Push5 and historical old-host obscured probe/originals/receipts unchanged.
+Expose a genuine compiled-target dependency without installing a replacement to manufacture
+read capability. Production schema, normalization, settings, consent and datasource behavior
+stay unchanged.
+
+Select only one explicit `NativeDatasourceTransitionTest` method using the **stock** runner
+and literal `wardpulseNativeIntegration=normal-delivery`. `probeDelivery` is read-only apart
+from private evidence files. `probeDelivery` and `observeDelivery` require explicit `deliveryProbeId` matching
+`[a-z0-9][a-z0-9_-]{0,63}`. It selects only `files/native_datasource/probes/<id>/`; there is no
+preferred/latest scan, historical fallback or migration from `native_datasource/probe/`.
+The selected directory is created once, and even partial/failed captures consume the ID.
+`first.png`, `first.json` and final `receipt.json` are retained without overwrite or automatic
+retry. The full current scope is revalidated after capture. `NativeReadAdmission` requires
+canonical emulator/image/display and actual current caller UID/package/APK/signer. The shared mapping reader checks current
+resource/runtime APK/signer, active instance/configuration, full-eight selections and intended
+targets. Current mapping/frame reads require no historical SDK-update entry resolution,
+journal, old package cohort or quiet
+writers. `NativePushUpdateTest` retains its entire original SDK 3→4 path and arguments.
+The shared `readNativeDeliveryTargets` reader uses the
+public typed own-provider producer from `NativeTypedConfigTest` and the existing complete-eight
+`readNativeSelections` chain. `discoverDeliveryTargets` validates system IDs against actual
+controller row IDs, returned slot/resource domains, owned providers and configured types;
+null upper selections and enabled states remain explicit. See
+[mapping and recovery limits](../apps/wear_android/README.md#guarded-normal-datasource-observations).
+The target's ordinary UID must acquire the public SDK manager and receive typed configs;
+availability, acquisition, callback/result/error and caller/resource/runtime/full-eight brackets
+are recorded separately in private `files/native_read/requester-*/receipt.json`. Own-provider
+metadata is not all-provider selection evidence. Missing, duplicate, foreign, changed or unresolved
+associations stay Pending; do not guess IDs, use numerical/provider-only joins, synthesize
+records, use cached data/default policy, select providers or grant permission to proceed.
+No client acquisition is required. New resource diagnostics distinguish resource-package and
+runtime-package reads without relabeling prior ambiguous `beforeResource` or uninvoked client
+acquisition as a proven denial or package-visibility cause. The current runtime reader described
+under [independent client metadata observation](#independent-client-metadata-observation) also
+serves this read; its Java archive parsing and subsequent typed acquisition remain Pending until
+actually reached and verified on the preserved target.
+
+For an active Push target, the reader reuses actual caller-owned inventory before and after
+the typed observation. It retains exact package/version/manager-slot/active/configuration
+scope, checks the version against the installed resource and requires the freshly observed
+slot's `expectedSlotSha256`. A Legacy-only read never acquires Push inventory or requires
+Push ownership. Missing ownership on a Push target stays Pending without installation,
+manager mutation or activation. `NativeDeliveryMapping.scopeSha256` binds current caller,
+resource/runtime, System, full-eight native and applicable Push evidence to the first-frame
+and restoration receipts; read evidence grants no publication, request or direct-data authority.
+
+Freshly populate the named variables from independent current installed/active observations.
+Do not reuse a historical manager-witness host hash. The command shape for the single
+first-frame Legacy probe is:
+
+```sh
+adb -s "$WEAR_SERIAL" shell am instrument -w -r \
+  -e class app.wardpulse.wear.nativeintegration.NativeDatasourceTransitionTest#probeDelivery \
+  -e wardpulseNativeIntegration normal-delivery \
+  -e deliveryProbeId "$NATIVE_DELIVERY_PROBE_ID" \
+  -e expectedAvd "$NATIVE_AVD" -e expectedFingerprintSha256 "$NATIVE_FINGERPRINT_SHA256" \
+  -e expectedCallerUid "$NATIVE_CALLER_UID" -e expectedHostVersionCode "$NATIVE_HOST_VERSION_CODE" \
+  -e expectedHostApkSha256 "$NATIVE_HOST_SHA256" -e expectedHostSignerSha256 "$NATIVE_HOST_SIGNER_SHA256" \
+  -e expectedResourceApkSha256 "$NATIVE_RESOURCE_SHA256" -e expectedResourceSignerSha256 "$NATIVE_RESOURCE_SIGNER_SHA256" \
+  -e expectedRuntimeApkSha256 "$NATIVE_RUNTIME_SHA256" -e expectedRuntimeSignerSha256 "$NATIVE_RUNTIME_SIGNER_SHA256" \
+  -e expectedRuntime "$NATIVE_RUNTIME" -e expectedResourcePackage "$NATIVE_RESOURCE_PACKAGE" \
+  -e expectedInstanceSha256 "$NATIVE_INSTANCE_SHA256" -e expectedConfigurationSha256 "$NATIVE_CONFIG_SHA256" \
+  app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+For an already-active owned Push resource, use its actual resource identity and add
+`-e expectedSlotSha256 "$NATIVE_SLOT_SHA256"`, freshly obtained from its caller-owned
+inventory. Do not infer the manager slot from native, resource or requester IDs.
+
+Choose `NATIVE_DELIVERY_PROBE_ID` explicitly for this new current-scope read; never reuse an
+existing ID. Inspect the selected private `files/native_datasource/probes/<id>/first.png`
+independently before batching. Require a complete unobscured native frame; an overlay is not
+accepted evidence. Record that PNG's SHA-256 and the exact selected `receipt.json` SHA-256.
+The immutable receipt retains `frameReview=Pending`; independent review does not rewrite it.
+Do not relabel the historical old-host obscured original as a current accepted first read.
+HOST must establish quiet summary writers and quiet/unpaired transport, record the original
+bridge/peer configuration, and restore it after reconciliation. Absence of connected nodes or
+a running listener alone cannot prove that no producer has future work. Do not disable the
+listener, freeze live preferences, clear state or overwrite a newer publication to create
+these preconditions. If quiet ownership cannot be established, leave the mutation route Pending.
+
+For one `observeDelivery` invocation, retain the same identity arguments and selected
+`deliveryProbeId`, change the explicit method and add all these `-e` strings:
+
+| Argument | Required value |
+| --- | --- |
+| `deliveryScenario` | One of `normal`, `delayed`, `obsolete`, `recovery`, or the 18 finite `fixture-*` scenarios in the [catalog](../apps/wear_android/README.md#guarded-normal-datasource-observations) |
+| `authorizedOperation` | `observeDelivery:<deliveryScenario>`, or the separately admitted production-payload operation below, explicitly authorizing this exact scenario's publications, bounded requests and recovery |
+| `quietWriters` | `confirmed-unpaired`, after establishing the HOST precondition |
+| `firstFrameReview` | `complete-unobscured`, after inspecting this probe's original |
+| `expectedDeliveryProbeSha256` | SHA-256 of the exact selected `probes/<id>/receipt.json` |
+| `expectedReviewedFrameSha256` | SHA-256 of that exact private original PNG |
+| `expectedFixtureSha256` | For every `fixture-*` scenario: independently supplied SHA-256 of the original packaged asset bytes; requires a debug target |
+| `expectedReorderAfterSha256` | Additionally for `fixture-n3_reorder`: independently supplied SHA-256 of `watch_dashboard_summary_n3_reorder_after.json` |
+| `priorDeliveryRestorationReview`, `expectedPriorDeliveryRestorationSha256` | After an earlier case: `complete` and the exact prior receipt hash after its separate effective-restoration review |
+
+Neither the probe receipt nor inventory/peer reads authorize these writes or establish quiet
+writers. Selection requires the exact receipt/PNG hashes, its native-record hash and matching
+current host, instance, configuration, mapping and full provenance scope. Incomplete, changed,
+cross-scope or ambiguous sidecar evidence is rejected without repair or fallback. The case
+receipt retains `deliveryProbeId`, `reviewedProbeSha256` and `reviewedFirstFrameSha256`.
+A new read grants no publication authority. One method runs one bounded scenario; its global
+`files/native_datasource/<scenario>/` directory prevents replay independently of probe ID.
+The normal case
+publishes a sanitized pair through `WatchSummaryStore.saveEncoded` and requests the selected
+system IDs. Delayed stages withhold extra requests until after the main observation; obsolete
+removes secondary mains/extras, and recovery restores the pair. Inspect every original
+requested/bounded frame and actual effective data. Requested updates, accepted application
+state, a runtime accessibility event, cached native data and effective rendering are separate
+evidence. No callback provenance or transition PASS follows from request return, event arrival,
+event timeout or the final frame. Redacted native fields can leave semantics unavailable.
+
+##### Retained-extra production payload observation
+
+This 2026-10-31 test-contract extension is Source support only. It grants no early
+provisioning, device write or native acceptance. Square `normal`,
+`fixture-n1_pair_zero_full`, `fixture-n1_pair_near_full_tiny` and `delayed` remain consumed,
+with original frames, historical Pending labels and exact old recovery receipts unchanged.
+Root must separately admit both
+the actual changed **production** WFF payload and its observation, after whole execution
+DONE, owning CLI exit, owned-process retirement and a fresh separate idle observation.
+Unused fixture, SDK, obsolete and recovery cases do not replace either required witness.
+
+Keep the same probe/identity/recovery arguments above. The **2026-10-31 near-full extension**
+permits exactly `deliveryScenario=fixture-n1_pair_near_full_tiny` alongside retained `delayed`
+support. Only these two scenarios permit `expectedRetainedExtraAdmissionSha256`, the exact
+SHA-256 of the Root-reviewed private `files/native_datasource/retained-extra-admission.json`. Its bytes
+must already be present through separately authorized HOST provisioning. The code accepts
+no caller-selected path, automatic baseline, migration or provenance fallback. Sidecars,
+missing/changed bytes, incomplete joins or missing historical evidence block observation.
+`readNativeRetainedExtraAdmission` in
+[NativeDatasourceState.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeDatasourceState.kt)
+checks the record before reservation, publication or requests. Its private record contains:
+
+| Field | Required meaning |
+| --- | --- |
+| `kind`, `scenario` | Exactly `retained-extra-production-payload` and the selected `delayed` or `fixture-n1_pair_near_full_tiny` scenario |
+| `baseline`, `candidate` | Separate artifact objects, with every field below |
+| `sourceSha256` | SHA-256 of that artifact's reviewed `tools/render-watchface.mjs` source |
+| `generatedXmlSha256`, `builtXmlSha256`, `installedXmlSha256` | Identical SHA-256 digests of canonical generated XML, the actual built production APK's raw `watchface.xml`, and the installed resource bytes for that artifact |
+| `builtApkSha256`, `resourceApkSha256` | Identical SHA-256 digests of the built and installed resource APK |
+| `resourcePackage` | The actual Legacy or owned Push resource package |
+| `instanceSha256`, `configurationSha256`, `scopeSha256` | Artifact's actual active renderer instance/configuration hashes and complete delivery mapping provenance scope hash |
+| `baseline.receiptSha256` | Exact immutable original `<scenario>/receipt.json` hash, including its separate later restoration; its scenario and scope must equal the admission scenario and baseline scope |
+
+All digests are lowercase 64-character SHA-256 strings. Root's review binds the baseline
+source/generated/built/installed/active evidence to that scenario's original consumed receipt, and
+the candidate joins to the actual production artifact. The hash-pinned record is an explicit
+owner attestation of historical/source/build joins; the instrumentation cannot independently
+reconstruct historical installed bytes or inspect the host checkout. Missing evidence must
+block that attestation. Do not fabricate a baseline or qualify a diagnostic/test overlay as
+production. Preserve the original recovery receipt exactly; the admission is a separate file.
+
+Both generator source and production XML digests must differ from the baseline. APK,
+signature, test, probe, instance or configuration churn alone cannot qualify unchanged
+XML. Candidate package/instance/configuration/full provenance scope must match the current
+renderer and mapping. Instrumentation independently reads that package's installed raw
+`watchface` resource, compares its XML digest, and brackets it with identical installed APK/
+signer identities and a retained renderer/mapping read. The installed APK/signer must also
+match the ordinary `expectedResourceApkSha256`/`expectedResourceSignerSha256` arguments.
+Package access or an unresolved artifact join is a real capability gap, never permission
+to replace the target or change the XML identity to manufacture admission.
+
+For the near-full scenario, also supply
+`expectedFixtureSha256=4aa6180f44dcb5c920a15f12ef5f5dd4167d87ab1e9ff7ee8b86bd2b8d97f4e8`
+and a debug target. The baseline receipt must contain exactly one `fixtureInputs` entry for
+`watch_dashboard_summary_n1_pair_near_full_tiny.json` with that hash and exact original-byte
+restoration. Instrumentation verifies the actual packaged bytes before reservation, then
+passes the original UTF-8 string, mock mode and historical timestamp unchanged through the
+existing summary lease/store and targeted services. It records the existing single `fixture`
+stage. No other fixture or arbitrary asset/path is admitted by this extension.
+
+Set `authorizedOperation=observeDelivery:<scenario>-payload-<candidate.generatedXmlSha256>`.
+The delayed operation/path remains unchanged; the near-full prefix is exactly
+`fixture-n1_pair_near_full_tiny-payload-`. Scenario and payload digest key the separate attempt
+directory, regardless of admission/test/probe changes. `reserveNativeRetainedExtraCase` arms global `latest.json`, creates that fresh
+directory and durably persists its receipt before the summary lease can publish or dispatch.
+A partial reservation fences later mutations through the global prior-recovery gate; a
+reserved scenario/payload cannot replay after failure or recovery. Candidate receipts retain the reviewed
+admission content/hash and production XML digest. Legacy recovery resolution is unchanged.
+`normalRestorationScenario` may explicitly select `delayed-payload-<digest>` when a later
+SDK/client route needs that exact separately reviewed normal recovery. A near-full fixture
+payload receipt never qualifies as a normal control; existing normal qualifications are unchanged.
+While a candidate is globally latest, both normal-recovery consumers also require its
+`priorDeliveryRestorationReview=complete` and exact `expectedPriorDeliveryRestorationSha256`;
+an older normal receipt cannot bypass a partial or unresolved candidate attempt.
+
+Run separate `observeRestoration` only with the same admission/hash and selected `deliveryScenario`.
+It must still be the global latest case; the saved admission hash and current artifact joins
+must match before its one later frame is armed. The existing lease preserves newer producer
+data and independent targeted cleanup. Immediate cleanup is not later restoration or paint
+acceptance. `priorDeliveryRestorationReview=complete` and the exact candidate receipt hash
+remain necessary before subsequent mutations. Missing/failed separate restoration stays Pending.
+
+The existing private
+`NativeDatasourceGuardTest.explicitProbeSelectionRetainsHistoryAndRejectsReusedOrChangedEvidence`
+covers synthetic admission/history/replay/partial-attempt rejection; the existing
+`failedPublicationRestoresOnlyOwnedDataAndRetainsUnresolvedRecovery` exercises reserved leases
+under failure and newer publication. These extend existing methods, preserving default/manual
+discovery counts. Their execution, native compositing/antialiasing, original effective-data/frame
+review, candidate joins, justified finite cases, exact recovery and restored ordinary Face/Glance
+verification remain later HOST duties. For near-full acceptance, inspect every original and
+actual effective-data limits, the large green Codex main proportion and independent tiny Spark
+outer. Requests/events/types and rounded 100/0 labels establish neither the native fields,
+selected branch nor repaired paint. Verify exact restoration, separate later recovery and
+ordinary Face/Glance recovery. Corrected-artifact delayed and near-full acceptance is **Pending**;
+this route is neither an admission, waiver nor PASS. All original item12 compatibility and
+acceptance obligations remain required; public acceptance follows native acceptance.
+
+The fixture route uses only the 19 existing assets across 18 scenarios listed in the catalog.
+All names are fixed in `nativeDeliveryFixtureAssets` in
+[NativeDatasourceState.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeDatasourceState.kt);
+no argument accepts a path or arbitrary payload. Single-input scenario names are
+`fixture-<suffix>`; `fixture-n3_reorder` alone selects two inputs, in before/after order.
+The bytes come from the instrumentation context's packaged assets, not a device file push.
+Hash both independently approved originals and reconcile the actual test APK's packaged inputs
+before admission. `readNativeDeliveryFixtures` requires exact authorization and all selected
+hashes before any case write/publication. Neither timestamps nor mock mode are rewritten;
+the normal store/services retain their decoder behavior. Historical mock inputs supply no
+healthy public-cohort evidence.
+
+For example, after the separate provisioning, current-first review and quiet-custody admission,
+the exact two-input invocation shape is below. Populate every variable from independent current
+evidence. If a previous case exists, also supply
+`-e priorDeliveryRestorationReview complete -e expectedPriorDeliveryRestorationSha256 "$NATIVE_PRIOR_RESTORATION_SHA256"`
+after its separate settled review; this applies across all normal, fixture and SDK cases.
+
+```sh
+adb -s "$WEAR_SERIAL" shell am instrument -w -r \
+  -e class app.wardpulse.wear.nativeintegration.NativeDatasourceTransitionTest#observeDelivery \
+  -e wardpulseNativeIntegration normal-delivery \
+  -e deliveryScenario fixture-n3_reorder \
+  -e authorizedOperation observeDelivery:fixture-n3_reorder \
+  -e expectedFixtureSha256 "$NATIVE_REORDER_BEFORE_SHA256" \
+  -e expectedReorderAfterSha256 "$NATIVE_REORDER_AFTER_SHA256" \
+  -e deliveryProbeId "$NATIVE_DELIVERY_PROBE_ID" \
+  -e expectedDeliveryProbeSha256 "$NATIVE_PROBE_RECEIPT_SHA256" \
+  -e expectedReviewedFrameSha256 "$NATIVE_FIRST_FRAME_SHA256" \
+  -e firstFrameReview complete-unobscured -e quietWriters confirmed-unpaired \
+  -e expectedAvd "$NATIVE_AVD" -e expectedFingerprintSha256 "$NATIVE_FINGERPRINT_SHA256" \
+  -e expectedCallerUid "$NATIVE_CALLER_UID" -e expectedHostVersionCode "$NATIVE_HOST_VERSION_CODE" \
+  -e expectedHostApkSha256 "$NATIVE_HOST_SHA256" -e expectedHostSignerSha256 "$NATIVE_HOST_SIGNER_SHA256" \
+  -e expectedResourceApkSha256 "$NATIVE_RESOURCE_SHA256" -e expectedResourceSignerSha256 "$NATIVE_RESOURCE_SIGNER_SHA256" \
+  -e expectedRuntimeApkSha256 "$NATIVE_RUNTIME_SHA256" -e expectedRuntimeSignerSha256 "$NATIVE_RUNTIME_SIGNER_SHA256" \
+  -e expectedRuntime "$NATIVE_RUNTIME" -e expectedResourcePackage "$NATIVE_RESOURCE_PACKAGE" \
+  -e expectedInstanceSha256 "$NATIVE_INSTANCE_SHA256" -e expectedConfigurationSha256 "$NATIVE_CONFIG_SHA256" \
+  app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+For an active owned Push resource also supply its freshly read `expectedSlotSha256`, as above.
+For a single fixture replace `deliveryScenario` and `authorizedOperation` with that exact catalog
+scenario, supply its `expectedFixtureSha256` and omit `expectedReorderAfterSha256`.
+This example grants no current publication authority: quiet custody remains independently
+unproved until HOST establishes it. Restored radios or a connected bridge prove no quietness.
+
+`files/native_datasource/<scenario>/receipt.json` retains original asset names/hashes and
+Pending publication/observation stages in `fixtureInputs`, plus separate `publications` and
+`events`. Single fixtures record `fixture-requested.{png,json}` and
+`fixture-bounded.{png,json}`; reorder records `reorder-before-*` and `reorder-after-*`
+separately in the same directory/lease. `observeNativeDeliveryStage` records selected-event
+availability separately from stage acquisition within the unchanged five-second wait. Each stage
+joins its exact fixture and accepted-summary hashes, current full scope and intended targets to
+the actual PNG/sidecar names and hashes. Complete originals, valid native metadata, fresh scope/
+ownership checks and successful persistence are required to record acquisition. Event absence
+alone does not stop later publication when that independent evidence exists; missing, invalid or
+unseen evidence remains Pending/failure. Genuine request, capture, mapping, ownership and
+persistence errors, including timeout-shaped action failures, stop the invocation and attempt
+independent targeted recovery while preserving the first failure if cleanup also fails.
+A selected event or successfully acquired originals prove no input-specific delivery or paint,
+and a later after-frame proves no unseen before-stage behavior. Inspect both
+stages against the existing literal fixture/API oracles, including titles, zero tokens, colors,
+exact ranges, extra positions and obsolete NoData. Accepted bytes, request return, event boundary,
+effective data and paint remain separate. These are manual cases, never an automatic matrix.
+
+`NativeSummaryLease` retains originals opaquely and restores only attributable owned data
+after rechecking quiet writers. A newer publication is preserved and recorded privately;
+unresolved interleaving/transport retains recovery material and stays Pending. There is no
+cross-writer atomic compare-and-set guarantee. Requests and independent normal-data recovery
+use only freshly validated intended targets with `requestUpdate`. Each provider group must be
+durably armed before fresh mapping validation and dispatch; failed persistence prevents dispatch.
+Publications also arm durably before a fresh full-scope mapping read and the main-thread
+ownership recheck/save; slow native reads run off the main thread.
+Recovery attempts independent groups even if one fails, preserving newer producer data.
+Unresolved mapping or uncertain dispatch stays Pending without stale-ID reuse, blanket requests
+or retries. A durable latest-case fence requires the prior later-restoration receipt and explicit
+HOST effective-recovery review before another scenario; no scenario can be replayed.
+`files/native_datasource/latest.json` remains global, outside `probes/<id>/`. Selecting a
+different current first read cannot reopen a case or bypass prior-recovery review.
+The immediate frame is diagnostic. After actual native
+settlement, select `observeRestoration` once with the same identity arguments plus
+`deliveryScenario`; it records a separate later original and newer-write status without
+publishing or restoring a snapshot. Verify actual restored normal delivery/rendering, retained
+instance/bindings/upper choices/consent/settings/time/font/ambient and the original HOST bridge
+state; reconcile newer data instead of forcing the old digest. Keep `.bin` originals,
+reconciliation bytes, raw records and frames app-private until recovery/review is resolved.
+
+`NativeDatasourceGuardTest` has four separately selectable private admission/selection/mapping/
+cleanup cases. Select the new guard explicitly as
+`app.wardpulse.wear.nativeintegration.NativeDatasourceGuardTest#explicitProbeSelectionRetainsHistoryAndRejectsReusedOrChangedEvidence`
+on the stock runner. It uses private synthetic files only, preserving historical/global
+evidence while checking independent creation, invalid/duplicate IDs, partial/changed captures,
+scope mismatches and exact hash/sidecar rejection; it reviews no real native original.
+The three normal-delivery methods and four datasource guard cases are annotation-excluded from
+the default 48. With the six SDK direct-data cases below, the manual total is 48. Neither source
+completion nor a successful instrumentation exit closes unavailable provenance, unseen transitions
+or effective-restoration acceptance. The existing cleanup guard exercises the shared stage path
+with synthetic private originals: event presence/absence, missing/invalid evidence, unseen-before
+versus later evidence, persistence failure and genuine action failures with independent recovery.
+This changes no discovered method or default exclusion and supplies no native paint/restoration
+proof. Compilation, affected guards, packaged counts and new native observations remain unrun.
+All native outcomes remain
+Pending until ordered HOST execution and inspection. Retire the instrumentation's single
+UiAutomation owner before another native/hierarchy owner starts.
+
+#### Guarded SDK direct-data observations
+
+The direct route is limited to API36 public SDK updates under the ordinary target UID. It is
+independent of the unresolved historical client route and supplies no client/bitmap PASS.
+Use the stock `app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner` and exactly one
+`app.wardpulse.wear.nativeintegration.NativeDatasourceTransitionTest#probeDirectCapability`,
+`#observeDirectData` or `#observeDirectRestoration` method (the latter two use the same full
+class prefix). All require literal `-e wardpulseNativeIntegration sdk-direct-data`, plus the
+same freshly observed caller, emulator/image/display, host/resource/runtime, active
+instance/configuration and applicable owned-Push identity arguments as the datasource probe.
+Never select the whole class on the stock runner or use the isolated runner for these methods.
+
+Before capability probing, use `probeDelivery` with `normal-delivery` and a NEW explicit
+`deliveryProbeId`. Independently review that current unobscured original and exact hashes;
+the old obscured original is retained without relabeling. For `probeDirectCapability` add:
+
+| `-e` argument | Value |
+| --- | --- |
+| `deliveryProbeId` | Explicit current first-read ID |
+| `firstFrameReview` | `complete-unobscured` after independent review |
+| `expectedDeliveryProbeSha256` | Exact selected `probes/<id>/receipt.json` hash |
+| `expectedReviewedFrameSha256` | Exact selected `probes/<id>/first.png` hash |
+
+The once-only `files/native_datasource/probes/<id>/sdk-direct-capability/receipt.json` records
+`WEAR_BAKLAVA_0` availability, ordinary `targetContext` acquisition and fresh scope retention.
+Failure consumes the directory; no automatic retry, grant or alternate context is allowed.
+API35.1 typed reads do not establish API36 update capability; acquisition establishes neither
+an actual update outcome nor effective data/paint. Independently review the capability receipt.
+
+For exactly one `observeDirectData`, keep those arguments and additionally supply:
+
+| `-e` argument | Value |
+| --- | --- |
+| `directScenario` | `unsupported-range`, `malformed-title`, `partial-no-data-main` or `no-data-main-valid-extra` |
+| `authorizedOperation` | `observeDirectData:<directScenario>` for this exact operation |
+| `expectedDirectCapabilitySha256` | Exact selected capability receipt hash |
+| `quietWriters` | `confirmed-unpaired` after independent quiet-writer/bridge custody |
+| `normalRestorationReview` | `complete` after current targeted normal recovery review |
+| `normalRestorationScenario` | Reviewed `normal`, `delayed`, `obsolete`, `recovery` or separately admitted `delayed-payload-<digest>` case |
+| `expectedNormalRestorationReceiptSha256` | Exact normal-case receipt hash, after separate later observation and review |
+| `priorDeliveryRestorationReview`, `expectedPriorDeliveryRestorationSha256` | For a prior global case: `complete` and that exact reviewed receipt hash |
+
+The shared client/direct recovery-support fence requires matching full provenance/mapping,
+successful normal cleanup, original-byte reconciliation, a later observation and current
+normal producer data. Each case directory `files/native_datasource/sdk-<scenario>/` is single-use,
+independent of probe ID. The global `latest.json` fence includes SDK cases. An SDK constructor
+rejection establishes no native effect; its exact receipt still needs review before another case.
+
+See the [finite data and evidence contract](../apps/wear_android/README.md#guarded-sdk-direct-data-observations):
+MAX300/VALUE111 is unsupported range; invalid TITLE uses valid 0/400/148; main-only NoData
+targets Today; the fourth case sends Today NoData then RingSplit 0/400/148/TITLE0 sequentially.
+`nativeSdkDirectData` supplies complete deterministic ranged inputs through public typed
+setters: explicit generic `RangedValueComplicationData.TYPE_UNDEFINED`, a single-color ramp
+with interpolation explicitly false, short text `37%` and content description `Test percentage`.
+Mains use `RingFamily.CODEX`; the valid RingSplit extra uses `RingFamily.CODEX_SPARK`.
+Emitted-object checks and the existing finite-builder guard verify presence and exact content
+alongside the scenario's range, title and ordered targets. Each negative retains valid unrelated
+channels; main-only NoData remains independent of ranged inputs and a RingSplit target.
+This construction establishes no observed nonpaint, delivery or paint acceptance. There are
+no raw-map or reflection bypasses. No pair atomicity or automatic suppression of valid extra
+data is asserted.
+
+Before the first call, all potentially affected targets are durably armed. Each per-ID call
+freshly validates full typed/system/native joins and unchanged current normal producer data.
+Dispatch return and bounded `OutcomeReceiver` processing/forwarding are recorded separately
+from effective native data and per-ID original PNG/JSON observations. Error/timeout retains
+uncertain effect; late callbacks cannot rewrite terminal evidence. Recovery runs on success
+and failure for every armed target through fresh current normal requests, including uncalled
+targets. Remaining independent provider groups are attempted after failures; newer producer
+data is never overwritten. No uncertain dispatch is automatically retried.
+
+After actual settlement, separately select `observeDirectRestoration` with the same current
+identity arguments and `-e directScenario <scenario>`. It records `restoration-later.png/json`
+and detects newer producer data. HOST must inspect effective normal data, the later original,
+retained bindings/upper choices/consent/settings/time/font/ambient and original bridge state.
+Requests, callbacks and immediate cleanup frames cannot clear recovery; before another case,
+bind explicit review to the final exact prior receipt hash using the prior-delivery arguments.
+Retain all private reference bytes, receipts and originals until reconciliation.
+
+`NativeSdkDirectDataGuardTest` has three explicitly selectable excluded methods:
+`api36AndExactManualAuthorizationCannotBeReplacedByTypedReads`,
+`finitePublicBuildersRetainRangesTitlesAndSequentialPartialTargets` and
+`durableArmingUncertainCallbacksAndIndependentRecoveryCannotBeSkipped`. They use synthetic
+private evidence, public construction and injected dispatch/recovery, without a live update.
+Source inventory is **48 default + 48 manual = 96**; packaged discovery/execution remains HOST.
+After whole execution DONE, owned-process retirement, owning CLI exit when used and fresh
+separate idle, Root reconciles the complete provisioning footprint and candidate order before
+full `just check-wear`, docs confirmation, test-APK provenance/install admission, affected/new
+guards and the full default suite on its correctly provisioned owning candidate. Only then
+admit the NEW current first read and separately authorized capability/finite cases/recovery.
+Preserve actual Push5, the genuine historical 47-test PASS and the separate failed preservation/
+missing UI4→5 witness. No downgrade/reset/replay/code6, retroactive witness, permission/query/
+context bypass or app-only remedy is authorized. Current active identity, viewport/geometry,
+compatibility, public/restoration duties and broader item12 acceptance remain Pending.
+Physical phone use remains forbidden for this scope.
+
+#### Independent client metadata observation
+
+For the independent read, select exactly
+`app.wardpulse.wear.nativeintegration.NativeClientMetadataTest#observeClientMetadata`
+on `app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner`, with
+`wardpulseNativeIntegration=client-metadata`. The isolated runner excludes it. This is a later
+HOST observation after whole Runner DONE, owned-process retirement, any owning-CLI exit and
+fresh separate public idle, with fresh runtime identity/custody and reviewed test-only provisioning.
+No phone action or target installation to manufacture capability is authorized. Surface any
+genuine target dependency for admission rather than relaxing guards.
+
+The read checks current facts using `NativeReadAdmission` in
+[NativeReadObservation.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeReadObservation.kt),
+without the historical update journal, requester mappings or quiet-bridge admission. Preserve
+Round Wear4/asset3/Push4 as historical evidence; the recorded current host is Wear4/asset5.
+Current reads must retain actual Push5 and freshly verify installed identities independently
+of Source/builds. Legacy-only Square does not need fabricated Push ownership/history. Supply
+independently observed values:
+
+| Arguments | Current evidence |
+| --- | --- |
+| `expectedAvd`, `expectedFingerprintSha256` | Canonical emulator and exact current system image |
+| `expectedCallerUid`, `expectedHostVersionCode` | Actual target/provider UID and installed Wear code, without assuming code 4 identifies the APK |
+| `expectedHostApkSha256`, `expectedHostSignerSha256` | Current target APK and signer before and after test-only provisioning |
+| `expectedResourcePackage`, `expectedResourceApkSha256`, `expectedResourceSignerSha256` | Actually active WFF resource package/APK/signer, independent of opaque instance identity |
+| `expectedRuntime`, `expectedRuntimeApkSha256`, `expectedRuntimeSignerSha256` | Active runtime class suffix and installed runtime APK/signer |
+| `expectedInstanceSha256` | Current opaque native instance hash, not a WFF resource WatchFaceId or SDK manager slot |
+| `clientArtifactReview` | `resolved-1.2.1`, after actual resolved AAR/graph review |
+| `expectedClientArtifactSha256`, `expectedClientGraphSha256` | Exact resolved client 1.2.1 AAR and retained dependency-graph receipt hashes; caller assertions alone prove no provenance |
+
+Use the stock invocation shape above with the exact class/method, `client-metadata` opt-in and
+all these arguments expanded. No candidate flags, manager-witness review, asset-3 hash,
+Push4 hash, requester IDs or restoration receipt is an input to this read. Actual inaccessible
+APK/service/permission/instance evidence remains an explicit outcome, without grants or fallbacks.
+
+For current `NativeReadAdmission.resourceIdentity` calls, `readNativeRuntimePackage` in
+[NativeReadObservation.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeReadObservation.kt)
+uses existing UiAutomation only for a fixed runtime `pm path` discovery. `readInstalledRuntimePath`
+reads at most 4097 bytes, accepts at most 4096 and requires EOF, a conditional completion marker
+and exactly one absolute APK path. Additional/split, malformed or incomplete output is rejected.
+The ordinary target UID/context reads the APK bytes and calls `getPackageArchiveInfo` with
+`GET_SIGNING_CERTIFICATES`; real archive/application metadata must identify the exact runtime,
+a positive version, one current signer and no splits. Repeated APK hashes and complete path
+discoveries bracket parsing, and observed hash/signer must match current HOST expectations.
+The parsed version is retained in runtime identity receipts and outer brackets. No argument,
+path, hash or archive `sourceDir` supplies missing metadata. No installed-package lookup,
+adopted identity, SDK-context substitution, query/grant/permission or target replacement is added.
+The historical `NativePackage.read`, Candidate and entire SDK3→4 flow remain unchanged.
+Byte readability under the UID and synthetic success do not prove Java archive/signature/version
+parsing. Later HOST must verify actual JUnit/receipt outcomes and package/hash/signer/version
+against independent current provenance; unreached downstream capability remains Pending.
+
+Inspect private `files/native_read/client-*/receipt.json`. `operations` distinguishes uninvoked,
+unsupported, null/empty, denied/inaccessible, timeout, ambiguous/domain-unresolved and acquired
+results. Current failures retain `failureType` (actual class name, syntax-validated and at most
+192 characters, otherwise `Unknown`) and fixed `failureSubstage` values for runtime discovery,
+bytes, archive parsing and identity checks, or operation/recording stages. Outcome classification
+and the original failing substage survive recording/cleanup failures. No exception message,
+cause, stack or sensitive payload is emitted. The historical thrown class remains Unknown.
+`clientSlots` records actual client keys/enabled states/supported types before matching;
+different numbers from native slots are retained. `beforeFace`/`afterFace`, caller identities and
+resource/runtime identities bracket the observation; raw configuration hashes are diagnostic,
+not an invented selected-provider producer. Missing/changed evidence leaves association unresolved
+while preserving returned metadata. No data, rendering, restoration or message call is made.
+
+The read-only receipt kind cannot authorize `observeOverride`. The shared acquisition custody
+in `files/native_client/acquisition/` fences both old and new client owners. A five-second
+factory deadline and successful binding cleanup do not release an unreturned remote reference;
+synchronous calls must return, and failed/unresolved custody requires HOST reconciliation before
+another owner. Keep cleanup failures separate from acquisition outcomes and retain evidence.
+The ten synthetic client guard cases, including three runtime-reader additions and expanded
+outcome assertions, require later actual HOST execution; source review is not
+runtime acceptance, restoration proof or #12 closure. The original historical SDK3→4 admission,
+journal and settled witness remain unchanged.
+
+#### Typed own-provider config observation
+
+Select exactly
+`app.wardpulse.wear.nativeintegration.NativeTypedConfigTest#observeActiveComplicationConfigs`
+on `app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner`, with
+`wardpulseNativeIntegration=typed-configs`. The isolated runner excludes it. Use the stock
+invocation shape above and the independent-read current caller arguments: `expectedAvd`,
+`expectedFingerprintSha256`, `expectedCallerUid`, `expectedHostVersionCode`,
+`expectedHostApkSha256` and `expectedHostSignerSha256`. Actual process/target/package/signer
+checks precede public SDK acquisition; no shell UID is adopted for that call. Historical Push,
+requester, client-artifact and quiet-bridge inputs are not required.
+
+For optional active-face bracketing, additionally supply the independently observed current
+`expectedResourcePackage`, `expectedResourceApkSha256`, `expectedResourceSignerSha256`,
+`expectedRuntime`, `expectedRuntimeApkSha256`, `expectedRuntimeSignerSha256` and
+`expectedInstanceSha256` arguments described above. Missing/inaccessible/changed bracket evidence
+does not suppress own-provider metadata and cannot authorize a join. Preserve raw configs and
+inspect each operation's invocation, target, returned domain and outcome rather than treating an
+instrumentation exit as complete acceptance.
+
+[NativeTypedConfigTest.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeTypedConfigTest.kt)
+checks public Wear SDK 35.1 availability (`WEAR_VIC_1`), acquires `ComplicationsManager` with the
+actual target context and calls `getActiveComplicationConfigsAsync`. Existing platform
+`useLibrary("wear-sdk")` compile wiring supplies the public types absent from the prior test
+compiler classpath; versions and the existing required-library contract are unchanged. Class
+loading, availability and manager acquisition each still need runtime evidence. No reflection,
+hidden API, new Maven dependency, grant or fallback is used.
+
+Inspect fresh private `files/native_read/typed-*/receipt.json` for actual provider/system `id`,
+`watchFaceSlotId`, provider component, resource `WatchFaceId` package/null-or-present class and
+data type. Resource identity is separate from native opaque instance identity. Neither equal
+numbers nor offsets, modulo, ordering, provider-only or stale/default policy establish joins
+with generator/native/flat-row/client/SDK Push slot domains. `activeFaceAssociation` remains
+`ambiguous/domain-unresolved`, including with stable brackets, and read-only receipts cannot
+authorize mutations. The five-second callback wait starts after synchronous invocation returns;
+late/duplicate completions cannot change a terminal receipt, but no platform retirement is inferred.
+
+The five synthetic `NativeTypedConfigGuardTest` cases may later be selected explicitly by class
+on the stock runner, without querying SDK/live state. They test callbacks and records, not an OS
+producer. Actual execution/compilation and runtime capability remain pending HOST evidence,
+after whole Runner DONE, all owned-process retirement, any owning-CLI exit and fresh separate
+public idle. Before watch actions, freshly establish exact runtime identity/custody and reviewed
+test-only provisioning. No phone action, target installation to manufacture access, historical
+replay or state normalization is authorized. Preserve Round Wear4/asset3/Push4 as historical
+evidence; the recorded current host is Wear4/asset5. Current operations must retain actual
+Push5 and freshly verify installed identities independently of Source/builds. Surface genuine
+target dependencies.
+Broader native/restoration/artifact/compatibility/public acceptance gaps and whole-#12 closure
+remain pending.
+
+#### Owned Push inventory and connected peers
+
+These are separate later HOST observations on the stock
+`app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner` entry. Select exactly one method
+of `app.wardpulse.wear.nativeintegration.NativeInventoryObservationTest`:
+
+| Method | `wardpulseNativeIntegration` | Private receipt |
+| --- | --- | --- |
+| `observeOwnedPushInventory` | `owned-push` | `files/native_read/owned-push-*/receipt.json` |
+| `observeConnectedPeers` | `connected-peers` | `files/native_read/connected-peers-*/receipt.json` |
+
+Use the stock invocation shape in [Guarded Push witness](#guarded-push-witness), substituting
+the exact class/method and opt-in above. Supply only the independent current caller arguments:
+`expectedAvd`, `expectedFingerprintSha256`, `expectedCallerUid`, `expectedHostVersionCode`,
+`expectedHostApkSha256` and `expectedHostSignerSha256`. Neither route adopts shell authority
+for its API call or requires the historical version-3 probe, journal, bundle, active-face/
+resource/instance join, requester mapping or quiet-bridge inputs. The isolated runner excludes
+both methods. Never run default discovery on the stock runner.
+
+[NativeInventoryObservationTest.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeInventoryObservationTest.kt)
+uses the existing Push wrapper's support/list APIs. Inspect actual caller-owned package/version/
+manager-slot rows, remaining capacity, validation outcomes and the second inventory comparison.
+Only a returned owned WardPulse Push package permits its `isActive` read. An absent package
+leaves active status uninvoked; it is not a measured `false`. Active status and manager slots
+do not establish a native-instance or complication-slot join. Raw invalid/changed inventory
+remains retained with unresolved authority. Push reads use five-second cooperative deadlines.
+
+The peer route directly awaits `NodeClient.connectedNodes` for at most five seconds after
+synchronous task acquisition returns, then records remote ID/display name/nearby fields.
+It never calls `requestRefresh` or a message client. Late completion cannot rewrite a terminal
+receipt; no remote-retirement claim follows. Null, empty, denied/inaccessible, unsupported,
+timeout and ambiguous/domain-unresolved outcomes remain distinct from uninvoked/successful
+reads. Empty peers prove neither quiet writers nor lack of queued/local work, and GMS
+connection-category flags are not peer results. Both routes repeat current caller identity.
+Receipts are private read-only evidence and cannot satisfy override admission.
+
+The seven synthetic `NativeInventoryGuardTest` cases can later be explicitly selected by class
+on the stock runner; they do not access the SDK, peers or normal stores. Actual guard execution,
+complete `just check-wear`, artifact/graph renewal and applicable RED→GREEN remain HOST work
+after whole Runner DONE, all owned-process retirement, any owning-CLI exit and fresh separate
+public idle. Watch observations additionally require fresh exact runtime identity/custody,
+reviewed test-only provisioning and cleanup/recovery. Expose a genuine target dependency;
+do not replace a target to manufacture access. No phone action is authorized. Keep Round
+Wear4/asset3/Push4 as historical evidence; the recorded current host is Wear4/asset5. Current
+observations must retain actual Push5 and freshly verify installed identities independently
+of Source/builds; Legacy-only Square needs no invented Push history. Preserve the historical SDK3→4 journal/settled witness
+and strict mutation guards.
+Malformed/delayed/missing-main native, restoration, comprehensive artifact/compatibility and
+healthy public acceptance remain pending; no universal PASS, physical-device or #12 closure follows.
+
+#### Guarded complication client probe
+
+Use this later HOST route only after whole execution DONE, all owned-process retirement and
+separate fresh public idle, with separately reviewed compilation/provisioning as described
+for current datasource observations. Preserve original targets; this route cannot authorize
+early installation. Resolve and checksum the exact test-only client 1.2.1 artifact first,
+including the warm/empty-cache/reuse proof above. No permission grant, instance creation,
+activation, service-policy bypass or hidden state normalization is permitted.
+
+The pinned 1.2.1 rendering API declares `WatchFaceLayer` in `androidx.wear.watchface.style`.
+`NativeComplicationOverrideTest` uses that namespace without changing rendering parameters
+or dependency versions. The recorded unresolved-import Kotlin failure did not install a target
+or establish unavailable native capability. Corrected compilation, complete build checks and
+actual client access remain separate Pending HOST evidence.
+
+Select exactly one `NativeComplicationOverrideTest` method on the stock runner with
+`wardpulseNativeIntegration=client-probe`. The three guarded native methods, ten synthetic
+`NativeClientGuardTest` cases and independent metadata observation remain excluded by the
+isolated runner; with the thirteen datasource, six Push, six typed-config and nine inventory
+cases the manual total is 48 and the current default total is 48. The guarded native methods
+require the same current
+caller/resource/runtime/renderer and applicable owned-Push identity arguments as the
+[datasource probe](#guarded-datasource-observations), plus
+`clientArtifactReview=resolved-1.2.1` and `expectedClientArtifactSha256` from the actual resolved
+AAR. Freshly observe identities; do not reuse the pre-replacement host hash. Current admission
+requires no historical manager receipt, SDK-update entry resolution or old package cohort.
+Separate client authorization, permission/capability checks and custody still guard binding
+only the already-existing active instance; unavailable access remains Pending.
+
+For `probeClient`, use the prior stock-runner command shape with these substitutions:
+
+```sh
+adb -s "$WEAR_SERIAL" shell am instrument -w -r \
+  -e class app.wardpulse.wear.nativeintegration.NativeComplicationOverrideTest#probeClient \
+  -e wardpulseNativeIntegration client-probe \
+  -e clientArtifactReview resolved-1.2.1 \
+  -e expectedClientArtifactSha256 "$CLIENT_AAR_SHA256" \
+  ... \
+  app.wardpulse.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+The `...` denotes the mandatory identity arguments above; expand them before executing.
+This is an invocation template, not an executable abbreviated command. Inspect private
+`files/native_client/probe/first.png` for the first complete unobscured original and inspect
+`probe/receipt.json` for actual API/service/permission/instance/slot access and cleanup. A
+source signature, default datasource policy or caller-provided artifact hash proves none
+of these capabilities. Unavailable/denied/unmapped capability stays Pending; do not override.
+
+Only after a successful probe and supported recovery, select `observeOverride` once with:
+
+| Additional argument | Required independent HOST observation/review |
+| --- | --- |
+| `clientProbeReview`, `normalRestorationReview` | Both `complete` |
+| `expectedClientProbeSha256` | SHA-256 of the completed private probe receipt |
+| `firstFrameReview` | `complete-unobscured` |
+| `expectedReviewedFrameSha256` | SHA-256 of the inspected client probe original |
+| `quietWriters` | `confirmed-unpaired`; preserve/restore the original HOST bridge state |
+| `normalRestorationScenario` | The previously reviewed `normal`, `delayed`, `obsolete`, `recovery` or separately admitted `delayed-payload-<digest>` datasource case |
+| `expectedNormalRestorationReceiptSha256` | Exact completed datasource receipt after separate later restoration observation and effective-data review |
+| `overrideMode` | `active` or `supplied-bitmap` |
+| `overrideScenario` | One of the six cases in `nativeOverrideData` in [NativeClientProbe.kt](../apps/wear_android/app/src/androidTest/java/app/wardpulse/wear/nativeintegration/NativeClientProbe.kt) |
+| `authorizedOperation` | `observeOverride:<overrideMode>:<overrideScenario>`, explicit authorization for this exact direct-data operation and bounded normal-data recovery; read receipts are insufficient |
+| `priorClientRestorationReview`, `expectedPriorClientRestorationSha256` | After a previous armed client transport: `complete` and the exact prior case receipt hash following separate effective-restoration review |
+| `priorDeliveryRestorationReview`, `expectedPriorDeliveryRestorationSha256` | When a payload-bound candidate is globally latest: `complete` and its exact reviewed receipt hash after separate later restoration; an older normal receipt cannot bypass it |
+
+The [component contract](../apps/wear_android/README.md#guarded-complication-client-probe)
+defines cases, API/transport rejection, binding ownership and evidence limits. No argument
+may supply guessed slot IDs, raw payloads, permission or a new instance. Each mode/scenario
+is single-use, including failure; no retries, resets or deleted receipts to obtain a witness.
+Keep `.bin` summary reference bytes, effective-data records and original frames private.
+No summary is restored from those bytes: cleanup requests **current** normal producer data
+only for freshly revalidated affected targets, using the shared typed mapping and durable
+per-provider arming. Independent groups are attempted even after another failure; failed
+persistence or unresolved mappings forbid dispatch. No blanket request, stale IDs or retry
+can substitute. Legitimate newer publications and all existing choices/settings are preserved.
+
+After that client owner retires and normal delivery separately settles, select
+`observeRestoration` with the same mode/scenario and identity/artifact arguments. It captures
+one later native original, checks client/binding cleanup and notes producer changes. Inspect
+normal effective rendering and reconcile newer data, including bindings, upper choices,
+consent, settings, time/font/ambient and original bridge state. Failed close or unreturned
+interactive acquisition leaves resource ownership Pending; control unbind alone is not proof
+that an unreturned remote reference released. Do not start another owner until reconciled.
+The private latest-acquisition receipt guards subsequent cases; an earlier normal-delivery
+receipt cannot substitute for reviewing this route's own effective restoration.
+Supplied bitmaps cannot replace normal datasource/transition/true-ambient proof. No override,
+restoration or visual PASS is promised; full native acceptance stays Pending.
+
+#### Connected-suite retention policy
+
 Both `just test-wear-device` and the connected suite inside `just test-phone-watch-sync`
 require the shared Wear project policy in `apps/wear_android/gradle.properties`:
 `android.injected.androidTest.leaveApksInstalledAfterRun` must be true. It suppresses
@@ -881,6 +2265,25 @@ and unrestricted by keyguard. Record the prior power state and settings; an ordi
 `KEYCODE_WAKEUP` may wake a sleeping target, but verify the actual state before testing.
 Restore temporary power-state or setting changes exactly after verification. No screen-timeout
 change is required.
+
+**UiAutomation ownership.** Keep one automation owner per selected target while a
+connected instrumentation suite runs. Do not concurrently invoke `uiautomator dump`
+or another consumer that registers a separate UiAutomation service. Observe through
+noncompeting `screencap`, read-only `dumpsys`, or the existing instrumentation's own
+outputs; defer hierarchy dumps until that instrumentation owner finishes.
+Inspect the reported instrumentation test/run status and expected test counts before
+declaring PASS. Interpret the invocation's output mode: formatted JUnit
+`OK (...)`/`FAILURES!!!` summaries, or raw instrumentation status records with `-r`.
+Confirm the selected cases and expected counts in either mode; do not require raw
+`INSTRUMENTATION_STATUS_CODE: 0` in formatted output.
+An ADB exit code of zero does not establish test success; an automation
+registration abort supplies neither product-assertion evidence nor a verified frame.
+Preserve earlier RED evidence and distinguish such an invocation failure from it.
+Before recording a copied native artifact as present, verify its actual format and content:
+a decodable PNG for an image, or the expected case/metric records for text. An ADB transfer's
+exit code, destination filename or nonempty file alone proves none of this. Command
+diagnostics and absent conditional outputs remain missing evidence; preserve the original
+receipt and record the correction rather than accepting diagnostic text as an artifact.
 
 Prove scoped before/after continuity of target UID, APK identity, saved-summary digest,
 logical consent and verifier/debug-app/wait-for-debugger settings alongside work and pairing.
@@ -1012,6 +2415,7 @@ After an update:
 - [Android `sdkmanager` bootstrap](https://developer.android.com/tools/sdkmanager)
 - [Android Emulator controls](https://developer.android.com/studio/run/emulator)
 - [Android Emulator acceleration](https://developer.android.com/studio/run/emulator-acceleration)
+- [Android Emulator snapshots and management](https://developer.android.com/studio/run/emulator-snapshots)
 - [Android SDK platform releases](https://developer.android.com/tools/releases/platforms)
 - [Android Gradle Plugin 9.3](https://developer.android.com/build/releases/agp-9-3-0-release-notes)
 - [Compose BOM](https://developer.android.com/develop/ui/compose/bom)

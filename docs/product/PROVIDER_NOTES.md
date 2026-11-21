@@ -29,10 +29,71 @@ Each provider should document:
 
 Platform code owns transport, TLS, background scheduling, secure credential retrieval, retries, and encrypted storage. Rust owns parsing, validation, normalization, error mapping, aggregation, budgets, projections, alerts, and dashboard view models.
 
+### Family, source and compatibility identity
+
+`ProviderFamily`, `ConnectionKind` and `ProviderConnectionId` in
+`core/ward-pulse-core/src/model/identity.rs` mirror the phone family/kind pair.
+`ProviderSource` distinguishes a known connection, synthetic Mock and unresolved legacy origin.
+The private Serde boundary retains each original provider tag and optional connection;
+family/source fields are internal and introduce no schema or persisted encoding change.
+
+| Family | Source | Connection | Encoded provider |
+| --- | --- | --- | --- |
+| OpenAI | Codex plan | `openai.plan` | `codex` |
+| OpenAI | Platform reporting | `openai.platform` | `openai` |
+| Anthropic | Claude plan | `anthropic.plan` | `claude` |
+| Anthropic | Organization reporting | `anthropic.platform` | `claude` |
+| Cursor | Plan | `cursor.plan` | `cursor` |
+| Cursor | Team reporting | `cursor.platform` | `cursor` |
+
+Old account records need no source. Connectionless OpenAI/Codex snapshots retain their historical
+source distinction, while Claude/Cursor stay unresolved. Omitted/null connections keep the
+existing omission behavior. Unknown explicit keys and mismatched tag/key pairs round-trip
+without becoming a known source. Alert lookup prefers an explicit key; otherwise the legacy
+openai/codex/claude/cursor/mock fallback remains respectively `openai.platform`, `openai.plan`,
+`anthropic.plan`, `cursor.plan`, `mock.plan`. That fallback does not establish origin.
+
+Account IDs, credential/session keys, authorization, `HistoryOwner` and currentness remain
+independent. Family grouping grants no sibling access. Cache ownership still requires both
+the exact connection and legacy provider token. Alert-condition provider tokens and canonical
+key JSON, consumed markers, recovery ownership and remembered necessary constraints remain
+unchanged. FFI names, envelopes and string allocation ownership, phone labels and selections,
+ring/metric IDs and Wear schema version 9 are unchanged.
+
+`connection_capabilities` in `core/ward-pulse-providers/src/lib.rs` selects source-owned
+descriptors from the family `plan.rs` and `platform.rs` modules, with no family union.
+OpenAI Platform supports cost, tokens, requests, daily/hourly usage and daily costs, and usage
+model breakdown. Codex plan supports credits and daily token activity without Platform cost
+or requests. Claude and Cursor plans support allowances/credits without reporting buckets,
+tokens, requests or cost. Anthropic reporting supports cost, tokens, daily/hourly usage,
+daily cost, usage model and workspace breakdowns, without credits or requests. Cursor Team
+supports cost, requests and daily usage/cost without plan credits or tokens. Optional missing
+values do not disable supported descriptors. Synthetic Mock capabilities remain separate.
+`guidance` in `core/ward-pulse-providers/src/poll.rs` uses the shared connection identity,
+preserving each floor and the non-clamping Cursor Team freshness note.
+
+Existing normalization and tests live under `openai/{plan,platform}.rs`,
+`anthropic/{plan,platform}.rs` and `cursor/{plan,platform}.rs` in
+`core/ward-pulse-providers/src/`. Legacy normalization entrypoints and result/error types
+remain available through `openai`, `codex`, `claude` and `cursor` reexports.
+
 ### Validation stops short of rejecting timestamps
 
 Rust validates what it can act on. It deliberately does **not** reject a malformed instant:
-`DateTimeUtc` normalizes what it recognizes and passes anything else through unchanged.
+`DateTimeUtc` in `core/ward-pulse-core/src/time.rs` recognizes the numeric UTC shape
+`YYYY-MM-DDTHH:MM:SS[.digits]Z` without calendar validation. It retains nonzero fractions,
+trims insignificant trailing zeros and makes all-zero fractions equivalent to whole seconds.
+Its shared `Ord` compares seconds and then fractional digits, treating missing positions as
+zero. Recognized UTC values sort before opaque values, which sort lexically. Construction
+and deserialization remain infallible. Outside recognized forms, legacy removal of a dotted
+suffix before uppercase `Z` remains; other input passes through unchanged. This does not
+expand accepted timezones.
+
+`merge_dashboard_snapshots_json` in `core/ward-pulse-ffi/src/lib.rs` uses that shared ordering
+for the newest snapshot. A late older report cannot replace newer same-second cache data,
+including after restart; equal instants remain eligible to replace it. The supported end-to-end
+precision is microseconds within Dart/native timestamp representability. The core retains
+longer decimal fractions without promising that precision across the platform boundary.
 
 The reason is the failure mode, not the type. Instants arrive inside provider payloads, so a
 fallible parse would fail the whole report over one field, and a local-first dashboard would
@@ -44,6 +105,13 @@ boundary, which already returns an error envelope — not inside the core, which
 report anything.
 
 ## Consumption display
+
+**Current Claude scope, 2026-11-03.** Console organization API Money and Claude Plan monthly
+Extra usage are separate sources. Console's retained collection/management and source-owned
+Dashboard periods are restored; monthly Extra used amount, applicable cap and percentage
+remain independent. For Plan Extra, keep the existing Credits conversion as a compatibility
+choice, not a documented wire-unit or USD contract. Infer no wallet, missing amount, unlimited state,
+daily history, timezone or monthly reset. There is no tier-name gate or all-tier live certification.
 
 Providers may report plan allowances, purchased tokens or credits, or both. These values stay
 separate from monetary budgets because their units and reset rules differ.
@@ -113,6 +181,9 @@ per-provider capability tables below are the source of truth for what each conne
 - `Unknown` is reserved for transient provider state: a connection that has not synced yet or whose
   last sync failed. It stays on the status indicator rather than on values.
 - With no connections configured, the dashboard shows a single "Connect a provider" call to action.
+  Saved alert rules or local limits leave this deliberately idle dashboard and its watch summary
+  healthy. They supply neither reporting data nor evidence of successful sync; genuinely Unknown,
+  stale or error input keeps its status when settings are applied.
 - Debug **Mock data** loads a seeded multi-provider demo (OpenAI, Codex, Claude plan + platform,
   Cursor plan + platform) so the full dashboard stays reviewable without live credentials.
   Utilization reshuffles on toggle/refresh (not on automatic sync ticks); the Phase 1 single
@@ -130,10 +201,24 @@ comments, and are the single source of truth for cadence:
   5–15 by 1 minute, 15–30 by 5, and 30–60 by 10, so a single global cadence already satisfies
   every per-connection floor;
 - `effective_interval = max(user_setting, provider_minimum)` per connection;
+- automatic starts share a durable native admission anchor across foreground and headless
+  engines. Startup, timer and periodic work use the current slider preference after queued
+  ownership is obtained. Failed admitted attempts consume spacing. Denied claims record no
+  provider attempt. If the clock moves behind the anchor, a claim saves the corrected time
+  and defers automatic work until the effective interval elapses from that sample.
+  Token rotation, snapshot invalidation and engine detach do not reset the anchor;
+- reset wakes use `max(5 minutes, provider_minimum)` against that same anchor, including
+  under a 60-minute preference. A denied pending reset is rebooked for its earliest eligible
+  start through the existing one-shot scheduler. Android may delay execution;
+- explicit phone/watch refresh, connection checks and reconnect loads retain their existing
+  guards, bypass automatic admission and do not advance its anchor. Resume adds no fetch;
 - automatic sync on the phone runs on an in-process scheduler while the app isolate is alive
   (full 5–60 minute slider); after Android reclaims the process, a WorkManager Dart
   entrypoint continues sync at `max(slider, 15 minutes)` (Android periodic minimum);
-- watch summary re-sent after each successful automatic sync;
+- watch/widget publication and alert/recovery bookkeeping require new evidence. A wholly
+  skipped load publishes neither surface nor alerts. In mixed loads, skipped connections
+  retain validated data and known stale/error state without new success times, consumed
+  alert markers or recovery evidence; deferred reset scheduling remains permitted;
 - a failed sync keeps the last successful snapshot visible and retries on the next tick, so a
   launch without connectivity still recovers without a manual refresh;
 - the Cursor Team Admin API row notes hourly provider-side aggregation and that refreshed values
@@ -148,7 +233,7 @@ a running agent.
 
 ## Connection grouping
 
-Every family on the **Providers** tab is one section with distinct Plan and reporting connections:
+Every family on the **Providers** tab is one section. Supported connection kinds are:
 
 - `plan`: subscription or allowance reads (Codex device-code OAuth; Claude Code PKCE OAuth
   with authorization-code paste from the callback page; Cursor dashboard WebView sign-in that
@@ -158,8 +243,8 @@ Every family on the **Providers** tab is one section with distinct Plan and repo
 
 The current user-facing plan names are **Codex plan**, **Claude plan** and **Cursor plan**.
 OpenAI groups Codex plan with Platform reporting; Anthropic groups Claude plan with
-Organization reporting; Cursor groups Cursor plan with Team Admin API. The Dashboard
-uses the same family grouping while keeping each account's data and status separate.
+Organization reporting; Cursor groups Cursor plan with Team Admin API.
+The Dashboard uses the same family grouping while keeping each account's data and status separate.
 A plan login does not grant reporting access or verify its sibling reporting key.
 An optional user-defined label for reporting keys is plain phone-local display metadata:
 
@@ -293,8 +378,60 @@ and reports `credits` once at the response root. The phone keeps the main limit 
 `codex`, retains credits only on that root report record, and builds the report's
 `rateLimitsByLimitId` map from the main limit plus known additional limits. Additional limits are
 recognized by a local `metered_feature` table: `codex_bengalfox` maps to `spark` / `Spark`. The
-API's versioned `limit_name` is not a stable label, and an unknown feature is omitted until the
-table is updated rather than exposed under an internal code name.
+reserved literal `metered_feature=codex` is retained as a collision with the unnamed root,
+including complementary valid slots, in both root report representations. It leaves that
+root scope incomplete. The API's versioned `limit_name` is not a stable label, and an
+unrelated unknown feature is omitted until the table is updated rather than exposed under
+an internal code name.
+
+Recovery applicability is a separate optional `recoveryRequirements` descriptor on each
+normalized allowance: required Plan allowance IDs, scoped to the same account and history
+owner, plus `complete`. A complete scope includes its target. Missing or malformed context
+means targeted Unknown; it does not change raw consumption, quantities, status or resets.
+`reconcile_plan_recoveries` in `core/ward-pulse-core/src/recovery/mod.rs` returns both
+`pending` and `recoveries`. `PendingRecovery` saves flat window identity with optional
+requirements. Reconciliation merges saved and current requirements before evaluating fresh
+usable capacity across that complete scope. A narrowed current descriptor leaves the merged
+scope incomplete until it again accounts for every remembered necessary allowance; display
+threshold decoration cannot qualify those omitted constraints. Exhausted, missing, invalid,
+stale or Unknown necessary evidence retains the target, even after its own raw window has
+room. A later fresh complete report permits its ordinary notification. Unrelated meters and aggregate
+exhaustion/Unknown do not veto a qualified target. Purchased capacity cannot satisfy a Plan
+requirement; explicit unlimited Plan capacity remains usable. Raw exhaustion and reset
+metadata stay separate from effective recovery and wake scheduling. Runtime acceptance
+remains HOST-owned; source implementation is not execution evidence.
+
+The phone retains sanitized bucket qualification evidence before its fixed JSON boundary:
+root/recognized-feature bucket identity, typed `allowed`/`limit_reached`, distinct valid/null/omitted/
+malformed slots, and loss/collision flags. Repeated recognized additional identities retain
+the first valid value per slot, preserving known pair context while marking the bucket
+colliding rather than silently overwriting it.
+Unknown-feature presence is retained without raw names or payloads; it does not globally veto
+the reported main bucket. The paired synthetic examples `recovery_usage_raw.json` and
+`recovery_report.json` under `fixtures/providers/codex/`, plus the raw-derived explicit-null
+`recovery_singleton_report.json`, are joined by the transport test in
+`apps/phone_flutter/test/codex_account_client_test.dart`.
+
+The finite positive scope is the unique root `codex` included-quota bucket, with well-formed
+status, no collision or lost evidence, and either two valid slots or one valid slot whose
+sibling is explicitly null. The pair requires `codex-primary` and `codex-secondary`; the
+singleton requires its present target. Both require `allowed:true` and `limit_reached:false`
+for completeness. Denial, including false/false with room, and reached=true with room remain
+bucket-local unresolved evidence and retain known constraints. Positive access with exhausted
+included slots can reflect purchased-credit fallback; it does not restore included capacity.
+The same bounded inference supports the legacy root report representation when qualification
+evidence is retained. Metadata-free/lossy normalized reports, including `report_two_limits.json`,
+remain decodable without manufacturing qualification. A current explicit-null singleton does
+not retire a previously remembered necessary sibling: reconciliation unions known constraints
+until qualified retirement evidence exists. Known Spark pairs retain their two constraints
+without claiming universal Spark applicability or a cross-bucket dependency.
+
+This is a compatibility inference about reported main-bucket included capacity, grounded in
+the official Codex revision
+[`cf881a627dd52e7aecef63416c1acd2a89c4dfbd`](https://github.com/openai/codex/tree/cf881a627dd52e7aecef63416c1acd2a89c4dfbd).
+It infers no tier, duration, model entitlement or relation from co-occurrence, labels, credit
+fallback or preview policy. It guarantees neither deployed-service behavior nor arbitrary
+model/API request execution; broader feature uncertainty stays separate from these targets.
 
 A limit that carries a name labels both of its windows after itself, so a limit reporting two of
 them would label them identically. A named limit reporting both therefore appends the short window
@@ -323,6 +460,32 @@ Official references:
 
 ## Anthropic organization reporting
 
+**Integration correction, 2026-11-03.** Organization reporting is restored in the active
+catalogue and `buildLiveProviderStack`, shared by foreground/headless `PhoneLiveBindings`.
+Retain `AnthropicReportingClient`, `normalizeAnthropicReportJson`, provider `claude`,
+connection/cache `anthropic.platform`, credential versions and cache generations. Capture
+one UTC instant for `generatedAt`, `capturedEndMicros` and calendar starts; keep the existing
+usage/cost envelopes and accepted request-bound repair. No query/core/schema repair,
+credential migration or fresh provider probe is part of this correction.
+
+The bound direct collection completed three HTTP 200 requests with pagination complete:
+November 1/2 cost buckets were explicitly empty, November 3 was absent, and usage had zero
+token totals. Complete-day normalization therefore retains current-period Unknown for that
+collection. The separate 10:49 normalized cache corroborates unavailability; it establishes
+neither identical app-key/wire inputs, all-time no-charge behavior nor positive expenses.
+
+Each reporting account's Dashboard expense block shows known Money independently of optional
+local caps, including zero; missing cost stays unavailable. Source as-of/status and partial
+history remain source-owned, separate from Claude Plan monthly Extra Credits. The duplicate
+global spend cards are removed; domain totals and budget evaluation remain intact. Existing common
+Anthropic/Cursor budget catalogue, selection and publication remain: known spend plus a
+positive usable same-currency cap and percentage are required. Preserve every stored ID,
+null default, explicit empty selection, unavailable removal and capacity rule. No exclusion,
+flag, catalogue split or migration is introduced. Current widget rows still require a
+percentage; uncapped Money and Extra used/cap paint belong to the next approved widget task.
+Native checks and full HOST/build/install/UI/Root acceptance remain pending until executed;
+historical 692-pass/13-failure evidence remains RED.
+
 Status: implemented on 2026-07-25.
 
 Checked 2026-10-16: the official [Usage and Cost guide](https://platform.claude.com/docs/en/manage-claude/usage-cost-api)
@@ -339,11 +502,27 @@ is separate from buying a claude.ai Team chat plan. The owner reported a success
 reporting connection after conversion; that report is not an independent new API probe
 or a guarantee of eligibility, free conversion or reversal for other accounts.
 
-Organization-scoped personal keys use the linked account's reporting permissions;
-eligible service-account keys must also be outside workspace scope. Console Admin keys
-are a separate supported type without the personal-key Scope selector. Claude Enterprise
-Analytics keys are for another service. None of these reporting credentials replaces the
-separate **Claude plan** login.
+WardPulse policy selects **one ordinary organization-scoped reporting key**, linked to an
+account with actual reporting rights and outside workspace scope. The Console creation path
+is organization → API keys → Create key → name/expiry → Linked account: yourself → no
+workspace scope → copy once. Providers → Anthropic → Organization reporting accepts it in
+Value with an optional Label; Save starts the existing reporting check. Account rights and
+organization eligibility are independent of Claude subscription plans. This field introduces
+no reporting OAuth, second runtime credential or management permission.
+
+The official [Admin API authentication contract](https://platform.claude.com/docs/en/manage-claude/admin-api#authentication)
+documents the `sk-ant-admin` marker, and [Which key do you need?](https://platform.claude.com/docs/en/manage-claude/admin-api-keys#which-key-do-you-need)
+identifies Console Admin keys as `sk-ant-admin01-…`. Although the provider supports that key
+type for reports, WardPulse excludes it by product policy. `validateAnthropicReportingKey`
+in `apps/phone_flutter/lib/providers/provider_connection.dart` rejects trimmed values with
+that marker in the editor and shared reporting client before HTTP. Marker absence proves no
+scope or rights; ordinary candidates still undergo the existing reporting request checks.
+Local `authenticationRejected` survives error mapping and captured-version attribution,
+with replacement guidance in Providers and Edit key targeting the same connection. Only a
+current live success establishes Connected. Policy rejection retains the previous secret,
+label, cache and settings; blank-value label edits, Cancel, Remove and explicit replacement
+keep their existing semantics. Claude Enterprise Analytics is a different service. Reporting
+credentials do not replace the separate Claude plan login.
 
 Scope:
 
@@ -354,15 +533,44 @@ Scope:
   in completed minute buckets (`bucket_width=1m`, limit 1440), through the actual snapshot
   end. Skip empty ranges and paginate both widths; never extend the end into the future.
 - Usage requests `group_by[]=model` for model breakdown; cost stays ungrouped.
-- Costs keep daily aggregation over the original requested interval. Amounts are decimal
-  strings in lowest currency units (cents); WardPulse rounds reported amounts to integer
-  USD cents without estimating prices from tokens.
+- Costs use daily aggregation. The documented `ending_at` selector filters bucket ends,
+  so collection sends one second after the captured end's UTC ceiling midnight; an exact
+  midnight uses that midnight plus one second. This selection fence admits the last required
+  daily bucket without moving the snapshot's as-of time or implying future activity.
+  `buildLiveProviderStack` in `apps/phone_flutter/lib/dashboard/live_provider_stack.dart`
+  carries the captured `generatedAt` and private integer `capturedEndMicros` together.
+  `anthropic_provider_snapshot_from_report_json` in
+  `core/ward-pulse-providers/src/anthropic/platform.rs` continues to use the private precise
+  captured-end bound when selecting cost days and deciding empty periods, independently
+  of shared timestamp canonicalization.
+  Amounts are decimal strings in lowest currency units (cents); WardPulse accumulates them
+  exactly and rounds each daily and period output independently to integer USD cents, half
+  away from zero, without estimating prices from tokens. Period totals use exact amounts
+  rather than rounded daily costs.
 - Rust coalesces minute usage into one UTC-day history bucket ending at the latest reported
-  bucket end, preserving model/cache totals and historical daily cost alignment. Reported
-  zero remains known zero; absent cost stays unknown in history and affected period totals.
+  usage or cost bucket end, preserving model/cache totals and daily cost alignment. A
+  current-day cost bucket retains its nominal next-midnight end, not an inferred publication
+  cutoff. Cost days outside the requested interval, including days starting at the precise
+  captured end, do not contribute.
+- Today, Monday-start Week and calendar Month are UTC periods for the authorized organization.
+  Each total requires cost coverage for every intersecting UTC day, even a day absent from
+  usage. An empty period is unavailable. A returned empty cost bucket or explicit zero is
+  known zero; an absent day or missing result amount leaves the affected total unavailable.
   API token history can appear before reported costs; no reporting deadline is promised.
+- Budget percentages compare reported-to-date spend with locally saved advisory ceilings;
+  they do not promise that every incurred charge has been published or enforce provider-side
+  limits. Supported Anthropic period IDs remain disabled in the selection catalogue when
+  spend is unavailable, separately from an unset or unusable ceiling. Saved selections and
+  ceiling values are retained; plan connections gain no monetary budget rows.
 - Documented poll floor is one minute; the global slider lower bound remains five minutes.
 - Never log the key, authorization header, or raw response bodies.
+
+The cost bucket-end selection contract was supplied from the
+[legacy cost reference](https://platform.claude.com/docs/en/api/beta/organization/cost_report/retrieve) on
+2026-11-02. That current reference presents API version `2026-10-21`; this integration
+retains `anthropic-version: 2023-06-01`. Acceptance of the corrected fence under the deployed
+header still requires bounded actual-response verification. Source and synthetic regressions,
+and the historical verification below, do not establish fresh live cost availability.
 
 Verified 2026-10-20: host Rust, fixture, Flutter and documentation checks passed, followed by
 both Android Rust builds, a debug phone APK build and a preserving installation. Live phone
@@ -395,24 +603,73 @@ authorization-code flow Claude Code uses (`client_id` for Claude Code, redirect
 refresh tokens in secure storage. Refresh is serialized like Codex. Reporting calls undocumented
 `GET /api/oauth/usage` with `anthropic-beta: oauth-2025-04-20` and a Claude Code user agent, then
 normalizes `five_hour`, `seven_day`, optional per-model weekly windows, and `extra_usage` into
-`AllowanceState`. Phone dashboard cards still list every window. Watch/Glance rings collapse
-Claude **plan** windows into one slot (`allowance.claude.plan`): the tightest known remaining
-window wins, including an exhausted window; unknown windows cannot displace a known zero.
+`AllowanceState`. Optional `five_hour` and all other ordinary/Fable windows normalize
+independently; an absent session does not hide the remaining windows or extra usage.
+Phone dashboard cards still list every reported window. Watch/Glance rings collapse
+ordinary Claude **plan** windows into one slot (`allowance.claude.plan`): the tightest known
+remaining window wins, including an exhausted window; unknown windows cannot displace a known zero.
 Glance label is the short token (`5h`, `Weekly`, `Opus weekly`, `Sonnet weekly`). Purchased
 `extra_usage` is not in that collapse pool and is **not** a watch ring candidate — it stays on
-phone dashboard cards. It may surface as a warning/error alert
+the phone Dashboard as monthly used/applicable-cap Credits. The phone widget retains
+reported finite nonnegative-percentage eligibility even with no cap, using stable ID
+`allowance.claude.claude-extra-usage`. Missing/invalid percentage produces no widget row;
+saved unavailable choices remain removable. Monthly used/cap widget details remain pending
+the separately approved runtime adoption. It may surface as a warning/error alert
 **only when the user configures a threshold** for that meter on Providers — never from a
 hard-coded utilization cutoff alone.
 
+Ordinary recovery descriptors require the applicable session and overall weekly windows.
+A qualified explicit-null session with a reported weekly window supports weekly-only scope
+without a tier gate; omitted session evidence does not. Missing overall weekly applicability
+leaves ordinary targets incomplete. Fable retains its known overall-weekly dependency and own
+scoped ceiling, while unresolved Fable/session/model relations remain incomplete only for
+Fable. Legacy model windows retain their own and overall-weekly constraints without imposing
+those unresolved relations on ordinary targets.
+
+The optional included Fable weekly sub-cap is normalized independently as
+`claude-seven-day-fable` (`Fable weekly`), never as an Opus alias. The adapter joins
+`weekly_scoped_shares[].limit_index` to that response's `limits` array, requiring a
+nonnegative integer index, kind `weekly_scoped`, group `weekly`, an explicitly null
+`scope.model.id` and exact `scope.model.display_name` of `Fable`. It emits at most one
+Fable allowance. Missing/null lists, malformed entries and unknown scopes do not invalidate
+independently valid ordinary or legacy windows.
+
+Own-quota used percentage is inferred only from `used_percent_of_weekly` divided by
+`allowance_percent_of_weekly`, then multiplied by 100. Usage must be finite and nonnegative;
+the allowance must be finite and positive. Usage at or above the allowance becomes 100%;
+otherwise division precedes multiplication to avoid overflow. Invalid or missing inputs
+leave usage and status unknown. Neither a fixed allocation nor `limits.percent`, activity,
+severity or a sibling window supplies a fallback.
+
+This is a narrow inference from explicit weekly-relative fields and Anthropic's
+[included shared-weekly sub-cap policy](https://support.claude.com/en/articles/15424964-claude-fable-models-on-your-plan),
+not a published private-API guarantee. The 2026-11-01 safe observations show null scoped
+shares on Pro and a recognized join after an owner-reported Max upgrade: 0 used / 50
+allowance, with `is_active=false`. Ordinary weekly usage is also inactive at zero, so activity
+does not establish availability or consumption. All observed consumption is zero; neither
+the denominator of `limits.percent` nor precise activity semantics is established.
+The Pro/Max fixtures are explicitly synthetic projections of the three allowlisted safe
+observations/field-shape/measurement files. Nonzero arithmetic tests are synthetic, not
+captured positive-consumption evidence.
+
+Providers exposes each reported Plan window for its own alert rule, independently of
+watch collapse or selection. A window inherits the connection's Plan threshold unless it
+has an explicit percentage or Off override. See the user guide's
+[Alert thresholds](user-guide/DASHBOARD.md#alert-thresholds).
+
 Claude plan resets are validated by `claude_provider_snapshot_from_report_json` in
-`core/ward-pulse-providers/src/claude/mod.rs`. Supported input is ASCII Gregorian
+`core/ward-pulse-providers/src/anthropic/plan.rs`. Supported input is ASCII Gregorian
 `YYYY-MM-DDTHH:MM:SS[.digits]` with uppercase `T` and a mandatory uppercase `Z` or numeric
 `±HH:MM` zone (at most `23:59`), valid calendar dates, and no leap seconds. Years must stay
 within `0000`–`9999` before and after UTC conversion. The adapter validates the entire fraction,
 applies the offset, then drops sub-second precision to emit `YYYY-MM-DDTHH:MM:SSZ`.
 Missing or null resets stay absent; malformed or overflowing resets return the sanitized
-`InvalidTimestamp` adapter error. This boundary leaves the shared infallible `DateTimeUtc`
-and its text-based equality and ordering policy unchanged; see [Boundary](#boundary).
+`InvalidTimestamp` adapter error for ordinary and legacy windows. Optional Fable uses only
+its joined limit's own reset through the same parser; missing, malformed or overflowing
+Fable resets stay absent without discarding ordinary windows or borrowing their reset.
+This independent reset parser still emits whole seconds; it does not use the shared
+`DateTimeUtc` format recognizer to validate or convert resets. Shared fractional
+canonicalization and ordering are described in [Boundary](#boundary).
 
 This is a compatibility integration, not a published third-party API. Endpoint or OAuth client
 changes may require an app update. Never log tokens, authorization codes, or raw response bodies.
@@ -422,8 +679,11 @@ changes may require an app update. Never log tokens, authorization codes, or raw
 Status: implemented as an experimental on-device compatibility integration on 2026-07-25;
 dashboard WebView sign-in added 2026-07-26.
 
-Cursor has no official personal-account usage API and no OAuth grant for plan meters. Providers
-opens an in-app WebView to the Cursor dashboard; after sign-in the phone captures the
+The reviewed official [API](https://cursor.com/docs/api) and
+[SDK](https://cursor.com/docs/sdk/typescript) documentation does not establish an equivalent
+authorization grant for this integration’s personal plan meters. SDK User API keys and agent
+usage are separate from dashboard plan reporting and Team reporting. Providers opens an in-app
+WebView to the Cursor dashboard; after sign-in the phone captures the
 `WorkosCursorSessionToken` cookie (Advanced paste remains for the same value), stores it
 securely, and calls `GET /api/usage-summary`, normalizing included plan pools and on-demand
 meters into allowances. When the payload includes `autoPercentUsed` / `apiPercentUsed`, WardPulse
@@ -432,8 +692,65 @@ on the phone and as selectable watch rings. Purchased on-demand usage is phone-o
 alert **only** with a user-configured threshold on Providers); it is not a ring. Older combined-only payloads keep a single Plan
 usage bar. Selected known exhausted pools remain on the watch as 0% left with empty grey
 tracks; unknown or unavailable pools are not fabricated as zero.
-Do not claim Admin-API hourly aggregation on this experimental row. Never log the cookie or
-raw response bodies.
+
+Recovery descriptors for the qualified two-pool shape each require only that pool. A partial
+split remains incomplete for its reported targets. The combined shape requires its one
+aggregate allowance; disagreement about exhaustion between its combined percentage and
+amount-derived percentage leaves that target incomplete. Purchased capacity supplies no Plan-recovery permission. These
+relationships are adapter evidence, not provider-name policy in the shared core.
+
+Both included pools remain Plan windows for alert configuration, independently of watch
+selection. Each can inherit Plan, set its own percentage or explicitly turn Off;
+Purchased controls the separate on-demand allowance. See
+[Alert thresholds](user-guide/DASHBOARD.md#alert-thresholds).
+
+Navigation additionally admits only the six exact HTTPS identities in Cursor's
+[sign-in-domain guidance](https://cursor.com/help/troubleshooting/sign-in-domains), reviewed
+2026-10-27: `accounts.x.ai`, `accounts.spacex.ai`, `auth.x.ai`, `auth.grok.com`,
+`auth.grokusercontent.com` and `auth.grokipedia.com`. The page's October 30 fallback wording
+supplies no year. These hosts gain no credential-read authority: cookie reads/probes remain
+HTTPS `cursor.com` apex/subdomains only.
+
+The navigation policy rejects Google authorization in accordance with Google's
+[secure-browser policy](https://developers.google.com/identity/protocols/oauth2/policies#use-secure-browsers).
+Android's `CursorSignInWebViewClient` in
+`apps/phone_flutter/android/app/src/main/java/app/wardpulse/CursorSignInWebViewClient.java`
+wraps the plugin client to block authorization navigation and resource requests, including
+subframes that the Flutter delegate does not expose. Native interception enforces the same
+approved main-frame HTTPS/host policy for all request methods, including POST, which skips
+Android's navigation callback. The internal blank document is admitted only after retirement
+begins. Harmless CAPTCHA/static subresources still reach the original client. Native main-frame HTTP failures enter page recovery; optional
+subresource HTTP errors do not. The guard crosses only view/client IDs and fixed failure
+categories, and its sticky status is checked before/after cookie probing and before accepting completion.
+The WebView keeps its default user agent. Recovery uses
+same-account email when offered, Cancel/reopen and Help → Advanced paste, without a new
+browser handoff or OAuth protocol.
+External browser return does not supply the WebView cookie; no suitable reporting
+callback/exchange was established for this integration.
+
+`CursorPlanSignInScreen` in `apps/phone_flutter/lib/providers/cursor_plan_sign_in_screen.dart`
+bounds platform stages to 15 seconds and page loading to 30 seconds. Two minutes bounds
+automatic polling, then Check again resumes checks while password/MFA entry remains waiting.
+Retry verifies a new startup wipe; old work retains the shared-jar lease until it settles and
+its document finishes retiring to a local blank page. Unsettled cleanup cannot clear a newer
+attempt. Failure/cancellation leaves the previous saved connection intact. A token is returned
+only once after verified cleanup. A failed blank-page request is retryable: the barrier
+retains the old browser until retirement succeeds, including on Retry or Cancel/reopen.
+A failed retirement never grants a newer browser access to the shared jar.
+
+Local verification on 2026-10-27–28 passed the complete phone check, affected Flutter
+regressions and native callback JVM harness. Normal and seeded debug APKs were built
+and installed with data preserved on the API36 phone emulator. Native offline page recovery,
+Retry, Cancel/back/reopen, Help and the empty Advanced paste route were observed;
+the normal build repeated page recovery and Cancel after the debug-seed bootstrap change.
+Saved-connection presence remained intact; its secret value was not inspected.
+The four Help/Paste captures use a shared Mock reference, not live-provider acceptance.
+
+Current Google/email migration, external browser return, new live session capture,
+account entitlement and live-provider acceptance remain **Pending**. Source/fake tests
+do not establish live login success, and these changes do not establish a billing repair.
+Do not claim Admin-API hourly aggregation or a Team publication deadline on this experimental
+row. Never log auth query/fragment, identity/password, tokens, cookies/headers or raw bodies.
 
 ## Cursor team Admin API
 
@@ -489,25 +806,43 @@ identifies the explicit missing-scope response for error mapping;
 Scope:
 
 - Basic auth with a team Admin API key against `POST /teams/daily-usage-data` and
-  `POST /teams/spend`.
-- Spend responses use `teamMemberSpend` (also accepted as `teamMembers`) with
-  `page` / `pageSize` pagination. For each member, `overallSpendCents` takes precedence,
-  including zero; otherwise both `includedSpendCents` and `spendCents` must be reported
-  and their sum is the total. Round the selected member total once to integer cents,
-  reject non-finite or out-of-range totals, then checked-add across members and pages.
-  Missing/null collections, no spend pages or incomplete member amounts leave the month
-  spend unknown. Explicit empty collections and complete zero amounts remain known zero;
-  malformed collections are rejected.
-- Spend is billing-cycle scoped and maps only to the month budget; today and week stay
-  unknown until a day-scoped spend source exists.
+  `POST /teams/filtered-usage-events`. Money covers the authorized team's extra-paid usage,
+  not an inferred personal account. Only explicit `isChargeable: true` events contribute
+  numeric `chargedCents`, including Cursor fees. Included/nonchargeable usage is excluded
+  even when its reported amount is positive; request units and model costs are not money.
+- One captured UTC instant defines Today, Monday Week and calendar Month. The event query
+  starts at the earlier Week/Month start and ends inclusively one millisecond before the
+  captured instant floored to epoch milliseconds. STRING epoch-ms event timestamps and
+  numeric inclusive period echoes keep their exact time meaning. Each period independently
+  requires positive integer-ms duration; an empty shorter period stays Unknown even when
+  a wider query is valid. The independent 14-day daily history window is unchanged.
+- Validate event page identities, explicit flags, echoed bounds, stable counts and page size
+  (1000), and terminal aggregate row count in both Dart and Rust. Partial and empty pages
+  are allowed; there is no fill formula or event deduplication. A single terminal-empty
+  response may use 0 or 1 for either page count or page identity, with zero rows and both
+  flags false. This compatibility policy is not a provider promise about empty responses.
+  Missing evidence is unavailable; incomplete pagination or overflow is an invalid report,
+  not partial money. A complete positive-duration empty report is known zero.
+- Raw event-page strings preserve decimal number lexemes. Rust checked-adds decimal cents
+  per calendar period, including exponent notation, and rounds each total once, half away
+  from zero, into checked integer USD cents. It never falls back to billing-cycle money.
+- Ceilings are local advisory limits. Existing Cursor Month ceilings retain their exact
+  stored value, now compared with extra-paid UTC calendar Month instead of the old
+  cycle/included comparison basis. A missing limit differs from a present unusable zero;
+  a percentage needs complete spend and a positive same-currency limit. Supported unavailable
+  periods and saved selections remain visible/removable. Only Cursor-platform persistence
+  uses the private `cursor-extra-paid-calendar-v1` basis wrapper: old unmarked/incompatible
+  snapshots are misses without clearing, restamping or retiring credentials. New-basis
+  stale fallback retains original timestamps; public JSON and other caches stay unchanged.
 - Daily request counts are raw usage events, not billed request units. Count only the complete
   funding family `subscriptionIncludedReqs + usageBasedReqs + apiKeyReqs`; the overlapping
   `composerRequests`, `chatRequests` and `agentRequests` breakdown is ignored. Explicit
   canonical zeros stay known zero. An incomplete funding family makes that day's count
   unknown across all rows and pages; complete counts retain saturating addition and UTC dates.
-- Hard ceiling is 20 requests per minute; WardPulse polls at the global slider cadence (minimum
-  five minutes). Usage aggregates hourly on the provider side; Providers shows that freshness
-  note on this Admin API row only.
+- Official team rate limit is 60 requests per minute. Cursor documents hourly aggregation
+  and recommends polling at most hourly; choose an hourly refresh interval and avoid repeated
+  manual refreshes. This correction changes no scheduler or retry policy and promises no
+  publication deadline. Providers shows the hourly freshness note on this Admin API row only.
 - Never log the key, authorization header, or raw response bodies.
 
 Official references:
@@ -516,6 +851,12 @@ Official references:
 - [Team Admin API](https://cursor.com/docs/account/teams/admin-api)
 - [Staff clarification of per-member and pooled spend](https://forum.cursor.com/t/admin-api-docs-missing-includedspendcents-and-new-teams-usage-metrics/162742/9)
 - [Team roles, seats and invitations](https://docs.x.ai/x-subscription/team-plans)
+
+The extra-paid calendar correction's native/API acceptance remains **Pending** until the
+executed candidate is bound to its FFI/APK/install, actual paid-only pagination and period
+values, retained selections/ceilings and restoration. Source, sanitized fixtures, Mock output
+and stale-cache recovery are not live-provider proof. The checks below are historical evidence
+for the earlier reporting implementation, not acceptance of the event-based correction.
 
 Verified 2026-10-20: the normalization corrections passed host checks and a preserving phone
 update; the selected plan allowances were checked on the phone widget, Wear Glance and watch

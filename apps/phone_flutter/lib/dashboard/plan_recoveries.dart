@@ -5,30 +5,94 @@ import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 import 'dashboard_models.dart';
 
 /// One plan window, named the only way it is unique: allowance ids repeat
-/// across accounts, so the account travels with them.
-typedef WindowKey = ({String accountId, String allowanceId});
+/// across accounts and accepted connection owners.
+typedef WindowKey =
+    ({String accountId, String allowanceId, HistoryOwner? historyOwner});
+
+/// Additive persisted context; identity remains the existing flat window key.
+class PendingRecovery {
+  const PendingRecovery(this.key, {this.requirements});
+
+  final WindowKey key;
+  final RecoveryRequirements? requirements;
+
+  Map<String, dynamic> toJson() => {
+    'accountId': key.accountId,
+    'allowanceId': key.allowanceId,
+    if (key.historyOwner != null) 'historyOwner': key.historyOwner!.toJson(),
+    if (requirements != null) 'requirements': requirements!.toJson(),
+  };
+}
+
+typedef RecoveryReconciliation =
+    ({List<PendingRecovery> pending, List<PlanRecovery> recoveries});
+
+typedef ReconcilePlanRecoveries =
+    RecoveryReconciliation Function(
+      DashboardSnapshot snapshot,
+      List<PendingRecovery> pending,
+    );
+
+RecoveryReconciliation reconcilePlanRecoveries(
+  DashboardSnapshot snapshot,
+  List<PendingRecovery> pending,
+) {
+  final result =
+      jsonDecode(
+            reconcilePlanRecoveriesJson(
+              snapshot.toJsonString(),
+              encodePendingRecoveries(pending),
+            ),
+          )
+          as Map<String, dynamic>;
+  return (
+    pending: decodePendingRecoveries(jsonEncode(result['pending'])),
+    recoveries: [
+      for (final value in result['recoveries'] as List)
+        planRecoveryFromJson(value as Map<String, dynamic>),
+    ],
+  );
+}
+
+String encodePendingRecoveries(List<PendingRecovery> pending) =>
+    jsonEncode([for (final entry in pending) entry.toJson()]);
+
+List<PendingRecovery> decodePendingRecoveries(String json) {
+  final keys = decodeWindowKeys(json);
+  if (keys.isEmpty) return const [];
+  final values = jsonDecode(json) as List;
+  return [
+    for (var i = 0; i < keys.length; i++)
+      PendingRecovery(
+        keys[i],
+        requirements: RecoveryRequirements.maybeFromJson(
+          (values[i] as Map<String, dynamic>)['requirements'],
+        ),
+      ),
+  ];
+}
 
 /// A window that was spent and has room again.
 ///
-/// `accountId` keys the notification so a repeat replaces it; it is never part
-/// of what a reader sees. `provider` is: two subscriptions can both call a
+/// `accountId` and ownership key the notification so a repeat replaces it;
+/// neither is part of what a reader sees. `provider` is: two subscriptions can both call a
 /// window "Weekly plan", and the family is what tells them apart.
 typedef PlanRecovery =
     ({
       String accountId,
+      HistoryOwner? historyOwner,
       String provider,
       String allowanceId,
       String label,
       DateTime? resetsAt,
     });
 
-/// Windows `snapshot` reports as spent (Rust core in production; a test seam
-/// everywhere else, since host tests load no `.so`).
+/// Windows `snapshot` reports as spent (Rust core by default; injectable in tests).
 typedef ReadExhaustedWindows =
     List<WindowKey> Function(DashboardSnapshot snapshot);
 
-/// Windows from `exhausted` that `snapshot` reports usable again (Rust core in
-/// production; a test seam everywhere else, since host tests load no `.so`).
+/// Remembered targets whose applicable Plan capacity is usable (Rust core by
+/// default; injectable in tests).
 typedef ReadPlanRecoveries =
     List<PlanRecovery> Function(
       DashboardSnapshot snapshot,
@@ -43,7 +107,7 @@ List<WindowKey> exhaustedWindows(DashboardSnapshot snapshot) {
   return _decodeWindowKeys(exhaustedWindowsJson(snapshot.toJsonString()));
 }
 
-/// Asks the core which of [exhausted] have room again in [snapshot].
+/// Asks the core which of [exhausted] have usable applicable capacity in [snapshot].
 List<PlanRecovery> planRecoveries(
   DashboardSnapshot snapshot,
   List<WindowKey> exhausted,
@@ -79,6 +143,7 @@ DateTime? nextResetAmong(
       final isExhausted = exhausted.any(
         (key) =>
             key.accountId == account.accountId &&
+            key.historyOwner == account.historyOwner &&
             key.allowanceId == allowance.id,
       );
       final resetsAt = allowance.resetsAt;
@@ -97,7 +162,12 @@ DateTime? nextResetAmong(
 String encodeWindowKeys(List<WindowKey> keys) {
   return jsonEncode([
     for (final key in keys)
-      {'accountId': key.accountId, 'allowanceId': key.allowanceId},
+      {
+        'accountId': key.accountId,
+        'allowanceId': key.allowanceId,
+        if (key.historyOwner != null)
+          'historyOwner': key.historyOwner!.toJson(),
+      },
   ]);
 }
 
@@ -123,6 +193,12 @@ List<WindowKey> _decodeWindowKeys(String json) {
       (
         accountId: (key as Map<String, dynamic>)['accountId'] as String,
         allowanceId: key['allowanceId'] as String,
+        historyOwner:
+            key['historyOwner'] == null
+                ? null
+                : HistoryOwner.fromJson(
+                  key['historyOwner'] as Map<String, dynamic>,
+                ),
       ),
   ];
 }
@@ -133,6 +209,12 @@ PlanRecovery planRecoveryFromJson(Map<String, dynamic> json) {
   final resetsAt = json['resetsAt'];
   return (
     accountId: json['accountId'] as String,
+    historyOwner:
+        json['historyOwner'] == null
+            ? null
+            : HistoryOwner.fromJson(
+              json['historyOwner'] as Map<String, dynamic>,
+            ),
     provider: json['provider'] as String,
     allowanceId: json['allowanceId'] as String,
     label: json['label'] as String,

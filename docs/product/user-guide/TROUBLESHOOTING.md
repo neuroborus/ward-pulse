@@ -16,6 +16,8 @@ for its update timing.
 If a connection is saved but a meter says **Unknown**, **Balance unavailable** or is absent,
 check what that account exposes in the provider's own dashboard. Some providers do not report
 every balance, reset time, model breakdown or history. A missing value is not a zero.
+Claude Extra usage may report its monthly used amount, cap or percentage independently;
+a missing or zero cap is not Unlimited or proof of exhaustion.
 
 ## Loading or an error screen
 
@@ -26,9 +28,16 @@ If loading or errors continue, note the visible status and the step that failed 
 
 ## Credential rejected or access unavailable
 
-Read the connection name on Dashboard or **Providers**. **Platform reporting**,
-**Organization reporting** and **Team Admin API** are separate from the plan login
-in the same provider family.
+A Dashboard warning that says a saved connection was rejected records a past event.
+Tap its text to open the exact connection on **Providers**, then check the row's current
+status. It may already have recovered. Use that plan's sign-in controls, Cursor's own
+session controls or the named reporting row's key editor only if still needed. The warning
+stays after reconnect, refresh, restart and ordinary removal; its **X** dismisses it without
+opening Providers. A dismissed warning stays dismissed for that saved connection, while
+a newly saved or reconnected connection can produce a new warning if rejected later.
+
+Read the connection name on Dashboard or **Providers**. **Platform reporting** and
+**Team Admin API** are separate from the plan login in the same provider family.
 
 - **Key rejected:** check that you entered the full key for the named reporting row, or
   replace it there. Use **Edit key** where offered.
@@ -48,15 +57,36 @@ Check the setup for the named connection:
 
 - [OpenAI Platform reporting](/guide/providers-openai#platform-reporting) needs an organization
   Admin key, not an ordinary project key.
-- [Anthropic Organization reporting](/guide/providers-anthropic#organization-reporting) needs
-  organization reporting access; personal/service keys must not be workspace-scoped.
-  An Individual API organization needs the [Console conversion](/guide/providers-anthropic#convert-an-individual-organization).
+- [Anthropic Organization reporting](/guide/providers-anthropic#organization-reporting)
+  needs an ordinary organization-scoped key linked to an account with reporting rights,
+  outside workspace scope. Replace Console Admin keys in this row's **Value** field and
+  **Save**. WardPulse rejects their documented marker before requesting a report and keeps
+  the saved key, label and cache on rejection. **Cancel** leaves the edit unsaved. A
+  candidate without that marker or a working Claude plan login does not establish reporting
+  permissions.
 - [Cursor Team Admin API](/guide/providers-cursor#team-admin-api) needs a Team key with reporting
   access; check [General → View team resources](/guide/providers-cursor#team-key-permissions).
 
-For a plan/session error, use the named plan row's **Reconnect** or Cursor's
-**Sign in again**. Claude callback paste expects **CODE#STATE**, not a reporting key.
+Console reporting can be Connected while a required daily cost bucket is missing. Partial
+history does not establish complete Today/Week/Month totals or no charges. Keep unavailable
+cost distinct from known zero. Money rounds to whole cents, so a tiny positive charge can
+also display as zero cents. Console and Cursor Team budget percentages need known spend
+and a positive same-currency cap; read known spend without a cap on Dashboard. Saved unavailable
+choices remain removable. An unset cap is not a provider outage. Retained Stale amounts keep
+the source's previous successful time, even when a sibling source updates.
+
+For a current plan/session error, open the named plan row under **Providers** and sign in again.
+If it still says **Connected**, use **Reconnect**, or **Sign in again** for Cursor.
+Claude callback paste expects **CODE#STATE**, not a reporting key.
 Do not paste a secret into an unrelated row or a help request.
+
+Cursor plan sign-in offers **Retry**, **Cancel** and **Help** after a startup, page or session
+check problem. Google authorization is blocked in the built-in browser; choose email for the
+same account when offered, or Cancel and reopen. After automatic checks pause, finish any
+password/MFA entry and tap **Check again**. A failed or cancelled replacement preserves the
+saved connection. [Advanced paste](/guide/providers-cursor#advanced-paste) remains available
+from the plan row's help icon after Cancel. This recovery does not establish account entitlement
+or repair a billing problem.
 
 ## Previous data, offline or rate limited
 
@@ -94,19 +124,54 @@ Do not clear credentials or reset pairing as the first response to a delayed sum
 
 - Check **Widget** metric choices and whether those metrics have known provider data. **No metrics**
   can be a valid empty selection.
-- If you see **Resize widget**, increase its height. For missing labels/credits, increase width;
-  smaller sizes deliberately show fewer complete columns or rows.
+- If you see **Resize widget**, increase its width or height. For missing labels, purchased
+  balances or reset times, increase width; smaller allocations omit complete columns/rows.
+  A reset can disappear before a valid balance. Missing reset data is omitted, and the
+  displayed time uses the phone's local timezone; it is not a live capacity guarantee.
+- The widget keeps its own text size when system font size or bold text changes. Resize it
+  rather than reducing the phone's text settings to make room.
 - Open and refresh WardPulse on the phone. A **STALE** widget can keep earlier rows after a
   failed report; the background interval is approximate and Android may delay it.
 
 Widget choices are separate from Watchface. See [Home widget](/guide/widget).
 
+## Alert notifications do not appear
+
+Check your enabled threshold rules on **Providers**, **Settings → Notifications → Alert
+notifications**, and Android's app/channel notification settings for WardPulse. Provider errors
+alone are not threshold notifications. Repeated crossed reports are suppressed, including after
+a restart or a rule edit that remains crossed. Unknown/missing reports do not reset this.
+A report showing the condition clear is needed before a later crossing can notify again.
+Crossings seen while muted or denied are not delivered as a backlog when you enable delivery.
+
+If Settings shows **Notifications are blocked**, choose **Enable notifications**, allow them in
+Android settings, and return to WardPulse. Opening Android settings alone changes neither
+permission nor your two saved switches. Returning without allowing notifications keeps the
+warning. If the page cannot open, retry or open WardPulse's notification controls from Android
+settings. A missing warning does not rule out a blocked channel or Do Not Disturb.
+
 ## Plan recovery notifications do not appear
 
 Check **Settings → Notifications → Plan recovery** and Android's notification permission for
-WardPulse. This feature is for an exhausted plan becoming usable again; it does not send every
-Dashboard threshold alert as a notification. It needs a later report to detect recovery, so
+WardPulse. The warning and **Enable notifications** action above apply to this switch too.
+This independent feature is for an exhausted plan becoming usable again; use
+**Alert notifications** for configured thresholds. It needs a later report to detect recovery, so
 its delivery is not an exact reset alarm.
+
+If the five-hour window has reset but a necessary weekly allowance is exhausted or Unknown,
+WardPulse keeps the recovery pending, including across app restarts. The reported usage
+and reset time apply to that window; they do not show that every necessary
+allowance is usable. A fresh report showing usable included capacity allows the later normal
+notification. Provider reporting delays and Android scheduling can delay detection. Purchased
+credits do not clear an exhausted included allowance.
+
+Codex main-quota recovery needs a qualified two-window report or a qualified single window
+with an explicitly absent sibling. A previously necessary sibling is retained when later
+absent. Omitted, malformed or ambiguous evidence, or denied/reached status for the bucket,
+cannot establish recovery from apparent room. This compatibility interpretation covers the
+reported included quota, not arbitrary model/API access; uncertainty about separate features
+does not block a qualified main-quota target. Also check Android's channel settings and Do Not
+Disturb. Phone-to-watch notification bridging remains Android-controlled and best effort.
 
 ## Asking for help
 

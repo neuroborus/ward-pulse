@@ -6,6 +6,7 @@ import java.nio.file.Files
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.util.Properties
+import java.util.zip.ZipFile
 import javax.inject.Inject
 import org.gradle.process.ExecOperations
 
@@ -141,6 +142,22 @@ abstract class PrepareDefaultWatchFace : DefaultTask() {
                 </resources>
                 """.trimIndent() + "\n",
             )
+            // Outside assets/res: provenance for the opt-in test consumer, never host metadata.
+            val resourcesSha256 = ZipFile(apk).use { zip ->
+                zip.getInputStream(requireNotNull(zip.getEntry("resources.arsc"))).use { sha256(it.readBytes()) }
+            }
+            staging.resolve("identity.properties").writeText(
+                listOf(
+                    "packageName=${artifacts.applicationId}",
+                    "versionCode=${artifact.versionCode}",
+                    "apkSha256=$apkSha256",
+                    "signerSha256=${sha256(certificate.encoded)}",
+                    "hostSignerSha256=${hostCertificateSha256.get()}",
+                    "validatorSha256=${validatorSha256.get()}",
+                    "tokenSha256=${sha256(token.toByteArray(Charsets.UTF_8))}",
+                    "resourcesSha256=$resourcesSha256",
+                ).joinToString("\n", postfix = "\n"),
+            )
             output.parentFile.mkdirs()
             Files.move(staging.toPath(), output.toPath())
         } catch (failure: Exception) {
@@ -149,6 +166,44 @@ abstract class PrepareDefaultWatchFace : DefaultTask() {
             throw GradleException("Could not prepare the validated bundled watch face.")
         } finally {
             staging.deleteRecursively()
+        }
+    }
+}
+
+abstract class PrepareNativePushCandidate : DefaultTask() {
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val validatedDirectory: DirectoryProperty
+
+    @get:OutputDirectory
+    abstract val assetsDirectory: DirectoryProperty
+
+    @TaskAction
+    fun prepare() {
+        val output = assetsDirectory.get().asFile
+        if (output.exists() && !output.deleteRecursively()) {
+            throw GradleException("Could not invalidate native candidate assets.")
+        }
+        try {
+            val validated = validatedDirectory.get().asFile
+            val receipt = Properties().apply {
+                validated.resolve("identity.properties").inputStream().use { load(it) }
+            }
+            require(receipt.getProperty("packageName") == "app.wardpulse.watchfacepush.main")
+            require(receipt.getProperty("versionCode") == "4")
+            val apk = validated.resolve("assets/default_watchface.apk")
+            require(PrepareDefaultWatchFace.sha256(apk.readBytes()) == receipt.getProperty("apkSha256"))
+            val xml = validated.resolve("res/values/default_watchface.xml").readText()
+            val token = Regex("<string name=\"default_wf_token\" translatable=\"false\">([^<]+)</string>")
+                .find(xml)?.groupValues?.get(1) ?: error("Missing validated token")
+            require(PrepareDefaultWatchFace.sha256(token.toByteArray()) == receipt.getProperty("tokenSha256"))
+            val bundle = output.resolve("native_push_candidate").apply { mkdirs() }
+            apk.copyTo(bundle.resolve("candidate.apk"))
+            bundle.resolve("validation-token.txt").writeText(token)
+            validated.resolve("identity.properties").copyTo(bundle.resolve("identity.properties"))
+        } catch (_: Exception) {
+            output.deleteRecursively()
+            throw GradleException("Could not package the validated native candidate; no assets retained.")
         }
     }
 }
@@ -183,6 +238,14 @@ if (!hasReleaseKey) {
     }
 }
 
+val n1PairDiagnostics = providers.gradleProperty("wardpulseN1PairDiagnostics")
+    .map { it.toBooleanStrict() }.getOrElse(false)
+gradle.taskGraph.whenReady {
+    if (n1PairDiagnostics && allTasks.any { it.name.contains("release", ignoreCase = true) }) {
+        throw GradleException("wardpulseN1PairDiagnostics is debug-only; release requests are forbidden.")
+    }
+}
+
 android {
     namespace = "app.wardpulse.wear"
     compileSdk {
@@ -190,15 +253,16 @@ android {
             minorApiLevel = 1
         }
     }
+    useLibrary("wear-sdk")
 
     defaultConfig {
         applicationId = "app.wardpulse"
         minSdk = 33
         targetSdk = 36
-        versionCode = 2
+        versionCode = 4
         versionName = "0.1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "app.wardpulse.wear.IsolatedWearRunner"
     }
 
     signingConfigs {
@@ -213,7 +277,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("boolean", "WARDPULSE_N1_PAIR_DIAGNOSTICS", n1PairDiagnostics.toString())
+        }
         release {
+            buildConfigField("boolean", "WARDPULSE_N1_PAIR_DIAGNOSTICS", "false")
             signingConfig =
                 if (hasReleaseKey) {
                     signingConfigs.getByName("release")
@@ -259,6 +327,7 @@ dependencies {
     androidTestImplementation("androidx.test:core:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.wear.watchface:watchface-client:1.2.1")
 }
 
 // Build-time only: one pinned official validator resolved through settings' Google Maven.
@@ -271,6 +340,13 @@ dependencies.add(
     pushValidator.name,
     "com.google.android.wearable.watchface.validator:validator-push-cli:1.1.0-alpha01@jar",
 )
+
+val nativeCandidate = providers.gradleProperty("wardpulseNativeCandidate").map {
+    it.toBooleanStrictOrNull() ?: throw GradleException("wardpulseNativeCandidate must be true or false.")
+}.orElse(false)
+if (nativeCandidate.get() && providers.gradleProperty("wardpulsePushVersionCode").orNull != "4") {
+    throw GradleException("The native candidate requires wardpulsePushVersionCode=4.")
+}
 
 androidComponents.onVariants { variant ->
     val kind = requireNotNull(variant.buildType)
@@ -311,4 +387,13 @@ androidComponents.onVariants { variant ->
     }
     variant.sources.assets!!.addGeneratedSourceDirectory(prepareFace, PrepareDefaultWatchFace::assetsDirectory)
     variant.sources.res!!.addGeneratedSourceDirectory(prepareFace, PrepareDefaultWatchFace::resourcesDirectory)
+    if (kind == "debug" && nativeCandidate.get()) {
+        val candidate = tasks.register<PrepareNativePushCandidate>("prepareDebugNativePushCandidate") {
+            validatedDirectory.set(prepareFace.flatMap { it.outputDirectory })
+            assetsDirectory.set(layout.buildDirectory.dir("generated/nativePushCandidate/debug/assets"))
+        }
+        variant.androidTest!!.sources.assets!!.addGeneratedSourceDirectory(
+            candidate, PrepareNativePushCandidate::assetsDirectory,
+        )
+    }
 }

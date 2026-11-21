@@ -14,11 +14,19 @@ class WidgetScreen extends StatefulWidget {
     required this.preferences,
     required this.onPreferencesChanged,
     required this.onRefresh,
+    this.reportingOutcomes = const [],
+    this.saving = false,
+    this.localCapsAvailable = true,
   });
 
   final DashboardSnapshot? snapshot;
-  final PhoneWidgetPreferences preferences;
-  final Future<void> Function(PhoneWidgetPreferences value)
+  final Iterable<ConnectionReportingOutcome> reportingOutcomes;
+  final PhoneWidgetPreferences? preferences;
+  final bool saving;
+  final bool localCapsAvailable;
+  final Future<void> Function(
+    PhoneWidgetPreferences Function(PhoneWidgetPreferences current) update,
+  )
   onPreferencesChanged;
 
   /// Pull-to-refresh reload, shared with the app-bar action.
@@ -29,40 +37,43 @@ class WidgetScreen extends StatefulWidget {
 }
 
 class _WidgetScreenState extends State<WidgetScreen> {
-  List<String> get _effectiveIds {
-    final snapshot = widget.snapshot;
-    if (snapshot == null) {
-      return widget.preferences.migratedIds;
+  List<String> _selectionIds(
+    DashboardSnapshot? snapshot,
+    PhoneWidgetPreferences preferences,
+  ) {
+    if (!preferences.usesDefaults || snapshot == null) {
+      return preferences.migratedIds;
     }
     return [
-      for (final metric in resolvePhoneWidgetMetrics(
-        snapshot,
-        widget.preferences,
-      ))
+      for (final metric in resolvePhoneWidgetMetrics(snapshot, preferences))
         metric.id,
     ];
   }
 
-  Future<void> _toggleMetric(WatchRingMetric metric, bool selected) async {
-    if (!metric.isAvailable) {
-      return;
-    }
-    final ids = [..._effectiveIds];
-    if (selected) {
-      if (ids.contains(metric.id) || ids.length >= phoneWidgetSlotCount) {
-        return;
-      }
-      ids.add(metric.id);
-    } else {
-      ids.remove(metric.id);
-    }
+  Future<void> _toggleMetric(
+    WidgetScreen picker,
+    WatchRingMetric metric,
+    bool selected,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      await widget.onPreferencesChanged(
-        PhoneWidgetPreferences(selectedIds: ids),
-      );
+      await picker.onPreferencesChanged((current) {
+        final ids = [..._selectionIds(picker.snapshot, current)];
+        if (selected) {
+          if (!phoneWidgetMetricIsAvailable(metric) ||
+              ids.contains(metric.id) ||
+              ids.length >= phoneWidgetSlotCount) {
+            return current;
+          }
+          ids.add(metric.id);
+        } else if (!ids.remove(metric.id)) {
+          return current;
+        }
+        return PhoneWidgetPreferences(selectedIds: ids);
+      });
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (messenger.mounted) {
+        messenger.showSnackBar(
           const SnackBar(content: Text('Could not update widget metrics')),
         );
       }
@@ -71,9 +82,32 @@ class _WidgetScreenState extends State<WidgetScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final snapshot = widget.snapshot;
-    final selectedIds = _effectiveIds;
-    final catalog = phoneWidgetCatalog(snapshot);
+    final picker = widget;
+    final snapshot = picker.snapshot;
+    final preferences = picker.preferences;
+    final selectedIds =
+        preferences == null
+            ? const <String>[]
+            : _selectionIds(snapshot, preferences);
+    final reported = phoneWidgetCatalog(
+      snapshot,
+      reportingOutcomes: picker.reportingOutcomes,
+      localCapsAvailable: picker.localCapsAvailable,
+    );
+    final reportedIds = reported.map((metric) => metric.id).toSet();
+    final catalog = [
+      ...reported,
+      for (final id in selectedIds)
+        if (!reportedIds.contains(id))
+          WatchRingMetric(
+            id: id,
+            label: 'Saved metric: $id',
+            usedPercent: null,
+            status: ProviderStatus.unknown,
+            unavailableReason:
+                'This saved metric is not currently reported. Deselect it to remove the choice.',
+          ),
+    ];
     // Ticked rows, not stored ids — same reason as Watchface.
     final usedSlots =
         catalog.where((metric) => selectedIds.contains(metric.id)).length;
@@ -89,35 +123,41 @@ class _WidgetScreenState extends State<WidgetScreen> {
               ListTile(
                 leading: const Icon(Icons.widgets_outlined),
                 title: const Text('Home screen widget'),
+                trailing: widget.saving ? const Text('Saving…') : null,
                 subtitle: Text(
                   // Same reason as Watchface: the count explains a greyed row
                   // that the cap alone leaves looking broken.
-                  '$usedSlots of $phoneWidgetSlotCount slots used · '
-                  'independent of Watchface · Claude windows stay separate · '
-                  'credits append like Glance · exhausted pools show as 0% left',
+                  preferences == null
+                      ? 'Widget preferences unavailable'
+                      : '$usedSlots of $phoneWidgetSlotCount slots used · '
+                          'independent of Watchface · Claude windows stay separate · '
+                          'reported expenses and allowance details · exhausted pools show as 0% left',
                 ),
               ),
-              if (catalog.isEmpty) ...[
+              if (preferences != null && catalog.isEmpty) ...[
                 const Divider(height: 1),
                 const ListTile(
                   title: Text('No metrics yet'),
                   subtitle: Text(
                     'Connect a provider under Providers · plan windows and '
-                    'budget limits fill these slots.',
+                    'reported expenses fill these slots.',
                   ),
                 ),
               ],
-              CatalogOutline(
-                catalog: catalog,
-                rowBuilder:
-                    (metric, title) => _MetricTile(
-                      metric: metric,
-                      title: title,
-                      selected: selectedIds.contains(metric.id),
-                      atCapacity: selectedIds.length >= phoneWidgetSlotCount,
-                      onChanged: (value) => _toggleMetric(metric, value),
-                    ),
-              ),
+              if (preferences != null)
+                CatalogOutline(
+                  catalog: catalog,
+                  rowBuilder:
+                      (metric, title) => _MetricTile(
+                        metric: metric,
+                        title: title,
+                        selected: selectedIds.contains(metric.id),
+                        atCapacity: selectedIds.length >= phoneWidgetSlotCount,
+                        localCapsAvailable: picker.localCapsAvailable,
+                        onChanged:
+                            (value) => _toggleMetric(picker, metric, value),
+                      ),
+                ),
             ],
           ),
         ),
@@ -129,7 +169,9 @@ class _WidgetScreenState extends State<WidgetScreen> {
               leading: const Icon(Icons.preview_outlined),
               title: const Text('Next widget payload'),
               subtitle: Text(
-                phoneWidgetPayloadSubtitle(snapshot, widget.preferences),
+                preferences == null || !picker.localCapsAvailable
+                    ? 'Unavailable'
+                    : phoneWidgetPayloadSubtitle(snapshot, preferences),
               ),
             ),
           ),
@@ -159,6 +201,7 @@ class _MetricTile extends StatelessWidget {
     required this.title,
     required this.selected,
     required this.atCapacity,
+    required this.localCapsAvailable,
     required this.onChanged,
   });
 
@@ -166,19 +209,26 @@ class _MetricTile extends StatelessWidget {
   final String title;
   final bool selected;
   final bool atCapacity;
+  final bool localCapsAvailable;
   final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final canToggle = metric.isAvailable && (selected || !atCapacity);
-    final reason = metric.unavailableReason;
+    final available = phoneWidgetMetricIsAvailable(metric);
+    final canToggle = selected || (available && !atCapacity);
+    final reason = available ? null : metric.unavailableReason;
     return CheckboxListTile(
       secondary:
           reason == null
               ? const Icon(Icons.data_usage_outlined)
               : Tooltip(message: reason, child: const Icon(Icons.help_outline)),
       title: Text(title),
-      subtitle: Text(metric.catalogSubtitle),
+      subtitle: Text(
+        phoneWidgetMetricSubtitle(
+          metric,
+          localCapsAvailable: localCapsAvailable,
+        ),
+      ),
       value: selected,
       onChanged: canToggle ? (value) => onChanged(value ?? false) : null,
     );

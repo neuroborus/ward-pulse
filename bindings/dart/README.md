@@ -7,6 +7,56 @@ The package loads `libward_pulse_ffi.so`, converts the returned UTF-8 JSON to a 
 string, and releases the Rust allocation. Domain models and calculations stay in Rust;
 Flutter owns JSON decoding and UI-safe error handling.
 
+`loadDebugDashboardSnapshotJson(seed, captureAnchor: '2026-11-02T12:00:00Z')`
+optionally dates debug Mock data. Without the named argument, the existing seed-only
+C symbol and output are retained. The dated call uses
+`ward_pulse_debug_dashboard_snapshot_at_result_json`, borrowing a UTF-8 anchor and freeing
+both the Dart request allocation and the Rust result through their existing owners.
+Rust requires whole-second `YYYY-MM-DDTHH:MM:SSZ` UTC with representable rebased dates;
+invalid explicit anchors raise `WardPulseBindingsException` without fallback. Embedded
+NUL input is rejected before the C-string boundary. Phone startup exposes this only in debug.
+Rebuild both Android ABIs and qualify the actual APK/FFI symbols on HOST before acceptance;
+Flutter tests alone do not establish native symbol availability.
+
+## Plan recovery reconciliation
+
+`reconcilePlanRecoveriesJson(snapshotJson, pendingJson)` calls the additive
+`ward_pulse_reconcile_plan_recoveries_result_json` export with `{snapshot, pending}`.
+Its normal result envelope carries a JSON string in `reconciliationJson`, containing
+`{pending, recoveries}`. Existing window/recovery exports retain their signatures.
+Pending entries keep flat `accountId`, `allowanceId` and optional `historyOwner`, with
+optional `requirements: {allowanceIds, complete}`. Allowances carry the same descriptor as
+`recoveryRequirements`. References are account/owner-local Plan IDs; incomplete or malformed
+context is Unknown, and legacy key-only records remain readable.
+
+The phone persists Rust-returned pending context through owner-partitioned storage, retaining
+reset scheduling metadata separately. Rust evaluates complete applicable Plan capacity after
+merging current and saved requirements; a blocked target remains pending even with own-window
+room. Legacy key-only callers use the same evaluator, while contextual callers also retain
+necessary constraints across reports. The external reconciliation API and types are unchanged.
+Rebuild and identify actual loaded libraries on HOST before runtime acceptance.
+
+## Threshold condition observations
+
+The existing `ward_pulse_apply_alert_settings_result_json` export returns an optional
+`alertConditions` array in `DashboardSnapshot`. It is omitted when empty; snapshots without
+it decode as having no observations. Each record has `key` and `state`. The key contains
+`provider`, `accountId`, the resolved `connection` storage key (including the legacy fallback),
+and a typed `target`: `{ "kind": "allowance", "source": "plan", "id": "window-a" }` or
+`{ "kind": "budget", "period": "today" }`. Allowance sources are `plan`/`purchased`; budget
+periods are `today`/`week`/`month`. Labels and configured threshold values are not identity.
+
+Rust emits `crossed`, `clear`, or `unknown` for enabled, present targets. A `crossed` record
+carries its exact emitted `alert` (`severity` and `message`); `alerts` is derived from those
+records. `clear` and `unknown` carry no alert. Disabled rules and missing accounts/windows
+produce no observation, and neither absence nor unknown usage means clear. Local budgets,
+Plan inheritance and explicit Off retain their existing eligibility rules. Dart only decodes
+these evaluations; it must not infer them from messages, severity or percentages.
+
+This additive contract uses the existing JSON-string ABI and does not change WatchSummary.
+Phone-only lifecycle provenance stays outside shared JSON and is restored after the transform
+by `applyUserAlertSettings` in the phone shell.
+
 Build the Android libraries before running the phone app:
 
 ```sh

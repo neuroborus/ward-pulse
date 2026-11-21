@@ -4,8 +4,10 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
 
 ## Credential Rules
 
-- Provider credentials stay on the phone that owns the provider transport. OpenAI, Anthropic, and
-  Cursor platform Admin API keys are entered on the phone; ChatGPT/Codex sign-in uses OpenAI's
+- Provider credentials are encrypted on the phone that owns the provider transport and used
+  to authenticate requests directly to their provider. Reporting uses one OpenAI organization
+  Admin key, one ordinary organization-scoped Anthropic key with actual linked-account rights,
+  or one Cursor Team key per corresponding row; ChatGPT/Codex sign-in uses OpenAI's
   device-code flow. Claude subscription uses Claude Code's PKCE authorization-code flow (browser
   plus pasted callback code); Cursor plan uses an experimental in-app WebView dashboard sign-in
   that captures the `WorkosCursorSessionToken` cookie (optional Advanced paste remains for
@@ -15,7 +17,14 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
   fixed-key installs migrate without requiring another login.
 - Saved credentials are never displayed in full. Credential entry may reveal only the current unsaved value after an explicit user action.
 - Optional user-defined labels for API-key connections are plain phone-local display metadata. They are stored beside the credential reference, never concatenated into the secret value, and never sent to Wear OS.
-- Credentials are never sent to a WardPulse cloud service in the MVP.
+- Anthropic Organization reporting excludes the documented Console Admin marker
+  `sk-ant-admin` by app policy. The same nonsecret validator runs before saving a nonempty
+  new/replacement value and before any report request with a saved value. Marker absence
+  proves neither organization scope nor reporting rights. A policy rejection produces local,
+  credential-versioned authentication feedback; it does not delete or rewrite the saved key,
+  label, cached report or preferences. Explicit replacement and Remove retain their normal
+  lifecycle barriers; blank-value label edits and Cancel do not replace credentials.
+- Credentials are never sent to a WardPulse cloud service or the watch in the MVP.
 - Wear OS surfaces receive dashboard summaries, not provider credentials.
 - Android encrypted credential data is excluded from backup because its key is device-bound.
 
@@ -27,11 +36,29 @@ headers, prompts or raw reports. It includes non-secret identity digests and exa
 storage key references; neither digests nor private account data are logged. Android app backup
 is disabled for both credential and snapshot data.
 
+Historical Dashboard rejection warnings add only a committed-connection UUID, one event UUID
+and a dismissal flag per catalogue connection to this private store. They contain no timestamps,
+credentials, token fragments, account details, response bodies or native error text. Only an
+explicitly classified rejection under current credential revision and live fetch ownership can
+record an event. OAuth rejection and its credential/cache retirement share the durable barrier;
+reporting keys and Cursor sessions keep their existing retention rules. No old disconnection
+reason is inferred or migrated.
+
+Explicit successful connection commitment rotates event eligibility; routine token refresh,
+cancelled reconnect, migration and ordinary removal preserve its historical identity. Exact-event
+dismissal persists a tombstone, so repeated or stale failures cannot revive a dismissed warning,
+and an old dismissal cannot hide a replacement event. Historical feedback survives recovery and
+removal until X; Android Clear storage removes it with the other local records. Metadata-only
+failures retain confirmed notices without fencing valid credentials or retiring cache. Failed
+in-memory preference commits must not leak notice fields into subsequent whole-map writes.
+
 Credential changes commit a generation barrier and discard the matching cache before awaiting
 secure-storage writes/deletes. Immutable key references keep abandoned older SDK operations
 from clobbering a newer login. Cancelled reconnect restores the prior immutable credential
 under a fresh generation; first-time cancellation stays unconnected. Pending/unknown operations
 fail closed. Explicit reconnect can recover them without selecting an uncertain candidate.
+After a failed activation, whole-map writes for healthy sibling connections preserve the
+confirmed prior lifecycle state, so restart cannot select the unconfirmed credential slot.
 Migration backups are eligible only for the exact migrated slot, generation and token revision,
 with a matching securely read identity; ordinary OAuth refresh, replacement and deletion retire
 them. Snapshot corruption never changes the active credential pointer.
@@ -43,6 +70,15 @@ cleanup references persist until deletion is acknowledged; Claude's old pasted-t
 uses this queue without rotating the active OAuth connection. Detached SDK write candidates
 remain unselectable and are conservatively excluded from cleanup until process restart.
 
+Explicit plan removal reconciles the open Providers row and accepted app data at the
+confirmed native deletion barrier, before remaining secure cleanup. The synchronous observer
+receives only the existing non-secret lifecycle stamp; app reload is started without awaiting
+provider work under the lease. Cleanup feedback requires a read lease confirming the exact
+deleted generation/revision/epoch. Active or pending replacements suppress older feedback;
+unreadable evidence remains unavailable and recoverable. An unknown or failed deletion barrier
+does not confirm removal. Cleanup and reload failures remain separate from confirmed local
+retirement and cannot reactivate retired credentials.
+
 Snapshots retain their original success times. Cold recovery checks credential presence and
 identity, rejects malformed/foreign/mock records, and does not manufacture unknown accounts or
 zero usage. Snapshot I/O failure permits a fresh live result; credential barrier failure reports
@@ -50,6 +86,29 @@ failure before secret mutation. All connection leases are validated together imm
 foreground/headless publication. This protects concurrent Flutter engines in one Android
 process and restart; it does not promise cross-process locking or atomic network delivery
 against a later disconnect.
+
+Completed genuine absence reads also carry phone-private lifecycle evidence: either a
+successful null/blank credential read followed by successful native missing-credential
+retirement, or an established deleted read followed by successful native lease release.
+Activation invalidates that old absence before subsequent publication/failure guards, while
+unrelated healthy connection caches remain valid. Cache probes, cleanup, failed/unavailable
+or tolerated optional reads, parsing/identity retirement alone, pending/skipped work and
+accountless active or stale/Unknown reports cannot establish absence. Captured evidence
+survives later failure/stale and settings transformations, including headless failures that
+would otherwise mark newer widget rows STALE. Absence cannot qualify positive accounts,
+reporting outcomes or recovery-history owners. These stamps never enter shared JSON,
+persisted normalized payloads, watch/widget output, logs or user text. This adds no retraction
+of dispatched calls and no atomic validation/delivery guarantee across engines.
+
+Automatic polling also persists non-secret generation/principal admission stamps and the
+cadence anchor in this private store. The native owner atomically validates the current
+fetch ticket and credential version before recording a start or correcting a future anchor.
+Token revision, cache invalidation and fetch release/detach preserve spacing. Credential
+replacement has a new generation. Admission-metadata failure blocks automatic network work
+without fencing valid credentials or retiring snapshots. Later whole-map writes use confirmed
+admission metadata even when a failed commit exposes new values in memory. This durable
+admission is separate from ephemeral network exclusion and does not hold a credential/storage
+transaction over network waits.
 
 ## Codex Account
 
@@ -65,7 +124,12 @@ against a later disconnect.
   sanitized report reaches Rust.
 - A `401` triggers one token refresh and retry. Only an invalid, expired, reused, or revoked refresh
   token removes the local session; permission and transient failures preserve it. Explicit
-  disconnect removes the session locally before best-effort remote revocation.
+  disconnect tolerates unavailable encrypted session reads so an independently available
+  native deletion barrier can still retire the local session. Other reads keep their errors;
+  malformed-session cleanup and its failures remain separate. Confirmed retirement precedes
+  remaining cleanup and optional best-effort refresh-token revocation after storage leases
+  release. Unreadable or missing session material produces no revocation request, and remote
+  failure cannot undo local retirement or establish provider-side revocation.
 - The direct Codex compatibility endpoints are not a published third-party API. Treat this adapter
   as experimental, keep failures isolated, and do not extend it to prompts, conversations, model
   execution, or arbitrary ChatGPT backend access.
@@ -75,6 +139,13 @@ against a later disconnect.
 - The phone opens Claude Code's PKCE authorize URL in the external browser. After approval, the
   user pastes the short-lived authorization code (`CODE#STATE`) from Anthropic's callback page;
   the phone exchanges it for tokens. Anthropic does not offer a device-code grant for this client.
+- Each sign-in attempt owns a fresh PKCE verifier/state and reconnect ticket and accepts one
+  pasted code; a malformed code or mismatched state is rejected before any token request.
+  Success or failure ends the attempt. A failed attempt cancels its ticket, keeping the prior
+  confirmed session (a first sign-in stays unconnected), and rejects later codes before any
+  network request; Restart sign-in begins a new attempt. Cancellation still applies while a
+  completion is in flight, a newer attempt supersedes older ones, and success is reported only
+  after secure persistence and accepted activation.
 - Access and rotating refresh tokens stay in platform-secure storage. Authorization codes and
   tokens are never logged, sent to Wear OS, or passed across the Rust FFI boundary.
 - Token refresh and session writes are serialized. Anthropic rotates refresh tokens; the phone
@@ -87,24 +158,44 @@ against a later disconnect.
 ## Cursor Plan Account
 
 - The phone opens Cursor’s dashboard in an in-app WebView restricted to Cursor and known login
-  IdP hosts. After the user signs in, WardPulse reads the `WorkosCursorSessionToken` cookie only
-  from `cursor.com`, stores it in platform-secure storage, and wipes the WebView cookie jar
+  IdP hosts. The six exact HTTPS identities listed in [Cursor plan reporting](PROVIDER_NOTES.md#cursor-plan-reporting)
+  permit navigation only, never cookie reads. Google authorization transitions are rejected
+  by navigation policy and an Android WebViewClient request guard, including subframe and
+  resource requests that Flutter's navigation delegate does not expose. Harmless CAPTCHA
+  resources remain allowed. The native guard also enforces approved HTTPS main-frame hosts
+  during request interception, so POST cannot bypass navigation policy. Internal `about:blank`
+  loads require explicit retirement mode. Guard attachment must succeed before any sign-in
+  page loads; its channel carries only view/client IDs and fixed failure categories.
+  Main-document HTTP failures fail the attempt, while optional subresource errors do not. The WebView keeps its default
+  user agent. After sign-in,
+  WardPulse reads `WorkosCursorSessionToken` only from HTTPS `cursor.com` apex/subdomains,
+  stores it in platform-secure storage, and wipes the WebView cookie jar
   (clear + verify, also on disconnect and before each new sign-in). If a wipe cannot confirm the
-  session cookie is gone, Sign in refuses to proceed and disconnect warns the user. Settings help
-  explains the flow; Advanced paste explains how to copy the same cookie value from desktop
-  Chrome or Edge DevTools.
-- This is a dashboard session compatibility login, not a published Cursor OAuth grant. Do not
-  label it OAuth in UI or docs.
+  session cookie is gone, Sign in refuses to proceed and disconnect warns the user. Providers
+  Help explains same-account email when offered, Cancel/reopen and Advanced paste; the guide
+  preserves Chrome, Firefox and Safari cookie instructions. Retry verifies a fresh wipe.
+  Retired attempts cannot complete or clear a newer attempt: pending platform work and confirmed
+  document retirement to a local blank page retain the shared cookie-jar lease. Unconfirmed
+  retirement leaves subsequent sign-in fail-closed. Failed blank-page requests can be retried
+  on Retry or Cancel/reopen without releasing the old browser early; Cancel and manual recovery
+  stay available. Sticky native failures are rechecked before accepting a captured credential.
+  Failed/cancelled reconnect preserves the prior secret.
+- This is a dashboard session compatibility login. Reviewed official documentation does not
+  establish an equivalent grant for this integration’s personal plan meters. Do not label it
+  OAuth in UI or docs. SDK User API keys and Team reporting are separate.
 - The phone sends authenticated read-only requests only to `GET /api/usage-summary` with that
   cookie. Session values are never logged, sent to Wear OS, or passed across the Rust FFI
-  boundary. Explicit disconnect deletes the local secret.
+  boundary. Diagnostics exclude auth query/fragment, identity/password, cookies/headers and
+  raw bodies; recovery messages use fixed stage categories. Explicit disconnect deletes the local secret.
 - Treat the adapter as experimental, keep failures isolated, and do not extend it to prompts,
   agent execution, or arbitrary Cursor dashboard scraping.
 
 ## Phone-to-Watch Sync
 
 - The Data Layer payload follows `schemas/watch_dashboard_summary.schema.json`, which owns its
-  version number, and contains only derived ring metrics, optional compact remaining-credits
+  version number, and contains only derived ring metrics, the optional aggregate boolean
+  `selectedRingDataUnavailable` (`true` when a nonempty effective selection of percent rings
+  yields no usable ring metrics, omitted otherwise), optional compact remaining-credits
   glance (`creditsGlance`), budget, selected allowance, provider-status, alert, freshness, and
   phone-owned manual-refresh allowance fields (`manualRefreshAllowed` /
   `manualRefreshAvailableAt`, driven by the PollCadence hard floor). Ring entries and credits
@@ -139,16 +230,85 @@ request ID, and sanitized parser reason. They must not include response bodies o
 values.
 Phone-to-watch logs record outcomes only and never include the serialized summary.
 
+The private N1/N2 producer diagnostic exception is explicitly debug-only and default-off through
+`wardpulseN1PairDiagnostics` in both Wear and legacy-face Gradle owners. `N1PairDiagnostics`
+in `WatchSummaryComplications.kt` admits only synthetic schema9/mock, ordinal0: the singleton
+`allowance.codex.plan` / `allowance.codex.spark` pair (`N1_PAIR`), both used63, or exactly two
+ordered bands, an ordinary `allowance.codex.plan` followed by the
+`allowance.cursor.cursor-plan-models` / `allowance.cursor.cursor-plan-other` pair
+(`N2_PLAN_PAIR`), all three used63. All admitted pools are OK and plan money fields are null.
+Unrelated shapes are rejected before returned-field inspection. The cases share at most four
+records per process exposing fixed case/stage labels, bounded actual routing and returned
+VALUE/MIN/MAX, and closed returned-type/value-type/TITLE/ramp categories, including actual
+single-color Spark and Cursor-cyan ramps. Observation uses the same returned object after
+the existing single load and selection; TITLE or logging failure cannot change the return.
+Unexpected literals and unavailable stages remain categorized or unknown. This exception
+permits no labels, request IDs, exception text, notification keys, credentials, opaque
+identifiers, serialized summaries or private originals; it does not authorize ordinary summary logging.
+
+The diagnostic legacy face uses only a generated build-directory overlay; canonical and Push
+resources stay unchanged, normal builds ignore stale overlays and release diagnostic requests
+fail. Its slot106 consumer can display bounded fields regardless of admission, so Root must
+establish sanitized input and quiet writers before exposing it. Captures stay private, outside
+public guidance and screenshot assets. Root restores normal artifacts before restoring private
+original data and retires diagnostic controls. See
+[private N1 pair diagnostics](../../apps/watchface_wff/README.md#private-n1-pair-diagnostics)
+for stage attribution and cleanup ownership. Diagnostics establish neither repair nor causality.
+
 ## Notification Rules
 
 A notification is read off a locked screen, by whoever is holding the phone. It may carry only
-what the reader needs to act: the provider family and the window's own name. It must not carry
-credentials, account identifiers, spend, or any raw provider field — the account id keys the
-notification so a repeat replaces its own earlier copy, and never appears in its text.
+what the reader needs to act: the provider family, the window's own name and the user-configured
+alert threshold percentage. It must not carry credentials, account identifiers, actual spend,
+or any raw provider field. Private identifiers serve only local bookkeeping and addressing;
+they never appear in notification text.
 
-Recovery notifications are the only interruption WardPulse makes. Nothing else in the product
-earns one, and an alert threshold never becomes one: alerts are conditions, listed and counted,
-while a recovery is an edge that is told once.
+The phone has independent **Alert notifications** and **Plan recovery** delivery controls.
+Both default on when unset and preserve a saved Off. Threshold rules remain opt-in on Providers;
+only Rust's configured-threshold observations qualify for alert delivery. Provider errors and
+status severity alone never create notifications. One shared foreground coordinator requests
+Android permission on the first eligible normal use, after successful effective-choice reads
+and a completed resumed UI frame. Either On choice qualifies; both saved Off suppress asking.
+Failed/pending reads, pending writes and stale UI ownership cannot authorize that attempt.
+Explicit foreground Off→On actions can retry and report blocking without changing the saved
+choice. Polling, headless work and notifier show never request permission.
+
+An attempt marker stays in secure phone storage. Automatic dispatch claims it before asking;
+denial or a dispatched error leaves it handled across refresh, recreation and restart. A crash
+between the durable claim and dispatch can consume this opportunity. Storage failures suppress
+automatic asking. A missing marker permits one bootstrap attempt, including on this pre-release
+upgrade; it is not evidence that Android permission was never requested. Existing grants,
+denials and restrictions remain authoritative. No permission flags or delivery choices are reset.
+
+Foreground startup registers both existing system channels without posting, independently of
+preference/provider completion. Notifier readiness can also register them without asking or
+touching the attempt marker. Registration retains channel identities and original importance
+(Alert notifications: 3; Plan recovery: 4), preserves user blocking/importance, and never deletes
+or recreates channels. A failed preference read cannot authorize posting or persist a fallback.
+
+Alert posts use `wardpulse.alerts`, a fixed numeric ID and a SHA-256 tag over the structural
+condition key. This opaque digest addresses notifications; it does not decide eligibility.
+Recovery posts retain their separate channel and untagged IDs. No account identifier, spend,
+raw error or provider payload is included in notification text or payload extras. Lock-screen
+visibility still depends on Android and the user's notification settings.
+
+Consumed alert markers and delivery choices stay in phone-secure storage. A crossing is consumed
+before a post attempt; only a positively observed clear rearms it. Unknown, missing and disabled
+observations retain history. Rule edits preserve identity: a clear result rearms, a still-crossed
+result does not replay. Muted or denied crossings are consumed without backlog. A failed marker
+read/write suppresses that condition's post and can be retried on a later accepted observation;
+after a successful claim, plugin failure or a crash can lose delivery until clear. One isolate
+serializes its work, but secure storage supplies no cross-isolate atomic claim: overlapping
+workers can duplicate attempts or race bookkeeping. This is best effort, not exactly-once
+delivery. Mock data neither posts synthetic alerts nor changes production consumed markers.
+
+Both switches affect delivery only. Dashboard/Wear alerts, status, watch/widget publication,
+recovery tracking and reset-wake scheduling remain independent. Recovery preference failures
+mute posting while retaining tracking and wake work. Foreground callers recheck their current
+delivery choices after repository validation. Alert choice gates posting only; recovery samples
+it when entering tracking/delivery work. These checks do not make later awaits, storage or
+plugin delivery atomic. The Wear app adds no dispatcher; Android may bridge phone notifications,
+without a delivery or mirroring guarantee.
 
 ## Rust Core Rule
 

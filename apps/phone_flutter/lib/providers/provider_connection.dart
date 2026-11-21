@@ -10,6 +10,16 @@ enum ProviderFamily { openai, anthropic, cursor }
 
 enum ConnectionKind { plan, platform }
 
+const anthropicReportingKeyGuidance =
+    'Use an ordinary organization-scoped API key with reporting access. '
+    'Replace Console Admin keys; WardPulse does not accept them for reporting.';
+
+/// Marker exclusion is product policy, not proof of a candidate's access rights.
+String? validateAnthropicReportingKey(String value) =>
+    value.trim().startsWith('sk-ant-admin')
+        ? 'Replace this Console Admin key.'
+        : null;
+
 final class ProviderConnectionId {
   const ProviderConnectionId({required this.provider, required this.kind});
 
@@ -31,6 +41,14 @@ final class ProviderConnectionId {
     }
     return ProviderConnectionId(provider: provider, kind: kind);
   }
+
+  /// Compatibility provider token carried by accounts this connection owns.
+  String get legacyProvider => switch ((provider, kind)) {
+    (ProviderFamily.openai, ConnectionKind.plan) => 'codex',
+    (ProviderFamily.openai, ConnectionKind.platform) => 'openai',
+    (ProviderFamily.anthropic, _) => 'claude',
+    (ProviderFamily.cursor, _) => 'cursor',
+  };
 
   @override
   bool operator ==(Object other) =>
@@ -96,6 +114,12 @@ final class ProviderConnection {
   /// Non-clamping provider freshness guidance shown on the Settings row.
   final String? freshnessNote;
 
+  /// Canonical source identity, independent of a saved display name.
+  String get sourceTitle =>
+      id.kind == ConnectionKind.plan
+          ? title
+          : '${providerFamilyLabel(id.provider)} · $title';
+
   String get listTitle {
     final label = displayName?.trim();
     if (label != null && label.isNotEmpty) {
@@ -142,7 +166,8 @@ List<ProviderConnection> providerConnectionCatalog({
     ProviderConnection(
       id: ProviderConnections.anthropicPlatform,
       title: 'Organization reporting',
-      subtitle: 'API key with reporting access · stored on this phone',
+      subtitle:
+          'Ordinary organization key with reporting access · no Admin keys',
       secretHint: 'API key',
       displayName:
           platformLabels[ProviderConnections.anthropicPlatform.storageKey],

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../app/pull_to_refresh_list.dart';
 import '../app/surface_order.dart';
+import '../providers/connection_lifecycle.dart';
+import '../providers/connection_rejection_notice.dart';
 import '../providers/provider_connection.dart';
 import '../charts/usage_history_chart.dart';
 import 'connected_capabilities.dart';
@@ -38,16 +40,26 @@ class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
     super.key,
     required this.snapshot,
+    this.configuredBudgetPeriods = const {},
     this.onOpenProviders,
     this.onEditReportingKey,
+    this.rejectionNotices = const [],
+    this.onRevealConnection,
+    this.onDismissRejection,
     this.reveal,
     this.order,
     required this.onRefresh,
   });
 
   final DashboardSnapshot snapshot;
+
+  /// Positive saved caps by connection. Null means local rules are unavailable.
+  final Map<String, Set<String>>? configuredBudgetPeriods;
   final VoidCallback? onOpenProviders;
   final void Function(ProviderConnectionId)? onEditReportingKey;
+  final List<ConnectionRejectionNotice> rejectionNotices;
+  final void Function(ProviderConnectionId)? onRevealConnection;
+  final void Function(ConnectionRejectionNotice)? onDismissRejection;
 
   /// Keeps the cards where the reader last saw them. Owned by the shell, which
   /// shares it with the app-bar problem badge; `null` ranks afresh every build.
@@ -145,13 +157,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final snapshot = widget.snapshot;
     final onOpenProviders = widget.onOpenProviders;
     if (snapshot.accounts.isEmpty) {
-      if (snapshot.reportingOutcomes.isNotEmpty) {
+      if (snapshot.reportingOutcomes.isNotEmpty ||
+          widget.rejectionNotices.any((notice) => !notice.dismissed)) {
         return PullToRefreshList(
           onRefresh: widget.onRefresh,
           children: [
             _SyncHeader(
               snapshot: snapshot,
               onEditReportingKey: widget.onEditReportingKey,
+              rejectionNotices: widget.rejectionNotices,
+              onRevealConnection: widget.onRevealConnection,
+              onDismissRejection: widget.onDismissRejection,
             ),
             const SizedBox(height: 16),
             const Text('No reporting data yet.'),
@@ -176,8 +192,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final hasPurchasedAllowance = allAllowances.any(
       (allowance) => allowance.source == AllowanceSource.purchased,
     );
-    final showMissingPurchased = caps.showAllowances && !hasPurchasedAllowance;
-    final showPlatformSpend = true;
+    final showMissingPurchased =
+        !hasPurchasedAllowance &&
+        snapshot.accounts.any(
+          (account) =>
+              !_isClaudePlan(account) &&
+              ConnectedCapabilities.fromAccounts([account]).showAllowances,
+        );
 
     return PullToRefreshList(
       onRefresh: widget.onRefresh,
@@ -185,6 +206,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _SyncHeader(
           snapshot: snapshot,
           onEditReportingKey: widget.onEditReportingKey,
+          rejectionNotices: widget.rejectionNotices,
+          onRevealConnection: widget.onRevealConnection,
+          onDismissRejection: widget.onDismissRejection,
         ),
         const SizedBox(height: 16),
         if (caps.showAllowances && !hasVisibleAllowances) ...[
@@ -199,9 +223,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _ProviderDashboardSections(
             sections: providerSections,
             sectionKeys: _sectionKeys,
+            configuredBudgetPeriods: widget.configuredBudgetPeriods,
             footer:
                 showMissingPurchased && hasVisibleAllowances
-                    ? const MissingPurchasedUsageCard()
+                    ? MissingPurchasedUsageCard(
+                      otherPlansOnly: snapshot.accounts.any(_isClaudePlan),
+                    )
                     : null,
           ),
           const SizedBox(height: 16),
@@ -217,15 +244,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
         _SectionHeader(title: 'Alerts'),
         const SizedBox(height: 8),
-        _AlertsPanel(alerts: snapshot.alerts),
-        // Platform spend sits below primary plan/token surfaces — $0 + Unknown
-        // is easy to misread as "Codex is empty" when shown near the top.
-        if (showPlatformSpend && caps.showBudgets) ...[
-          const SizedBox(height: 16),
-          _SectionHeader(title: 'Platform spend'),
-          const SizedBox(height: 8),
-          _BudgetCards(snapshot: snapshot),
-        ] else if (showPlatformSpend && caps.showSpendGap) ...[
+        if (widget.configuredBudgetPeriods == null)
+          const Card(child: ListTile(title: Text('Alerts unavailable')))
+        else
+          _AlertsPanel(alerts: snapshot.alerts),
+        if (caps.showSpendGap &&
+            !snapshot.accounts.any(_showsSourceExpenses)) ...[
           const SizedBox(height: 16),
           _CapabilityGapRow(
             title: 'Spend',
@@ -366,15 +390,19 @@ class EmptyAllowanceCard extends StatelessWidget {
 }
 
 class MissingPurchasedUsageCard extends StatelessWidget {
-  const MissingPurchasedUsageCard({super.key});
+  const MissingPurchasedUsageCard({super.key, this.otherPlansOnly = false});
+
+  final bool otherPlansOnly;
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: const Padding(
-        padding: EdgeInsets.all(16),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
         child: Text(
-          'Purchased usage: none reported. This account has no purchased credits right now.',
+          otherPlansOnly
+              ? 'Purchased usage: no data reported by other connected plans.'
+              : 'Purchased usage: none reported. This account has no purchased credits right now.',
         ),
       ),
     );
@@ -382,11 +410,19 @@ class MissingPurchasedUsageCard extends StatelessWidget {
 }
 
 class AllowanceSummaryCard extends StatelessWidget {
-  const AllowanceSummaryCard({super.key, required this.allowance, this.accent});
+  const AllowanceSummaryCard({
+    super.key,
+    required this.allowance,
+    this.title,
+    this.accent,
+    this.monthlyExtraUsage = false,
+  });
 
   final AllowanceState allowance;
+  final String? title;
+  final bool monthlyExtraUsage;
 
-  /// Provider family tint for the progress fill; defaults to theme primary.
+  /// Metric identity tint for the progress fill; defaults to theme primary.
   final Color? accent;
 
   @override
@@ -399,6 +435,10 @@ class AllowanceSummaryCard extends StatelessWidget {
       AllowanceSource.purchased => allowance.usedFraction,
     };
     final headline = switch (allowance.source) {
+      _ when monthlyExtraUsage =>
+        allowance.used == null
+            ? 'Monthly usage unavailable'
+            : '${allowance.used!.label} used this month',
       AllowanceSource.plan => '${allowance.remainingPercentLabel} left',
       AllowanceSource.purchased when allowance.unlimited => 'Unlimited',
       AllowanceSource.purchased =>
@@ -408,6 +448,8 @@ class AllowanceSummaryCard extends StatelessWidget {
                 : 'Balance unavailable'),
     };
     final detail = switch (allowance.source) {
+      _ when monthlyExtraUsage =>
+        'Monthly cap: ${allowance.limit?.label ?? 'Unavailable'}',
       AllowanceSource.plan when allowance.resetsAt != null =>
         'Resets ${formatLocal(allowance.resetsAt!)}',
       AllowanceSource.plan => 'Reset time unavailable',
@@ -424,7 +466,10 @@ class AllowanceSummaryCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: Text(allowance.label, style: textTheme.titleMedium),
+                  child: Text(
+                    title ?? allowance.label,
+                    style: textTheme.titleMedium,
+                  ),
                 ),
                 // A mark is an exception, never the norm: a column of healthy
                 // checkmarks outweighs the one warning the screen was opened
@@ -435,6 +480,8 @@ class AllowanceSummaryCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(headline, style: textTheme.headlineSmall),
+            if (monthlyExtraUsage && allowance.usedPercent != null)
+              Text('${allowance.usedPercentLabel} used'),
             if (progress != null) ...[
               const SizedBox(height: 14),
               ClipRRect(
@@ -448,7 +495,7 @@ class AllowanceSummaryCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 10),
-            if (allowance.resetsAt != null)
+            if (!monthlyExtraUsage && allowance.resetsAt != null)
               Tooltip(
                 message: formatUtc(allowance.resetsAt!),
                 child: Text(detail),
@@ -462,52 +509,23 @@ class AllowanceSummaryCard extends StatelessWidget {
   }
 }
 
-/// Spend of one period across every connection — money only.
-///
-/// Limits are per connection, so the total has no ceiling to measure against:
-/// no bar, no percentage, and no status pill that would read `Unknown` forever.
-class BudgetSummaryCard extends StatelessWidget {
-  const BudgetSummaryCard({
-    super.key,
-    required this.title,
-    required this.state,
-  });
-
-  final String title;
-  final BudgetState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final spentLabel = state.spent?.label;
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: textTheme.titleMedium),
-            const SizedBox(height: 14),
-            spentLabel == null
-                ? const Text('No spend reported')
-                : Text(spentLabel, style: textTheme.headlineSmall),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _SyncHeader extends StatelessWidget {
-  const _SyncHeader({required this.snapshot, this.onEditReportingKey});
+  const _SyncHeader({
+    required this.snapshot,
+    this.onEditReportingKey,
+    this.rejectionNotices = const [],
+    this.onRevealConnection,
+    this.onDismissRejection,
+  });
 
   final DashboardSnapshot snapshot;
   final void Function(ProviderConnectionId)? onEditReportingKey;
+  final List<ConnectionRejectionNotice> rejectionNotices;
+  final void Function(ProviderConnectionId)? onRevealConnection;
+  final void Function(ConnectionRejectionNotice)? onDismissRejection;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final updatedAt = formatLocal(snapshot.generatedAt);
     final syncIssue = snapshot.syncIssue;
@@ -525,34 +543,130 @@ class _SyncHeader extends StatelessWidget {
                 : 'Updated $updatedAt',
           ),
         ),
-        ReportingFailures(
+        ConnectionFeedback(
           outcomes: snapshot.reportingOutcomes,
+          issue: syncIssue,
+          details: snapshot.syncTooltip,
+          rejection: snapshot.syncRejection,
+          notices: rejectionNotices,
           onEditKey: onEditReportingKey,
+          onRevealConnection: onRevealConnection,
+          onDismiss: onDismissRejection,
         ),
-        if (syncIssue != null &&
-            (snapshot.reportingOutcomes.every((outcome) => !outcome.failed) ||
-                syncIssue.name.startsWith('codex') ||
-                syncIssue.name.startsWith('claude'))) ...[
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Tooltip(
-                message: snapshot.syncTooltip ?? syncIssue.message,
-                child: Icon(Icons.error_outline, color: colors.error, size: 18),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  syncIssue.message,
-                  style: TextStyle(color: colors.error),
-                ),
-              ),
-            ],
-          ),
-        ],
       ],
     );
+  }
+}
+
+/// Shared by normal, empty and failed Dashboard loads. Tombstones suppress only
+/// the matching rejection, never current verification or independent failures.
+class ConnectionFeedback extends StatelessWidget {
+  const ConnectionFeedback({
+    super.key,
+    this.outcomes = const [],
+    this.issue,
+    this.details,
+    this.showIssueTooltip = true,
+    this.rejection,
+    this.notices = const [],
+    this.onEditKey,
+    this.onRevealConnection,
+    this.onDismiss,
+  });
+  final Iterable<ConnectionReportingOutcome> outcomes;
+  final DashboardSyncIssue? issue;
+  final String? details;
+  final bool showIssueTooltip;
+  final ConnectionRejection? rejection;
+  final List<ConnectionRejectionNotice> notices;
+  final void Function(ProviderConnectionId)? onEditKey;
+  final void Function(ProviderConnectionId)? onRevealConnection;
+  final void Function(ConnectionRejectionNotice)? onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.error;
+    final visibleOutcomes = outcomes.where(
+      (outcome) =>
+          outcome.category != ReportingOutcomeCategory.authenticationRejected ||
+          !notices.any(
+            (notice) =>
+                notice.connection == outcome.connection &&
+                notice.eventId ==
+                    outcome.credentialVersion?.values['committedConnection'],
+          ),
+    );
+    final matched = notices.any((notice) => notice.matches(rejection));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final notice in notices.where((notice) => !notice.dismissed))
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Tooltip(
+                    message: 'Review ${_noticeLabel(notice)} connection',
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        foregroundColor: color,
+                        alignment: Alignment.centerLeft,
+                      ),
+                      onPressed:
+                          onRevealConnection == null
+                              ? null
+                              : () => onRevealConnection!(notice.connection),
+                      child: Text(
+                        '${_noticeLabel(notice)}: a saved connection was rejected. Open Providers to review this connection.',
+                      ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Dismiss ${_noticeLabel(notice)} rejection warning',
+                  onPressed:
+                      onDismiss == null ? null : () => onDismiss!(notice),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+          ),
+        ReportingFailures(outcomes: visibleOutcomes, onEditKey: onEditKey),
+        if (issue != null &&
+            !matched &&
+            (visibleOutcomes.every((outcome) => !outcome.failed) ||
+                issue!.name.startsWith('codex') ||
+                issue!.name.startsWith('claude')))
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (showIssueTooltip)
+                  Tooltip(
+                    message: details ?? issue!.message,
+                    child: Icon(Icons.error_outline, color: color, size: 18),
+                  )
+                else
+                  Icon(Icons.error_outline, color: color, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(issue!.message, style: TextStyle(color: color)),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _noticeLabel(ConnectionRejectionNotice notice) {
+    final row = providerConnectionCatalog().firstWhere(
+      (row) => row.id == notice.connection,
+    );
+    return '${providerFamilyLabel(row.id.provider)} · ${row.title}';
   }
 }
 
@@ -594,48 +708,6 @@ class ReportingFailures extends StatelessWidget {
               ),
             ),
       ],
-    );
-  }
-}
-
-class _BudgetCards extends StatelessWidget {
-  const _BudgetCards({required this.snapshot});
-
-  final DashboardSnapshot snapshot;
-
-  @override
-  Widget build(BuildContext context) {
-    final cards = [
-      BudgetSummaryCard(title: 'Today', state: snapshot.todayTotal),
-      BudgetSummaryCard(title: 'Week', state: snapshot.weekTotal),
-      BudgetSummaryCard(title: 'Month', state: snapshot.monthTotal),
-    ];
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 760) {
-          return Column(
-            // A money-only card has no full-width row left to stretch it.
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final card in cards) ...[
-                card,
-                if (card != cards.last) const SizedBox(height: 12),
-              ],
-            ],
-          );
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final card in cards) ...[
-              Expanded(child: card),
-              if (card != cards.last) const SizedBox(width: 12),
-            ],
-          ],
-        );
-      },
     );
   }
 }
@@ -804,10 +876,12 @@ class _ProviderDashboardSections extends StatelessWidget {
   const _ProviderDashboardSections({
     required this.sections,
     required this.sectionKeys,
+    required this.configuredBudgetPeriods,
     this.footer,
   });
 
   final List<_ProviderDashboardSection> sections;
+  final Map<String, Set<String>>? configuredBudgetPeriods;
 
   /// Owned by the screen's state so a key survives rebuilds and stays a valid
   /// scroll target between the tap and the frame that answers it.
@@ -823,7 +897,10 @@ class _ProviderDashboardSections extends StatelessWidget {
           if (index > 0) const SizedBox(height: 20),
           KeyedSubtree(
             key: sectionKeys.putIfAbsent(section.provider, GlobalKey.new),
-            child: _ProviderDashboardSectionView(section: section),
+            child: _ProviderDashboardSectionView(
+              section: section,
+              configuredBudgetPeriods: configuredBudgetPeriods,
+            ),
           ),
         ],
         if (footer case final footer?) ...[const SizedBox(height: 12), footer],
@@ -833,13 +910,18 @@ class _ProviderDashboardSections extends StatelessWidget {
 }
 
 class _ProviderDashboardSectionView extends StatelessWidget {
-  const _ProviderDashboardSectionView({required this.section});
+  const _ProviderDashboardSectionView({
+    required this.section,
+    required this.configuredBudgetPeriods,
+  });
 
   final _ProviderDashboardSection section;
+  final Map<String, Set<String>>? configuredBudgetPeriods;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final configured = configuredBudgetPeriods;
     final chip = providerStatusChipColors(
       Theme.of(context).colorScheme,
       section.status,
@@ -851,6 +933,15 @@ class _ProviderDashboardSectionView extends StatelessWidget {
           : section.provider,
     );
     final labels = section.accounts.map(_dashboardSourceLabel).toList();
+    final sourceTitles = [
+      for (final (index, label) in labels.indexed)
+        label != section.providerLabel &&
+                labels.where((candidate) => candidate == label).length == 1
+            ? label
+            : labels.length > 1
+            ? '$label · Source ${index + 1}'
+            : label,
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -888,16 +979,15 @@ class _ProviderDashboardSectionView extends StatelessWidget {
           const SizedBox(height: 12),
           _ProviderDashboardSourceView(
             account: account,
+            configuredBudgetPeriods:
+                configured == null
+                    ? null
+                    : configured[account.connection] ?? const {},
             accent: accent,
+            sourceTitle: sourceTitles[index],
             caption:
-                labels[index] != section.providerLabel &&
-                        labels
-                                .where((label) => label == labels[index])
-                                .length ==
-                            1
-                    ? labels[index]
-                    : labels.length > 1
-                    ? '${labels[index]} · Source ${index + 1}'
+                sourceTitles[index] != section.providerLabel
+                    ? sourceTitles[index]
                     : null,
           ),
         ],
@@ -916,45 +1006,228 @@ String _dashboardSourceLabel(ProviderSnapshot account) {
       connection.provider == providerFamilyOf(account.provider)) {
     for (final metadata in providerConnectionCatalog()) {
       if (metadata.id == connection) {
-        return metadata.title;
+        return metadata.sourceTitle;
       }
     }
   }
   return account.providerLabel;
 }
 
+bool _isClaudePlan(ProviderSnapshot account) =>
+    account.provider == 'claude' &&
+    account.connection == ProviderConnections.claudePlan.storageKey;
+
+bool _showsSourceExpenses(ProviderSnapshot account) {
+  final connection = ProviderConnectionId.fromStorageKey(
+    account.connection ?? '',
+  );
+  if (connection?.kind == ConnectionKind.plan) return false;
+  if (connection == ProviderConnections.openAiPlatform ||
+      connection == ProviderConnections.anthropicPlatform ||
+      connection == ProviderConnections.cursorPlatform) {
+    return true;
+  }
+  return ConnectedCapabilities.fromAccounts([account]).showBudgets;
+}
+
+/// One account's reported Money and optional advisory caps, never Plan balances.
+class _SourceExpenseBlock extends StatelessWidget {
+  const _SourceExpenseBlock({
+    required this.account,
+    required this.title,
+    required this.configuredBudgetPeriods,
+  });
+
+  final ProviderSnapshot account;
+  final String title;
+  final Set<String>? configuredBudgetPeriods;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final budgets = [account.today, account.week, account.month];
+    final configured = configuredBudgetPeriods;
+    Widget period(BudgetState budget, {required bool wide}) {
+      final title = Text(budget.periodLabel, style: textTheme.titleSmall);
+      final amount = Text(
+        budget.spent?.label ?? 'No spend reported',
+        style: textTheme.titleMedium,
+        textAlign: wide ? TextAlign.start : TextAlign.end,
+      );
+      final capLabel =
+          configured == null
+              ? 'Unavailable'
+              : budget.limit?.label ??
+                  (configured.contains(budget.period)
+                      ? 'Configured · Awaiting report'
+                      : 'Not set');
+      final cap = Text(
+        'Local cap: $capLabel',
+        style: textTheme.bodySmall,
+        textAlign: wide ? TextAlign.start : TextAlign.end,
+      );
+      return KeyedSubtree(
+        key: ValueKey('source-expense.${budget.period}'),
+        child:
+            wide
+                ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [title, const SizedBox(height: 8), amount, cap],
+                )
+                : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 2, child: title),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [amount, cap],
+                      ),
+                    ),
+                  ],
+                ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 760;
+        final periods = [
+          for (final budget in budgets) period(budget, wide: wide),
+        ];
+        return Card(
+          key: ValueKey('source-expenses.${account.accountId}'),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: Text(title, style: textTheme.titleSmall)),
+                    if (account.status != ProviderStatus.ok)
+                      StatusPill(status: account.status),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                wide
+                    ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final (index, content) in periods.indexed) ...[
+                          if (index > 0) const SizedBox(width: 12),
+                          Expanded(child: content),
+                        ],
+                      ],
+                    )
+                    : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final (index, content) in periods.indexed) ...[
+                          if (index > 0) const SizedBox(height: 12),
+                          content,
+                        ],
+                      ],
+                    ),
+                const SizedBox(height: 12),
+                if (account.lastSuccessfulSyncAt case final asOf?)
+                  Tooltip(
+                    message: formatUtc(asOf),
+                    child: Text(
+                      'As of ${formatLocal(asOf)}',
+                      style: textTheme.bodySmall,
+                    ),
+                  )
+                else
+                  Text(
+                    'Last successful report unavailable',
+                    style: textTheme.bodySmall,
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _ProviderDashboardSourceView extends StatelessWidget {
   const _ProviderDashboardSourceView({
     required this.account,
+    required this.configuredBudgetPeriods,
     required this.accent,
+    required this.sourceTitle,
     required this.caption,
   });
 
   final ProviderSnapshot account;
+  final Set<String>? configuredBudgetPeriods;
   final Color accent;
+  final String sourceTitle;
   final String? caption;
 
   @override
   Widget build(BuildContext context) {
+    final showExpenses = _showsSourceExpenses(account);
     final cards = [
       for (final allowance in account.allowances)
-        AllowanceSummaryCard(allowance: allowance, accent: accent),
+        AllowanceSummaryCard(
+          allowance: allowance,
+          title: '$sourceTitle · ${allowance.label}',
+          monthlyExtraUsage:
+              _isClaudePlan(account) &&
+              allowance.source == AllowanceSource.purchased &&
+              allowance.id == 'claude-extra-usage',
+          accent: switch ((account.provider, allowance.source, allowance.id)) {
+            ('claude', AllowanceSource.plan, 'claude-seven-day-fable') =>
+              familyClaudeFableColor,
+            ('cursor', AllowanceSource.plan, 'cursor-plan-models') =>
+              familyCursorOwnColor,
+            _ => accent,
+          },
+        ),
+      if (_isClaudePlan(account) &&
+          !account.allowances.any(
+            (allowance) =>
+                allowance.source == AllowanceSource.purchased &&
+                allowance.id == 'claude-extra-usage',
+          ))
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              '$sourceTitle · Extra usage: monthly data unavailable.',
+            ),
+          ),
+        ),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (caption case final caption?) ...[
-          Text(caption, style: Theme.of(context).textTheme.titleSmall),
+        if (!showExpenses && caption != null) ...[
+          Text(caption!, style: Theme.of(context).textTheme.titleSmall),
           if (cards.isNotEmpty ||
               account.buckets.isNotEmpty ||
               account.modelBreakdown.isNotEmpty)
             const SizedBox(height: 8),
+        ],
+        if (showExpenses) ...[
+          _SourceExpenseBlock(
+            account: account,
+            title: caption ?? '$sourceTitle · Expenses',
+            configuredBudgetPeriods: configuredBudgetPeriods,
+          ),
+          if (cards.isNotEmpty) const SizedBox(height: 12),
         ],
         if (cards.isNotEmpty)
           LayoutBuilder(
             builder: (context, constraints) {
               if (constraints.maxWidth < 760) {
                 return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     for (final card in cards) ...[
                       card,
@@ -976,17 +1249,22 @@ class _ProviderDashboardSourceView extends StatelessWidget {
             },
           ),
         if (account.buckets.isNotEmpty) ...[
-          if (cards.isNotEmpty) const SizedBox(height: 12),
-          UsageHistoryChart(buckets: account.buckets, accent: accent),
+          if (showExpenses || cards.isNotEmpty) const SizedBox(height: 12),
+          UsageHistoryChart(
+            buckets: account.buckets,
+            title: '$sourceTitle · Usage history',
+            accent: accent,
+          ),
         ],
         if (account.modelBreakdown.isNotEmpty) ...[
-          if (cards.isNotEmpty || account.buckets.isNotEmpty)
+          if (showExpenses || cards.isNotEmpty || account.buckets.isNotEmpty)
             const SizedBox(height: 12),
-          _SectionHeader(title: 'Model usage'),
+          _SectionHeader(title: '$sourceTitle · Model usage'),
           const SizedBox(height: 8),
           _ModelUsagePanel(models: account.modelBreakdown, accent: accent),
         ],
-        if (cards.isEmpty &&
+        if (!showExpenses &&
+            cards.isEmpty &&
             account.buckets.isEmpty &&
             account.modelBreakdown.isEmpty)
           Text(

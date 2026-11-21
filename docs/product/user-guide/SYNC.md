@@ -26,6 +26,19 @@ The selected interval is between 5 and 60 minutes while WardPulse is open; the d
 The text beside the slider shows both cadences. Background refresh may continue when you
 are not using WardPulse, subject to Android scheduling.
 
+In debug builds with **Mock data** on, background refresh skips provider reads and leaves
+the demo widget and watch displays unchanged. Turn Mock data off to resume it.
+
+Automatic refreshes share their spacing across the open app, restarts and background work.
+An attempted refresh counts even when the network fails. Opening the app again can show
+saved data while the next automatic attempt is still waiting. Refresh now and connection
+checks keep their existing availability rules and do not restart that automatic interval.
+
+A pending plan reset can request another attempt after at least five minutes, even with
+a longer selected interval. If a recent automatic attempt prevents it, WardPulse schedules
+the reset attempt for its next eligible time. Android may delay that work. Reusing saved
+data while waiting does not mean a plan recovered or produce new alert notifications.
+
 Provider reporting has its own freshness. Cursor aggregates team usage by the hour, so a
 successful refresh can return unchanged figures. This applies to **Team Admin API**,
 separately from the experimental **Cursor plan** connection. See [Cursor reporting history](/guide/providers-cursor#read-the-history).
@@ -35,10 +48,19 @@ separately from the experimental **Cursor plan** connection. See [Cursor reporti
 After a successful report, WardPulse keeps that connection's data locally. If a later
 refresh fails, it can show those values with their original successful timestamps and
 mark them stale. A fresh result for one provider can coexist with earlier stale data for another.
+Watch and widget selections keep their stale markers when another connection updates.
+Each surface follows the metrics and purchased credits it displays, so selecting only fresh
+data avoids a stale marker from an unrelated connection.
 
 This recovery works across phone app restarts and background polling. A new connection
 that has never reported successfully has no earlier data to recover. Provider sign-in and
 fresh reporting need network access. Removed or replaced connections cannot reuse obsolete data.
+
+After a newly connected provider has reported, older work that read it as unconnected cannot
+replace the newer combined report or mark its widget rows stale. Other providers keep their
+healthy or recoverable data. A failed credential read does not prove that a connection was
+removed. Updates already sent can still arrive later; phone, widget and watch delivery is
+not one simultaneous transaction.
 
 - The phone can show **Showing previous data** and a provider/sync issue.
 - The home widget keeps earlier rows and can show **STALE** after a failed refresh.
@@ -47,6 +69,55 @@ fresh reporting need network access. Removed or replaced connections cannot reus
 These displays can update at different times. The two-hour rule applies to Wear, not the
 phone or widget, and a watch display may update after that time rather than exactly then.
 
+## Alert notifications
+
+1. On **Providers**, configure the usage or budget alert thresholds you want.
+2. Open **Settings → Notifications → Alert notifications** to control delivery.
+3. Allow Android's notification request when it appears. If **Notifications are blocked** appears
+   in Settings, choose **Enable notifications** to open WardPulse's Android settings,
+   allow notifications there, then return to WardPulse. Turning a WardPulse delivery switch
+   off and back on can retry the request; Android decides whether to show it again.
+
+Alert notifications and **Plan recovery** are independent and start on unless you saved Off.
+They share one Android permission. On the first eligible foreground use, WardPulse makes one
+automatic attempt after reading your choices and becoming ready on screen. Either switch
+being on qualifies; saving both off suppresses the attempt. A denial does not cause repeated
+automatic prompts after refresh or restart. Existing installations can receive this one
+bootstrap attempt too, subject to Android's previous permission decisions.
+
+Android can block delivery even while a WardPulse switch is on. Denial keeps your saved
+choices; an explicit off-to-on retry reports blocking. Polling and background delivery never
+request permission. WardPulse registers its **Alert notifications** and **Plan recovery**
+system channels before any notification; their blocking and importance remain under Android's
+controls. The location and appearance of those controls vary by Android version and device.
+
+An enabled threshold can notify when first observed crossed. Unchanged crossings are suppressed
+across app restarts; a report showing the condition clear rearms it. Missing or unknown data does
+not rearm it. Changing a rule or disabling/re-enabling it while it remains crossed does not
+replay the notification. Crossings seen while muted or denied are not queued for later delivery.
+Provider errors alone do not trigger these notifications. Delivery is best effort: a failed
+attempt can be lost, and overlapping background/foreground work can repeat an attempt.
+
+Notification history follows the accepted connection. An unchanged credential, routine refresh,
+or sign-in that identifies the same account keeps its history, including after a restart or
+label edit. An accepted replacement with different account evidence starts separate history.
+Changing a pasted key or session token also starts separate local history: WardPulse cannot
+tell whether different opaque credentials mean another organization or a key rotation for
+the same one. That connection's first observed crossed condition can therefore notify without
+an earlier clear report. Cancelling or failing a reconnect does not adopt replacement history.
+
+Older saved notification history may lack enough evidence to associate it with an accepted
+connection. Each such condition can become eligible on its first qualified crossed observation;
+each such plan window can lose its pending recovery notification. Subsequent reports establish
+history for that connection. These limits apply independently to each condition and window;
+they do not imply a single extra notification or guaranteed delivery.
+
+Turning either delivery switch off leaves reporting, in-app alerts, watch/widget updates and
+recovery tracking active. Notification text contains only the provider family, window or budget
+name, and the configured alert boundary in **% left** or recovery copy. An alert set to 20% left
+still says 20% left when a later report shows 10% left. Check Android's lock-screen settings for
+visibility.
+
 ## Plan recovery notifications
 
 1. Open **Settings → Notifications**.
@@ -54,12 +125,29 @@ phone or widget, and a watch display may update after that time rather than exac
 3. If Android requests notification permission, allow it to receive those notifications.
 
 This feature tells you when a plan window that was exhausted becomes usable again. It is
-WardPulse's notification feature; Dashboard threshold alerts are configured separately in
-Providers. Detection depends on reporting and scheduling, so it is not an exact reset alarm.
+independent of Alert notifications and needs no threshold rule. Detection depends on reporting
+and scheduling, so it is not an exact reset alarm or an exactly-once delivery guarantee.
 
-If Android blocks notifications, WardPulse reports that. Enable notifications for WardPulse in
-Android's app settings, then return to the toggle. Reporting and the in-app Dashboard remain
-available without notification permission.
+A five-hour window can reset while a necessary weekly allowance is still exhausted or
+Unknown. The displayed usage and reset time still describe that window, but WardPulse keeps
+its recovery pending until a fresh report shows usable included capacity across its necessary
+allowances. That pending state survives app restarts. A later usable report can then trigger
+the normal notification; reporting delays and Android scheduling can delay it. Independent
+allowances do not have to recover together. Purchased credits do not restore included quota.
+
+For Codex, WardPulse recognizes a qualified main-quota report with both windows, or one window
+whose sibling is explicitly absent. A previously necessary sibling remains required even when
+a later report says it is absent. Missing or unclear information, or denied/reached status in
+that bucket, cannot establish recovery from percentages alone. These are compatibility
+inferences about the reported included quota, not a guarantee that every model or API request
+will run. Uncertainty about a separate feature does not silence a qualified main-quota target.
+
+The **Notifications are blocked** warning applies to both switches, including saved Off choices.
+**Enable notifications** opens Android settings; it does not grant permission or change either
+switch. WardPulse rechecks when you return. Android's channel settings and Do Not Disturb can
+still limit delivery without this warning. Reporting and the in-app Dashboard remain available
+without notification permission.
+Android may bridge phone notifications to a paired watch; WardPulse does not guarantee mirroring.
 
 For delayed watch delivery, unchanged figures or failed reports, see
 [Troubleshooting](/guide/troubleshooting).

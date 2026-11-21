@@ -9,6 +9,7 @@ void main() {
     final catalog = providerConnectionCatalog(
       platformLabels: {
         ProviderConnections.openAiPlatform.storageKey: 'Work org key',
+        ProviderConnections.anthropicPlatform.storageKey: 'Console org key',
       },
     );
 
@@ -21,10 +22,27 @@ void main() {
       'cursor.platform',
     ]);
     expect(catalog[1].listTitle, 'Work org key');
+    expect(
+      catalog
+          .singleWhere(
+            (connection) =>
+                connection.id == ProviderConnections.anthropicPlatform,
+          )
+          .listTitle,
+      'Console org key',
+    );
     expect(providerFamilyLabel(ProviderFamily.openai), 'OpenAI');
   });
 
   test('storage keys round-trip back to their connection id', () {
+    expect(
+      ProviderConnectionId.fromStorageKey('anthropic.platform'),
+      ProviderConnections.anthropicPlatform,
+    );
+    expect(
+      providerConnectionCatalog().map((connection) => connection.id),
+      contains(ProviderConnections.anthropicPlatform),
+    );
     for (final connection in providerConnectionCatalog()) {
       expect(
         ProviderConnectionId.fromStorageKey(connection.id.storageKey),
@@ -81,7 +99,7 @@ void main() {
       (key) => key != 'mock.plan',
     );
 
-    expect(catalogKeys, containsAll(rustKeys));
+    expect(catalogKeys, unorderedEquals(rustKeys));
   });
 }
 

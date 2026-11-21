@@ -1,21 +1,46 @@
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/provider_status_color.dart';
+import '../providers/provider_connection.dart';
 import '../settings/watch_ring_preferences.dart';
 import '../sync/credit_request_runway.dart';
+import '../sync/selected_data_freshness.dart';
 import '../sync/watch_credits_glance.dart';
 import 'phone_widget_preferences.dart';
 
-/// One rendered home-widget row (remaining language).
+enum PhoneWidgetRowKind { allowance, budget }
+
+/// Private, lossless metric data; native layout decides which details fit.
 final class PhoneWidgetRow {
   const PhoneWidgetRow({
     required this.label,
     required this.remainingPercent,
     required this.accentArgb,
     this.creditsSuffix,
+    this.familyLabel,
+    this.poolLabel,
+    this.resetsAt,
+    this.kind = PhoneWidgetRowKind.allowance,
+    this.spent,
+    this.cap,
+    this.extraUsed,
+    this.extraCap,
   });
 
+  /// Complete identity retained for old caches and descriptive payload strings.
   final String label;
-  final int remainingPercent;
+  final int? remainingPercent;
+  final PhoneWidgetRowKind kind;
+  final Money? spent;
+  final Money? cap;
+  final Quantity? extraUsed;
+  final Quantity? extraCap;
+
+  /// Explicit display lines; absent when only a legacy flat label is available.
+  final String? familyLabel;
+  final String? poolLabel;
+
+  /// The selected allowance's reported boundary, never an inferred budget end.
+  final DateTime? resetsAt;
 
   /// ARGB int for the family accent bar.
   final int accentArgb;
@@ -24,11 +49,15 @@ final class PhoneWidgetRow {
   final String? creditsSuffix;
 
   /// Fixed percent column for the launcher table layout.
-  String get percentText => '$remainingPercent% left';
+  String get percentText =>
+      remainingPercent == null ? '' : '$remainingPercent% left';
 
-  /// Widget-tab / tests line: `% left` · label · optional credits (matches columns).
+  /// Descriptive payload line, separate from native column visibility.
   String get line {
     final credits = creditsSuffix;
+    if (kind == PhoneWidgetRowKind.budget) {
+      return '${spent == null ? 'Unavailable' : phoneWidgetMoneyText(spent!)} · $label';
+    }
     if (credits == null) {
       return '$percentText · $label';
     }
@@ -36,7 +65,7 @@ final class PhoneWidgetRow {
   }
 }
 
-/// Snapshot + prefs → home-widget rows (unavailable already omitted).
+/// Snapshot + prefs → rows, including supported saved unknown budgets.
 final class PhoneWidgetPayload {
   const PhoneWidgetPayload({required this.rows, required this.stale});
 
@@ -56,17 +85,61 @@ PhoneWidgetPayload buildPhoneWidgetPayload(
     resolvePhoneWidgetMetrics(snapshot, preferences),
     maxSlots: maxSlots,
   );
+  final credits = [
+    for (final metric in metrics) _phoneWidgetCredits(snapshot, metric.id),
+  ];
   return PhoneWidgetPayload(
-    stale: snapshot.overallStatus == ProviderStatus.stale,
-    rows: [
+    stale: selectedDataIsStale(snapshot, [
       for (final metric in metrics)
-        PhoneWidgetRow(
-          label: metric.catalogTitle,
-          remainingPercent: metric.remainingPercent!.round(),
-          accentArgb: phoneWidgetAccentArgb(metric.id),
-          creditsSuffix: phoneWidgetCreditsSuffix(snapshot, metric.id),
-        ),
+        if (metric.contributor case final contributor?) contributor,
+      for (final credit in credits) ...?credit?.contributors,
+    ]),
+    rows: [
+      for (var i = 0; i < metrics.length; i++)
+        _phoneWidgetRow(snapshot, metrics[i], creditsSuffix: credits[i]?.text),
     ],
+  );
+}
+
+PhoneWidgetRow _phoneWidgetRow(
+  DashboardSnapshot snapshot,
+  WatchRingMetric metric, {
+  String? creditsSuffix,
+}) {
+  final provider = providerFromRingId(metric.id);
+  final connection = connectionFromBudgetRingId(metric.id);
+  final String? family;
+  if (connection != null) {
+    family = providerFamilyLabel(connection.provider);
+  } else if (provider != null) {
+    family = providerDisplayLabel(provider);
+  } else {
+    family = null;
+  }
+  // This legacy pool label already includes its family. Other pool names stay
+  // whole, including spaces and separators that are part of their real label.
+  final pool =
+      metric.id == cursorOwnPoolId && metric.label == 'Cursor Models'
+          ? 'Models'
+          : metric.label;
+  final allowance = _phoneWidgetAllowance(snapshot, metric.id);
+  final extra = metric.id == 'allowance.claude.claude-extra-usage';
+  return PhoneWidgetRow(
+    label: metric.catalogTitle,
+    familyLabel: family,
+    poolLabel: family == null ? null : pool,
+    remainingPercent: phoneWidgetRemainingPercent(metric),
+    kind:
+        connection == null
+            ? PhoneWidgetRowKind.allowance
+            : PhoneWidgetRowKind.budget,
+    spent: metric.spent,
+    cap: metric.limit,
+    extraUsed: extra ? allowance?.used : null,
+    extraCap: extra ? allowance?.limit : null,
+    accentArgb: phoneWidgetAccentArgb(metric.id),
+    creditsSuffix: creditsSuffix,
+    resetsAt: allowance?.resetsAt,
   );
 }
 
@@ -75,31 +148,40 @@ PhoneWidgetPayload buildPhoneWidgetPayload(
 /// Matches Wear Glance / face strips: append finite purchased `credits` on plan
 /// windows only. Purchased-meter rows (Extra usage, on-demand) already *are* the
 /// credit pool — do not repeat. Budgets and missing/unlimited balances omit.
-String? phoneWidgetCreditsSuffix(DashboardSnapshot snapshot, String metricId) {
+String? phoneWidgetCreditsSuffix(DashboardSnapshot snapshot, String metricId) =>
+    _phoneWidgetCredits(snapshot, metricId)?.text;
+
+({String text, List<SurfaceDataContributor> contributors})? _phoneWidgetCredits(
+  DashboardSnapshot snapshot,
+  String metricId,
+) {
   final provider = providerFromRingId(metricId);
   if (provider == null) {
     return null;
   }
-  if (_isPurchasedMeterMetric(snapshot, provider, metricId)) {
+  if (_phoneWidgetAllowance(snapshot, metricId)?.source ==
+      AllowanceSource.purchased) {
     return null;
   }
-  final remaining = purchasedCreditsRemainingForProvider(snapshot, provider);
-  if (remaining == null || remaining <= 0) {
+  final credits = resolvePurchasedCreditsForProvider(snapshot, provider);
+  if (credits == null || !credits.remaining.isFinite || credits.remaining < 0) {
     return null;
   }
-  return '${compactCreditCount(remaining)} credits';
+  return (
+    text: '${compactCreditCount(credits.remaining)} credits',
+    contributors: credits.contributors,
+  );
 }
 
-bool _isPurchasedMeterMetric(
+AllowanceState? _phoneWidgetAllowance(
   DashboardSnapshot snapshot,
-  String provider,
   String metricId,
 ) {
-  const prefix = 'allowance.';
-  final stem = '$prefix$provider.';
-  if (!metricId.startsWith(stem)) {
-    return false;
+  final provider = providerFromRingId(metricId);
+  if (provider == null) {
+    return null;
   }
+  final stem = 'allowance.$provider.';
   final allowanceId = metricId.substring(stem.length);
   for (final account in snapshot.accounts) {
     if (account.provider != provider) {
@@ -107,11 +189,11 @@ bool _isPurchasedMeterMetric(
     }
     for (final allowance in account.allowances) {
       if (allowance.id == allowanceId) {
-        return allowance.source == AllowanceSource.purchased;
+        return allowance;
       }
     }
   }
-  return false;
+  return null;
 }
 
 /// Family accent matching [providerFamilyColor]; neutral grey when no family is
@@ -120,6 +202,9 @@ bool _isPurchasedMeterMetric(
 /// A budget row carries the connection it belongs to, so it takes that family
 /// (`budget.anthropic.platform.month`) rather than a colour of its own.
 int phoneWidgetAccentArgb(String metricId) {
+  if (metricId == 'allowance.claude.claude-seven-day-fable') {
+    return familyClaudeFableColor.toARGB32();
+  }
   if (metricId.contains('claude') || metricId.contains('anthropic')) {
     return providerFamilyColor('claude').toARGB32();
   }

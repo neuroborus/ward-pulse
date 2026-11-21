@@ -44,6 +44,18 @@ Unsupported declaration forms fail closed. Phone codes must be positive odd with
 the next even Wear code; independent legacy and Push codes must also be positive
 and at most 2147483647. Push uses its declared default, without running Gradle.
 
+It also reads `.github/workflows/release-github.yml` at that same trusted `source_sha`
+as data. The exact `WARDPULSE_APK_NAMING: friendly-v1` declaration selects
+`WardPulse-V-Android.apk`, `WardPulse-V-WearOS.apk` and
+`WardPulse-V-WatchFace-WearOS5Plus.apk`, with V from those coherent source versions.
+A successfully read historical producer without the declaration selects the original
+`wardpulse-<surface>-<version>-code<code>.apk` names. Malformed, duplicate, unknown or
+unavailable evidence fails closed. Equal versions/codes across this transition are supported;
+neither semantic-version cutoffs, the dispatch checkout's convention nor asset names select
+the contract. The three technical AAB names and standalone Push APK name stay unchanged.
+Each source admits exactly seven binaries and two receipts, never an old/new union or aliases.
+Historical assets and receipts are preserved, and historical producer code is never executed.
+
 Only the phone/Wear AABs, `SHA256SUMS` and `provenance.json` are downloaded, using
 authenticated exact GitHub asset-ID GETs. `GitHub.download` accepts 200 or at most
 three 302 redirects to HTTPS `release-assets.githubusercontent.com` or
@@ -181,8 +193,11 @@ Tests inject in-memory transport and neutral synthetic releases; they use no
 sockets, HTTP services, credentials, sleeps or external test framework. Real
 filesystem tests need temporary scratch and clean it deterministically. The suite covers
 preparation identity/receipt/byte checks, filesystem safety, exact reuse/promotion,
-retention, response normalization and uncertainty/no-replay behavior. It cannot establish
-live authentication, Play acceptance, review or delivery.
+retention, response normalization and uncertainty/no-replay behavior. Naming coverage includes
+historical and friendly sources with identical versions/codes, exact membership, rejected
+mixtures/aliases and receipt tampering, and selection of only the phone/Wear AABs while
+verifying all seven identities. It cannot establish production signed staging, live
+authentication, Play acceptance, review or delivery.
 
 Every focused Python execution, including ad hoc runs and timing during implementation
 or review, belongs to HOST under the task's

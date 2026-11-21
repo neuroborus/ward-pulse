@@ -4,8 +4,171 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_payload.dart';
 
 void main() {
+  test(
+    'widget expenses distinguish known uncapped, saved unknown and empty defaults',
+    () {
+      expect(
+        phoneWidgetMoneyText(
+          const Money(minorUnits: -9223372036854775808, currency: 'EUR'),
+        ),
+        '-EUR 92233720368547758.08',
+      );
+      final source = DashboardSnapshot.fromJson({
+        ...DashboardSnapshot.empty().toJson(),
+        'accounts': [
+          {
+            'accountId': 'local-report',
+            'provider': 'claude',
+            'connection': 'anthropic.platform',
+            'status': 'ok',
+            'credits': <Object>[],
+            'buckets': <Object>[],
+            'modelBreakdown': <Object>[],
+            'allowances': <Object>[],
+            for (final period in ['today', 'week', 'month'])
+              period: {
+                ...BudgetState.unknownPeriod(period).toJson(),
+                if (period == 'today')
+                  'spent': const Money(minorUnits: 0, currency: 'EUR').toJson(),
+              },
+          },
+        ],
+      });
+      final known = phoneWidgetCatalog(
+        source,
+      ).singleWhere((m) => m.id.endsWith('.today'));
+      expect(phoneWidgetMetricIsAvailable(known), isTrue);
+      expect(
+        known.isAvailable,
+        isFalse,
+        reason: 'Shared Watch cap eligibility stays unchanged.',
+      );
+      expect(
+        resolvePhoneWidgetMetrics(
+          source,
+          const PhoneWidgetPreferences(),
+        ).map((m) => m.id),
+        ['budget.anthropic.platform.today'],
+      );
+      expect(
+        phoneWidgetMetricSubtitle(known),
+        contains('EUR 0.00 spent · No cap'),
+      );
+      const saved = PhoneWidgetPreferences(
+        selectedIds: ['budget.anthropic.platform.week'],
+      );
+      final unknown = resolvePhoneWidgetMetrics(source, saved).single;
+      expect(phoneWidgetMetricIsAvailable(unknown), isFalse);
+      expect(
+        phoneWidgetPayloadSubtitle(source, saved),
+        contains('Unavailable'),
+      );
+      expect(phoneWidgetPayloadSubtitle(source, saved), isNot(contains('%')));
+      expect(
+        phoneWidgetPayloadSubtitle(
+          source,
+          const PhoneWidgetPreferences(selectedIds: []),
+        ),
+        'No metrics selected',
+      );
+      expect(
+        phoneWidgetPayloadSubtitle(
+          DashboardSnapshot.empty(),
+          const PhoneWidgetPreferences(),
+        ),
+        'No default metrics available',
+      );
+      const missing = PhoneWidgetPreferences(
+        selectedIds: ['allowance.claude.missing'],
+      );
+      expect(resolvePhoneWidgetMetrics(source, missing), isEmpty);
+      expect(
+        phoneWidgetPayloadSubtitle(source, missing),
+        '1 selected · No current metrics available',
+      );
+    },
+  );
+
+  test(
+    'widget keeps six independent rows even when three watch pairs would not fit',
+    () {
+      final base = DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      );
+      final dashboard = DashboardSnapshot.fromJson(
+        base.toJson()
+          ..['accounts'] = [
+            for (final (provider, connection, ids) in [
+              (
+                'claude',
+                'anthropic.plan',
+                ['claude-five-hour', 'claude-seven-day-fable'],
+              ),
+              ('codex', 'openai.plan', ['codex-primary', 'spark-primary']),
+              (
+                'cursor',
+                'cursor.plan',
+                ['cursor-plan-models', 'cursor-plan-other'],
+              ),
+            ])
+              {
+                ...base.primaryAccount!.toJson(),
+                'provider': provider,
+                'connection': connection,
+                'allowances': [
+                  for (final id in ids)
+                    {
+                      'id': id,
+                      'label': id,
+                      'source': 'plan',
+                      'usedPercent': 100.0,
+                      'windowMinutes': 10080,
+                      'resetsAt': '2026-11-08T08:00:00Z',
+                      'status': 'rateLimited',
+                    },
+                ],
+              },
+          ],
+      );
+      const ids = [
+        'allowance.claude.claude-five-hour',
+        claudeFableRingId,
+        'allowance.codex.codex-primary',
+        'allowance.codex.spark-primary',
+        cursorOwnPoolId,
+        cursorOtherPoolId,
+      ];
+      expect(
+        watchRingCapacityReason(migrateWatchRingSelectedIds(ids)),
+        isNotNull,
+      );
+      final preferences = phoneWidgetPreferencesFromStoredIds(ids);
+      expect(preferences.selectedIds, ids);
+      expect(
+        resolvePhoneWidgetMetrics(dashboard, preferences).map((m) => m.id),
+        ids,
+      );
+      final payload = buildPhoneWidgetPayload(dashboard, preferences);
+      expect(payload.rows, hasLength(6));
+      expect(payload.rows.every((row) => row.remainingPercent == 0), isTrue);
+      expect(
+        payload.rows.every(
+          (row) => row.resetsAt == DateTime.utc(2026, 11, 8, 8),
+        ),
+        isTrue,
+      );
+      expect(
+        payload.rows.map((row) => row.poolLabel),
+        unorderedEquals(ids.map((id) => id.split('.').last)),
+      );
+    },
+  );
+
   test('Codex widget keeps every window and its saved selection', () {
     final base = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
@@ -176,6 +339,65 @@ void main() {
     expect(widgetIds, isNot(contains(claudePlanRingId)));
     expect(watchIds, contains(claudePlanRingId));
     expect(watchIds, isNot(contains('allowance.claude.claude-extra-usage')));
+  });
+
+  test('Extra usage percent eligibility is independent of monthly cap', () {
+    const id = 'allowance.claude.claude-extra-usage';
+    const preferences = PhoneWidgetPreferences(selectedIds: [id]);
+    for (final percent in [
+      0.0,
+      20.0,
+      100.0,
+      150.0,
+      null,
+      -1.0,
+      double.nan,
+      double.infinity,
+    ]) {
+      final snapshot = DashboardSnapshot.fromJson({
+        ...DashboardSnapshot.empty().toJson(),
+        'accounts': [
+          {
+            'accountId': 'claude-local',
+            'provider': 'claude',
+            'connection': 'anthropic.plan',
+            'status': 'ok',
+            'credits': <Object>[],
+            'buckets': <Object>[],
+            'modelBreakdown': <Object>[],
+            for (final period in ['today', 'week', 'month'])
+              period: BudgetState.unknownPeriod(period).toJson(),
+            'allowances': [
+              {
+                'id': 'claude-extra-usage',
+                'status': 'ok',
+                'source': 'purchased',
+                'label': 'Extra usage',
+                'usedPercent': percent,
+                'limit': null,
+              },
+            ],
+          },
+        ],
+      });
+      final eligible = percent != null && percent.isFinite && percent >= 0;
+      final metric = phoneWidgetCatalog(
+        snapshot,
+      ).singleWhere((metric) => metric.id == id);
+      expect(metric.isAvailable, eligible);
+      expect(
+        resolvePhoneWidgetMetrics(
+          snapshot,
+          preferences,
+        ).map((metric) => metric.id),
+        eligible ? [id] : isEmpty,
+      );
+      expect(preferences.migratedIds, [id]);
+      expect(
+        watchRingCatalog(snapshot).map((metric) => metric.id),
+        isNot(contains(id)),
+      );
+    }
   });
 
   test('defaults prefer plan windows including exhausted Cursor pools', () {

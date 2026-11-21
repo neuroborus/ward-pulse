@@ -10,15 +10,15 @@
 
 ## Working Agreements
 
-- All code comments and logs must be in English.
+- All code comments, logs and committed project prose must be in English.
 - Follow the current monorepo layout before creating new directories.
 - Avoid introducing new dependencies. Add a crate/package only when it is conventional for the ecosystem and clearly justified.
 - Keep Rust domain logic deterministic and independent from Flutter, Android, Google Play APIs, secure storage, and platform transport.
 - Keep platform shells responsible for UI, transport, storage, background scheduling, and phone-to-watch propagation.
 - Prefer small, focused changes.
-- Follow [delegation](.agents/skills/delegation/SKILL.md): code is authored only by Agent Runner execution with independent review, followed by the coordinator's full zero-findings pass. Neither the coordinator nor a standalone subagent may implement a fallback outside Runner.
+- Follow [delegation](.agents/skills/delegation/SKILL.md): code is authored only by Agent Runner execution under the [current owner-selected mode](.agents/skills/delegation/references/owner-selected-mode.md), followed by the coordinator's full independent zero-findings pass. Neither the coordinator nor a standalone subagent may implement a fallback outside Runner.
 - Do not generate full Flutter or Gradle projects unless the current task explicitly requires it.
-- Standing owner authorization (2026-10-17, extending 2026-10-13): Agent Runner execution may commit within the approved task scope after its required pipeline reviews and checks. The coordinator may also make a separate local commit of reviewed delegated changes without a new permission request: code must have been authored by actual Runner execution and independently reviewed; design or documentation must have been prepared by a subagent and independently reviewed. Before a coordinator commit, complete all applicable mandatory checks and the coordinator's full zero-findings pass after the last correction. A task-specific no-commit instruction overrides this permission. It does not authorize code authorship outside Runner, push, amend/history rewrite, unrelated files, or commit trailers. The polishing pipeline itself remains stage-only; an authorized coordinator commit is a separate action.
+- Standing owner authorization (2026-10-17, extending 2026-10-13): Agent Runner execution may commit within the approved task scope after its required pipeline reviews and checks under the current owner-selected mode linked above. The coordinator may also make a separate local commit of reviewed delegated changes without a new permission request: code must have been authored by actual Runner execution and verified under that mode; design or documentation must have been prepared by a subagent and independently reviewed. Before a coordinator commit, complete all applicable mandatory checks and the coordinator's full independent zero-findings pass after the last correction. A task-specific no-commit instruction overrides this permission. It does not authorize code authorship outside Runner, push, amend/history rewrite, unrelated files, or commit trailers. The polishing pipeline itself remains stage-only; an authorized coordinator commit is a separate action.
 - Do not commit secrets, provider credentials, authorization headers, raw prompts, or sensitive raw provider payloads.
 - Do not treat WardPulse brand assets as covered by Apache-2.0 unless a file explicitly says so.
 - Keep OpenPencil `.fig` sources with their owner and regenerate runtime exports instead of editing them by hand.
@@ -59,9 +59,12 @@ Run all cargo commands from `core/` — there is no root `Cargo.toml`. Tests are
 - `dashboard/mod.rs` builds snapshots and aggregate totals; `alerts/mod.rs` applies alert
   settings and local budget limits; `budget/` evaluates spend against a limit; `projection/`
   projects spend linearly over a period.
-- One adapter module per family: `openai/`, `codex/`, `claude/`, `cursor/`, `mock/`.
-  `claude/platform.rs` and `cursor/platform.rs` normalize the Anthropic organization and
-  Cursor team Admin APIs; `mock/demo.rs` invents demo data. Shared: `allowance.rs`, `poll.rs`.
+- Canonical identities live in `ward-pulse-core/src/model/identity.rs`; private Serde
+  compatibility DTOs live in `model/legacy.rs`.
+- Family adapters: `openai/`, `anthropic/`, `cursor/`, each with `plan.rs` and `platform.rs`.
+  Legacy `codex` and `claude` entrypoints are compatibility reexports. `mock/demo.rs` invents
+  demo data. Source capability descriptors live with each adapter; shared: `allowance.rs`,
+  `poll.rs` (uses the core connection identity).
 - FFI surface: `ward-pulse-ffi/src/lib.rs` (single file). Adding a core capability the phone
   needs means touching ffi + `bindings/dart/lib/src/ward_pulse_bindings.dart` +
   `apps/phone_flutter/lib/dashboard/phone_live_bindings.dart`.
@@ -143,7 +146,7 @@ Start with:
 
 ### Provider parsing or a new provider capability
 Start with:
-- `core/ward-pulse-providers/src/<family>/mod.rs`
+- `core/ward-pulse-providers/src/<family>/{plan,platform}.rs`
 - `fixtures/providers/<family>/`
 - `docs/product/PROVIDER_NOTES.md`
 

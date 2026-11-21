@@ -6,31 +6,1921 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
+import 'package:ward_pulse_phone/dashboard/apply_alert_settings.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_load.dart';
+import 'package:ward_pulse_phone/dashboard/phone_live_bindings.dart';
+import 'package:ward_pulse_phone/sync/openai_reporting_client.dart';
+import 'package:ward_pulse_phone/sync/provider_reporting_clients.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
+import 'package:ward_pulse_phone/providers/codex_account_row.dart';
+import 'package:ward_pulse_phone/providers/codex_account_store.dart';
+import 'package:ward_pulse_phone/sync/codex_account_client.dart';
+import 'package:ward_pulse_phone/providers/connection_rejection_notice.dart';
+import 'package:ward_pulse_phone/providers/cursor_plan_row.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting.dart';
 import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
 import 'package:ward_pulse_phone/dashboard/provider_status_color.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
+import 'package:ward_pulse_phone/dashboard/dashboard_screen.dart';
+import 'package:ward_pulse_phone/dashboard/status_pill.dart';
 import 'package:ward_pulse_phone/dashboard/merging_connection_repository.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
+import 'package:ward_pulse_phone/providers/alert_threshold_dialogs.dart';
 import 'package:ward_pulse_phone/providers/provider_connection_row.dart';
+import 'package:ward_pulse_phone/providers/providers_screen.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
+import 'package:ward_pulse_phone/settings/alert_notification_preferences.dart';
+import 'package:ward_pulse_phone/settings/notification_permission_preferences.dart';
+import 'package:ward_pulse_phone/settings/settings_screen.dart';
+import 'package:ward_pulse_phone/sync/alert_notifications.dart';
+import 'package:ward_pulse_phone/sync/notification_coordinator.dart';
+import 'package:ward_pulse_phone/sync/headless_provider_sync.dart';
+import 'package:ward_pulse_phone/sync/automatic_poll.dart';
+import 'package:ward_pulse_phone/settings/alert_percent_threshold_editor.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
 import 'package:ward_pulse_phone/settings/refresh_interval_preferences.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_payload.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_sync.dart';
 import 'package:ward_pulse_phone/sync/poll_cadence.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_scheduler.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_logger.dart';
 import 'package:ward_pulse_phone/settings/recovery_notification_preferences.dart';
 import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
+import 'package:ward_pulse_phone/sync/recovery_wake.dart';
 import 'package:ward_pulse_phone/sync/recovery_watchlist.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
+import 'package:ward_pulse_phone/watchface/watchface_screen.dart';
+
+import 'connection_cache_test_support.dart';
 
 void main() {
+  group('plan retirement reconciliation', () {
+    late NativeCacheTestBridge bridge;
+    setUpAll(() async => bridge = await NativeCacheTestBridge.start());
+    tearDownAll(() => bridge.close());
+    setUp(() => bridge.reset());
+
+    testWidgets(
+      'Codex encrypted-read failure reconciles before post-lease cleanup feedback',
+      (tester) async {
+        await tester.runAsync(() async {
+          const id = ProviderConnections.codexPlan;
+          final secure = FakeSecureStorage();
+          final platform = ObservingCachePlatform(
+            bridge.platform('foreground'),
+          );
+          final now = DateTime.utc(2026, 11, 18, 12);
+          final live = PhoneLiveBindings.create(
+            secureStorage: secure,
+            cachePlatform: platform,
+            codexClient: CodexAccountClient(
+              transport: _PlanCodexTransport(),
+              clock: () => now,
+            ),
+            openAiClient: OpenAiReportingClient(
+              http: ProviderReportingHttp(transport: _PlanReportingTransport()),
+            ),
+          );
+          final store = SecureCodexAccountStore(
+            storage: secure,
+            platform: platform,
+          );
+          final session = CodexAccountSession(
+            accessToken: 'synthetic-access',
+            refreshToken: 'synthetic-refresh',
+            accountId: 'synthetic-account',
+            refreshedAt: now,
+          );
+          await store.write(session);
+          final keys = <String>[];
+          secure.onRead = (key, _) => keys.add(key);
+          await store.readVersioned();
+          final slot = keys.singleWhere(
+            (key) => secure.values[key] == jsonEncode(session.toJson()),
+          );
+          await live.credentialStore.writeSecret(
+            ProviderConnections.openAiPlatform,
+            'synthetic-reporting-key',
+          );
+          final initialSync = Completer<void>();
+          final removalSync = Completer<void>();
+          final cleanupStarted = Completer<void>();
+          final releaseCleanup = Completer<void>();
+          const channel = MethodChannel('app.wardpulse/watch_sync');
+          final messenger = tester.binding.defaultBinaryMessenger;
+          final payloads = <Map>[];
+          messenger.setMockMethodCallHandler(channel, (call) async {
+            payloads.add(jsonDecode(call.arguments as String) as Map);
+            if (!initialSync.isCompleted) {
+              initialSync.complete();
+            } else if (!removalSync.isCompleted) {
+              removalSync.complete();
+            }
+            return null;
+          });
+          final replies = <Future<Object?>>[];
+          var joined = 0;
+          bridge.onInvoke = replies.add;
+          secure.onRead =
+              (key, completion) => replies.add(
+                completion.then<Object?>(
+                  (value) => value,
+                  onError: (_) => null,
+                ),
+              );
+          Future<void> drain() async {
+            do {
+              final batch = replies.sublist(joined);
+              joined = replies.length;
+              await Future.wait(batch);
+              await tester.idle();
+              await tester.pump();
+              await tester.idle();
+            } while (joined != replies.length);
+          }
+
+          String? deletionLease;
+          var deletionReleased = false, settled = false;
+          platform.onComplete = (method, args, result) {
+            if (args['connection'] != id.storageKey) return;
+            if (method == 'acquire' && args['action'] == 'delete') {
+              deletionLease = (result! as Map)['lease'] as String;
+            }
+            if (method == 'finish' &&
+                deletionLease != null &&
+                args['lease'] == deletionLease &&
+                args['operation'] == 'release') {
+              deletionReleased = true;
+              // Earlier cleanup under the lease has already completed normally.
+              secure.beforeDelete = (key) async {
+                if (key == 'wardpulse.codex-companion.config') {
+                  cleanupStarted.complete();
+                  await releaseCleanup.future;
+                  throw StateError('Synthetic post-lease companion failure.');
+                }
+              };
+            }
+          };
+          Future<void>? editing;
+          try {
+            tester.view.physicalSize = Size(
+              tester.view.physicalSize.width,
+              2400 * tester.view.devicePixelRatio,
+            );
+            await tester.pumpWidget(
+              WardPulseApp(
+                repository: live.repository,
+                credentialStore: live.credentialStore,
+                codexAccountService: live.codexAccountService,
+                claudeAccountService: live.claudeAccountService,
+                rejectionNotices: live.rejectionNotices,
+                watchSyncService: const MethodChannelWatchSyncService(),
+              ),
+            );
+            await initialSync.future;
+            await drain();
+            final app = find.byType(FutureBuilder<DashboardSnapshot>);
+            final beforeLoad =
+                tester.widget<FutureBuilder<DashboardSnapshot>>(app).future!;
+            final before = await beforeLoad;
+            expect(
+              before.accounts.map((a) => a.connection),
+              containsAll(['openai.plan', 'openai.platform']),
+            );
+            await tester.tap(find.text('Providers'));
+            await drain();
+            await tester.scrollUntilVisible(
+              find.text('Codex plan'),
+              300,
+              scrollable: find.byType(Scrollable).first,
+            );
+            await drain();
+            final row = find.byType(CodexAccountRow);
+            final owner = tester.state(row);
+            final rowFinder = find.widgetWithText(
+              ProviderConnectionRow,
+              'Codex plan',
+            );
+            expect(
+              find.descendant(of: rowFinder, matching: find.text('Connected')),
+              findsOneWidget,
+            );
+            secure.failReadKey = slot;
+            editing =
+                (tester.widget<ProviderConnectionRow>(rowFinder).onTap
+                        as dynamic)()
+                    as Future<void>;
+            editing = editing.then((_) {
+              settled = true;
+            });
+            await tester.pumpAndSettle();
+            await tester.tap(find.text('Disconnect'));
+            await cleanupStarted.future;
+            await tester.pump();
+            final load =
+                tester.widget<FutureBuilder<DashboardSnapshot>>(app).future!;
+            final accepted = await load;
+            await removalSync.future;
+            await drain();
+            final visible =
+                tester
+                    .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+                    .snapshot!;
+            final payload = payloads.last;
+            expect(
+              [
+                deletionReleased,
+                owner.mounted && identical(tester.state(row), owner),
+                find
+                    .descendant(
+                      of: rowFinder,
+                      matching: find.text('Not connected'),
+                    )
+                    .hitTestable()
+                    .evaluate()
+                    .length,
+                identical(beforeLoad, load),
+                accepted.accounts.any((a) => a.connection == 'openai.plan'),
+                visible.accounts.any((a) => a.connection == 'openai.plan'),
+                accepted.accounts.any(
+                  (a) =>
+                      a.connection == 'openai.platform' &&
+                      a.status == ProviderStatus.ok,
+                ),
+                visible.accounts.any(
+                  (a) =>
+                      a.connection == 'openai.platform' &&
+                      a.status == ProviderStatus.ok,
+                ),
+                (payload['providers'] as List).any(
+                  (p) => p['provider'] == 'codex',
+                ),
+                (payload['providers'] as List).any(
+                  (p) => p['provider'] == 'openai',
+                ),
+                payloads.length,
+                settled,
+              ],
+              [
+                true,
+                true,
+                1,
+                false,
+                false,
+                false,
+                true,
+                true,
+                false,
+                true,
+                2,
+                false,
+              ],
+              reason:
+                  'The owned row, app, Providers and watch must reconcile '
+                  'once while only post-lease companion cleanup is held.',
+            );
+            expect(
+              find.text('Disconnected, but local cleanup remains'),
+              findsNothing,
+            );
+            releaseCleanup.complete();
+            await editing;
+            await drain();
+            expect(
+              find.text('Disconnected, but local cleanup remains'),
+              findsOneWidget,
+            );
+            expect(
+              tester.widget<FutureBuilder<DashboardSnapshot>>(app).future,
+              same(load),
+            );
+            expect(payloads, hasLength(2));
+          } finally {
+            if (!releaseCleanup.isCompleted) releaseCleanup.complete();
+            try {
+              if (find.byType(AlertDialog).evaluate().isNotEmpty) {
+                Navigator.of(tester.element(find.byType(AlertDialog))).pop();
+              }
+              try {
+                await tester.pumpWidget(const SizedBox());
+              } finally {
+                if (editing != null) await editing;
+              }
+            } finally {
+              try {
+                await drain();
+              } finally {
+                platform.onComplete = null;
+                secure.beforeDelete = null;
+                secure.onRead = null;
+                bridge.onInvoke = null;
+                messenger.setMockMethodCallHandler(channel, null);
+                tester.view.resetPhysicalSize();
+              }
+            }
+          }
+        });
+      },
+      timeout: const Timeout(Duration(seconds: 60)),
+    );
+
+    for (final advancedRemove in [false, true]) {
+      for (final syncFails in [false, true]) {
+        testWidgets(
+          'committed Cursor ${advancedRemove ? 'Advanced Remove' : 'Disconnect'} '
+          'reconciles open surfaces despite '
+          '${syncFails ? 'downstream sync failure' : 'label cleanup failure'}',
+          (tester) async {
+            await tester.runAsync(() async {
+              final secure = FakeSecureStorage();
+              final platform = bridge.platform('foreground');
+              final http = ProviderReportingHttp(
+                transport: _PlanReportingTransport(),
+              );
+              final live = PhoneLiveBindings.create(
+                secureStorage: secure,
+                cachePlatform: platform,
+                cursorClient: CursorPlanClient(http: http),
+                openAiClient: OpenAiReportingClient(http: http),
+              );
+              final credentials = live.credentialStore;
+              const id = ProviderConnections.cursorPlan;
+              await credentials.writeSecret(id, 'synthetic-cursor-session');
+              await credentials.writeLabel(id, 'Synthetic plan');
+              await credentials.writeSecret(
+                ProviderConnections.openAiPlatform,
+                'synthetic-reporting-key',
+              );
+              final initialSync = Completer<void>();
+              final removalSync = Completer<void>();
+              final cleanupStarted = Completer<void>();
+              final releaseCleanup = Completer<void>();
+              const channel = MethodChannel('app.wardpulse/watch_sync');
+              final messenger = tester.binding.defaultBinaryMessenger;
+              final payloads = <Map>[];
+              var failSync = false;
+              var removing = false;
+              messenger.setMockMethodCallHandler(channel, (call) async {
+                expect(call.method, 'syncWatchSummary');
+                payloads.add(jsonDecode(call.arguments as String) as Map);
+                final signal = removing ? removalSync : initialSync;
+                if (!signal.isCompleted) signal.complete();
+                if (failSync) {
+                  throw PlatformException(code: 'synthetic_sync_failure');
+                }
+                return null;
+              });
+              Future<void>? editing;
+              var removalCompleted = false;
+              final replies = <Future<Object?>>[];
+              final readLabels = <String>{};
+              var joinedReplies = 0;
+              bridge.onInvoke = replies.add;
+              secure.onRead = (key, completion) {
+                replies.add(completion);
+                if (key.endsWith('.label')) readLabels.add(key);
+              };
+              try {
+                tester.view.physicalSize = Size(
+                  tester.view.physicalSize.width,
+                  2400 * tester.view.devicePixelRatio,
+                );
+                await tester.pumpWidget(
+                  WardPulseApp(
+                    repository: live.repository,
+                    credentialStore: credentials,
+                    codexAccountService: live.codexAccountService,
+                    claudeAccountService: live.claudeAccountService,
+                    rejectionNotices: live.rejectionNotices,
+                    watchSyncService: const MethodChannelWatchSyncService(),
+                  ),
+                );
+                await initialSync.future;
+                await tester.pumpAndSettle();
+                final before =
+                    await tester
+                        .widget<FutureBuilder<DashboardSnapshot>>(
+                          find.byType(FutureBuilder<DashboardSnapshot>),
+                        )
+                        .future!;
+                expect(
+                  before.accounts.map((a) => a.connection),
+                  containsAll(['cursor.plan', 'openai.platform']),
+                );
+                final oldVersion = before.connectionVersions[id.storageKey]!;
+                expect(
+                  await bridge.invoke('proof', 'readSnapshot', {
+                    'connection': id.storageKey,
+                    'expected': oldVersion,
+                  }),
+                  isNotNull,
+                );
+                readLabels.clear();
+                await tester.tap(find.text('Providers'));
+                await tester.pump();
+                // Join real acquire/finish/currentness replies and store reads,
+                // including serial successors from credential discovery and all
+                // mounted plan rows. Drain real microtask continuations too:
+                // serialized service completions can follow their last reply.
+                do {
+                  final batch = replies.sublist(joinedReplies);
+                  joinedReplies = replies.length;
+                  await Future.wait(batch);
+                  await tester.idle();
+                  await tester.pump();
+                  await tester.idle();
+                } while (joinedReplies != replies.length);
+                expect(
+                  readLabels,
+                  containsAll(
+                    providerConnectionCatalog()
+                        .where((connection) => connection.secretHint != null)
+                        .map(
+                          (connection) =>
+                              connection.id ==
+                                      ProviderConnections.openAiPlatform
+                                  ? 'wardpulse.openai.admin-api-key.label'
+                                  : 'wardpulse.${connection.id.storageKey}.label',
+                        ),
+                  ),
+                );
+                expect(find.byType(RowProgress), findsNothing);
+                await tester.scrollUntilVisible(
+                  find.text('Cursor plan'),
+                  300,
+                  scrollable: find.byType(Scrollable).first,
+                );
+                await tester.pump();
+                // Scrolling may mount any plan row; join its complete read chain
+                // before publishing, then collect reads started by that frame.
+                do {
+                  final batch = replies.sublist(joinedReplies);
+                  joinedReplies = replies.length;
+                  await Future.wait(batch);
+                  await tester.idle();
+                  await tester.pump();
+                  await tester.idle();
+                } while (joinedReplies != replies.length);
+                expect(find.byType(RowProgress), findsNothing);
+                final rowFinder = find.widgetWithText(
+                  ProviderConnectionRow,
+                  'Cursor plan',
+                );
+                final cursorRow = find.byType(CursorPlanRow);
+                final rowState = tester.state(cursorRow);
+                expect(rowState.mounted, isTrue);
+                expect(
+                  find.descendant(
+                    of: rowFinder,
+                    matching: find.text('Connected'),
+                  ),
+                  findsOneWidget,
+                );
+                final beforeLoad =
+                    tester
+                        .widget<FutureBuilder<DashboardSnapshot>>(
+                          find.byType(FutureBuilder<DashboardSnapshot>),
+                        )
+                        .future;
+                secure.failDeleteKey = 'wardpulse.cursor.plan.label';
+                secure.beforeDelete = (key) async {
+                  if (key == secure.failDeleteKey) {
+                    cleanupStarted.complete();
+                    await releaseCleanup.future;
+                  }
+                };
+                failSync = syncFails;
+                removing = true;
+                // Invoke the real entrypoint callback, retaining its completion so
+                // OLD can reach the stale-surface oracle without awaiting a reload
+                // that it never requests. No new lifecycle Dart API is used here.
+                if (advancedRemove) {
+                  final helpButton = find.descendant(
+                    of: rowFinder,
+                    matching: find.byWidgetPredicate(
+                      (widget) =>
+                          widget is IconButton &&
+                          widget.tooltip == 'About Cursor plan sign-in',
+                    ),
+                  );
+                  editing =
+                      (tester.widget<IconButton>(helpButton).onPressed
+                              as dynamic)()
+                          as Future<void>;
+                  await tester.pumpAndSettle();
+                  await tester.tap(find.text('Advanced paste'));
+                } else {
+                  editing =
+                      (tester.widget<ProviderConnectionRow>(rowFinder).onTap
+                              as dynamic)()
+                          as Future<void>;
+                }
+                editing = editing.then((_) {
+                  removalCompleted = true;
+                });
+                await tester.pumpAndSettle();
+                await tester.tap(
+                  find.text(advancedRemove ? 'Remove' : 'Disconnect'),
+                );
+                await cleanupStarted.future;
+                await tester.pump();
+                final load =
+                    tester
+                        .widget<FutureBuilder<DashboardSnapshot>>(
+                          find.byType(FutureBuilder<DashboardSnapshot>),
+                        )
+                        .future!;
+                final accepted = await load;
+                if (!identical(beforeLoad, load)) await removalSync.future;
+                // Join publication reads and their serial successors before
+                // rendering the completed work; animation is not I/O readiness.
+                do {
+                  final batch = replies.sublist(joinedReplies);
+                  joinedReplies = replies.length;
+                  await Future.wait(batch);
+                  await tester.idle();
+                  await tester.pump();
+                  await tester.idle();
+                } while (joinedReplies != replies.length);
+                // OLD retains an animating busy row until cleanup is released;
+                // finish the dialog transition without waiting for that spinner.
+                await tester.pump();
+                await tester.pump(const Duration(seconds: 1));
+                final lease = Map<String, Object?>.from(
+                  (await bridge.invoke('proof', 'acquire', {
+                        'connection': id.storageKey,
+                        'action': 'read',
+                      }))!
+                      as Map,
+                );
+                try {
+                  expect(lease['mode'], 'deleted');
+                } finally {
+                  await bridge.invoke('proof', 'finish', {
+                    'connection': id.storageKey,
+                    'lease': lease['lease'],
+                    'operation': 'release',
+                  });
+                }
+                expect(
+                  await bridge.invoke('proof', 'valid', {
+                    'connection': id.storageKey,
+                    'expected': oldVersion,
+                  }),
+                  isFalse,
+                );
+                expect(
+                  await bridge.invoke('proof', 'readSnapshot', {
+                    'connection': id.storageKey,
+                    'expected': oldVersion,
+                  }),
+                  isNull,
+                );
+                expect(
+                  await SecureProviderCredentialStore(
+                    storage: secure,
+                    platform: bridge.platform('cold'),
+                  ).readSecret(id),
+                  isNull,
+                );
+                final defaultRows = cursorRow.evaluate().length;
+                final allCursorRows = find.byType(
+                  CursorPlanRow,
+                  skipOffstage: false,
+                );
+                final retainedRows = allCursorRows.evaluate().length;
+                final sameOwner =
+                    rowState.mounted &&
+                    defaultRows == 1 &&
+                    identical(tester.state(cursorRow), rowState);
+                final disconnectedContent = find.descendant(
+                  of: rowFinder,
+                  matching: find.text('Not connected'),
+                );
+                final disconnectedVisible =
+                    disconnectedContent.hitTestable().evaluate().length == 1;
+                final rowRemoved = sameOwner && disconnectedVisible;
+                final visible =
+                    tester
+                        .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+                        .snapshot!;
+                final payload = payloads.last;
+                // Collect every surface before the joint oracle, including the
+                // accepted app input and actual watch-summary encoding, while
+                // label cleanup is still held outside the retirement lease.
+                expect(
+                  [
+                    rowRemoved,
+                    accepted.accounts.any((a) => a.connection == 'cursor.plan'),
+                    visible.accounts.any((a) => a.connection == 'cursor.plan'),
+                    accepted.accounts.any(
+                      (a) =>
+                          a.connection == 'openai.platform' &&
+                          a.status == ProviderStatus.ok,
+                    ),
+                    visible.accounts.any(
+                      (a) =>
+                          a.connection == 'openai.platform' &&
+                          a.status == ProviderStatus.ok,
+                    ),
+                    (payload['providers'] as List).any(
+                      (p) => p['provider'] == 'cursor',
+                    ),
+                    (payload['providers'] as List).any(
+                      (p) => p['provider'] == 'openai',
+                    ),
+                    removalCompleted,
+                  ],
+                  [true, false, false, true, true, false, true, false],
+                  reason:
+                      'Retirement must reconcile the open row, accepted data '
+                      'and watch summary before cleanup finishes, retaining the '
+                      'healthy sibling. Cursor rows: default=$defaultRows, '
+                      'including offstage=$retainedRows, '
+                      'original mounted=${rowState.mounted}, '
+                      'same owner=$sameOwner.',
+                );
+                expect(
+                  find.text('Disconnected, but local cleanup remains'),
+                  findsNothing,
+                );
+                releaseCleanup.complete();
+                await editing;
+                await tester.pump();
+                expect(
+                  find.text('Disconnected, but local cleanup remains'),
+                  findsOneWidget,
+                );
+                expect(
+                  tester
+                      .widget<FutureBuilder<DashboardSnapshot>>(
+                        find.byType(FutureBuilder<DashboardSnapshot>),
+                      )
+                      .future,
+                  same(load),
+                  reason: 'Cleanup must not request a second app reload.',
+                );
+              } finally {
+                try {
+                  if (!releaseCleanup.isCompleted) releaseCleanup.complete();
+                  try {
+                    if (find.byType(AlertDialog).evaluate().isNotEmpty) {
+                      Navigator.of(
+                        tester.element(find.byType(AlertDialog)),
+                      ).pop();
+                    }
+                  } finally {
+                    try {
+                      await tester.pumpWidget(const SizedBox());
+                    } finally {
+                      if (editing != null) await editing;
+                    }
+                  }
+                } finally {
+                  try {
+                    // Unmounted continuations may still release leases or start
+                    // successor reads. Drain them before closing the native bridge.
+                    do {
+                      final batch = replies.sublist(joinedReplies);
+                      joinedReplies = replies.length;
+                      await Future.wait(batch);
+                      await tester.idle();
+                      await tester.pump();
+                      await tester.idle();
+                    } while (joinedReplies != replies.length);
+                  } finally {
+                    bridge.onInvoke = null;
+                    secure.onRead = null;
+                    messenger.setMockMethodCallHandler(channel, null);
+                    tester.view.resetPhysicalSize();
+                  }
+                }
+              }
+            });
+          },
+          timeout: const Timeout(Duration(seconds: 60)),
+        );
+      }
+    }
+  });
+
+  for (final row in providerConnectionCatalog()) {
+    testWidgets(
+      'historical warning reveals ${row.id.storageKey} without editing or dismissal',
+      (tester) async {
+        final notices = _RejectionNotices(
+          ConnectionRejectionNotice(
+            connection: row.id,
+            eventId: 'synthetic-event',
+            dismissed: false,
+          ),
+        );
+        Widget app() => WardPulseApp(
+          repository: const NoProvidersDashboardRepository(),
+          rejectionNotices: notices,
+        );
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        final label = '${providerFamilyLabel(row.id.provider)} · ${row.title}';
+        final body = find.byTooltip('Review $label connection');
+        await tester.ensureVisible(body);
+        await tester.tap(body);
+        await tester.pumpAndSettle();
+        final target = find.text(row.title);
+        expect(target.hitTestable(), findsOneWidget);
+        final focused = FocusManager.instance.primaryFocus!.context!;
+        expect(
+          find.descendant(
+            of: find.byElementPredicate(
+              (element) => identical(element, focused),
+            ),
+            matching: target,
+          ),
+          findsOneWidget,
+        );
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(notices.event.dismissed, isFalse);
+        await tester.tap(find.text('Dashboard'));
+        await tester.pumpAndSettle();
+        expect(body, findsOneWidget);
+        await tester.ensureVisible(
+          find.byTooltip('Dismiss $label rejection warning'),
+        );
+        await tester.tap(find.byTooltip('Dismiss $label rejection warning'));
+        await tester.pumpAndSettle();
+        expect(find.byType(ProvidersScreen), findsNothing);
+        expect(notices.event.dismissed, isTrue);
+        expect(body, findsNothing);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        expect(body, findsNothing);
+      },
+    );
+  }
+
+  for (final scale in [1.0, 1.6]) {
+    testWidgets(
+      'warning body settles late reporting recovery above navigation at $scale',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(390, 844);
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(() {
+          tester.view.resetPhysicalSize();
+          tester.view.resetDevicePixelRatio();
+          tester.platformDispatcher.clearTextScaleFactorTestValue();
+        });
+        const id = ProviderConnections.openAiPlatform;
+        final store = _MemoryCredentialStore();
+        for (final connection in [
+          id,
+          ProviderConnections.anthropicPlatform,
+          ProviderConnections.cursorPlatform,
+        ]) {
+          await store.writeSecret(connection, 'synthetic-key');
+        }
+        final outcome = ConnectionReportingOutcome(
+          connection: id,
+          credentialVersion: store.version(id),
+          category: ReportingOutcomeCategory.transientFailure,
+          source: ReportingOutcomeSource.live,
+          freshness: ReportingOutcomeFreshness.current,
+        );
+        final repository = _PublicationRepository(
+          DashboardSnapshot.empty()
+              .withConnectionVersions({id.storageKey: store.version(id).values})
+              .withReportingOutcomes([outcome]),
+        );
+        final notices = _RejectionNotices(
+          const ConnectionRejectionNotice(
+            connection: id,
+            eventId: 'synthetic-event',
+            dismissed: false,
+          ),
+        );
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            credentialStore: store,
+            rejectionNotices: notices,
+          ),
+        );
+        await tester.pumpAndSettle();
+        final loads = repository.loads;
+        final release = Completer<void>();
+        addTearDown(() {
+          if (!release.isCompleted) release.complete();
+        });
+        store.beforeReadLabel = (connection) async {
+          if (connection == id) await release.future;
+        };
+        final warning = find.byTooltip(
+          'Review OpenAI · Platform reporting connection',
+        );
+        await tester.ensureVisible(warning);
+        await tester.tap(warning);
+        // Keep the initial read and its progress indicators active while the
+        // old bounded discovery/animation path would already acknowledge.
+        for (var frame = 0; frame < 4; frame++) {
+          await tester.pump();
+        }
+        await tester.pump(const Duration(milliseconds: 250));
+        await tester.pump();
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(notices.event.dismissed, isFalse);
+        expect(find.text('Could not check'), findsNothing);
+        release.complete();
+        await tester.pumpAndSettle();
+        final row = find.widgetWithText(
+          ProviderConnectionRow,
+          'Platform reporting',
+        );
+        final viewport = tester.getRect(
+          find.descendant(
+            of: find.byType(ProvidersScreen),
+            matching: find.byType(Viewport),
+          ),
+        );
+        expect(
+          viewport.bottom,
+          lessThanOrEqualTo(tester.getTopLeft(find.byType(NavigationBar)).dy),
+        );
+        for (final target in [
+          row,
+          find.descendant(of: row, matching: find.text('Could not check')),
+          find.descendant(
+            of: row,
+            matching: find.text(
+              '${outcome.connectionLabel}\n${outcome.supportingCopy}',
+            ),
+          ),
+          find.descendant(of: row, matching: find.byTooltip('Budget limits')),
+          find.descendant(
+            of: row,
+            matching: find.byTooltip('Alert thresholds'),
+          ),
+        ]) {
+          final rect = tester.getRect(target);
+          expect(
+            viewport.inflate(0.5).contains(rect.topLeft),
+            isTrue,
+            reason: '$rect outside $viewport',
+          );
+          expect(
+            viewport.inflate(0.5).contains(rect.bottomRight),
+            isTrue,
+            reason: '$rect outside $viewport',
+          );
+        }
+        final focused = FocusManager.instance.primaryFocus!.context!;
+        expect(
+          find.descendant(
+            of: find.byElementPredicate(
+              (element) => identical(element, focused),
+            ),
+            matching: row,
+          ),
+          findsOneWidget,
+        );
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(notices.event.dismissed, isFalse);
+        expect(repository.loads, loads);
+      },
+    );
+  }
+
+  testWidgets(
+    'unsaved invalid reporting input cannot create a saved rejection event',
+    (tester) async {
+      final notices = _RejectionNotices.empty();
+      final store = _MemoryCredentialStore();
+      final repository = _PublicationRepository(DashboardSnapshot.empty());
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          credentialStore: store,
+          rejectionNotices: notices,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final loads = repository.loads;
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Organization reporting'));
+      await tester.tap(find.text('Organization reporting'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        _credentialValueField(),
+        'sk-ant-admin01-synthetic',
+      );
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(
+        await store.readSecret(ProviderConnections.anthropicPlatform),
+        isNull,
+      );
+      expect(repository.loads, loads);
+      expect(await notices.read(), isEmpty);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byTooltip('Review Anthropic · Organization reporting connection'),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'failed snapshot and failed dismissal retain independently actionable warning',
+    (tester) async {
+      final notices = _RejectionNotices(
+        const ConnectionRejectionNotice(
+          connection: ProviderConnections.claudePlan,
+          eventId: 'synthetic-event',
+          dismissed: false,
+        ),
+      )..failDismiss = true;
+      final repository = _FailingDashboardRepository(
+        DashboardSyncIssue.claudeAuthentication,
+        null,
+        (
+          connection: notices.event.connection.storageKey,
+          eventId: notices.event.eventId,
+        ),
+      );
+      await tester.pumpWidget(
+        WardPulseApp(repository: repository, rejectionNotices: notices),
+      );
+      await tester.pumpAndSettle();
+      final dismiss = find.byTooltip(
+        'Dismiss Anthropic · Claude plan rejection warning',
+      );
+      expect(
+        find.byTooltip('Review Anthropic · Claude plan connection'),
+        findsOneWidget,
+      );
+      await tester.tap(dismiss);
+      await tester.pumpAndSettle();
+      expect(dismiss, findsOneWidget);
+      expect(find.byType(ProvidersScreen), findsNothing);
+      expect(
+        find.text(DashboardSyncIssue.claudeAuthentication.message),
+        findsNothing,
+      );
+      expect(
+        find.byTooltip(DashboardSyncIssue.claudeAuthentication.message),
+        findsNothing,
+      );
+      notices.failDismiss = false;
+      await tester.tap(dismiss);
+      await tester.pumpAndSettle();
+      expect(dismiss, findsNothing);
+      expect(find.byType(ProvidersScreen), findsNothing);
+      expect(
+        find.text(DashboardSyncIssue.claudeAuthentication.message),
+        findsNothing,
+      );
+      expect(
+        find.byTooltip(DashboardSyncIssue.claudeAuthentication.message),
+        findsNothing,
+      );
+    },
+  );
+
+  for (final independent in [false, true]) {
+    testWidgets(
+      'failed Dashboard with a dismissed key rejection ${independent ? 'retains independent disclosure' : 'suppresses matching disclosure'}',
+      (tester) async {
+        const notice = ConnectionRejectionNotice(
+          connection: ProviderConnections.openAiPlatform,
+          eventId: 'synthetic-event',
+          dismissed: true,
+        );
+        final issue =
+            independent
+                ? DashboardSyncIssue.providerUnavailable
+                : DashboardSyncIssue.authentication;
+        final details =
+            independent
+                ? 'Usage · HTTP 503 · service_unavailable'
+                : 'Usage · HTTP 401 · invalid_api_key';
+        final repository = _CountingDashboardRepository(() {
+          throw DashboardLoadException.withOutcomes(
+            issue: issue,
+            details: details,
+            syncRejection:
+                independent
+                    ? null
+                    : (
+                      connection: notice.connection.storageKey,
+                      eventId: notice.eventId,
+                    ),
+            reportingOutcomes: [
+              ConnectionReportingOutcome(
+                connection: notice.connection,
+                category: ReportingOutcomeCategory.authenticationRejected,
+                source: ReportingOutcomeSource.live,
+                credentialVersion: CredentialVersion({
+                  'committedConnection': notice.eventId,
+                }),
+              ),
+              if (independent)
+                const ConnectionReportingOutcome(
+                  connection: ProviderConnections.cursorPlatform,
+                  category: ReportingOutcomeCategory.accessDenied,
+                  source: ReportingOutcomeSource.live,
+                ),
+            ],
+          );
+        });
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            rejectionNotices: _RejectionNotices(notice),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Dashboard unavailable'), findsOneWidget);
+        expect(find.text(issue.message), findsNothing);
+        expect(
+          find.textContaining('OpenAI · Platform reporting: Key rejected'),
+          findsNothing,
+        );
+        final generic = find.byTooltip(issue.message);
+        expect(generic, independent ? findsOneWidget : findsNothing);
+        if (independent) {
+          expect(
+            find.textContaining('Cursor · Team Admin API: Access denied'),
+            findsOneWidget,
+          );
+          await tester.longPress(generic);
+          await tester.pumpAndSettle();
+          expect(find.text(issue.message), findsOneWidget);
+        }
+        await tester.tap(find.text('Details'));
+        await tester.pumpAndSettle();
+        expect(find.text('Error details'), findsOneWidget);
+        expect(find.text(details), findsOneWidget);
+        await tester.tap(find.text('Close'));
+        await tester.pumpAndSettle();
+        expect(find.text('Error details'), findsNothing);
+        if (independent) {
+          await tester.tap(find.widgetWithText(TextButton, 'Edit key'));
+          await tester.pumpAndSettle();
+          expect(
+            find.descendant(
+              of: find.byType(AlertDialog),
+              matching: find.text('Cursor · Team Admin API'),
+            ),
+            findsOneWidget,
+          );
+        } else {
+          expect(find.text('Edit key'), findsNothing);
+        }
+      },
+    );
+  }
+
+  testWidgets('saved warning remains actionable before any snapshot resolves', (
+    tester,
+  ) async {
+    final pending = Completer<DashboardSnapshot>();
+    final notices = _RejectionNotices(
+      const ConnectionRejectionNotice(
+        connection: ProviderConnections.cursorPlan,
+        eventId: 'synthetic-event',
+        dismissed: false,
+      ),
+    );
+    final repository = _PublicationRepository(DashboardSnapshot.empty())
+      ..response = pending.future;
+    await tester.pumpWidget(
+      WardPulseApp(repository: repository, rejectionNotices: notices),
+    );
+    await tester.pump();
+    expect(
+      find.byTooltip('Review Cursor · Cursor plan connection'),
+      findsOneWidget,
+    );
+    pending.complete(DashboardSnapshot.empty());
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('late notice read cannot revive a confirmed dismissal', (
+    tester,
+  ) async {
+    final notices = _RejectionNotices(
+      const ConnectionRejectionNotice(
+        connection: ProviderConnections.claudePlan,
+        eventId: 'synthetic-event',
+        dismissed: false,
+      ),
+    );
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: const NoProvidersDashboardRepository(),
+        rejectionNotices: notices,
+      ),
+    );
+    await tester.pumpAndSettle();
+    final old = notices.event;
+    final delayed = Completer<List<ConnectionRejectionNotice>>();
+    notices.nextRead = delayed.future;
+    await _notificationLifecycle(tester, AppLifecycleState.resumed);
+    await tester.tap(
+      find.byTooltip('Dismiss Anthropic · Claude plan rejection warning'),
+    );
+    await tester.pumpAndSettle();
+    delayed.complete([old]);
+    await tester.pumpAndSettle();
+    expect(
+      find.byTooltip('Review Anthropic · Claude plan connection'),
+      findsNothing,
+    );
+  });
+
+  for (final failed in [false, true]) {
+    testWidgets(
+      'default-On bootstrap is independent of ${failed ? 'failed' : 'held'} provider loading',
+      (tester) async {
+        await _notificationLifecycle(tester, AppLifecycleState.resumed);
+        final pending = Completer<DashboardSnapshot>();
+        final snapshot = DashboardSnapshot.empty();
+        final repository =
+            _PublicationRepository(snapshot)
+              ..failLoad = failed
+              ..response = failed ? null : pending.future;
+        final storage = FakeSecureStorage();
+        var requests = 0;
+        var statusReads = 0;
+        var allowed = true;
+        final decision = Completer<bool>();
+        final coordinator = PhoneNotificationCoordinator(
+          attempts: SecureNotificationPermissionAttemptStore(storage: storage),
+          initialize: () async {},
+          requestPermission: () async {
+            requests++;
+            return decision.future;
+          },
+          readStatus: () async {
+            statusReads++;
+            return allowed;
+          },
+        );
+        try {
+          await tester.pumpWidget(
+            _notificationApp(coordinator, repository: repository),
+          );
+          await tester.pump();
+          expect(repository.loads, 1);
+          expect(requests, 1);
+          expect(
+            await SecureNotificationPermissionAttemptStore(
+              storage: storage,
+            ).read(),
+            isTrue,
+          );
+          await tester.tap(find.text('Settings'));
+          await tester.pumpAndSettle();
+          expect(statusReads, 1);
+          expect(find.text('Notifications are blocked'), findsNothing);
+          allowed = false;
+          decision.complete(false);
+          await tester.pumpAndSettle();
+          expect(statusReads, 2);
+          expect(find.text('Notifications are blocked'), findsOneWidget);
+          expect(requests, 1);
+        } finally {
+          await tester.pumpWidget(const SizedBox());
+          if (!decision.isCompleted) decision.complete(false);
+          if (!pending.isCompleted) pending.complete(snapshot);
+          await tester.pump();
+        }
+      },
+    );
+  }
+
+  for (final choices in [(false, false), (true, false), (false, true)]) {
+    testWidgets(
+      'blocked warning preserves saved choices $choices without asking',
+      (tester) async {
+        if (choices == (false, false)) {
+          tester.view.physicalSize = const Size(320, 800);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+        }
+        await _notificationLifecycle(tester, AppLifecycleState.resumed);
+        final storage = FakeSecureStorage();
+        final attempts = SecureNotificationPermissionAttemptStore(
+          storage: storage,
+        );
+        await attempts.write(true);
+        var writes = 0;
+        storage.beforeWrite = (_) async {
+          writes++;
+        };
+        final alerts = _NotificationChoice()..enabled = choices.$1;
+        final recoveries = _NotificationChoice()..enabled = choices.$2;
+        var requests = 0;
+        final coordinator = PhoneNotificationCoordinator(
+          attempts: attempts,
+          initialize: () async {},
+          requestPermission: () async {
+            requests++;
+            return false;
+          },
+          readStatus: () async => false,
+        );
+        await tester.pumpWidget(
+          _notificationApp(coordinator, alerts: alerts, recoveries: recoveries),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Settings'));
+        await tester.pumpAndSettle();
+        expect(find.text('Notifications are blocked'), findsOneWidget);
+        await tester.ensureVisible(find.text('Enable notifications'));
+        expect(tester.takeException(), isNull);
+        final settings = tester.widget<SettingsScreen>(
+          find.byType(SettingsScreen),
+        );
+        expect(settings.alertNotificationsEnabled, choices.$1);
+        expect(settings.recoveryNotificationsEnabled, choices.$2);
+        expect(alerts.writes + recoveries.writes, 0);
+        expect(requests, 0);
+        expect(writes, 0);
+        expect(await attempts.read(), isTrue);
+        expect(storage.deleted, isEmpty);
+      },
+    );
+  }
+
+  testWidgets(
+    'Settings entry and resumed return read actual status, failures stay unknown',
+    (tester) async {
+      await _notificationLifecycle(tester, AppLifecycleState.resumed);
+      final reads = <Completer<bool?>>[];
+      final storage = FakeSecureStorage();
+      var requests = 0;
+      final coordinator = PhoneNotificationCoordinator(
+        attempts: SecureNotificationPermissionAttemptStore(storage: storage),
+        initialize: () async {},
+        requestPermission: () async {
+          requests++;
+          return false;
+        },
+        readStatus: () {
+          final read = Completer<bool?>();
+          reads.add(read);
+          return read.future;
+        },
+      );
+      try {
+        await tester.pumpWidget(
+          _notificationApp(
+            coordinator,
+            alerts: _NotificationChoice()..enabled = false,
+            recoveries: _NotificationChoice()..enabled = false,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(reads, isEmpty);
+        await tester.tap(find.text('Settings'));
+        await tester.pump();
+        expect(reads, hasLength(1));
+        expect(find.text('Notifications are blocked'), findsNothing);
+        reads[0].complete(false);
+        await tester.pumpAndSettle();
+        expect(find.text('Notifications are blocked'), findsOneWidget);
+        await _notificationLifecycle(tester, AppLifecycleState.inactive);
+        await tester.pump();
+        expect(reads, hasLength(1));
+        await _notificationLifecycle(tester, AppLifecycleState.resumed);
+        await tester.pump();
+        expect(reads, hasLength(2));
+        expect(find.text('Notifications are blocked'), findsNothing);
+        reads[1].complete(true);
+        await tester.pumpAndSettle();
+        expect(find.text('Notifications are blocked'), findsNothing);
+        await tester.tap(find.text('Dashboard'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Settings'));
+        await tester.pump();
+        expect(reads, hasLength(3));
+        reads[2].complete(null);
+        await tester.pumpAndSettle();
+        expect(find.text('Notifications are blocked'), findsNothing);
+        await _notificationLifecycle(tester, AppLifecycleState.inactive);
+        await _notificationLifecycle(tester, AppLifecycleState.resumed);
+        await tester.pump();
+        expect(reads, hasLength(4));
+        reads[3].completeError(StateError('Status unavailable.'));
+        await tester.pumpAndSettle();
+        expect(find.text('Notifications are blocked'), findsNothing);
+        expect(requests, 0);
+        expect(storage.values, isEmpty);
+        expect(storage.deleted, isEmpty);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        for (final read in reads) {
+          if (!read.isCompleted) read.complete(null);
+        }
+        await tester.pump();
+      }
+    },
+  );
+
+  testWidgets(
+    'status rejects older reads, replaced coordinators and disposed results',
+    (tester) async {
+      await _notificationLifecycle(tester, AppLifecycleState.resumed);
+      final oldReads = <Completer<bool?>>[];
+      final newReads = <Completer<bool?>>[];
+      final alerts = _NotificationChoice()..enabled = false;
+      final recoveries = _NotificationChoice()..enabled = false;
+      PhoneNotificationCoordinator coordinator(List<Completer<bool?>> reads) =>
+          PhoneNotificationCoordinator(
+            initialize: () async {},
+            readStatus: () {
+              final read = Completer<bool?>();
+              reads.add(read);
+              return read.future;
+            },
+          );
+      final oldCoordinator = coordinator(oldReads);
+      final newCoordinator = coordinator(newReads);
+      Future<void> resume() async {
+        await _notificationLifecycle(tester, AppLifecycleState.inactive);
+        await _notificationLifecycle(tester, AppLifecycleState.resumed);
+        await tester.pump();
+      }
+
+      try {
+        await tester.pumpWidget(
+          _notificationApp(
+            oldCoordinator,
+            alerts: alerts,
+            recoveries: recoveries,
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Settings'));
+        await tester.pump();
+        await resume();
+        expect(oldReads, hasLength(2));
+        oldReads[1].complete(true);
+        await tester.pumpAndSettle();
+        oldReads[0].complete(false);
+        await tester.pumpAndSettle();
+        expect(find.text('Notifications are blocked'), findsNothing);
+        await resume();
+        expect(oldReads, hasLength(3));
+        await tester.pumpWidget(
+          _notificationApp(
+            newCoordinator,
+            alerts: alerts,
+            recoveries: recoveries,
+          ),
+        );
+        expect(newReads, hasLength(1));
+        newReads[0].complete(true);
+        await tester.pumpAndSettle();
+        oldReads[2].complete(false);
+        await tester.pumpAndSettle();
+        expect(find.text('Notifications are blocked'), findsNothing);
+        await resume();
+        expect(newReads, hasLength(2));
+        await tester.pumpWidget(const SizedBox());
+        newReads[1].complete(false);
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        for (final read in [...oldReads, ...newReads]) {
+          if (!read.isCompleted) read.complete(null);
+        }
+        await tester.pump();
+      }
+    },
+  );
+
+  for (final alert in [true, false]) {
+    testWidgets(
+      '${alert ? 'alert' : 'recovery'} permission decision refreshes status with provider load held',
+      (tester) async {
+        await _notificationLifecycle(tester, AppLifecycleState.resumed);
+        final snapshot = DashboardSnapshot.empty();
+        final load = Completer<DashboardSnapshot>();
+        final decision = Completer<bool>();
+        final storage = FakeSecureStorage();
+        final alerts = _NotificationChoice()..enabled = false;
+        final recoveries = _NotificationChoice()..enabled = false;
+        var requests = 0;
+        var allowed = true;
+        final coordinator = PhoneNotificationCoordinator(
+          attempts: SecureNotificationPermissionAttemptStore(storage: storage),
+          initialize: () async {},
+          requestPermission: () {
+            requests++;
+            return decision.future;
+          },
+          readStatus: () async => allowed,
+        );
+        try {
+          await tester.pumpWidget(
+            _notificationApp(
+              coordinator,
+              repository: _PublicationRepository(snapshot)
+                ..response = load.future,
+              alerts: alerts,
+              recoveries: recoveries,
+            ),
+          );
+          await tester.pump();
+          await tester.tap(find.text('Settings'));
+          await tester.pumpAndSettle();
+          final settings = tester.widget<SettingsScreen>(
+            find.byType(SettingsScreen),
+          );
+          expect(find.text('Notifications are blocked'), findsNothing);
+          final changing =
+              alert
+                  ? settings.onAlertNotificationsChanged(true)
+                  : settings.onRecoveryNotificationsChanged(true);
+          await tester.pump();
+          expect(requests, 1);
+          allowed = false;
+          decision.complete(alert);
+          expect(await changing, alert);
+          await tester.pumpAndSettle();
+          expect(find.text('Notifications are blocked'), findsOneWidget);
+          expect(alerts.enabled, alert);
+          expect(recoveries.enabled, !alert);
+          expect(requests, 1);
+          expect(
+            await SecureNotificationPermissionAttemptStore(
+              storage: storage,
+            ).read(),
+            isTrue,
+          );
+        } finally {
+          await tester.pumpWidget(const SizedBox());
+          if (!decision.isCompleted) decision.complete(false);
+          if (!load.isCompleted) load.complete(snapshot);
+          await tester.pump();
+        }
+      },
+    );
+  }
+
+  for (final outcome in [true, false, null, 'exception']) {
+    testWidgets(
+      'notification settings navigation $outcome guards duplicates and preserves policy',
+      (tester) async {
+        await _notificationLifecycle(tester, AppLifecycleState.resumed);
+        final storage = FakeSecureStorage();
+        var writes = 0;
+        storage.beforeWrite = (_) async {
+          writes++;
+        };
+        final alerts = _NotificationChoice()..enabled = false;
+        final recoveries = _NotificationChoice()..enabled = false;
+        var opens = 0;
+        var reads = 0;
+        var requests = 0;
+        var allowed = false;
+        var opening = Completer<bool?>();
+        final coordinator = PhoneNotificationCoordinator(
+          attempts: SecureNotificationPermissionAttemptStore(storage: storage),
+          initialize: () async {},
+          requestPermission: () async {
+            requests++;
+            return false;
+          },
+          readStatus: () async {
+            reads++;
+            return allowed;
+          },
+          openSettings: () {
+            opens++;
+            return opening.future;
+          },
+        );
+        Future<void> tapAction() async {
+          await tester.ensureVisible(find.text('Enable notifications'));
+          await tester.tap(find.text('Enable notifications'));
+        }
+
+        try {
+          await tester.pumpWidget(
+            _notificationApp(
+              coordinator,
+              alerts: alerts,
+              recoveries: recoveries,
+            ),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Settings'));
+          await tester.pumpAndSettle();
+          await tapAction();
+          await tapAction();
+          await tester.pump();
+          expect(opens, 1);
+          expect(
+            tester
+                .widget<TextButton>(
+                  find.widgetWithText(TextButton, 'Enable notifications'),
+                )
+                .onPressed,
+            isNull,
+          );
+          await tester.tap(find.text('Dashboard'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text('Settings'));
+          await tester.pumpAndSettle();
+          await tapAction();
+          expect(
+            opens,
+            1,
+          ); // The coordinator also guards a remounted Settings tab.
+          if (outcome == 'exception') {
+            opening.completeError(StateError('Settings unavailable.'));
+          } else {
+            opening.complete(outcome as bool?);
+          }
+          await tester.pumpAndSettle();
+          expect(reads, 2); // Launch completion is not a status read or grant.
+          expect(find.text('Notifications are blocked'), findsOneWidget);
+          expect(
+            find.text('Could not open Android notification settings'),
+            outcome == true ? findsNothing : findsOneWidget,
+          );
+          expect(
+            tester
+                .widget<TextButton>(
+                  find.widgetWithText(TextButton, 'Enable notifications'),
+                )
+                .onPressed,
+            isNotNull,
+          );
+          if (outcome == true) {
+            await _notificationLifecycle(tester, AppLifecycleState.inactive);
+            await _notificationLifecycle(tester, AppLifecycleState.resumed);
+            await tester.pumpAndSettle();
+            expect(find.text('Notifications are blocked'), findsOneWidget);
+            allowed = true;
+            await _notificationLifecycle(tester, AppLifecycleState.inactive);
+            await _notificationLifecycle(tester, AppLifecycleState.resumed);
+            await tester.pumpAndSettle();
+            expect(find.text('Notifications are blocked'), findsNothing);
+          } else {
+            opening = Completer<bool?>();
+            await tapAction();
+            expect(opens, 2);
+            opening.complete(true);
+            await tester.pumpAndSettle();
+            expect(find.text('Notifications are blocked'), findsOneWidget);
+          }
+          expect(alerts.enabled, isFalse);
+          expect(recoveries.enabled, isFalse);
+          expect(alerts.writes + recoveries.writes, 0);
+          expect(requests, 0);
+          expect(writes, 0);
+          expect(storage.values, isEmpty);
+          expect(storage.deleted, isEmpty);
+        } finally {
+          await tester.pumpWidget(const SizedBox());
+          if (!opening.isCompleted) opening.complete(false);
+          await tester.pump();
+        }
+      },
+    );
+  }
+
+  for (final choices in [(false, false), (true, false), (false, true)]) {
+    testWidgets('bootstrap respects saved delivery choices $choices', (
+      tester,
+    ) async {
+      await _notificationLifecycle(tester, AppLifecycleState.resumed);
+      final storage = FakeSecureStorage();
+      final alerts = SecureAlertNotificationPreferenceStore(storage: storage);
+      final recoveries = SecureRecoveryNotificationPreferenceStore(
+        storage: storage,
+      );
+      await alerts.write(choices.$1);
+      await recoveries.write(choices.$2);
+      var requests = 0;
+      var initializations = 0;
+      PhoneNotificationCoordinator coordinator() =>
+          PhoneNotificationCoordinator(
+            attempts: SecureNotificationPermissionAttemptStore(
+              storage: storage,
+            ),
+            initialize: () async {
+              initializations++;
+            },
+            requestPermission: () async {
+              requests++;
+              return false;
+            },
+          );
+      for (var mount = 0; mount < 2; mount++) {
+        await tester.pumpWidget(
+          _notificationApp(
+            coordinator(),
+            alerts: alerts,
+            recoveries: recoveries,
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpAndSettle();
+      }
+      expect(requests, choices.$1 || choices.$2 ? 1 : 0);
+      expect(initializations, 2); // Includes both saved Off, before any post.
+      expect(await alerts.read(), choices.$1);
+      expect(await recoveries.read(), choices.$2);
+    });
+  }
+
+  for (final refresh in [false, true]) {
+    for (final failed in [false, true]) {
+      testWidgets(
+        '${refresh ? 'refresh' : 'initial'} ${failed ? 'failed' : 'held'} choices cannot authorize an ask from cached On${refresh && !failed ? ' after saved Off' : ''}',
+        (tester) async {
+          await _notificationLifecycle(tester, AppLifecycleState.inactive);
+          final alerts = _NotificationChoice();
+          final recoveries = _NotificationChoice();
+          final affected = refresh ? recoveries : alerts;
+          final release = Completer<void>();
+          var requests = 0;
+          final coordinator = PhoneNotificationCoordinator(
+            attempts: SecureNotificationPermissionAttemptStore(
+              storage: FakeSecureStorage(),
+            ),
+            initialize: () async {},
+            requestPermission: () async {
+              requests++;
+              return false;
+            },
+          );
+          void delayRead() {
+            affected.failRead = failed;
+            affected.hold = failed ? null : release.future;
+          }
+
+          Future<void>? refreshing;
+          try {
+            if (!refresh) delayRead();
+            await tester.pumpWidget(
+              _notificationApp(
+                coordinator,
+                alerts: alerts,
+                recoveries: recoveries,
+              ),
+            );
+            if (refresh) {
+              await tester.pumpAndSettle();
+              await tester.tap(find.text('Settings'));
+              await tester.pumpAndSettle();
+              delayRead();
+              refreshing =
+                  tester
+                      .widget<SettingsScreen>(find.byType(SettingsScreen))
+                      .onRefresh();
+            }
+            await tester.pump();
+            if (refresh && !failed) {
+              final settings = tester.widget<SettingsScreen>(
+                find.byType(SettingsScreen),
+              );
+              await settings.onAlertNotificationsChanged(false);
+              await settings.onRecoveryNotificationsChanged(false);
+            }
+            await _notificationLifecycle(tester, AppLifecycleState.resumed);
+            expect(
+              requests,
+              0,
+            ); // Resumed alone is insufficient without its frame.
+            if (!refresh && !failed) {
+              release.complete();
+              await tester.idle();
+              expect(
+                requests,
+                0,
+              ); // Choices are resolved; no resumed frame yet.
+            }
+            await tester.pump();
+            expect(requests, !refresh && !failed ? 1 : 0);
+            if (!release.isCompleted) release.complete();
+            await refreshing;
+            await tester.pumpAndSettle();
+            expect(requests, failed || refresh ? 0 : 1);
+            if (failed) {
+              affected.failRead = false;
+              await tester.tap(find.text('Settings'));
+              await tester.pumpAndSettle();
+              await tester
+                  .widget<SettingsScreen>(find.byType(SettingsScreen))
+                  .onRefresh();
+              await tester.pumpAndSettle();
+              expect(requests, 1);
+            }
+          } finally {
+            await tester.pumpWidget(const SizedBox());
+            if (!release.isCompleted) release.complete();
+            await refreshing;
+            await _notificationLifecycle(tester, AppLifecycleState.resumed);
+            await tester.pump();
+          }
+        },
+      );
+    }
+  }
+
+  for (final dispose in [false, true]) {
+    testWidgets(
+      'foreground readiness is rechecked after initialization (${dispose ? 'disposed' : 'paused'})',
+      (tester) async {
+        await _notificationLifecycle(tester, AppLifecycleState.resumed);
+        final ready = Completer<void>();
+        var requests = 0;
+        final coordinator = PhoneNotificationCoordinator(
+          attempts: SecureNotificationPermissionAttemptStore(
+            storage: FakeSecureStorage(),
+          ),
+          initialize: () => ready.future,
+          requestPermission: () async {
+            requests++;
+            return true;
+          },
+        );
+        try {
+          await tester.pumpWidget(_notificationApp(coordinator));
+          await tester.pumpAndSettle();
+          expect(requests, 0);
+          if (dispose) {
+            await tester.pumpWidget(const SizedBox());
+          } else {
+            await _notificationLifecycle(tester, AppLifecycleState.paused);
+          }
+          ready.complete();
+          await tester.pump();
+          expect(requests, 0);
+          await _notificationLifecycle(tester, AppLifecycleState.resumed);
+          if (dispose) await tester.pumpWidget(_notificationApp(coordinator));
+          await tester.pumpAndSettle();
+          expect(requests, 1);
+        } finally {
+          await tester.pumpWidget(const SizedBox());
+          if (!ready.isCompleted) ready.complete();
+          await _notificationLifecycle(tester, AppLifecycleState.resumed);
+          await tester.pump();
+        }
+      },
+    );
+  }
+
+  testWidgets(
+    'changed-Off choices cancel a durable preparation without losing explicit retry',
+    (tester) async {
+      await _notificationLifecycle(tester, AppLifecycleState.resumed);
+      final claimed = Completer<void>();
+      final release = Completer<void>();
+      final storage =
+          FakeSecureStorage()
+            ..beforeWrite = (_) async {
+              if (!claimed.isCompleted) claimed.complete();
+              await release.future;
+            };
+      var requests = 0;
+      final attempts = SecureNotificationPermissionAttemptStore(
+        storage: storage,
+      );
+      final coordinator = PhoneNotificationCoordinator(
+        attempts: attempts,
+        initialize: () async {},
+        requestPermission: () async {
+          requests++;
+          return false;
+        },
+      );
+      final alerts = _NotificationChoice();
+      final recoveries = _NotificationChoice();
+      try {
+        await tester.pumpWidget(
+          _notificationApp(coordinator, alerts: alerts, recoveries: recoveries),
+        );
+        await tester.pumpAndSettle();
+        expect(claimed.isCompleted, isTrue);
+        await tester.tap(find.text('Settings'));
+        await tester.pumpAndSettle();
+        final settings = tester.widget<SettingsScreen>(
+          find.byType(SettingsScreen),
+        );
+        await settings.onAlertNotificationsChanged(false);
+        await settings.onRecoveryNotificationsChanged(false);
+        release.complete();
+        await tester.pumpAndSettle();
+        expect(requests, 0);
+        expect(await attempts.read(), isFalse);
+        expect(await settings.onAlertNotificationsChanged(true), isFalse);
+        await tester.pumpAndSettle();
+        expect(requests, 1);
+        expect(await attempts.read(), isTrue);
+        expect(recoveries.enabled, isFalse);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        if (!release.isCompleted) release.complete();
+        await tester.pump();
+      }
+    },
+  );
+
+  testWidgets(
+    'startup and timer are automatic; resume does not fetch; manual refresh bypasses',
+    (tester) async {
+      final origins = <AutomaticPollOrigin?>[];
+      var deny = false;
+      final source = _alertTestSnapshot();
+      final repository = _CountingDashboardRepository(() {
+        final poll = AutomaticPollContext.current;
+        origins.add(poll?.origin);
+        if (deny && poll != null)
+          poll.skipped['anthropic.plan'] = AutomaticPollSkipped(
+            'anthropic.plan',
+            CredentialVersion({}),
+            DateTime.utc(2026, 11, 6),
+          );
+        return source;
+      });
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final watch = _FakeWatchSyncService(),
+          widget = _FakePhoneWidgetSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          syncScheduler: scheduler,
+          watchSyncService: watch,
+          phoneWidgetSyncService: widget,
+          readExhaustedWindows: (_) => [],
+          readPlanRecoveries: (_, _) => [],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(origins, [AutomaticPollOrigin.periodic]);
+      final pushes = watch.syncedSnapshots.length,
+          widgets = widget.syncedSnapshots.length;
+      await _notificationLifecycle(tester, AppLifecycleState.paused);
+      await _notificationLifecycle(tester, AppLifecycleState.resumed);
+      expect(origins, hasLength(1));
+      deny = true;
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(origins.last, AutomaticPollOrigin.periodic);
+      expect(watch.syncedSnapshots, hasLength(pushes));
+      expect(widget.syncedSnapshots, hasLength(widgets));
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      expect(origins.last, isNull);
+      expect(watch.syncedSnapshots.length, greaterThan(pushes));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets('schedules foreground and injected headless work together', (
+    tester,
+  ) async {
+    final app = WardPulseApp(
+      repository: ValueDashboardRepository(DashboardSnapshot.empty()),
+    );
+    expect(app.scheduleHeadlessSync, HeadlessProviderSync.schedule);
+    final foreground = _ManualProviderSyncScheduler();
+    addTearDown(foreground.dispose);
+    final headless = <Duration>[];
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: app.repository,
+        syncScheduler: foreground,
+        scheduleHeadlessSync: (interval) async => headless.add(interval),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(foreground.scheduledInterval, isNotNull);
+    expect(headless, [foreground.scheduledInterval]);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+  });
+
   for (final brightness in Brightness.values) {
     testWidgets(
       'app bar keeps the WardPulse mark and title in ${brightness.name}',
@@ -82,11 +1972,11 @@ void main() {
 
     final dashboard = find.byType(Scrollable).first;
     await tester.scrollUntilVisible(
-      find.text('Usage history'),
+      find.text('Mock · Usage history'),
       300,
       scrollable: dashboard,
     );
-    expect(find.text('Usage history'), findsOneWidget);
+    expect(find.text('Mock · Usage history'), findsOneWidget);
     expect(find.text('4 buckets'), findsOneWidget);
 
     await tester.scrollUntilVisible(
@@ -104,8 +1994,8 @@ void main() {
     expect(find.text('No alerts'), findsOneWidget);
 
     await tester.scrollUntilVisible(
-      find.text('Platform spend'),
-      300,
+      find.byKey(const ValueKey('source-expense.today')),
+      -300,
       scrollable: dashboard,
     );
     expect(find.text('Today'), findsWidgets);
@@ -257,6 +2147,68 @@ void main() {
     expect(find.text('Watch summary queued'), findsOneWidget);
   });
 
+  testWidgets('Settings sync reports invalid saved capacity without queuing', (
+    tester,
+  ) async {
+    const ids = [
+      codexPlanRingId,
+      codexSparkRingId,
+      cursorOwnPoolId,
+      cursorOtherPoolId,
+      claudePlanRingId,
+      claudeFableRingId,
+    ];
+    final store =
+        _MemoryWatchRingStore()
+          ..value = const WatchRingPreferences(selectedIds: ids);
+    final published = <String>[];
+    const channel = MethodChannel('app.wardpulse/watch_sync');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'syncWatchSummary');
+      published.add(call.arguments as String);
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(
+          _threePairDashboard(fableUsed: null),
+        ),
+        watchRingPreferenceStore: store,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(published, isEmpty);
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Send to watch'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -160));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Sync'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.widgetWithText(ListTile, 'Send to watch'),
+        matching: find.text(
+          'Watch updates paused · correct ring choices to resume',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Watch summary queued'), findsNothing);
+    expect(published, isEmpty);
+    expect(store.value.selectedIds, ids);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Settings shows systemic sections without Watch display', (
     tester,
   ) async {
@@ -280,13 +2232,14 @@ void main() {
       findsNothing,
     );
     await tester.scrollUntilVisible(
-      find.text('Diagnostics'),
+      find.widgetWithText(ListTile, 'Watch summary'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Diagnostics'), findsOneWidget);
     expect(find.text('Sync'), findsWidgets);
     expect(find.text('Watch summary'), findsOneWidget);
+    expect(find.text('Widget summary'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Help'),
       300,
@@ -330,6 +2283,86 @@ void main() {
         'other provider. Product names are trademarks of their respective owners.',
       ),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('Settings Widget summary follows current widget preferences', (
+    tester,
+  ) async {
+    final snapshot =
+        _asConnection(
+          DashboardSnapshot.fromJsonString(
+            File(
+              '../../fixtures/snapshots/dashboard_today.json',
+            ).readAsStringSync(),
+          ),
+        ).withStaleStatus();
+    final preferences =
+        _MemoryPhoneWidgetStore()
+          ..value = const PhoneWidgetPreferences(
+            selectedIds: ['budget.anthropic.platform.today'],
+          );
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        phoneWidgetPreferenceStore: preferences,
+        applyAlertSettings: (current, _) => current,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    final summary = find.widgetWithText(ListTile, 'Widget summary');
+    await tester.scrollUntilVisible(
+      summary,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    final settings = tester.widget<SettingsScreen>(find.byType(SettingsScreen));
+    expect(
+      settings.widgetPreferences?.selectedIds,
+      preferences.value.selectedIds,
+    );
+    final tile = tester.widget<ListTile>(summary);
+    expect(
+      (tile.subtitle as Text).data,
+      phoneWidgetPayloadSubtitle(snapshot, preferences.value),
+    );
+    expect(tile.onTap, isNull);
+    expect(tile.onLongPress, isNull);
+    expect(tile.trailing, isNull);
+    final sync = find.byWidgetPredicate(
+      (widget) =>
+          widget is ListTile &&
+          widget.title is Text &&
+          (widget.title as Text).data == 'Sync',
+    );
+    expect(
+      tester
+          .widget<StatusPill>(
+            find.descendant(of: sync, matching: find.byType(StatusPill)),
+          )
+          .status,
+      ProviderStatus.stale,
+    );
+
+    await tester.tap(find.text('Widget'));
+    await tester.pumpAndSettle();
+    final today = find.widgetWithText(CheckboxListTile, 'Today');
+    await tester.ensureVisible(today);
+    await tester.tap(today);
+    await tester.pumpAndSettle();
+    expect(preferences.value.selectedIds, isEmpty);
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      summary,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      (tester.widget<ListTile>(summary).subtitle as Text).data,
+      'No metrics selected',
     );
   });
 
@@ -499,13 +2532,19 @@ void main() {
     addTearDown(scheduler.dispose);
     final store = _DelayedAlertThresholdStore();
     final watch = _FakeWatchSyncService();
+    final phoneWidget = _FakePhoneWidgetSyncService();
+    final inputs = <DashboardSnapshot>[];
     await tester.pumpWidget(
       WardPulseApp(
         repository: repository,
         syncScheduler: scheduler,
         watchSyncService: watch,
+        phoneWidgetSyncService: phoneWidget,
         alertThresholdStore: store,
-        applyAlertSettings: (current, _) => current,
+        applyAlertSettings: (current, _) {
+          inputs.add(current);
+          return current;
+        },
       ),
     );
     await tester.pumpAndSettle();
@@ -540,6 +2579,21 @@ void main() {
     store.release.complete();
     await tester.pumpAndSettle();
     expect(watch.syncedSnapshots.last.accounts, isEmpty);
+    expect(phoneWidget.syncedSnapshots.last.accounts, isEmpty);
+    await tester
+        .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+        .onAlertThresholdsChanged(
+          (current) => current.withConnection(
+            ProviderConnections.codexPlan,
+            const ConnectionAlertThresholds(
+              plan: AlertPercentThreshold(at: 70),
+            ),
+          ),
+        );
+    await tester.pumpAndSettle();
+    expect(inputs.last.accounts, isEmpty);
+    expect(watch.syncedSnapshots.last.accounts, isEmpty);
+    expect(phoneWidget.syncedSnapshots.last.accounts, isEmpty);
     await tester.tap(find.text('Dashboard'));
     await tester.pumpAndSettle();
     expect(find.text('Connect a provider'), findsWidgets);
@@ -551,6 +2605,2110 @@ void main() {
       2500,
     );
   });
+
+  testWidgets('alert edits reevaluate owned input and publish both surfaces', (
+    tester,
+  ) async {
+    final source = _alertTestSnapshot();
+    final repository = _PublicationRepository(source);
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    final watch = _FakeWatchSyncService();
+    final phoneWidget = _FakePhoneWidgetSyncService();
+    final store = _MemoryAlertThresholdStore();
+    store.value = store.value.withConnection(
+      ProviderConnections.codexPlan,
+      const ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 70)),
+    );
+    final inputs = <DashboardSnapshot>[];
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: repository,
+        syncScheduler: scheduler,
+        watchSyncService: watch,
+        phoneWidgetSyncService: phoneWidget,
+        alertThresholdStore: store,
+        applyAlertSettings: (snapshot, settings) {
+          inputs.add(snapshot);
+          // Deliberately nonidentity: proves shell reevaluation, not native math.
+          return applyUserAlertSettings(
+            snapshot,
+            settings,
+            applyJson: (input, _) {
+              final json = jsonDecode(input) as Map<String, dynamic>;
+              final accounts = json['accounts'] as List;
+              final account = accounts.first as Map<String, dynamic>;
+              final windows = account['allowances'] as List;
+              final rules = settings.forConnection(
+                ProviderConnections.codexPlan,
+              );
+              final at = (rules.planWindows['window-a'] ?? rules.plan).at;
+              if (windows.isNotEmpty && at != null && at <= 75) {
+                account['status'] = 'warning';
+                (windows.first as Map<String, dynamic>)['status'] = 'warning';
+                json['alerts'] = [
+                  {'severity': 'warning', 'message': 'Configured window alert'},
+                ];
+              }
+              return jsonEncode(json);
+            },
+          );
+        },
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+
+    void expectPublished(bool crossed) {
+      final snapshot = watch.syncedSnapshots.last;
+      expect(phoneWidget.syncedSnapshots.last, same(snapshot));
+      expect(
+        snapshot.accounts.first.status,
+        crossed ? ProviderStatus.warning : ProviderStatus.ok,
+      );
+      expect(
+        snapshot.accounts.first.allowances.single.status,
+        crossed ? ProviderStatus.warning : ProviderStatus.ok,
+      );
+      expect(snapshot.alerts, crossed ? isNotEmpty : isEmpty);
+      expect(snapshot.accounts.skip(1).map((account) => account.status), [
+        ProviderStatus.warning,
+        ProviderStatus.rateLimited,
+        ProviderStatus.authRequired,
+      ]);
+      expect(snapshot.todayTotal.toJson(), source.todayTotal.toJson());
+      expect(snapshot.accounts.first.today.status, ProviderStatus.warning);
+      expect(snapshot.syncIssue, repository.snapshot.syncIssue);
+      expect(snapshot.syncDetails, repository.snapshot.syncDetails);
+      expect(
+        snapshot.connectionVersions,
+        repository.snapshot.connectionVersions,
+      );
+      expect(snapshot.reportingOutcomes, repository.snapshot.reportingOutcomes);
+    }
+
+    expectPublished(true);
+    const edits = [
+      // Explicit Off suppresses the enabled fallback.
+      ConnectionAlertThresholds(
+        plan: AlertPercentThreshold(at: 70),
+        planWindows: {'window-a': AlertPercentThreshold()},
+      ),
+      // Removing that entry resumes inheritance.
+      ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 70)),
+      ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 90)),
+      ConnectionAlertThresholds(
+        planWindows: {'window-a': AlertPercentThreshold(at: 70)},
+      ),
+      ConnectionAlertThresholds(
+        planWindows: {'window-a': AlertPercentThreshold()},
+      ),
+    ];
+    for (var index = 0; index < edits.length; index++) {
+      // Either failed delivery must leave the other independent path usable.
+      watch.fail = index == 0;
+      phoneWidget.fail = index == 1;
+      await tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onAlertThresholdsChanged(
+            (current) => current.withConnection(
+              ProviderConnections.codexPlan,
+              edits[index],
+            ),
+          );
+      await tester.pumpAndSettle();
+      expectPublished(index == 1 || index == 3);
+      expect(repository.loads, 1);
+      expect(inputs, everyElement(same(source)));
+      expect(watch.syncedSnapshots, hasLength(index + 2));
+      expect(phoneWidget.syncedSnapshots, hasLength(index + 2));
+    }
+    watch.fail = false;
+    phoneWidget.fail = false;
+
+    // A missing window keeps its rule; the same ID returns with a new label.
+    repository.snapshot = _alertTestSnapshot(includeWindow: false);
+    scheduler.tick();
+    await tester.pumpAndSettle();
+    await tester
+        .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+        .onAlertThresholdsChanged(
+          (current) => current.withConnection(
+            ProviderConnections.codexPlan,
+            const ConnectionAlertThresholds(
+              planWindows: {'window-a': AlertPercentThreshold(at: 70)},
+            ),
+          ),
+        );
+    await tester.pumpAndSettle();
+    expect(inputs.last, same(repository.snapshot));
+    expect(watch.syncedSnapshots.last.alerts, isEmpty);
+    repository.snapshot = _alertTestSnapshot(windowLabel: 'Renamed');
+    scheduler.tick();
+    await tester.pumpAndSettle();
+    expectPublished(true);
+    expect(inputs.last, same(repository.snapshot));
+    expect(
+      watch.syncedSnapshots.last.accounts.first.allowances.single.label,
+      'Renamed',
+    );
+    expect(repository.loads, 3);
+    expect(
+      AlertThresholdPreferences.decode(store.value.encode())
+          .forConnection(ProviderConnections.codexPlan)
+          .planWindows['window-a']!
+          .at,
+      70,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final refreshFirst in [true, false]) {
+    testWidgets(
+      'in-flight refresh converges with alert save (refresh first: $refreshFirst)',
+      (tester) async {
+        final source = _alertTestSnapshot();
+        final newer = _alertTestSnapshot(windowLabel: 'New data');
+        final repository = _PublicationRepository(source);
+        final store = _DelayedAlertThresholdStore();
+        final watch = _FakeWatchSyncService();
+        final phoneWidget = _FakePhoneWidgetSyncService();
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            alertThresholdStore: store,
+            watchSyncService: watch,
+            phoneWidgetSyncService: phoneWidget,
+            applyAlertSettings:
+                (snapshot, settings) => applyUserAlertSettings(
+                  snapshot,
+                  settings,
+                  applyJson:
+                      (input, _) => jsonEncode({
+                        ...jsonDecode(input) as Map<String, dynamic>,
+                        'alerts': [
+                          {
+                            'severity': 'warning',
+                            'message': 'Configured alert',
+                          },
+                        ],
+                      }),
+                ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Providers'));
+        await tester.pumpAndSettle();
+        final refresh = Completer<DashboardSnapshot>();
+        repository.response = refresh.future;
+        await tester.tap(find.byTooltip('Refresh'));
+        await tester.pumpAndSettle();
+        expect(repository.loads, 2);
+
+        final save = tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .onAlertThresholdsChanged(
+              (current) => current.withConnection(
+                ProviderConnections.codexPlan,
+                const ConnectionAlertThresholds(
+                  plan: AlertPercentThreshold(at: 70),
+                ),
+              ),
+            );
+        await tester.pump();
+        expect(store.started, isTrue);
+        if (refreshFirst) {
+          refresh.complete(newer);
+          await tester.pumpAndSettle();
+        }
+        store.release.complete();
+        await save;
+        await tester.pumpAndSettle();
+        if (!refreshFirst) {
+          // The edit is visible while the original foreground future is pending.
+          await tester.tap(find.text('Dashboard'));
+          await tester.pumpAndSettle();
+          final interim =
+              tester
+                  .widget<DashboardScreen>(find.byType(DashboardScreen))
+                  .snapshot;
+          expect(interim.accounts.first.allowances.single.label, 'Window A');
+          expect(interim.alerts.single.message, 'Configured alert');
+          refresh.complete(newer);
+          await tester.pumpAndSettle();
+        } else {
+          await tester.tap(find.text('Dashboard'));
+          await tester.pumpAndSettle();
+        }
+
+        final displayed =
+            tester
+                .widget<DashboardScreen>(find.byType(DashboardScreen))
+                .snapshot;
+        expect(displayed.accounts.first.allowances.single.label, 'New data');
+        expect(displayed.alerts.single.message, 'Configured alert');
+        expect(displayed.toJson(), watch.syncedSnapshots.last.toJson());
+        expect(displayed.toJson(), phoneWidget.syncedSnapshots.last.toJson());
+        expect(repository.loads, 2);
+        expect(
+          store.value.forConnection(ProviderConnections.codexPlan).plan.at,
+          70,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  for (final failure in ['evaluation', 'persistence']) {
+    testWidgets('$failure failure preserves state and releases queued edits', (
+      tester,
+    ) async {
+      final store = _MemoryAlertThresholdStore();
+      final watch = _FakeWatchSyncService();
+      final phoneWidget = _FakePhoneWidgetSyncService();
+      var failEvaluation = false;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: ValueDashboardRepository(_alertTestSnapshot()),
+          watchSyncService: watch,
+          phoneWidgetSyncService: phoneWidget,
+          alertThresholdStore: store,
+          applyAlertSettings: (snapshot, _) {
+            if (failEvaluation) {
+              failEvaluation = false;
+              throw StateError('Evaluation unavailable');
+            }
+            return snapshot;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      final providers = tester.widget<ProvidersScreen>(
+        find.byType(ProvidersScreen),
+      );
+      final previous = watch.syncedSnapshots.single;
+      failEvaluation = failure == 'evaluation';
+      store.failNextWrite = failure == 'persistence';
+      final failed = providers.onAlertThresholdsChanged(
+        (current) => current.withConnection(
+          ProviderConnections.codexPlan,
+          const ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 70)),
+        ),
+      );
+      final observedFailure = expectLater(failed, throwsStateError);
+      final queued = providers.onAlertThresholdsChanged((current) {
+        expect(current.connections, isEmpty);
+        expect(store.value.connections, isEmpty);
+        expect(store.writes, failure == 'evaluation' ? 0 : 1);
+        expect(watch.syncedSnapshots, [previous]);
+        expect(phoneWidget.syncedSnapshots, [previous]);
+        return current.withConnection(
+          ProviderConnections.cursorPlan,
+          const ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 90)),
+        );
+      });
+      await observedFailure;
+      await queued;
+      await tester.pumpAndSettle();
+      expect(
+        store.value.forConnection(ProviderConnections.codexPlan).isEnabled,
+        isFalse,
+      );
+      expect(
+        store.value.forConnection(ProviderConnections.cursorPlan).plan.at,
+        90,
+      );
+      expect(watch.syncedSnapshots, hasLength(2));
+      expect(phoneWidget.syncedSnapshots, hasLength(2));
+      expect(
+        tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .alertThresholds!
+            .toJson(),
+        store.value.toJson(),
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final failureFirst in [true, false]) {
+    testWidgets(
+      'alert save updates scheduled fallback (failure first: $failureFirst)',
+      (tester) async {
+        final source = _alertTestSnapshot();
+        final repository = _PublicationRepository(source);
+        final store = _DelayedAlertThresholdStore();
+        store.value = store.value.withConnection(
+          ProviderConnections.codexPlan,
+          const ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 70)),
+        );
+        final scheduler = _ManualProviderSyncScheduler();
+        addTearDown(scheduler.dispose);
+        final watch = _FakeWatchSyncService();
+        final phoneWidget = _FakePhoneWidgetSyncService();
+        final inputs = <DashboardSnapshot>[];
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            alertThresholdStore: store,
+            syncScheduler: scheduler,
+            watchSyncService: watch,
+            phoneWidgetSyncService: phoneWidget,
+            applyAlertSettings: (snapshot, settings) {
+              inputs.add(snapshot);
+              return applyUserAlertSettings(
+                snapshot,
+                settings,
+                applyJson:
+                    (input, _) => jsonEncode({
+                      ...jsonDecode(input) as Map<String, dynamic>,
+                      'alerts': [
+                        {'severity': 'warning', 'message': 'Configured alert'},
+                      ],
+                    }),
+              );
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(watch.syncedSnapshots.single.alerts, isNotEmpty);
+        await tester.tap(find.text('Providers'));
+        await tester.pumpAndSettle();
+        final save = tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .onAlertThresholdsChanged(
+              (current) => current.withConnection(
+                ProviderConnections.codexPlan,
+                const ConnectionAlertThresholds(),
+              ),
+            );
+        await tester.pump();
+        expect(store.started, isTrue);
+        final refresh = Completer<DashboardSnapshot>();
+        repository.response = refresh.future;
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(repository.loads, 2);
+        if (failureFirst) {
+          refresh.completeError(const DashboardLoadException());
+          await tester.pumpAndSettle();
+        }
+        store.release.complete();
+        await save;
+        await tester.pumpAndSettle();
+        if (!failureFirst) {
+          refresh.completeError(const DashboardLoadException());
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.text('Dashboard'));
+        await tester.pumpAndSettle();
+        final displayed =
+            tester
+                .widget<DashboardScreen>(find.byType(DashboardScreen))
+                .snapshot;
+        expect(displayed.toJson(), source.toJson());
+        expect(displayed.alerts, isEmpty);
+        expect(watch.syncedSnapshots.last.toJson(), displayed.toJson());
+        expect(phoneWidget.syncedSnapshots.last.toJson(), displayed.toJson());
+        expect(watch.syncedSnapshots, hasLength(2));
+        expect(phoneWidget.syncedSnapshots, hasLength(2));
+        expect(inputs, [source, source]);
+        expect(store.value.hasEnabledRules, isFalse);
+        expect(repository.loads, 2);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'alert write rechecks ownership before publishing either surface',
+    (tester) async {
+      final source = _alertTestSnapshot();
+      final repository = _PublicationRepository(source);
+      final store = _DelayedAlertThresholdStore();
+      final watch = _FakeWatchSyncService();
+      final phoneWidget = _FakePhoneWidgetSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          alertThresholdStore: store,
+          watchSyncService: watch,
+          phoneWidgetSyncService: phoneWidget,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      final save = tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onAlertThresholdsChanged(
+            (current) => current.withConnection(
+              ProviderConnections.codexPlan,
+              const ConnectionAlertThresholds(
+                plan: AlertPercentThreshold(at: 70),
+              ),
+            ),
+          );
+      await tester.pump();
+      expect(store.started, isTrue);
+      repository.current = false;
+      store.release.complete();
+      await save;
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots, [source]);
+      expect(phoneWidget.syncedSnapshots, [source]);
+      expect(
+        store.value.forConnection(ProviderConnections.codexPlan).plan.at,
+        70,
+      );
+      expect(repository.loads, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final retirement in [
+    'foreground',
+    'scheduled',
+    'credentials',
+    'fallback',
+  ]) {
+    testWidgets('$retirement load keeps only usable owned alert input', (
+      tester,
+    ) async {
+      final source = _alertTestSnapshot();
+      final repository = _PublicationRepository(source);
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final watch = _FakeWatchSyncService();
+      final phoneWidget = _FakePhoneWidgetSyncService();
+      final inputs = <DashboardSnapshot>[];
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          syncScheduler: scheduler,
+          watchSyncService: watch,
+          phoneWidgetSyncService: phoneWidget,
+          applyAlertSettings: (snapshot, _) {
+            inputs.add(snapshot);
+            return snapshot;
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      repository.failLoad = true;
+      repository.current = retirement != 'scheduled';
+      if (retirement == 'credentials') {
+        tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .onCredentialsChanged();
+      } else if (retirement == 'foreground') {
+        await tester.tap(find.byTooltip('Refresh'));
+      } else {
+        scheduler.tick();
+      }
+      await tester.pumpAndSettle();
+      await tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onAlertThresholdsChanged(
+            (current) => current.withConnection(
+              ProviderConnections.codexPlan,
+              const ConnectionAlertThresholds(
+                plan: AlertPercentThreshold(at: 70),
+              ),
+            ),
+          );
+      await tester.pumpAndSettle();
+      final retained = retirement == 'fallback';
+      expect(inputs, retained ? [source, source] : [source]);
+      expect(watch.syncedSnapshots, retained ? [source, source] : [source]);
+      expect(
+        phoneWidget.syncedSnapshots,
+        retained ? [source, source] : [source],
+      );
+      expect(
+        tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .alertThresholds!
+            .forConnection(ProviderConnections.codexPlan)
+            .plan
+            .at,
+        70,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets(
+    'Watchface composes overlapping picker saves across tab replacement',
+    (tester) async {
+      const todayId = 'budget.openai.platform.today';
+      const weekId = 'budget.openai.platform.week';
+      final releases = [Completer<void>(), Completer<void>()];
+      try {
+        final store =
+            _MemoryWatchRingStore()
+              ..value = const WatchRingPreferences(selectedIds: []);
+        store.beforeWrite = (_) => releases[store.writes.length - 1].future;
+        final sync = _FakeWatchSyncService();
+        Widget app() => WardPulseApp(
+          repository: ValueDashboardRepository(_surfaceSelectionSnapshot()),
+          watchRingPreferenceStore: store,
+          watchSyncService: sync,
+          applyAlertSettings: (current, _) => current,
+        );
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Watchface'));
+        await tester.pumpAndSettle();
+        final today = find.widgetWithText(CheckboxListTile, 'Today');
+        final week = find.widgetWithText(CheckboxListTile, 'Week');
+        await tester.ensureVisible(today);
+        await tester.tap(today);
+        await tester.pumpAndSettle();
+        expect(store.writes.single.selectedIds, [todayId]);
+
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Watchface'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(week);
+        await tester.tap(week);
+        await tester.pumpAndSettle();
+        expect(store.value.selectedIds, isEmpty);
+        expect(sync.syncedPreferences.last.selectedIds, isEmpty);
+
+        releases[0].complete();
+        await tester.pumpAndSettle();
+        expect(store.value.selectedIds, [todayId]);
+        expect(store.writes.map((value) => value.selectedIds).toList(), [
+          [todayId],
+          [todayId, weekId],
+        ]);
+        expect(sync.syncedPreferences.last.selectedIds, [todayId]);
+        expect(tester.widget<CheckboxListTile>(today).value, isTrue);
+        expect(tester.widget<CheckboxListTile>(week).value, isTrue);
+        expect(find.text('Saving…'), findsOneWidget);
+
+        releases[1].complete();
+        await tester.pumpAndSettle();
+        expect(store.value.selectedIds, [todayId, weekId]);
+        expect(sync.syncedPreferences.last.selectedIds, [todayId, weekId]);
+        expect(find.text('Saving…'), findsNothing);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        expect(store.reads, 2);
+        await tester.tap(find.text('Watchface'));
+        await tester.pumpAndSettle();
+        expect(tester.widget<CheckboxListTile>(today).value, isTrue);
+        expect(tester.widget<CheckboxListTile>(week).value, isTrue);
+        expect(sync.syncedPreferences.last.selectedIds, [todayId, weekId]);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        for (final release in releases) {
+          if (!release.isCompleted) release.complete();
+        }
+        await tester.pumpAndSettle();
+      }
+    },
+  );
+
+  testWidgets(
+    'Widget composes overlapping picker saves across tab replacement',
+    (tester) async {
+      const todayId = 'budget.openai.platform.today';
+      const weekId = 'budget.openai.platform.week';
+      final releases = [Completer<void>(), Completer<void>()];
+      try {
+        final store =
+            _MemoryPhoneWidgetStore()
+              ..value = const PhoneWidgetPreferences(selectedIds: []);
+        store.beforeWrite = (_) => releases[store.writes.length - 1].future;
+        final sync = _FakePhoneWidgetSyncService();
+        Widget app() => WardPulseApp(
+          repository: ValueDashboardRepository(_surfaceSelectionSnapshot()),
+          phoneWidgetPreferenceStore: store,
+          phoneWidgetSyncService: sync,
+          applyAlertSettings: (current, _) => current,
+        );
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        final today = find.widgetWithText(CheckboxListTile, 'Today');
+        final week = find.widgetWithText(CheckboxListTile, 'Week');
+        await tester.ensureVisible(today);
+        await tester.tap(today);
+        await tester.pumpAndSettle();
+        expect(store.writes.single.selectedIds, [todayId]);
+
+        await tester.tap(find.text('Watchface'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(week);
+        await tester.tap(week);
+        await tester.pumpAndSettle();
+        expect(store.value.selectedIds, isEmpty);
+        expect(sync.syncedPreferences.last.selectedIds, isEmpty);
+
+        releases[0].complete();
+        await tester.pumpAndSettle();
+        expect(store.value.selectedIds, [todayId]);
+        expect(store.writes.map((value) => value.selectedIds).toList(), [
+          [todayId],
+          [todayId, weekId],
+        ]);
+        expect(sync.syncedPreferences.last.selectedIds, [todayId]);
+        expect(tester.widget<CheckboxListTile>(today).value, isTrue);
+        expect(tester.widget<CheckboxListTile>(week).value, isTrue);
+        expect(find.text('Saving…'), findsOneWidget);
+
+        releases[1].complete();
+        await tester.pumpAndSettle();
+        expect(store.value.selectedIds, [todayId, weekId]);
+        expect(sync.syncedPreferences.last.selectedIds, [todayId, weekId]);
+        expect(find.text('Saving…'), findsNothing);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        expect(store.reads, 2);
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        expect(tester.widget<CheckboxListTile>(today).value, isTrue);
+        expect(tester.widget<CheckboxListTile>(week).value, isTrue);
+        expect(sync.syncedPreferences.last.selectedIds, [todayId, weekId]);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        for (final release in releases) {
+          if (!release.isCompleted) release.complete();
+        }
+        await tester.pumpAndSettle();
+      }
+    },
+  );
+
+  testWidgets('an older ring save failure keeps the composite pending', (
+    tester,
+  ) async {
+    const todayId = 'budget.openai.platform.today';
+    const weekId = 'budget.openai.platform.week';
+    final releases = [Completer<void>(), Completer<void>()];
+    try {
+      final store =
+          _MemoryWatchRingStore()
+            ..value = const WatchRingPreferences(selectedIds: []);
+      store.beforeWrite = (_) => releases[store.writes.length - 1].future;
+      final sync = _FakeWatchSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: ValueDashboardRepository(_surfaceSelectionSnapshot()),
+          watchRingPreferenceStore: store,
+          watchSyncService: sync,
+          applyAlertSettings: (current, _) => current,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      final today = find.widgetWithText(CheckboxListTile, 'Today');
+      final week = find.widgetWithText(CheckboxListTile, 'Week');
+      await tester.ensureVisible(today);
+      await tester.tap(today);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(week);
+      await tester.tap(week);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Widget'));
+      await tester.pumpAndSettle();
+      releases[0].completeError(StateError('Storage unavailable'));
+      await tester.pumpAndSettle();
+      expect(find.text('Could not update ring slots'), findsOneWidget);
+      expect(store.value.selectedIds, isEmpty);
+      expect(sync.syncedPreferences.last.selectedIds, isEmpty);
+      expect(store.writes.last.selectedIds, [todayId, weekId]);
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<CheckboxListTile>(today).value, isTrue);
+      expect(tester.widget<CheckboxListTile>(week).value, isTrue);
+      expect(find.text('Saving…'), findsOneWidget);
+      releases[1].complete();
+      await tester.pumpAndSettle();
+      expect(store.value.selectedIds, [todayId, weekId]);
+      expect(sync.syncedPreferences.last.selectedIds, [todayId, weekId]);
+      expect(find.text('Saving…'), findsNothing);
+      expect(tester.takeException(), isNull);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      for (final release in releases) {
+        if (!release.isCompleted) release.complete();
+      }
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets(
+    'a latest widget failure rolls back and a later edit survives disposal',
+    (tester) async {
+      const todayId = 'budget.openai.platform.today';
+      const monthId = 'budget.openai.platform.month';
+      final releases = [Completer<void>(), Completer<void>()];
+      try {
+        final store =
+            _MemoryPhoneWidgetStore()
+              ..value = const PhoneWidgetPreferences(selectedIds: [todayId]);
+        store.beforeWrite = (_) => releases[store.writes.length - 1].future;
+        final sync = _FakePhoneWidgetSyncService();
+        Widget app() => WardPulseApp(
+          repository: ValueDashboardRepository(_surfaceSelectionSnapshot()),
+          phoneWidgetPreferenceStore: store,
+          phoneWidgetSyncService: sync,
+          applyAlertSettings: (current, _) => current,
+        );
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        final week = find.widgetWithText(CheckboxListTile, 'Week');
+        await tester.ensureVisible(week);
+        await tester.tap(week);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Watchface'));
+        await tester.pumpAndSettle();
+        releases[0].completeError(StateError('Storage unavailable'));
+        await tester.pumpAndSettle();
+        expect(find.text('Could not update widget metrics'), findsOneWidget);
+        expect(sync.syncedPreferences, hasLength(1));
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        expect(store.value.selectedIds, [todayId]);
+        expect(tester.widget<CheckboxListTile>(week).value, isFalse);
+        expect(
+          tester
+              .widget<CheckboxListTile>(
+                find.widgetWithText(CheckboxListTile, 'Today'),
+              )
+              .value,
+          isTrue,
+        );
+        expect(find.text('Saving…'), findsNothing);
+        final month = find.widgetWithText(CheckboxListTile, 'Month');
+        await tester.ensureVisible(month);
+        await tester.pumpAndSettle();
+        await tester.tap(month);
+        await tester.pumpAndSettle();
+        expect(store.writes.last.selectedIds, [todayId, monthId]);
+        await tester.pumpWidget(const SizedBox());
+        releases[1].complete();
+        await tester.pumpAndSettle();
+        expect(store.value.selectedIds, [todayId, monthId]);
+        expect(sync.syncedPreferences, hasLength(1));
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(app());
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        expect(tester.widget<CheckboxListTile>(month).value, isTrue);
+        expect(sync.syncedPreferences.last.selectedIds, [todayId, monthId]);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        for (final release in releases) {
+          if (!release.isCompleted) release.complete();
+        }
+        await tester.pumpAndSettle();
+      }
+    },
+  );
+
+  testWidgets('surface capacity uses pending choices before a picker rebuild', (
+    tester,
+  ) async {
+    const todayId = 'budget.openai.platform.today';
+    const ringIds = [codexPlanRingId, cursorOwnPoolId];
+    const widgetIds = [
+      'missing.a',
+      'missing.b',
+      'missing.c',
+      'missing.d',
+      'missing.e',
+    ];
+    final ringRelease = Completer<void>();
+    final widgetRelease = Completer<void>();
+    try {
+      final rings =
+          _MemoryWatchRingStore()
+            ..value = const WatchRingPreferences(selectedIds: ringIds)
+            ..beforeWrite = (_) => ringRelease.future;
+      final widgets =
+          _MemoryPhoneWidgetStore()
+            ..value = const PhoneWidgetPreferences(selectedIds: widgetIds)
+            ..beforeWrite = (_) => widgetRelease.future;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: ValueDashboardRepository(_surfaceSelectionSnapshot()),
+          watchRingPreferenceStore: rings,
+          phoneWidgetPreferenceStore: widgets,
+          applyAlertSettings: (current, _) => current,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final today = find.widgetWithText(CheckboxListTile, 'Today');
+      final week = find.widgetWithText(CheckboxListTile, 'Week');
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      final addRingToday = tester.widget<CheckboxListTile>(today).onChanged!;
+      final addRingWeek = tester.widget<CheckboxListTile>(week).onChanged!;
+      addRingToday(true);
+      addRingWeek(true);
+      addRingToday(true);
+      await tester.pumpAndSettle();
+      expect(rings.writes.single.selectedIds, [...ringIds, todayId]);
+      expect(find.textContaining('3 of 3 slots used'), findsOneWidget);
+      expect(tester.widget<CheckboxListTile>(week).onChanged, isNull);
+      await tester.tap(find.text('Widget'));
+      await tester.pumpAndSettle();
+      final addWidgetToday = tester.widget<CheckboxListTile>(today).onChanged!;
+      final addWidgetWeek = tester.widget<CheckboxListTile>(week).onChanged!;
+      addWidgetToday(true);
+      addWidgetWeek(true);
+      addWidgetToday(true);
+      await tester.pumpAndSettle();
+      expect(widgets.writes.single.selectedIds, [...widgetIds, todayId]);
+      expect(find.textContaining('6 of 6 slots used'), findsOneWidget);
+      expect(tester.widget<CheckboxListTile>(week).onChanged, isNull);
+      widgetRelease.complete();
+      await tester.pumpAndSettle();
+      expect(widgets.value.selectedIds, [...widgetIds, todayId]);
+      expect(rings.value.selectedIds, ringIds);
+      ringRelease.complete();
+      await tester.pumpAndSettle();
+      expect(rings.value.selectedIds, [...ringIds, todayId]);
+      expect(tester.takeException(), isNull);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      for (final release in [ringRelease, widgetRelease]) {
+        if (!release.isCompleted) release.complete();
+      }
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets(
+    'refresh reads cannot replace accepted edits with old data or defaults',
+    (tester) async {
+      const todayId = 'budget.openai.platform.today';
+      const weekId = 'budget.openai.platform.week';
+      final ringRead = Completer<void>();
+      final widgetRead = Completer<void>();
+      final ringWrite = Completer<void>();
+      final widgetWrite = Completer<void>();
+      try {
+        final rings =
+            _MemoryWatchRingStore()
+              ..value = const WatchRingPreferences(selectedIds: [todayId])
+              ..beforeWrite = (_) => ringWrite.future;
+        final widgets =
+            _MemoryPhoneWidgetStore()
+              ..value = const PhoneWidgetPreferences(selectedIds: [todayId])
+              ..beforeWrite = (_) => widgetWrite.future;
+        final watchSync = _FakeWatchSyncService();
+        final widgetSync = _FakePhoneWidgetSyncService();
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: ValueDashboardRepository(_surfaceSelectionSnapshot()),
+            watchRingPreferenceStore: rings,
+            phoneWidgetPreferenceStore: widgets,
+            watchSyncService: watchSync,
+            phoneWidgetSyncService: widgetSync,
+            applyAlertSettings: (current, _) => current,
+          ),
+        );
+        await tester.pumpAndSettle();
+        rings.value = const WatchRingPreferences(selectedIds: []);
+        rings.beforeRead = () => ringRead.future;
+        widgets.beforeRead = () => widgetRead.future;
+        await tester.tap(find.text('Watchface'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Refresh'));
+        await tester.pumpAndSettle();
+        expect(rings.reads, 2);
+        final week = find.widgetWithText(CheckboxListTile, 'Week');
+        await tester.ensureVisible(week);
+        await tester.tap(week);
+        await tester.pumpAndSettle();
+        expect(rings.writes, isEmpty);
+        ringRead.complete();
+        await tester.pumpAndSettle();
+        expect(rings.writes.single.selectedIds, [todayId, weekId]);
+        expect(widgets.reads, 2);
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(week);
+        await tester.tap(week);
+        await tester.pumpAndSettle();
+        expect(widgets.writes, isEmpty);
+        widgetRead.completeError(StateError('Storage unavailable'));
+        await tester.pumpAndSettle();
+        expect(widgets.writes.single.selectedIds, [todayId, weekId]);
+        expect(watchSync.syncedPreferences.last.selectedIds, [todayId]);
+        expect(widgetSync.syncedPreferences.last.selectedIds, [todayId]);
+        expect(tester.widget<CheckboxListTile>(week).value, isTrue);
+        expect(find.text('Saving…'), findsOneWidget);
+        await tester.tap(find.byTooltip('Refresh'));
+        await tester.pumpAndSettle();
+        expect(rings.reads, 2);
+        expect(widgets.reads, 2);
+        widgetWrite.complete();
+        await tester.pumpAndSettle();
+        expect(widgets.value.selectedIds, [todayId, weekId]);
+        expect(widgetSync.syncedPreferences.last.selectedIds, [
+          todayId,
+          weekId,
+        ]);
+        expect(watchSync.syncedPreferences.last.selectedIds, [todayId]);
+        await tester.tap(find.text('Watchface'));
+        await tester.pumpAndSettle();
+        expect(tester.widget<CheckboxListTile>(week).value, isTrue);
+        expect(find.text('Saving…'), findsOneWidget);
+        ringWrite.complete();
+        await tester.pumpAndSettle();
+        expect(rings.value.selectedIds, [todayId, weekId]);
+        expect(watchSync.syncedPreferences.last.selectedIds, [todayId, weekId]);
+        expect(tester.takeException(), isNull);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        for (final release in [ringRead, widgetRead, ringWrite, widgetWrite]) {
+          if (!release.isCompleted) release.complete();
+        }
+        await tester.pumpAndSettle();
+      }
+    },
+  );
+
+  testWidgets(
+    'a failed warm rules read keeps the cap and crossing through a budget edit',
+    (tester) async {
+      final repository = _PublicationRepository(_surfaceSelectionSnapshot());
+      final rules = _MemoryAlertThresholdStore()..value = _savedExpenseRules;
+      final rings =
+          _MemoryWatchRingStore()
+            ..value = const WatchRingPreferences(selectedIds: []);
+      final widgets =
+          _MemoryPhoneWidgetStore()
+            ..value = const PhoneWidgetPreferences(selectedIds: []);
+      final watch = _FakeWatchSyncService();
+      final launcher = _FakePhoneWidgetSyncService();
+      final markers = _MemoryAlertConditions();
+      final notifier = _FakeAlertNotifier();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          alertThresholdStore: rules,
+          watchRingPreferenceStore: rings,
+          phoneWidgetPreferenceStore: widgets,
+          applyAlertSettings: _applyExpenseRules,
+          watchSyncService: watch,
+          phoneWidgetSyncService: launcher,
+          alertConditionStore: markers,
+          alertNotifier: notifier,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(markers.values, {_expenseAlertKey: false});
+      for (final tab in ['Watchface', 'Widget']) {
+        await tester.tap(find.text(tab));
+        await tester.pumpAndSettle();
+        final today = find.widgetWithText(CheckboxListTile, 'Today');
+        await tester.ensureVisible(today);
+        await tester.tap(today);
+        await tester.pumpAndSettle();
+      }
+      expect(rings.value.selectedIds, [_expenseRingId]);
+      expect(widgets.value.selectedIds, [_expenseRingId]);
+
+      rules.failRead = true;
+      repository.snapshot = _surfaceSelectionSnapshot(spent: 850);
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      expect(rules.reads, 2);
+      expect(notifier.posts, [_expenseAlertKey]);
+      expect(notifier.bodies, ['Reached your alert threshold: 20% left.']);
+      expect(watch.payload['rings'], [
+        containsPair('limit', {'minorUnits': 1000, 'currency': 'USD'}),
+      ]);
+      expect(launcher.payload.rows.single.cap?.minorUnits, 1000);
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      expect(find.text('Local cap: USD 10.00'), findsOneWidget);
+
+      await _openPlatformBudgetAction(tester);
+      final fields = find.descendant(
+        of: find.byType(ConnectionBudgetDialog),
+        matching: find.byType(TextField),
+      );
+      expect(tester.widget<TextField>(fields.first).controller!.text, '10.00');
+      await tester.enterText(fields.first, '10.50');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(rules.writes, 1);
+      expect(
+        rules.value.toJson(),
+        _savedExpenseRules
+            .withConnection(
+              ProviderConnections.openAiPlatform,
+              _savedExpenseRules
+                  .forConnection(ProviderConnections.openAiPlatform)
+                  .copyWith(
+                    budget: const ConnectionBudget(
+                      today: 1050,
+                      week: 2600,
+                      month: 4000,
+                    ),
+                  ),
+            )
+            .toJson(),
+      );
+      expect(markers.values, {_expenseAlertKey: true});
+      expect(notifier.posts, [_expenseAlertKey]);
+      expect(watch.payload['rings'], [
+        containsPair('limit', {'minorUnits': 1050, 'currency': 'USD'}),
+      ]);
+      expect(launcher.payload.rows.single.cap?.minorUnits, 1050);
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      expect(find.text('Local cap: USD 10.50'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a skipped poll publishes a saved cap after edit ownership is rejected',
+    (tester) async {
+      final source = _surfaceSelectionSnapshot();
+      final polls = <AutomaticPollContext>[];
+      var rejectEditedCap = false;
+      var rejectedValidations = 0;
+      final repository = _CountingDashboardRepository(
+        () {
+          if (AutomaticPollContext.current case final poll?) {
+            if (polls.isNotEmpty) {
+              const connection = 'openai.platform';
+              poll.skipped[connection] = AutomaticPollSkipped(
+                connection,
+                CredentialVersion({}),
+                DateTime.utc(2026, 11, 6),
+              );
+            }
+            polls.add(poll);
+          }
+          return source;
+        },
+        validateSnapshot: (snapshot) async {
+          if (rejectEditedCap &&
+              snapshot.accounts.first.today.limit?.minorUnits == 2000) {
+            rejectedValidations++;
+            return false;
+          }
+          return true;
+        },
+      );
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final rules = _MemoryAlertThresholdStore()..value = _savedExpenseRules;
+      final watch = _FakeWatchSyncService();
+      final launcher = _FakePhoneWidgetSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          syncScheduler: scheduler,
+          alertThresholdStore: rules,
+          applyAlertSettings: _applyExpenseRules,
+          watchRingPreferenceStore:
+              _MemoryWatchRingStore()
+                ..value = const WatchRingPreferences(
+                  selectedIds: [_expenseRingId],
+                ),
+          phoneWidgetPreferenceStore:
+              _MemoryPhoneWidgetStore()
+                ..value = const PhoneWidgetPreferences(
+                  selectedIds: [_expenseRingId],
+                ),
+          watchSyncService: watch,
+          phoneWidgetSyncService: launcher,
+          readExhaustedWindows: (_) => const [],
+          readPlanRecoveries: (_, _) => const [],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(polls.single.whollySkipped, isFalse);
+      expect(find.text('Local cap: USD 10.00'), findsOneWidget);
+      expect(watch.payload['rings'], [
+        containsPair('limit', {'minorUnits': 1000, 'currency': 'USD'}),
+      ]);
+      expect(launcher.payload.rows.single.cap?.minorUnits, 1000);
+
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(polls, hasLength(2));
+      expect(polls.last.whollySkipped, isTrue);
+      expect(watch.syncedSnapshots, hasLength(1));
+      expect(launcher.syncedSnapshots, hasLength(1));
+
+      await _openPlatformBudgetAction(tester);
+      final fields = find.descendant(
+        of: find.byType(ConnectionBudgetDialog),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(fields.first, '20.00');
+      rejectEditedCap = true;
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(rejectedValidations, 1);
+      expect(rules.writes, 1);
+      final saved = rules.value.forConnection(
+        ProviderConnections.openAiPlatform,
+      );
+      expect(saved.budget.today, 2000);
+      expect(watch.syncedSnapshots, hasLength(1));
+      expect(launcher.syncedSnapshots, hasLength(1));
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      expect(find.text('Local cap: USD 10.00'), findsOneWidget);
+
+      rejectEditedCap = false;
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(polls, hasLength(3));
+      expect(polls.last.whollySkipped, isTrue);
+      expect(find.text('Local cap: USD 20.00'), findsOneWidget);
+      expect(watch.syncedSnapshots, hasLength(2));
+      expect(watch.payload['rings'], [
+        containsPair('limit', {'minorUnits': 2000, 'currency': 'USD'}),
+      ]);
+      expect(launcher.syncedSnapshots, hasLength(2));
+      expect(launcher.payload.rows.single.cap?.minorUnits, 2000);
+
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(polls, hasLength(4));
+      expect(polls.last.whollySkipped, isTrue);
+      expect(watch.syncedSnapshots, hasLength(2));
+      expect(launcher.syncedSnapshots, hasLength(2));
+    },
+  );
+
+  testWidgets('a skipped poll publishes rules reread before a failed refresh', (
+    tester,
+  ) async {
+    const connection = 'openai.platform';
+    final source = _surfaceSelectionSnapshot();
+    final polls = <AutomaticPollContext>[];
+    var failRefresh = false;
+    final repository = _CountingDashboardRepository(() {
+      if (AutomaticPollContext.current case final poll?) {
+        if (polls.isNotEmpty) {
+          poll.skipped[connection] = AutomaticPollSkipped(
+            connection,
+            CredentialVersion({}),
+            DateTime.utc(2026, 11, 6),
+          );
+        }
+        polls.add(poll);
+      } else if (failRefresh) {
+        throw const DashboardLoadException();
+      }
+      return source;
+    });
+    final rules = _MemoryAlertThresholdStore()..value = _savedExpenseRules;
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    final watch = _FakeWatchSyncService();
+    final launcher = _FakePhoneWidgetSyncService();
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: repository,
+        syncScheduler: scheduler,
+        alertThresholdStore: rules,
+        applyAlertSettings: _applyExpenseRules,
+        watchRingPreferenceStore:
+            _MemoryWatchRingStore()
+              ..value = const WatchRingPreferences(
+                selectedIds: [_expenseRingId],
+              ),
+        phoneWidgetPreferenceStore:
+            _MemoryPhoneWidgetStore()
+              ..value = const PhoneWidgetPreferences(
+                selectedIds: [_expenseRingId],
+              ),
+        watchSyncService: watch,
+        phoneWidgetSyncService: launcher,
+        readExhaustedWindows: (_) => const [],
+        readPlanRecoveries: (_, _) => const [],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Local cap: USD 10.00'), findsOneWidget);
+    expect(watch.syncedSnapshots, hasLength(1));
+    expect(launcher.syncedSnapshots, hasLength(1));
+
+    rules.value = _savedExpenseRules.withConnection(
+      ProviderConnections.openAiPlatform,
+      const ConnectionAlertThresholds(budget: ConnectionBudget(today: 2000)),
+    );
+    failRefresh = true;
+    await tester.tap(find.byTooltip('Refresh'));
+    await tester.pumpAndSettle();
+    expect(rules.reads, 2);
+    expect(find.byType(DashboardScreen), findsNothing);
+    expect(watch.syncedSnapshots, hasLength(1));
+    expect(launcher.syncedSnapshots, hasLength(1));
+
+    scheduler.tick();
+    await tester.pumpAndSettle();
+    expect(polls, hasLength(2));
+    expect(polls.last.whollySkipped, isTrue);
+    expect(find.text('Local cap: USD 20.00'), findsOneWidget);
+    expect(watch.payload['rings'], [
+      containsPair('limit', {'minorUnits': 2000, 'currency': 'USD'}),
+    ]);
+    expect(launcher.payload.rows.single.cap?.minorUnits, 2000);
+  });
+
+  testWidgets(
+    'cold rules failure holds edits and exports while usage and recoveries advance',
+    (tester) async {
+      final planAccount = ProviderSnapshot.fromJson({
+        ..._alertTestSnapshot().primaryAccount!.toJson(),
+        'today': const BudgetState.unknownPeriod('today').toJson(),
+      });
+      DashboardSnapshot observations(int spent) {
+        final reporting = _applyExpenseRules(
+          _surfaceSelectionSnapshot(spent: spent),
+          _savedExpenseRules,
+        );
+        return reporting.withAccounts([...reporting.accounts, planAccount]);
+      }
+
+      final repository = _PublicationRepository(observations(100));
+      final rules =
+          _MemoryAlertThresholdStore()
+            ..value = _savedExpenseRules
+            ..failRead = true;
+      final watchlist = _MemoryRecoveryWatchlistStore();
+      final rings = _MemoryWatchRingStore();
+      final watch = _FakeWatchSyncService();
+      final launcher = _FakePhoneWidgetSyncService();
+      final markers = _MemoryAlertConditions();
+      final notifier = _FakeAlertNotifier();
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final window = (
+        accountId: planAccount.accountId,
+        allowanceId: planAccount.allowances.single.id,
+        historyOwner: null,
+      );
+      var exhausted = true;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          alertThresholdStore: rules,
+          watchRingPreferenceStore: rings,
+          applyAlertSettings: _applyExpenseRules,
+          watchSyncService: watch,
+          phoneWidgetSyncService: launcher,
+          recoveryWatchlistStore: watchlist,
+          readExhaustedWindows: (_) => exhausted ? [window] : [],
+          readPlanRecoveries: (_, _) => const [],
+          alertConditionStore: markers,
+          alertNotifier: notifier,
+          syncScheduler: scheduler,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('USD 1.00'), findsWidgets);
+      expect(find.text('Local cap: Unavailable'), findsWidgets);
+      expect(watchlist.keys, [window]);
+
+      exhausted = false;
+      repository.snapshot = observations(850);
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      expect(find.text('USD 8.50'), findsWidgets);
+      expect(watchlist.reads, 2);
+      expect(watchlist.keys, isEmpty);
+      await tester.scrollUntilVisible(
+        find.text('Alerts unavailable'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Alerts unavailable'), findsOneWidget);
+
+      await _openPlatformBudgetAction(tester);
+      expect(find.byType(ConnectionBudgetDialog), findsNothing);
+      expect(find.text('Could not update alert thresholds'), findsOneWidget);
+      var edited = false;
+      await expectLater(
+        tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .onAlertThresholdsChanged((current) {
+              edited = true;
+              return current;
+            }),
+        throwsStateError,
+      );
+      expect(edited, isFalse);
+      expect(rules.writes, 0);
+      expect(rules.value, same(_savedExpenseRules));
+      ScaffoldMessenger.of(
+        tester.element(find.byType(ProvidersScreen)),
+      ).removeCurrentSnackBar();
+
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      final plan = find.widgetWithText(CheckboxListTile, 'Window A');
+      await tester.ensureVisible(plan);
+      await tester.tap(plan);
+      await tester.pumpAndSettle();
+      expect(find.text('Could not update ring slots'), findsOneWidget);
+      expect(rings.writes, isEmpty);
+      expect(rings.value.selectedIds, isNull);
+      final today = find.widgetWithText(CheckboxListTile, 'Today');
+      expect(tester.widget<CheckboxListTile>(today).onChanged, isNull);
+      expect(find.text('Local cap unavailable.'), findsWidgets);
+      ScaffoldMessenger.of(
+        tester.element(find.byType(WatchfaceScreen)),
+      ).removeCurrentSnackBar();
+
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      final sync = find.widgetWithText(FilledButton, 'Sync');
+      await tester.scrollUntilVisible(
+        sync,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(sync.hitTestable(), findsOneWidget);
+      await tester.tap(sync);
+      await tester.pumpAndSettle();
+      expect(find.text('Watch sync unavailable'), findsOneWidget);
+      for (final title in ['Watch summary', 'Widget summary']) {
+        expect(
+          find.descendant(
+            of: find.widgetWithText(ListTile, title),
+            matching: find.text('Unavailable'),
+          ),
+          findsOneWidget,
+        );
+      }
+      expect(markers.values, isEmpty);
+      expect(markers.reads, isEmpty);
+      expect(notifier.posts, isEmpty);
+      expect(watch.syncedSnapshots, isEmpty);
+      expect(launcher.syncedSnapshots, isEmpty);
+
+      rules.failRead = false;
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(rules.reads, 3);
+      expect(
+        watch.payload['rings'],
+        contains(containsPair('id', _expenseRingId)),
+      );
+      expect(launcher.payload.rows, isNotEmpty);
+      expect(rings.value.selectedIds, isNull);
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<CheckboxListTile>(today).value, isTrue);
+    },
+  );
+
+  testWidgets('Watchface rejects stale picker edits for legacy budgets', (
+    tester,
+  ) async {
+    const connection = 'openai.legacy';
+    final rings =
+        _MemoryWatchRingStore()
+          ..value = const WatchRingPreferences(selectedIds: []);
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(
+          _surfaceSelectionSnapshot(connection: connection),
+        ),
+        watchRingPreferenceStore: rings,
+        watchSyncService: _FakeWatchSyncService(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Watchface'));
+    await tester.pumpAndSettle();
+    final today = find.widgetWithText(CheckboxListTile, 'Today');
+    final staleToggle = tester.widget<CheckboxListTile>(today).onChanged!;
+
+    await tester.tap(find.byTooltip('Refresh'));
+    await tester.pumpAndSettle();
+    staleToggle(true);
+    await tester.pumpAndSettle();
+    expect(rings.writes, isEmpty);
+    expect(find.text('Could not update ring slots'), findsOneWidget);
+
+    tester.widget<CheckboxListTile>(today).onChanged!(true);
+    await tester.pumpAndSettle();
+    expect(rings.writes.single.selectedIds, ['budget.$connection.today']);
+  });
+
+  testWidgets(
+    'failed warm selection reads retain explicitly empty exports and picker bases',
+    (tester) async {
+      final snapshot = _surfaceSelectionSnapshot(purchased: true);
+      final rings =
+          _MemoryWatchRingStore()
+            ..value = const WatchRingPreferences(selectedIds: []);
+      final widgets =
+          _MemoryPhoneWidgetStore()
+            ..value = const PhoneWidgetPreferences(selectedIds: []);
+      final watch = _FakeWatchSyncService();
+      final launcher = _FakePhoneWidgetSyncService();
+      final defaults =
+          jsonDecode(
+                WatchDashboardSummaryPayload.fromSnapshot(
+                  snapshot,
+                  const WatchRingPreferences(),
+                ).encode(),
+              )
+              as Map<String, dynamic>;
+      expect(defaults['rings'], isNotEmpty);
+      expect(defaults['creditsGlance'], isNotNull);
+      expect(
+        buildPhoneWidgetPayload(snapshot, const PhoneWidgetPreferences()).rows,
+        isNotEmpty,
+      );
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: ValueDashboardRepository(snapshot),
+          watchRingPreferenceStore: rings,
+          phoneWidgetPreferenceStore: widgets,
+          watchSyncService: watch,
+          phoneWidgetSyncService: launcher,
+        ),
+      );
+      await tester.pumpAndSettle();
+      rings.beforeRead = _unavailablePreference;
+      widgets.beforeRead = _unavailablePreference;
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      expect(rings.reads, 2);
+      expect(widgets.reads, 2);
+      expect(watch.syncedSnapshots, hasLength(2));
+      expect(launcher.syncedSnapshots, hasLength(2));
+      expect(watch.payload['rings'], isEmpty);
+      expect(watch.payload['creditsGlance'], isNull);
+      expect(launcher.payload.rows, isEmpty);
+      for (final tab in ['Watchface', 'Widget']) {
+        await tester.tap(find.text(tab));
+        await tester.pumpAndSettle();
+        final today = find.widgetWithText(CheckboxListTile, 'Today');
+        expect(
+          tester
+              .widgetList<CheckboxListTile>(find.byType(CheckboxListTile))
+              .map((tile) => tile.value),
+          everyElement(isFalse),
+        );
+        await tester.ensureVisible(today);
+        await tester.tap(today);
+        await tester.pumpAndSettle();
+      }
+      expect(rings.writes.single.selectedIds, [_expenseRingId]);
+      expect(widgets.writes.single.selectedIds, [_expenseRingId]);
+    },
+  );
+
+  for (final watchFails in [true, false]) {
+    testWidgets(
+      '${watchFails ? 'watch' : 'widget'} selection recovery and removal survive failed loads and skipped polls',
+      (tester) async {
+        const month = 'budget.openai.platform.month';
+        const connection = 'openai.platform';
+        final snapshot = _surfaceSelectionSnapshot();
+        final polls = <AutomaticPollContext>[];
+        final repository = _CountingDashboardRepository(() {
+          final poll = AutomaticPollContext.current;
+          if (poll == null) throw const DashboardLoadException();
+          polls.add(poll);
+          if (polls.length == 2) throw const DashboardLoadException();
+          if (polls.length >= 3) {
+            poll.skipped[connection] = AutomaticPollSkipped(
+              connection,
+              CredentialVersion({}),
+              DateTime.utc(2026, 11, 6),
+            );
+          }
+          return snapshot;
+        });
+        final rings = _MemoryWatchRingStore();
+        final widgets = _MemoryPhoneWidgetStore();
+        if (watchFails) {
+          rings.value = const WatchRingPreferences(selectedIds: [month]);
+          rings.beforeRead = _unavailablePreference;
+        } else {
+          widgets.value = const PhoneWidgetPreferences(selectedIds: [month]);
+          widgets.beforeRead = _unavailablePreference;
+        }
+        final watch = _FakeWatchSyncService();
+        final launcher = _FakePhoneWidgetSyncService();
+        final scheduler = _ManualProviderSyncScheduler();
+        addTearDown(scheduler.dispose);
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            watchRingPreferenceStore: rings,
+            phoneWidgetPreferenceStore: widgets,
+            watchSyncService: watch,
+            phoneWidgetSyncService: launcher,
+            syncScheduler: scheduler,
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(watchFails ? 'Watchface' : 'Widget'));
+        await tester.pumpAndSettle();
+        expect(watch.syncedSnapshots, hasLength(watchFails ? 0 : 1));
+        expect(launcher.syncedSnapshots, hasLength(watchFails ? 1 : 0));
+        expect(
+          find.text(
+            watchFails
+                ? 'Ring preferences unavailable'
+                : 'Widget preferences unavailable',
+          ),
+          findsOneWidget,
+        );
+        expect(find.byType(CheckboxListTile), findsNothing);
+        if (watchFails) {
+          expect(launcher.syncedPreferences.single.usesDefaults, isTrue);
+          expect(launcher.payload.rows, hasLength(3));
+        } else {
+          expect(watch.syncedPreferences.single.usesDefaults, isTrue);
+          expect(watch.payload['rings'], hasLength(3));
+        }
+
+        rings.beforeRead = null;
+        widgets.beforeRead = null;
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(rings.reads, watchFails ? 2 : 1);
+        expect(widgets.reads, watchFails ? 1 : 2);
+        expect(polls, hasLength(2));
+        expect(watch.syncedSnapshots, hasLength(watchFails ? 0 : 1));
+        expect(launcher.syncedSnapshots, hasLength(watchFails ? 1 : 0));
+
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(polls, hasLength(3));
+        expect(polls.last.whollySkipped, isTrue);
+        expect(rings.reads, watchFails ? 2 : 1);
+        expect(widgets.reads, watchFails ? 1 : 2);
+        final monthChoice = find.widgetWithText(CheckboxListTile, 'Month');
+        expect(tester.widget<CheckboxListTile>(monthChoice).value, isTrue);
+        if (watchFails) {
+          expect(watch.syncedPreferences.single.selectedIds, [month]);
+          expect(watch.payload['rings'], [containsPair('id', month)]);
+        } else {
+          expect(launcher.syncedPreferences.single.selectedIds, [month]);
+          expect(launcher.payload.rows.single.poolLabel, 'Month');
+        }
+
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(polls, hasLength(4));
+        expect(watch.syncedSnapshots, hasLength(1));
+        expect(launcher.syncedSnapshots, hasLength(1));
+
+        // A confirmed choice remains removable after a failed manual load.
+        await tester.tap(find.byTooltip('Refresh'));
+        await tester.pumpAndSettle();
+        final savedChoice = find.byWidgetPredicate(
+          (widget) => widget is CheckboxListTile && widget.value == true,
+        );
+        expect(savedChoice, findsOneWidget);
+        await tester.ensureVisible(savedChoice);
+        await tester.tap(savedChoice);
+        await tester.pumpAndSettle();
+        expect(watch.syncedSnapshots, hasLength(1));
+        expect(launcher.syncedSnapshots, hasLength(1));
+        if (watchFails) {
+          expect(rings.writes.single.selectedIds, isEmpty);
+        } else {
+          expect(widgets.writes.single.selectedIds, isEmpty);
+        }
+
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(polls, hasLength(5));
+        expect(polls.last.whollySkipped, isTrue);
+        expect(watch.syncedSnapshots, hasLength(watchFails ? 2 : 1));
+        expect(launcher.syncedSnapshots, hasLength(watchFails ? 1 : 2));
+        if (watchFails) {
+          expect(watch.payload['rings'], isEmpty);
+        } else {
+          expect(launcher.payload.rows, isEmpty);
+        }
+      },
+    );
+  }
+
+  for (final rulesChangedByRead in [true, false]) {
+    testWidgets(
+      'a queued widget request retires on a changed rules ${rulesChangedByRead ? 'read' : 'write'}',
+      (tester) async {
+        final source = _surfaceSelectionSnapshot();
+        final repository = _PublicationRepository(source);
+        final rules = _MemoryAlertThresholdStore()..value = _savedExpenseRules;
+        final newer = _savedExpenseRules.withConnection(
+          ProviderConnections.openAiPlatform,
+          const ConnectionAlertThresholds(
+            budget: ConnectionBudget(today: 2000),
+          ),
+        );
+        final firstWrite = Completer<void>();
+        final replacementLoad = Completer<DashboardSnapshot>();
+        final written = <PhoneWidgetPayload>[];
+        final launcher = _QueuedPhoneWidgetSyncService(
+          PhoneWidgetSyncCoordinator(
+            write: (payload, {required isCurrent}) async {
+              written.add(payload);
+              if (written.length == 1) await firstWrite.future;
+            },
+          ),
+        );
+        Future<void>? save;
+        try {
+          await tester.pumpWidget(
+            WardPulseApp(
+              repository: repository,
+              alertThresholdStore: rules,
+              phoneWidgetPreferenceStore:
+                  _MemoryPhoneWidgetStore()
+                    ..value = const PhoneWidgetPreferences(
+                      selectedIds: [_expenseRingId],
+                    ),
+              applyAlertSettings: _applyExpenseRules,
+              watchSyncService: _FakeWatchSyncService(),
+              phoneWidgetSyncService: launcher,
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(written.single.rows.single.cap?.minorUnits, 1000);
+          expect(firstWrite.isCompleted, isFalse);
+          await tester.tap(find.byTooltip('Refresh'));
+          await tester.pumpAndSettle();
+          expect(launcher.requests, hasLength(2));
+          expect(written, hasLength(1));
+          var queuedSettled = false;
+          unawaited(
+            launcher.requests[1].then<void>((_) {
+              queuedSettled = true;
+            }),
+          );
+          expect(queuedSettled, isFalse);
+
+          if (rulesChangedByRead) {
+            rules.value = newer;
+            repository.response = replacementLoad.future;
+            await tester.tap(find.byTooltip('Refresh'));
+            await tester.pump();
+            expect(repository.loads, 3);
+            expect(rules.reads, 3);
+          } else {
+            await tester.tap(find.text('Providers'));
+            await tester.pumpAndSettle();
+            repository.delayNextValidation = true;
+            save = tester
+                .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+                .onAlertThresholdsChanged((_) => newer);
+            await tester.pump();
+            expect(repository.validationStarted, isTrue);
+            expect(repository.validation.isCompleted, isFalse);
+            expect(rules.writes, 1);
+            expect(rules.value, same(newer));
+          }
+          expect(launcher.requests, hasLength(2));
+          firstWrite.complete();
+          await tester.pump();
+          expect(queuedSettled, isTrue);
+          expect(written, hasLength(1));
+          expect(launcher.requests, hasLength(2));
+
+          if (rulesChangedByRead) {
+            replacementLoad.complete(source);
+          } else {
+            repository.validation.complete(true);
+          }
+          await tester.pumpAndSettle();
+          await save;
+          expect(launcher.requests, hasLength(3));
+          expect(
+            written.map((payload) => payload.rows.single.cap?.minorUnits),
+            [1000, 2000],
+          );
+        } finally {
+          await tester.pumpWidget(const SizedBox());
+          if (!firstWrite.isCompleted) firstWrite.complete();
+          if (!replacementLoad.isCompleted) replacementLoad.complete(source);
+          if (!repository.validation.isCompleted)
+            repository.validation.complete(true);
+          await tester.pumpAndSettle();
+          await save;
+          await Future.wait(launcher.requests);
+        }
+      },
+    );
+  }
+
+  testWidgets('a skipped poll carries forward pending surface updates', (
+    tester,
+  ) async {
+    final first = _surfaceSelectionSnapshot();
+    final newer = _surfaceSelectionSnapshot(spent: 350);
+    final polls = <AutomaticPollContext>[];
+    final watchValidation = Completer<bool>();
+    var newerValidations = 0;
+    var source = first;
+    final repository = _CountingDashboardRepository(
+      () {
+        if (AutomaticPollContext.current case final poll?) {
+          polls.add(poll);
+          if (polls.length > 1) {
+            const connection = 'openai.platform';
+            poll.skipped[connection] = AutomaticPollSkipped(
+              connection,
+              CredentialVersion({}),
+              DateTime.utc(2026, 11, 6),
+            );
+          }
+        }
+        return source;
+      },
+      validateSnapshot: (snapshot) async {
+        // After load and acceptance validate, hold the watch dispatch check.
+        if (identical(snapshot, newer) && ++newerValidations == 3) {
+          return watchValidation.future;
+        }
+        return true;
+      },
+    );
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    final firstWrite = Completer<void>();
+    final watch = _FakeWatchSyncService();
+    final spent = <int?>[];
+    final launcher = _QueuedPhoneWidgetSyncService(
+      PhoneWidgetSyncCoordinator(
+        write: (payload, {required isCurrent}) async {
+          spent.add(payload.rows.single.spent?.minorUnits);
+          if (spent.length == 1) await firstWrite.future;
+        },
+      ),
+    );
+    try {
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          syncScheduler: scheduler,
+          watchSyncService: watch,
+          phoneWidgetPreferenceStore:
+              _MemoryPhoneWidgetStore()
+                ..value = const PhoneWidgetPreferences(
+                  selectedIds: [_expenseRingId],
+                ),
+          phoneWidgetSyncService: launcher,
+          readExhaustedWindows: (_) => const [],
+          readPlanRecoveries: (_, _) => const [],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(spent, [100]);
+      expect(watch.syncedSnapshots, [same(first)]);
+
+      source = newer;
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      expect(launcher.requests, hasLength(2));
+      expect(spent, [100]);
+      expect(watch.syncedSnapshots, [same(first)]);
+
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(polls, hasLength(2));
+      expect(polls.last.whollySkipped, isTrue);
+      expect(launcher.requests, hasLength(3));
+      expect(spent, [100]);
+      expect(watch.syncedSnapshots, [same(first), same(newer)]);
+
+      watchValidation.complete(true);
+      firstWrite.complete();
+      await tester.pumpAndSettle();
+      expect(spent, [100, 350]);
+
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(polls, hasLength(3));
+      expect(launcher.requests, hasLength(3));
+      expect(spent, [100, 350]);
+      expect(watch.syncedSnapshots, [same(first), same(newer)]);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      if (!watchValidation.isCompleted) watchValidation.complete(true);
+      if (!firstWrite.isCompleted) firstWrite.complete();
+      await tester.pumpAndSettle();
+      await Future.wait(launcher.requests);
+    }
+  });
+
+  testWidgets('a coalesced widget request leaves its replacement pending', (
+    tester,
+  ) async {
+    final source = _surfaceSelectionSnapshot();
+    final watch = _HoldingWatchSyncService();
+    final firstGuard = Completer<bool>();
+    final rowCounts = <int>[];
+    final launcher = _QueuedPhoneWidgetSyncService(
+      PhoneWidgetSyncCoordinator(
+        write: (payload, {required isCurrent}) async {
+          rowCounts.add(payload.rows.length);
+        },
+      ),
+    );
+    final polls = <AutomaticPollContext>[];
+    var firstGuardEntered = false;
+    var replacementRejected = false;
+    final repository = _CountingDashboardRepository(
+      () {
+        final poll = AutomaticPollContext.current!;
+        polls.add(poll);
+        if (polls.length == 3) {
+          const connection = 'openai.platform';
+          poll.skipped[connection] = AutomaticPollSkipped(
+            connection,
+            CredentialVersion({}),
+            DateTime.utc(2026, 11, 6),
+          );
+        }
+        return source;
+      },
+      validateSnapshot: (_) async {
+        if (launcher.requests.length == 2 && !firstGuardEntered) {
+          firstGuardEntered = true;
+          return firstGuard.future;
+        }
+        if (launcher.requests.length == 3 && !replacementRejected) {
+          replacementRejected = true;
+          return false;
+        }
+        return true;
+      },
+    );
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    try {
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          syncScheduler: scheduler,
+          watchSyncService: watch,
+          phoneWidgetPreferenceStore:
+              _MemoryPhoneWidgetStore()
+                ..value = const PhoneWidgetPreferences(
+                  selectedIds: [_expenseRingId],
+                ),
+          phoneWidgetSyncService: launcher,
+          readExhaustedWindows: (_) => const [],
+          readPlanRecoveries: (_, _) => const [],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(rowCounts, [1]);
+
+      watch.hold = true;
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(watch.entered.isCompleted, isTrue);
+      expect(polls, hasLength(2));
+
+      await tester.tap(find.text('Widget'));
+      await tester.pumpAndSettle();
+      final today = find.widgetWithText(CheckboxListTile, 'Today');
+      await tester.ensureVisible(today);
+      await tester.tap(today);
+      await tester.pumpAndSettle();
+      expect(launcher.requests, hasLength(2));
+      expect(firstGuardEntered, isTrue);
+
+      // The scheduled send queues the same selection behind the picker send.
+      watch.hold = false;
+      watch.release.complete();
+      await tester.pumpAndSettle();
+      expect(launcher.requests, hasLength(3));
+      expect(rowCounts, [1]);
+
+      firstGuard.complete(true);
+      await tester.pumpAndSettle();
+      expect(replacementRejected, isTrue);
+      expect(rowCounts, [1]);
+
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(polls, hasLength(3));
+      expect(polls.last.whollySkipped, isTrue);
+      expect(launcher.requests, hasLength(4));
+      expect(rowCounts, [1, 0]);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      if (!watch.release.isCompleted) watch.release.complete();
+      if (!firstGuard.isCompleted) firstGuard.complete(true);
+      await tester.pumpAndSettle();
+      await Future.wait(launcher.requests);
+    }
+  });
+
+  testWidgets('a rule save preserves in-flight tracking for its observation', (
+    tester,
+  ) async {
+    final account = _alertTestSnapshot(usedPercent: 100).accounts.first;
+    final source = DashboardSnapshot.empty().withAccounts([account]);
+    final window = (
+      accountId: account.accountId,
+      allowanceId: account.allowances.single.id,
+      historyOwner: account.historyOwner,
+    );
+    final read = Completer<void>();
+    final watchlist =
+        _MemoryRecoveryWatchlistStore()..beforeRead = () => read.future;
+    final wake = _RecordingRecoveryWake();
+    final rules = _MemoryAlertThresholdStore();
+    final repository = _PublicationRepository(source);
+    final watch = _FakeWatchSyncService();
+    try {
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          alertThresholdStore: rules,
+          recoveryWatchlistStore: watchlist,
+          recoveryWake: wake,
+          readExhaustedWindows: (_) => [window],
+          readPlanRecoveries: (_, _) => const [],
+          watchSyncService: watch,
+          applyAlertSettings:
+              (snapshot, _) => snapshot.withAccounts(snapshot.accounts),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(watchlist.reads, 1);
+      expect(watchlist.keys, isEmpty);
+      final initial = watch.syncedSnapshots.single;
+
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      await tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onAlertThresholdsChanged((_) => _savedExpenseRules);
+      await tester.pumpAndSettle();
+      expect(rules.writes, 1);
+      expect(repository.loads, 1);
+      expect(watch.syncedSnapshots, hasLength(2));
+      expect(watch.syncedSnapshots.last, isNot(same(initial)));
+      expect(watchlist.keys, isEmpty);
+
+      read.complete();
+      await tester.pumpAndSettle();
+      expect(watchlist.reads, 1);
+      expect(watchlist.keys, [window]);
+      expect(wake.cancelled, 1);
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      if (!read.isCompleted) read.complete();
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets(
+    'a skipped poll retires alert work for the same snapshot object',
+    (tester) async {
+      final source = _applyExpenseRules(
+        _surfaceSelectionSnapshot(spent: 850),
+        _savedExpenseRules,
+      );
+      final rules = _MemoryAlertThresholdStore()..value = _savedExpenseRules;
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final markers = _MemoryAlertConditions();
+      final markerRead = Completer<void>();
+      markers.beforeRead = (_) => markerRead.future;
+      final notifier = _FakeAlertNotifier();
+      final recoveries = _MemoryRecoveryWatchlistStore();
+      final watch = _FakeWatchSyncService();
+      final applied = <DashboardSnapshot>[];
+      final polls = <AutomaticPollContext>[];
+      final repository = _CountingDashboardRepository(() {
+        final poll = AutomaticPollContext.current!;
+        polls.add(poll);
+        if (polls.length == 2) {
+          final connection = _expenseAlertKey.connection;
+          poll.skipped[connection] = AutomaticPollSkipped(
+            connection,
+            CredentialVersion({}),
+            DateTime.utc(2026, 11, 6),
+          );
+        }
+        return source;
+      });
+      try {
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            alertThresholdStore: rules,
+            alertConditionStore: markers,
+            alertNotifier: notifier,
+            watchSyncService: watch,
+            recoveryWatchlistStore: recoveries,
+            readExhaustedWindows: (_) => const [],
+            readPlanRecoveries: (_, _) => const [],
+            syncScheduler: scheduler,
+            applyAlertSettings: (snapshot, _) {
+              applied.add(snapshot);
+              return snapshot;
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(markers.reads, [_expenseAlertKey]);
+        expect(recoveries.reads, 1);
+        expect(markers.values, isEmpty);
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(applied, [same(source), same(source)]);
+        expect(polls.last.whollySkipped, isTrue);
+        expect(polls.last.observes(_expenseAlertKey.connection), isFalse);
+        expect(recoveries.reads, 2);
+        expect(rules.reads, 1);
+        expect(watch.syncedSnapshots, [same(source)]);
+        markerRead.complete();
+        await tester.pumpAndSettle();
+        expect(markers.reads, [_expenseAlertKey]);
+        expect(markers.values, isEmpty);
+        expect(notifier.posts, isEmpty);
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        if (!markerRead.isCompleted) markerRead.complete();
+        await tester.pumpAndSettle();
+      }
+    },
+  );
 
   testWidgets('a reload keeps the dashboard on screen', (tester) async {
     final snapshot = DashboardSnapshot.fromJsonString(
@@ -574,36 +4732,142 @@ void main() {
     expect(find.text('Usage dashboard'), findsOneWidget);
   });
 
-  testWidgets('slot count follows the rows, not a stored selection', (
-    tester,
-  ) async {
-    final store =
-        _MemoryWatchRingStore()
-          ..value = const WatchRingPreferences(
-            selectedIds: [
-              'allowance.codex.plan',
-              'budget.anthropic.platform.today',
-              'budget.anthropic.platform.week',
-            ],
-          );
+  testWidgets(
+    'missing saved choices remain visible and removable after a failed load',
+    (tester) async {
+      final store =
+          _MemoryWatchRingStore()
+            ..value = const WatchRingPreferences(
+              selectedIds: [
+                'allowance.codex.plan',
+                'budget.anthropic.platform.today',
+                'budget.anthropic.platform.week',
+              ],
+            );
 
-    await tester.pumpWidget(
-      WardPulseApp(
-        repository: const _FailingDashboardRepository(
-          DashboardSyncIssue.providerUnavailable,
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: const _FailingDashboardRepository(
+            DashboardSyncIssue.providerUnavailable,
+          ),
+          watchRingPreferenceStore: store,
         ),
-        watchRingPreferenceStore: store,
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Watchface'));
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
 
-    // A failed load leaves no rows to tick, so counting the stored ids would
-    // claim three slots the screen does not show.
-    expect(find.text('No metrics yet'), findsOneWidget);
-    expect(find.textContaining('0 of 3 slots used'), findsOneWidget);
-  });
+      expect(find.text('No metrics yet'), findsOneWidget);
+      expect(find.textContaining('3 of 3 slots used'), findsOneWidget);
+      final saved = find.widgetWithText(CheckboxListTile, 'Codex plan');
+      expect(tester.widget<CheckboxListTile>(saved).value, isTrue);
+      expect(tester.widget<CheckboxListTile>(saved).onChanged, isNotNull);
+      await tester.ensureVisible(saved);
+      await tester.tap(saved);
+      await tester.pumpAndSettle();
+      expect(store.value.selectedIds, [
+        'budget.anthropic.platform.today',
+        'budget.anthropic.platform.week',
+      ]);
+      expect(find.textContaining('2 of 3 slots used'), findsOneWidget);
+    },
+  );
+
+  for (final (ids, reason) in [
+    (
+      [
+        codexPlanRingId,
+        codexSparkRingId,
+        cursorOwnPoolId,
+        cursorOtherPoolId,
+        claudePlanRingId,
+      ],
+      'two paired bands',
+    ),
+    (
+      [codexPlanRingId, cursorOwnPoolId, 'budget.anthropic.plan.today'],
+      '3 bands',
+    ),
+  ]) {
+    testWidgets('Watchface rejects an addition over $reason without saving', (
+      tester,
+    ) async {
+      final writes = <WatchRingPreferences>[];
+      await tester.pumpWidget(
+        _watchPicker(
+          snapshot: _threePairDashboard(),
+          initial: WatchRingPreferences(selectedIds: ids),
+          onChanged: writes.add,
+        ),
+      );
+      final fable = find.widgetWithText(CheckboxListTile, 'Fable');
+      expect(tester.widget<CheckboxListTile>(fable).value, isFalse);
+      expect(tester.widget<CheckboxListTile>(fable).onChanged, isNull);
+      expect(
+        find.descendant(of: fable, matching: find.textContaining(reason)),
+        findsOneWidget,
+      );
+      await tester.ensureVisible(fable);
+      await tester.tap(fable);
+      await tester.pumpAndSettle();
+      expect(writes, isEmpty);
+    });
+  }
+
+  testWidgets(
+    'invalid saved choices allow unavailable and missing removals until corrected',
+    (tester) async {
+      const ids = [
+        codexPlanRingId,
+        codexSparkRingId,
+        cursorOwnPoolId,
+        cursorOtherPoolId,
+        claudePlanRingId,
+        claudeFableRingId,
+        'missing.metric',
+      ];
+      final writes = <WatchRingPreferences>[];
+      await tester.pumpWidget(
+        _watchPicker(
+          snapshot: _threePairDashboard(fableUsed: null),
+          initial: const WatchRingPreferences(selectedIds: ids),
+          onChanged: writes.add,
+        ),
+      );
+      expect(find.text('Correct ring choices'), findsOneWidget);
+      expect(
+        find.textContaining('phone and widget updates continue'),
+        findsOneWidget,
+      );
+      final fable = find.widgetWithText(CheckboxListTile, 'Fable');
+      expect(tester.widget<CheckboxListTile>(fable).onChanged, isNotNull);
+      await tester.ensureVisible(fable);
+      await tester.pumpAndSettle();
+      await tester.tap(fable);
+      await tester.pumpAndSettle();
+      expect(
+        writes.single.selectedIds,
+        ids.where((id) => id != claudeFableRingId),
+      );
+      expect(find.text('Correct ring choices'), findsOneWidget);
+      final missing = find.widgetWithText(
+        CheckboxListTile,
+        'Saved metric: missing.metric',
+      );
+      expect(tester.widget<CheckboxListTile>(missing).value, isTrue);
+      expect(tester.widget<CheckboxListTile>(missing).onChanged, isNotNull);
+      await tester.ensureVisible(missing);
+      await tester.pumpAndSettle();
+      await tester.tap(missing);
+      await tester.pumpAndSettle();
+      expect(
+        writes.last.selectedIds,
+        ids.where((id) => id != claudeFableRingId && id != 'missing.metric'),
+      );
+      expect(find.text('Correct ring choices'), findsNothing);
+      expect(tester.widget<CheckboxListTile>(fable).onChanged, isNull);
+    },
+  );
 
   testWidgets('Watchface tab owns ring slots and payload preview', (
     tester,
@@ -754,6 +5018,205 @@ void main() {
     expect(store.value.selectedIds, isNotNull);
   });
 
+  testWidgets('saved caps follow accepted reports while spend is unknown', (
+    tester,
+  ) async {
+    final empty = DashboardSnapshot.empty(
+      generatedAt: DateTime.utc(2026, 11, 6),
+    );
+    final snapshot = DashboardSnapshot.fromJson({
+      ...empty.toJson(),
+      'accounts': [
+        for (final (id, provider, connection) in [
+          ('reporting-a', 'openai', ProviderConnections.openAiPlatform),
+          ('reporting-b', 'claude', ProviderConnections.anthropicPlatform),
+          ('reporting-c', 'cursor', ProviderConnections.cursorPlatform),
+        ])
+          {
+            'accountId': id,
+            'provider': provider,
+            'connection': connection.storageKey,
+            'status': 'unknown',
+            'today': empty.todayTotal.toJson(),
+            'week': empty.weekTotal.toJson(),
+            'month': empty.monthTotal.toJson(),
+            'credits': <Object>[],
+            'allowances': <Object>[],
+            'buckets': <Object>[],
+            'modelBreakdown': <Object>[],
+          },
+      ],
+    });
+    final stored = const AlertThresholdPreferences()
+        .withConnection(
+          ProviderConnections.openAiPlatform,
+          const ConnectionAlertThresholds(
+            budget: ConnectionBudget(month: 5000),
+          ),
+        )
+        .withConnection(
+          ProviderConnections.codexPlan,
+          const ConnectionAlertThresholds(
+            budget: ConnectionBudget(today: 2500),
+          ),
+        )
+        .withConnection(
+          ProviderConnections.cursorPlatform,
+          const ConnectionAlertThresholds(
+            budget: ConnectionBudget(today: 0, week: -1),
+          ),
+        );
+    final store = _MemoryAlertThresholdStore();
+    store.value = AlertThresholdPreferences.decode(stored.encode());
+    final repository = _PublicationRepository(snapshot);
+    final watch = _FakeWatchSyncService();
+    final phoneWidget = _FakePhoneWidgetSyncService();
+    Future<void>? rejected;
+    try {
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          alertThresholdStore: store,
+          watchSyncService: watch,
+          phoneWidgetSyncService: phoneWidget,
+          applyAlertSettings:
+              (current, settings) => applyUserAlertSettings(
+                current,
+                settings,
+                applyJson: (input, _) => input,
+              ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (final account in snapshot.accounts) {
+        final block = find.byKey(
+          ValueKey('source-expenses.${account.accountId}'),
+        );
+        for (final period in ['today', 'week', 'month']) {
+          final row = find.descendant(
+            of: block,
+            matching: find.byKey(ValueKey('source-expense.$period')),
+          );
+          expect(
+            find.descendant(of: row, matching: find.text('No spend reported')),
+            findsOneWidget,
+          );
+          expect(
+            find.descendant(
+              of: row,
+              matching: find.text(
+                account.accountId == 'reporting-a' && period == 'month'
+                    ? 'Local cap: Configured · Awaiting report'
+                    : 'Local cap: Not set',
+              ),
+            ),
+            findsOneWidget,
+          );
+        }
+      }
+      expect(watch.syncedSnapshots.single.toJson(), snapshot.toJson());
+      expect(phoneWidget.syncedSnapshots.single.toJson(), snapshot.toJson());
+
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      final budgetButton = find.descendant(
+        of: find.widgetWithText(ProviderConnectionRow, 'Platform reporting'),
+        matching: find.byTooltip('Budget limits'),
+      );
+      await tester.scrollUntilVisible(
+        budgetButton,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(budgetButton.hitTestable(), findsOneWidget);
+      await tester.tap(budgetButton);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField).at(2)).controller!.text,
+        '50.00',
+      );
+      await tester.enterText(find.byType(TextField).at(2), '75');
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(store.writes, 0);
+      await tester.tap(budgetButton);
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<TextField>(find.byType(TextField).at(2)).controller!.text,
+        '50.00',
+      );
+      await tester.enterText(find.byType(TextField).at(2), '75');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      final saved = store.value.forConnection(
+        ProviderConnections.openAiPlatform,
+      );
+      expect(saved.budget.month, 7500);
+      expect(watch.syncedSnapshots.last.toJson(), snapshot.toJson());
+
+      // New settings can be saved without owning publication of this report.
+      repository.delayNextValidation = true;
+      rejected = tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onAlertThresholdsChanged(
+            (current) => current.withConnection(
+              ProviderConnections.openAiPlatform,
+              const ConnectionAlertThresholds(
+                budget: ConnectionBudget(today: 2500),
+              ),
+            ),
+          );
+      await tester.pumpAndSettle();
+      expect(repository.validationStarted, isTrue);
+      repository.validation.complete(false);
+      await rejected;
+      await tester.pumpAndSettle();
+      final newer = store.value.forConnection(
+        ProviderConnections.openAiPlatform,
+      );
+      expect(newer.budget.today, 2500);
+      expect(newer.budget.month, isNull);
+      expect(watch.syncedSnapshots, hasLength(2));
+      expect(phoneWidget.syncedSnapshots, hasLength(2));
+      expect(repository.loads, 1);
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      final block = find.byKey(const ValueKey('source-expenses.reporting-a'));
+      for (final period in ['today', 'week', 'month']) {
+        final row = find.descendant(
+          of: block,
+          matching: find.byKey(ValueKey('source-expense.$period')),
+        );
+        expect(
+          find.descendant(
+            of: row,
+            matching: find.text(
+              period == 'month'
+                  ? 'Local cap: Configured · Awaiting report'
+                  : 'Local cap: Not set',
+            ),
+          ),
+          findsOneWidget,
+        );
+      }
+      final displayed = tester.widget<DashboardScreen>(
+        find.byType(DashboardScreen),
+      );
+      expect(displayed.snapshot.toJson(), snapshot.toJson());
+      expect(tester.takeException(), isNull);
+    } finally {
+      if (!repository.validation.isCompleted) {
+        repository.validation.complete(false);
+      }
+      if (rejected != null) {
+        await rejected;
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+    }
+  });
+
   testWidgets('Providers Platform row saves a budget limit and its alert', (
     tester,
   ) async {
@@ -800,7 +5263,7 @@ void main() {
     await tester.tap(platformButton('Budget limits'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Budget · Platform reporting'), findsOneWidget);
+    expect(find.text('Budget · OpenAI · Platform reporting'), findsOneWidget);
     await tester.enterText(find.byType(TextField).first, '25');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
@@ -808,7 +5271,7 @@ void main() {
     await tester.tap(platformButton('Alert thresholds'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Alerts · Platform reporting'), findsOneWidget);
+    expect(find.text('Alerts · OpenAI · Platform reporting'), findsOneWidget);
     expect(find.text('Today'), findsOneWidget);
     expect(find.text('Week'), findsOneWidget);
     expect(find.text('Month'), findsOneWidget);
@@ -837,6 +5300,181 @@ void main() {
     );
   });
 
+  testWidgets(
+    'owned window catalogue ignores watch selection and survives failed writes',
+    (tester) async {
+      final base = _alertTestSnapshot();
+      final account = base.primaryAccount!.toJson();
+      Map<String, dynamic> allowance(
+        String id,
+        String label, {
+        AllowanceSource source = AllowanceSource.plan,
+      }) {
+        return AllowanceState(
+          id: id,
+          source: source,
+          label: label,
+          usedPercent: null,
+          used: null,
+          limit: null,
+          remaining: null,
+          windowMinutes: null,
+          resetsAt: null,
+          status: ProviderStatus.ok,
+        ).toJson();
+      }
+
+      final snapshot = DashboardSnapshot.fromJson({
+        ...base.toJson(),
+        'accounts': [
+          {
+            ...account,
+            'allowances': [
+              for (var i = 0; i < 3; i++) allowance('dynamic-$i', 'Window $i'),
+              allowance(
+                'purchased',
+                'Purchased pool',
+                source: AllowanceSource.purchased,
+              ),
+            ],
+          },
+          {
+            ...account,
+            'accountId': 'reporting',
+            'connection': 'openai.platform',
+            'allowances': [allowance('sibling', 'Sibling window')],
+          },
+        ],
+      });
+      final repository = _PublicationRepository(snapshot);
+      final store = _MemoryAlertThresholdStore();
+      final ringStore =
+          _MemoryWatchRingStore()
+            ..value = const WatchRingPreferences(selectedIds: []);
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          alertThresholdStore: store,
+          watchRingPreferenceStore: ringStore,
+          applyAlertSettings: (current, _) => current,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      Future<void> open() async {
+        tester
+            .state<ScrollableState>(find.byType(Scrollable).first)
+            .position
+            .jumpTo(0);
+        await tester.pumpAndSettle();
+        final action = find.descendant(
+          of: find.widgetWithText(ProviderConnectionRow, 'Codex plan'),
+          matching: find.byTooltip('Alert thresholds'),
+        );
+        await tester.scrollUntilVisible(
+          action,
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(action);
+        await tester.pumpAndSettle();
+      }
+
+      Finder editor() =>
+          find.widgetWithText(AlertPercentThresholdEditor, 'Window 2');
+      Future<void> custom17() async {
+        final dropdown = find.descendant(
+          of: editor(),
+          matching: find.byType(DropdownButton<int?>),
+        );
+        await tester.ensureVisible(dropdown);
+        await tester.pumpAndSettle();
+        await tester.tap(dropdown);
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Custom % left').last);
+        await tester.tap(find.text('Custom % left').last);
+        await tester.pumpAndSettle();
+        final field = find.descendant(
+          of: editor(),
+          matching: find.byType(TextFormField),
+        );
+        await tester.ensureVisible(field);
+        await tester.enterText(field, '17');
+      }
+
+      await open();
+      final dialog = tester.widget<ConnectionAlertsDialog>(
+        find.byType(ConnectionAlertsDialog),
+      );
+      expect(dialog.planWindows.map((value) => value.id), [
+        'dynamic-0',
+        'dynamic-1',
+        'dynamic-2',
+      ]);
+      expect(
+        dialog.planWindows.every((value) => value.usedPercent == null),
+        isTrue,
+      );
+      expect(find.text('Sibling window'), findsNothing);
+      expect(find.text('Purchased pool'), findsNothing);
+      await custom17();
+      store.failNextWrite = true;
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(store.value.connections, isEmpty);
+      expect(find.text('Could not update alert thresholds'), findsOneWidget);
+      ScaffoldMessenger.of(
+        tester.element(find.byType(ProvidersScreen)),
+      ).hideCurrentSnackBar();
+      await tester.pumpAndSettle();
+      await open();
+      expect(
+        tester.widget<AlertPercentThresholdEditor>(editor()).usePlanDefault,
+        isTrue,
+      );
+      await custom17();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(
+        store.value
+            .forConnection(ProviderConnections.codexPlan)
+            .planWindows['dynamic-2']!
+            .at,
+        83,
+      );
+      expect(repository.loads, 1);
+
+      // Reload persisted rules after an authoritative failure: no fabricated windows.
+      repository.failLoad = true;
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      await open();
+      expect(find.text('Plan'), findsOneWidget);
+      expect(find.text('Purchased'), findsOneWidget);
+      expect(find.text('Plan window · dynamic-2'), findsOneWidget);
+      expect(
+        tester
+            .widget<ConnectionAlertsDialog>(find.byType(ConnectionAlertsDialog))
+            .planWindows,
+        isEmpty,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      repository.failLoad = false;
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      await open();
+      final reopened = tester.widget<AlertPercentThresholdEditor>(editor());
+      expect(reopened.value.at, 83);
+      expect(reopened.usePlanDefault, isFalse);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('Providers plan row can save connection alert thresholds', (
     tester,
   ) async {
@@ -856,17 +5494,19 @@ void main() {
     await tester.tap(find.text('Providers'));
     await tester.pumpAndSettle();
 
+    final alerts = find.descendant(
+      of: find.widgetWithText(ProviderConnectionRow, 'Codex plan'),
+      matching: find.byTooltip('Alert thresholds'),
+    );
     await tester.scrollUntilVisible(
-      find.text('Codex plan'),
+      alerts,
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(
-      find.descendant(
-        of: find.widgetWithText(ProviderConnectionRow, 'Codex plan'),
-        matching: find.byTooltip('Alert thresholds'),
-      ),
-    );
+    await tester.ensureVisible(alerts);
+    await tester.pumpAndSettle();
+    expect(alerts.hitTestable(), findsOneWidget);
+    await tester.tap(alerts);
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Alerts ·'), findsOneWidget);
@@ -910,19 +5550,61 @@ void main() {
   });
 
   testWidgets('labels previous dashboard data as stale', (tester) async {
-    final snapshot = DashboardSnapshot.fromJsonString(
+    final original = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
-    ).withStaleStatus(syncIssue: DashboardSyncIssue.authentication);
+    );
+    final snapshot = original.withStaleStatus(
+      syncIssue: DashboardSyncIssue.authentication,
+    );
 
     await tester.pumpWidget(
       WardPulseApp(repository: ValueDashboardRepository(snapshot)),
     );
     await tester.pumpAndSettle();
 
-    // Staleness is an account state, so no card carries a glyph for it: the
-    // family answers with a count and the app bar with a way in — never the
-    // same mark twice down the screen (PHONE_DASHBOARD_DESIGN.md).
-    expect(find.byIcon(Icons.schedule), findsNothing);
+    // The source owns its Stale glyph; family and app-bar rollups keep counts.
+    final account = original.accounts.single;
+    final sourceExpenses = find.byKey(
+      ValueKey('source-expenses.${account.accountId}'),
+    );
+    expect(
+      find.descendant(
+        of: sourceExpenses,
+        matching: find.byWidgetPredicate(
+          (widget) => widget is Icon && widget.semanticLabel == 'Stale',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: sourceExpenses, matching: find.byTooltip('Stale')),
+      findsOneWidget,
+    );
+    for (final budget in [account.today, account.week, account.month]) {
+      final period = find.descendant(
+        of: sourceExpenses,
+        matching: find.byKey(ValueKey('source-expense.${budget.period}')),
+      );
+      expect(
+        find.descendant(of: period, matching: find.text(budget.spent!.label)),
+        findsOneWidget,
+      );
+    }
+    final asOf = account.lastSuccessfulSyncAt!;
+    expect(
+      find.descendant(
+        of: sourceExpenses,
+        matching: find.text('As of ${formatLocal(asOf)}'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: sourceExpenses,
+        matching: find.byTooltip(formatUtc(asOf)),
+      ),
+      findsOneWidget,
+    );
     expect(find.byTooltip('Stale'), findsWidgets);
     expect(find.byTooltip('Go to stale'), findsOneWidget);
     expect(
@@ -1009,9 +5691,9 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Organization reporting'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextFormField).first, 'synthetic-key');
+      await tester.enterText(_credentialValueField(), 'synthetic-key');
       await tester.enterText(
-        find.byType(TextFormField).last,
+        find.widgetWithText(TextFormField, 'Label (optional)'),
         'Synthetic label',
       );
       await tester.tap(find.text('Save'));
@@ -1065,7 +5747,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Organization reporting'));
       await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextFormField).first, 'synthetic-key');
+      await tester.enterText(_credentialValueField(), 'synthetic-key');
       await tester.tap(find.text('Save'));
       await tester.pump();
       await tester.pump();
@@ -1253,6 +5935,622 @@ void main() {
     expect(requests, 3);
   });
 
+  testWidgets('a checked cadence skip preserves verified reporting access', (
+    tester,
+  ) async {
+    const id = ProviderConnections.openAiPlatform;
+    final key = id.storageKey;
+    final store = _MemoryCredentialStore('synthetic-key');
+    final version = store.version(id);
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    final initial = _surfaceSelectionSnapshot();
+    final payload = (
+      era: 0,
+      generatedAtMicros: initial.generatedAt.microsecondsSinceEpoch,
+    );
+    final success = ConnectionReportingOutcome(
+      connection: id,
+      category: ReportingOutcomeCategory.success,
+      source: ReportingOutcomeSource.live,
+      freshness: ReportingOutcomeFreshness.current,
+      credentialVersion: version,
+    );
+    DashboardSnapshot skipSelection(int era) => initial.withConnectionVersions(
+      {key: version.values},
+      snapshotOrdering: {
+        key: SnapshotOrdering(
+          payload: (era: era, generatedAtMicros: payload.generatedAtMicros),
+        ),
+      },
+    );
+    var currentEra = 0;
+    var skipped = skipSelection(currentEra);
+    final validatingSkip = Completer<void>();
+    final resume = Completer<void>();
+    final skippedEras = <int>[];
+    final feedbackChecks = <int, ({int? attemptEra, bool current})>{};
+    var skip = false;
+    var requests = 0;
+    final repository = _CountingDashboardRepository(
+      () {
+        if (skip) {
+          skippedEras.add(currentEra);
+          AutomaticPollContext.current!.skipped[key] = AutomaticPollSkipped(
+            key,
+            version,
+            initial.generatedAt.add(const Duration(minutes: 5)),
+          );
+          return skipped;
+        }
+        requests++;
+        return initial
+            .withConnectionVersions(
+              {key: version.values},
+              snapshotOrdering: {
+                key: SnapshotOrdering(payload: payload, attemptEra: 0),
+              },
+            )
+            .withReportingOutcomes([success]);
+      },
+      validateSnapshot: (snapshot) async {
+        if (identical(snapshot, skipped) && !validatingSkip.isCompleted) {
+          validatingSkip.complete();
+          await resume.future;
+        }
+        final ordering = snapshot.snapshotOrdering[key];
+        if (snapshot.accounts.isEmpty &&
+            snapshot.reportingOutcomes.isNotEmpty) {
+          final era = ordering?.attemptEra;
+          final current =
+              snapshot.reportingOutcomes.single == success && era == currentEra;
+          if (AutomaticPollContext.current != null) {
+            feedbackChecks[currentEra] = (attemptEra: era, current: current);
+          }
+          return current;
+        }
+        if (ordering?.payload case final selected?)
+          return selected.era == currentEra;
+        return true;
+      },
+    );
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: repository,
+        credentialStore: store,
+        syncScheduler: scheduler,
+        // Each tick must finish any pending Wear publication in fake async.
+        watchSyncService: _FakeWatchSyncService(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    final row = find.widgetWithText(
+      ProviderConnectionRow,
+      'Platform reporting',
+    );
+    Finder status(String label) =>
+        find.descendant(of: row, matching: find.text(label));
+    SnapshotOrdering? displayedOrder() =>
+        tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .snapshot
+            ?.snapshotOrdering[key];
+    final connected = status('Connected');
+    expect(connected, findsOneWidget);
+
+    try {
+      skip = true;
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(skippedEras, [0]);
+      expect(validatingSkip.isCompleted, isTrue);
+      expect(feedbackChecks[0], (attemptEra: 0, current: true));
+      expect(displayedOrder()?.attemptEra, 0);
+      expect(connected, findsOneWidget);
+
+      resume.complete();
+      await tester.pumpAndSettle();
+      expect(displayedOrder()?.payload, payload);
+      expect(displayedOrder()?.attemptEra, isNull);
+      expect(connected, findsOneWidget);
+
+      currentEra = 1;
+      skipped = skipSelection(currentEra);
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(skippedEras, [0, 1]);
+      expect(feedbackChecks[1], (attemptEra: 0, current: false));
+      expect(displayedOrder()?.payload?.era, 1);
+      expect(status('Not verified'), findsOneWidget);
+      expect(store.openAiSecret, 'synthetic-key');
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<DashboardScreen>(find.byType(DashboardScreen))
+            .snapshot
+            .reportingOutcomes,
+        isEmpty,
+      );
+      expect(requests, 1);
+    } finally {
+      if (!resume.isCompleted) {
+        resume.complete();
+        await tester.pumpAndSettle();
+      }
+    }
+  });
+
+  testWidgets('a checked cadence skip retires fenced reporting feedback', (
+    tester,
+  ) async {
+    const id = ProviderConnections.openAiPlatform;
+    final key = id.storageKey;
+    final store = _MemoryCredentialStore('synthetic-key');
+    final version = store.version(id);
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    final initial = _surfaceSelectionSnapshot();
+    final failure = ConnectionReportingOutcome(
+      connection: id,
+      category: ReportingOutcomeCategory.rateLimited,
+      source: ReportingOutcomeSource.live,
+      freshness: ReportingOutcomeFreshness.current,
+      credentialVersion: version,
+    );
+    final initialOrder = SnapshotOrdering(
+      payload: (
+        era: 0,
+        generatedAtMicros: initial.generatedAt.microsecondsSinceEpoch,
+      ),
+      attemptEra: 0,
+    );
+    var source = initial
+        .withConnectionVersions(
+          {key: version.values},
+          snapshotOrdering: {key: initialOrder},
+        )
+        .withReportingOutcomes([failure]);
+    var skip = false;
+    final repository = _CountingDashboardRepository(() {
+      if (skip) {
+        AutomaticPollContext.current!.skipped[key] = AutomaticPollSkipped(
+          key,
+          version,
+          initial.generatedAt.add(const Duration(minutes: 5)),
+        );
+      }
+      return source;
+    });
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: repository,
+        credentialStore: store,
+        syncScheduler: scheduler,
+      ),
+    );
+    await tester.pumpAndSettle();
+    DashboardSnapshot dashboard() =>
+        tester.widget<DashboardScreen>(find.byType(DashboardScreen)).snapshot;
+    expect(dashboard().reportingOutcomes.single.category, failure.category);
+
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    expect(find.text(failure.label), findsOneWidget);
+
+    final corrected = _surfaceSelectionSnapshot(spent: 700);
+    source = corrected.withConnectionVersions(
+      {key: version.values},
+      snapshotOrdering: {
+        key: SnapshotOrdering(
+          payload: (
+            era: 1,
+            generatedAtMicros: corrected.generatedAt.microsecondsSinceEpoch,
+          ),
+        ),
+      },
+    );
+    skip = true;
+    scheduler.tick();
+    await tester.pumpAndSettle();
+    expect(find.text(failure.label), findsNothing);
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+    expect(dashboard().reportingOutcomes, isEmpty);
+    expect(dashboard().accounts.single.today.spent?.minorUnits, 700);
+  });
+
+  testWidgets('Providers rechecks the cache selection of a cadence failure', (
+    tester,
+  ) async {
+    const id = ProviderConnections.openAiPlatform;
+    final key = id.storageKey;
+    final store = _MemoryCredentialStore('synthetic-key');
+    final version = store.version(id);
+    const emptyOrder = 'null:none';
+    var currentOrder = emptyOrder;
+    final feedback = ConnectionReportingOutcome(
+      connection: id,
+      category: ReportingOutcomeCategory.localReadFailure,
+      source: ReportingOutcomeSource.local,
+      freshness: ReportingOutcomeFreshness.current,
+      credentialVersion: version,
+    );
+    final repository = _CountingDashboardRepository(
+      () =>
+          throw DashboardLoadException.withOutcomes(
+            issue: DashboardSyncIssue.credentialUnavailable,
+            connectionVersions: {key: version.values},
+            snapshotOrdering: {
+              key: const SnapshotOrdering(emptyCacheOrder: emptyOrder),
+            },
+            reportingOutcomes: [feedback],
+          ),
+      validateSnapshot: (snapshot) async {
+        final order = snapshot.snapshotOrdering[key]?.emptyCacheOrder;
+        return order == null || order == currentOrder;
+      },
+    );
+    await tester.pumpWidget(
+      WardPulseApp(repository: repository, credentialStore: store),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    final supporting = find.text(
+      '${feedback.connectionLabel}\n${feedback.supportingCopy}',
+    );
+    expect(supporting, findsOneWidget);
+
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+    currentOrder = '0:0:1000';
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    expect(supporting, findsNothing);
+    final row = find.widgetWithText(
+      ProviderConnectionRow,
+      'Platform reporting',
+    );
+    expect(
+      find.descendant(of: row, matching: find.text('Not verified')),
+      findsOneWidget,
+    );
+  });
+
+  for (final duringAcceptance in [false, true]) {
+    final stage = duringAcceptance ? 'acceptance' : 'failure validation';
+    testWidgets('a scheduled load retired at $stage keeps the Dashboard', (
+      tester,
+    ) async {
+      const id = ProviderConnections.openAiPlatform;
+      final key = id.storageKey;
+      final store = _MemoryCredentialStore();
+      await store.writeSecret(id, 'synthetic-key');
+      final versions = {key: store.version(id).values};
+      final initial = _surfaceSelectionSnapshot(spent: 400);
+      final ordering = {
+        key: SnapshotOrdering(
+          payload: (
+            era: 0,
+            generatedAtMicros: initial.generatedAt.microsecondsSinceEpoch,
+          ),
+        ),
+      };
+      final displayed = initial.withConnectionVersions(
+        versions,
+        snapshotOrdering: ordering,
+      );
+      final failed = displayed.withSyncIssue(
+        DashboardSyncIssue.credentialUnavailable,
+      );
+      final entered = Completer<void>();
+      final release = Completer<void>();
+      var loads = 0;
+      var failureChecks = 0;
+      var currentEra = 0;
+      final repository = _CountingDashboardRepository(
+        () {
+          if (++loads == 1) return displayed;
+          if (duringAcceptance) return failed;
+          throw DashboardLoadException(
+            issue: DashboardSyncIssue.credentialUnavailable,
+            connectionVersions: versions,
+            snapshotOrdering: ordering,
+          );
+        },
+        validateSnapshot: (snapshot) async {
+          final era = snapshot.snapshotOrdering[key]?.payload?.era;
+          if (era == null) return true;
+          if ((identical(snapshot, failed) || snapshot.accounts.isEmpty) &&
+              ++failureChecks == (duringAcceptance ? 2 : 1)) {
+            entered.complete();
+            await release.future;
+          }
+          return era == currentEra;
+        },
+      );
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final watch = _FakeWatchSyncService();
+      final launcher = _FakePhoneWidgetSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          credentialStore: store,
+          syncScheduler: scheduler,
+          watchSyncService: watch,
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final dashboard = find.byType(DashboardScreen);
+      expect(dashboard, findsOneWidget);
+      try {
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(entered.isCompleted, isTrue);
+        currentEra = 1;
+      } finally {
+        release.complete();
+        await tester.pumpAndSettle();
+      }
+
+      expect(loads, 2);
+      expect(failureChecks, duringAcceptance ? 2 : 1);
+      expect(dashboard, findsOneWidget);
+      final snapshot = tester.widget<DashboardScreen>(dashboard).snapshot;
+      expect(snapshot.accounts.single.today.spent?.minorUnits, 400);
+      expect(snapshot.syncIssue, isNull);
+      expect(watch.syncedSnapshots, [displayed]);
+      expect(launcher.syncedSnapshots, [displayed]);
+    });
+  }
+
+  testWidgets('a rejected aggregate preserves verified reporting feedback', (
+    tester,
+  ) async {
+    const id = ProviderConnections.openAiPlatform;
+    const sibling = ProviderConnections.anthropicPlatform;
+    const failed = ProviderConnections.cursorPlatform;
+    final store = _MemoryCredentialStore('synthetic-key');
+    await store.writeSecret(sibling, 'synthetic-sibling');
+    await store.writeSecret(failed, 'synthetic-failed');
+    final version = store.version(id);
+    final siblingOutcome = ConnectionReportingOutcome(
+      connection: sibling,
+      category: ReportingOutcomeCategory.success,
+      source: ReportingOutcomeSource.live,
+      freshness: ReportingOutcomeFreshness.current,
+      credentialVersion: store.version(sibling),
+    );
+    final failedOutcome = ConnectionReportingOutcome(
+      connection: failed,
+      category: ReportingOutcomeCategory.localReadFailure,
+      source: ReportingOutcomeSource.local,
+      freshness: ReportingOutcomeFreshness.current,
+      credentialVersion: store.version(failed),
+    );
+    const siblingOrder = SnapshotOrdering(attemptEra: 1);
+    const failedOrder = SnapshotOrdering(emptyCacheOrder: 'null:none');
+    var cacheOrder = failedOrder.emptyCacheOrder;
+    final siblingUpdate = ConnectionReportingUpdate.completed(
+      siblingOutcome,
+      siblingOrder,
+    );
+    final obsoleteUpdate = ConnectionReportingUpdate.completed(
+      failedOutcome,
+      failedOrder,
+    );
+    final verified = DashboardSnapshot.empty()
+        .withConnectionVersions({id.storageKey: version.values})
+        .withReportingOutcomes([
+          ConnectionReportingOutcome(
+            connection: id,
+            category: ReportingOutcomeCategory.success,
+            source: ReportingOutcomeSource.live,
+            freshness: ReportingOutcomeFreshness.current,
+            credentialVersion: version,
+          ),
+        ]);
+    var source = verified;
+    final release = Completer<void>();
+    final repository = _CountingDashboardRepository(
+      () => source,
+      beforeObservedLoad: (observe) async {
+        if (identical(source, verified)) return;
+        observe(
+          ConnectionReportingUpdate(connection: id, credentialVersion: version),
+        );
+        observe(siblingUpdate);
+        observe(obsoleteUpdate);
+        await release.future;
+      },
+      validateSnapshot: (snapshot) async {
+        final order = snapshot.snapshotOrdering[failed.storageKey];
+        if (order != null && order.emptyCacheOrder != cacheOrder) return false;
+        return !snapshot.reportingOutcomes.contains(siblingOutcome) ||
+            snapshot.snapshotOrdering[sibling.storageKey]?.attemptEra == 1;
+      },
+    );
+    await tester.pumpWidget(
+      WardPulseApp(repository: repository, credentialStore: store),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    final providers = find.byType(ProvidersScreen);
+    final scrollable = find.descendant(
+      of: providers,
+      matching: find.byType(Scrollable),
+    );
+    final openAiReporting = find.descendant(
+      of: find.widgetWithText(Card, 'OpenAI'),
+      matching: find.widgetWithText(
+        ProviderConnectionRow,
+        'Platform reporting',
+      ),
+    );
+    final connected = find.descendant(
+      of: openAiReporting,
+      matching: find.text('Connected'),
+    );
+    await tester.scrollUntilVisible(
+      openAiReporting,
+      300,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    expect(connected, findsOneWidget);
+    Map<ProviderConnectionId, ConnectionReportingUpdate> updates() =>
+        tester.widget<ProvidersScreen>(providers).reportingUpdates;
+    final verifiedUpdate = updates()[id];
+    expect(verifiedUpdate?.outcome, same(verified.reportingOutcomes.single));
+
+    source = verified
+        .withConnectionVersions(
+          {
+            ...verified.connectionVersions,
+            sibling.storageKey: store.version(sibling).values,
+            failed.storageKey: store.version(failed).values,
+          },
+          snapshotOrdering: {
+            sibling.storageKey: siblingOrder,
+            failed.storageKey: failedOrder,
+          },
+        )
+        .withReportingOutcomes([siblingOutcome, failedOutcome]);
+    try {
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pump();
+      await tester.pump();
+      expect(updates()[id]?.checking, isTrue);
+      expect(updates()[sibling], same(siblingUpdate));
+      expect(updates()[failed], same(obsoleteUpdate));
+      cacheOrder = '0:0:1000';
+    } finally {
+      release.complete();
+      await tester.pumpAndSettle();
+    }
+    expect(updates(), {id: verifiedUpdate, sibling: siblingUpdate});
+    expect(updates()[id], same(verifiedUpdate));
+    expect(connected, findsOneWidget);
+    final anthropicReporting = find.descendant(
+      of: find.widgetWithText(Card, 'Anthropic'),
+      matching: find.widgetWithText(
+        ProviderConnectionRow,
+        'Organization reporting',
+      ),
+    );
+    await tester.scrollUntilVisible(
+      anthropicReporting,
+      -300,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: anthropicReporting, matching: find.text('Connected')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Details'));
+    await tester.pumpAndSettle();
+    expect(find.text('Connection changed during refresh.'), findsOneWidget);
+  });
+
+  testWidgets('a rejected aggregate rechecks retained feedback together', (
+    tester,
+  ) async {
+    const id = ProviderConnections.openAiPlatform;
+    const sibling = ProviderConnections.anthropicPlatform;
+    const unobserved = ProviderConnections.cursorPlatform;
+    final store = _MemoryCredentialStore('synthetic-key');
+    await store.writeSecret(sibling, 'synthetic-sibling');
+    await store.writeSecret(unobserved, 'synthetic-unobserved');
+    ConnectionReportingOutcome success(ProviderConnectionId connection) =>
+        ConnectionReportingOutcome(
+          connection: connection,
+          category: ReportingOutcomeCategory.success,
+          source: ReportingOutcomeSource.live,
+          freshness: ReportingOutcomeFreshness.current,
+          credentialVersion: store.version(connection),
+        );
+    final prior = success(id);
+    final siblingOutcome = success(sibling);
+    final unobservedOutcome = success(unobserved);
+    final initial = reportingUpdatesProof([
+      ConnectionReportingUpdate.completed(prior, null),
+      ConnectionReportingUpdate.completed(unobservedOutcome, null),
+    ]);
+    final checkingSibling = Completer<void>();
+    final release = Completer<void>();
+    var reject = false;
+    var checkedPrior = false;
+    final repository = _CountingDashboardRepository(
+      () {
+        if (reject) throw const DashboardLoadException();
+        return initial;
+      },
+      beforeObservedLoad: (observe) async {
+        if (!reject) return;
+        observe(
+          ConnectionReportingUpdate(
+            connection: id,
+            credentialVersion: prior.credentialVersion,
+          ),
+        );
+        observe(ConnectionReportingUpdate.completed(siblingOutcome, null));
+      },
+      validateSnapshot: (snapshot) async {
+        final versions = snapshot.connectionVersions;
+        if (reject && versions.isEmpty) return false;
+        if (reject && versions.length == 1) {
+          if (versions.containsKey(id.storageKey)) checkedPrior = true;
+          if (versions.containsKey(sibling.storageKey) &&
+              !checkingSibling.isCompleted) {
+            checkingSibling.complete();
+            await release.future;
+          }
+        }
+        return versions.entries.every(
+          (entry) => store
+              .version(ProviderConnectionId.fromStorageKey(entry.key)!)
+              .sameCache(CredentialVersion(entry.value)),
+        );
+      },
+    );
+    await tester.pumpWidget(
+      WardPulseApp(repository: repository, credentialStore: store),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Watchface'));
+    await tester.pumpAndSettle();
+    Iterable<ConnectionReportingOutcome> feedback() =>
+        tester
+            .widget<WatchfaceScreen>(find.byType(WatchfaceScreen))
+            .reportingOutcomes;
+    expect(feedback(), [prior, unobservedOutcome]);
+
+    try {
+      reject = true;
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pump();
+      await tester.pump();
+      expect(checkingSibling.isCompleted, isTrue);
+      expect(checkedPrior, isTrue);
+      await store.writeSecret(id, 'synthetic-replacement');
+      await store.writeSecret(unobserved, 'synthetic-unobserved-replacement');
+    } finally {
+      release.complete();
+      await tester.pumpAndSettle();
+    }
+    expect(feedback(), [siblingOutcome]);
+  });
+
   testWidgets(
     'refresh retires externally removed outcomes and keeps current sibling feedback',
     (tester) async {
@@ -1370,7 +6668,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Organization reporting'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextFormField).first, 'synthetic-key');
+    await tester.enterText(_credentialValueField(), 'synthetic-key');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(find.text('Could not update credential'), findsOneWidget);
@@ -1419,18 +6717,29 @@ void main() {
           findsOneWidget,
         );
       }
-      await tester.ensureVisible(find.text('Edit key').at(1));
-      await tester.tap(find.text('Edit key').at(1));
+      final repair = find.descendant(
+        of:
+            find
+                .ancestor(
+                  of: find.textContaining(
+                    'Anthropic · Organization reporting: Key rejected',
+                  ),
+                  matching: find.byType(Column),
+                )
+                .first,
+        matching: find.widgetWithText(TextButton, 'Edit key'),
+      );
+      await tester.ensureVisible(repair);
+      await tester.pumpAndSettle();
+      expect(repair.hitTestable(), findsOneWidget);
+      await tester.tap(repair);
       await tester.pumpAndSettle();
       expect(
         find.widgetWithText(AlertDialog, 'Anthropic · Organization reporting'),
         findsOneWidget,
       );
       expect(
-        tester
-            .widget<TextFormField>(find.byType(TextFormField).first)
-            .controller!
-            .text,
+        tester.widget<TextFormField>(_credentialValueField()).controller!.text,
         isEmpty,
       );
       expect(find.text('Remove'), findsOneWidget);
@@ -1462,10 +6771,7 @@ void main() {
     expect(find.text('Not connected'), findsWidgets);
     await tester.tap(find.text('Platform reporting'));
     await tester.pumpAndSettle();
-    await tester.enterText(
-      find.byType(TextFormField).first,
-      'secret-admin-key',
-    );
+    await tester.enterText(_credentialValueField(), 'secret-admin-key');
     expect(
       tester.widget<TextField>(find.byType(TextField).first).obscureText,
       isTrue,
@@ -1523,11 +6829,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Platform reporting'));
     await tester.pumpAndSettle();
+    await tester.enterText(_credentialValueField(), 'secret-admin-key');
     await tester.enterText(
-      find.byType(TextFormField).at(0),
-      'secret-admin-key',
+      find.widgetWithText(TextFormField, 'Label (optional)'),
+      'Work org key',
     );
-    await tester.enterText(find.byType(TextFormField).at(1), 'Work org key');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
@@ -1614,6 +6920,14 @@ void main() {
       find.byTooltip(DashboardSyncIssue.authentication.message),
       findsOneWidget,
     );
+    await tester.longPress(
+      find.byTooltip(DashboardSyncIssue.authentication.message),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text(DashboardSyncIssue.authentication.message),
+      findsNWidgets(2),
+    );
     expect(find.text('Details'), findsOneWidget);
     await tester.tap(find.text('Details'));
     await tester.pumpAndSettle();
@@ -1685,8 +6999,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Weekly plan'), findsOneWidget);
-      expect(find.text('Purchased credits'), findsOneWidget);
+      expect(find.text('Codex · Weekly plan'), findsOneWidget);
+      expect(find.text('Codex · Purchased credits'), findsOneWidget);
 
       await tester.tap(find.text('Settings'));
       await tester.pumpAndSettle();
@@ -1930,6 +7244,159 @@ void main() {
     expect(find.text('Codex plan'), findsOneWidget);
   });
 
+  for (final failure in ['cache clear', 'preference write']) {
+    for (final owned in [true, false]) {
+      testWidgets('mock $failure failure retains only owned data ($owned)', (
+        tester,
+      ) async {
+        final source = _alertTestSnapshot();
+        final repository = _PublicationRepository(source);
+        final preferences = _MemoryDebugDataPreferenceStore();
+        final watch = _FakeWatchSyncService();
+        final phoneWidget = _FakePhoneWidgetSyncService();
+        final inputs = <DashboardSnapshot>[];
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            debugDataAvailable: true,
+            debugDataPreferenceStore: preferences,
+            watchSyncService: watch,
+            phoneWidgetSyncService: phoneWidget,
+            applyAlertSettings: (snapshot, _) {
+              inputs.add(snapshot);
+              return snapshot;
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Settings'));
+        await tester.pumpAndSettle();
+        final toggle = find.widgetWithText(SwitchListTile, 'Mock data');
+        await tester.scrollUntilVisible(
+          toggle,
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        expect(toggle.hitTestable(), findsOneWidget);
+        repository.failClear = failure == 'cache clear';
+        preferences.failWrite = failure == 'preference write';
+        repository.current = owned;
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        expect(find.text('Could not update mock data setting'), findsOneWidget);
+        expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+        expect(preferences.value, isFalse);
+        expect(preferences.writes, failure == 'cache clear' ? 0 : 1);
+        expect(repository.loads, 1);
+
+        await tester.tap(find.text('Providers'));
+        await tester.pumpAndSettle();
+        await tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .onAlertThresholdsChanged(
+              (current) => current.withConnection(
+                ProviderConnections.codexPlan,
+                const ConnectionAlertThresholds(
+                  plan: AlertPercentThreshold(at: 70),
+                ),
+              ),
+            );
+        await tester.pumpAndSettle();
+        expect(inputs, owned ? [source, source] : [source]);
+        expect(watch.syncedSnapshots, owned ? [source, source] : [source]);
+        expect(
+          phoneWidget.syncedSnapshots,
+          owned ? [source, source] : [source],
+        );
+        await tester.tap(find.text('Dashboard'));
+        await tester.pumpAndSettle();
+        if (owned) {
+          expect(
+            tester
+                .widget<DashboardScreen>(find.byType(DashboardScreen))
+                .snapshot
+                .toJson(),
+            source.toJson(),
+          );
+        } else {
+          expect(find.byType(DashboardScreen), findsNothing);
+        }
+        expect(repository.loads, 1);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  for (final trigger in ['scheduled', 'foreground']) {
+    testWidgets('mock mode write survives an overlapping $trigger refresh', (
+      tester,
+    ) async {
+      final live = _PublicationRepository(_alertTestSnapshot());
+      final mock = _PublicationRepository(
+        _alertTestSnapshot(windowLabel: 'Mock data'),
+      );
+      final preferences = _MemoryDebugDataPreferenceStore();
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final watch = _FakeWatchSyncService();
+      final phoneWidget = _FakePhoneWidgetSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: DebugDashboardRepository(
+            live: live,
+            mock: mock,
+            preferences: preferences,
+          ),
+          debugDataAvailable: true,
+          debugDataPreferenceStore: preferences,
+          syncScheduler: scheduler,
+          watchSyncService: watch,
+          phoneWidgetSyncService: phoneWidget,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      final toggle = find.widgetWithText(SwitchListTile, 'Mock data');
+      await tester.scrollUntilVisible(
+        toggle,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      expect(toggle.hitTestable(), findsOneWidget);
+      final release = Completer<void>();
+      preferences.pendingWrite = release.future;
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(preferences.writes, 1);
+      expect(preferences.value, isFalse);
+      if (trigger == 'scheduled') {
+        scheduler.tick();
+      } else {
+        await tester.tap(find.byTooltip('Refresh'));
+      }
+      await tester.pumpAndSettle();
+      release.complete();
+      await tester.pumpAndSettle();
+      expect(preferences.value, isTrue);
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+      expect(watch.mockModes.last, isTrue);
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      final displayed =
+          tester.widget<DashboardScreen>(find.byType(DashboardScreen)).snapshot;
+      expect(displayed.accounts.first.allowances.single.label, 'Mock data');
+      expect(displayed.toJson(), mock.snapshot.toJson());
+      expect(displayed.toJson(), watch.syncedSnapshots.last.toJson());
+      expect(displayed.toJson(), phoneWidget.syncedSnapshots.last.toJson());
+      expect(live.loads, trigger == 'scheduled' ? 2 : 1);
+      expect(mock.loads, 1);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets(
     'demo data leaves nothing for a recovery to be measured against',
     (tester) async {
@@ -1942,7 +7409,13 @@ void main() {
       await preferences.writeMockDataEnabled(true);
       final watchlist =
           _MemoryRecoveryWatchlistStore()
-            ..keys = const [(accountId: 'codex-demo', allowanceId: 'weekly')];
+            ..keys = const [
+              (
+                accountId: 'codex-demo',
+                allowanceId: 'weekly',
+                historyOwner: null,
+              ),
+            ];
 
       await tester.pumpWidget(
         WardPulseApp(
@@ -1990,7 +7463,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
 
-    // On without being asked: interrupting is the point of the feature.
+    // This isolated switch fixture has no startup coordinator.
     expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
 
     // Off and on again, so the ask runs with Android refusing it.
@@ -2009,6 +7482,512 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'alert delivery choice persists and explicit Off to On reports denial',
+    (tester) async {
+      final storage = FakeSecureStorage();
+      final store = SecureAlertNotificationPreferenceStore(storage: storage);
+      final recovery = _MemoryRecoveryNotificationStore()..enabled = false;
+      final notifier = _FakeAlertNotifier();
+      Widget app() => WardPulseApp(
+        repository: ValueDashboardRepository(DashboardSnapshot.empty()),
+        alertNotificationStore: store,
+        alertNotifier: notifier,
+        recoveryNotificationStore: recovery,
+      );
+      Future<void> openSettings() async {
+        await tester.tap(find.text('Settings'));
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.widgetWithText(SwitchListTile, 'Alert notifications'),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+      }
+
+      await tester.pumpWidget(app());
+      await tester.pumpAndSettle();
+      await openSettings();
+      final toggle = find.widgetWithText(SwitchListTile, 'Alert notifications');
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+      expect(notifier.asked, 0);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(await store.read(), isFalse);
+      storage.failRead = true;
+      final refresh =
+          tester
+              .widget<SettingsScreen>(find.byType(SettingsScreen))
+              .onRefresh();
+      await tester.pumpAndSettle();
+      await refresh;
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+      storage.failRead = false;
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(app());
+      await tester.pumpAndSettle();
+      await openSettings();
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(await store.read(), isTrue);
+      expect(recovery.enabled, isFalse);
+      expect(notifier.asked, 1);
+      expect(
+        find.text('Android is blocking WardPulse notifications'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'scheduled acceptance runs recovery and alerts independently of a failed preference',
+    (tester) async {
+      const key = AlertConditionKey(
+        provider: 'claude',
+        accountId: 'account-a',
+        connection: 'anthropic.plan',
+        target: AllowanceAlertTarget(
+          source: AllowanceSource.plan,
+          id: 'weekly',
+        ),
+      );
+      DashboardSnapshot source(AlertCondition condition) =>
+          DashboardSnapshot.fromJson({
+            ...DashboardSnapshot.empty().toJson(),
+            'alertConditions': [condition.toJson()],
+          });
+      final repository = _PublicationRepository(
+        source(const AlertCondition.clear(key: key)),
+      );
+      final recovery = _MemoryRecoveryWatchlistStore();
+      final preference = _MemoryRecoveryNotificationStore()..failRead = true;
+      final notifier = _FakeAlertNotifier();
+      final watch = _FakeWatchSyncService();
+      final widget = _FakePhoneWidgetSyncService();
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          applyAlertSettings: (snapshot, _) => snapshot,
+          syncScheduler: scheduler,
+          watchSyncService: watch,
+          phoneWidgetSyncService: widget,
+          recoveryWatchlistStore: recovery,
+          recoveryNotificationStore: preference,
+          alertConditionStore: _MemoryAlertConditions(),
+          alertNotifier: notifier,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(recovery.reads, 1);
+      repository.snapshot = source(
+        const AlertCondition.crossed(
+          key: key,
+          alert: AlertSummary(
+            severity: 'warning',
+            message: 'Configured threshold',
+          ),
+        ),
+      );
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(recovery.reads, 2);
+      expect(notifier.posts, [key]);
+      expect(watch.syncedSnapshots, hasLength(2));
+      expect(widget.syncedSnapshots, hasLength(2));
+    },
+  );
+
+  testWidgets('a threshold edit retains the consumed notification identity', (
+    tester,
+  ) async {
+    final source = _alertTestSnapshot(usedPercent: 90);
+    final account = source.accounts.first;
+    final window = account.allowances.single;
+    final key = AlertConditionKey(
+      provider: account.provider,
+      accountId: account.accountId,
+      connection: account.connection!,
+      target: AllowanceAlertTarget(source: window.source, id: window.id),
+    );
+    final rules = _MemoryAlertThresholdStore();
+    rules.value = rules.value.withConnection(
+      ProviderConnections.codexPlan,
+      const ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 80)),
+    );
+    final notifier = _FakeAlertNotifier();
+    final markers = _MemoryAlertConditions();
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    try {
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: ValueDashboardRepository(source),
+          alertThresholdStore: rules,
+          alertConditionStore: markers,
+          alertNotifier: notifier,
+          syncScheduler: scheduler,
+          watchSyncService: _FakeWatchSyncService(),
+          phoneWidgetSyncService: _FakePhoneWidgetSyncService(),
+          readExhaustedWindows: (_) => const [],
+          readPlanRecoveries: (_, _) => const [],
+          applyAlertSettings: (snapshot, settings) {
+            final at =
+                settings.forConnection(ProviderConnections.codexPlan).plan.at;
+            final used = snapshot.accounts.first.allowances.single.usedPercent!;
+            final crossed = AlertCondition.crossed(
+              key: key,
+              alert: const AlertSummary(
+                severity: 'warning',
+                message: 'Configured window',
+              ),
+            );
+            return DashboardSnapshot.fromJson({
+              ...snapshot.toJson(),
+              'alertConditions': [
+                if (at != null)
+                  (used >= at ? crossed : AlertCondition.clear(key: key))
+                      .toJson(),
+              ],
+            });
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(notifier.posts, [key]);
+      expect(notifier.bodies, ['Reached your alert threshold: 20% left.']);
+      expect(markers.values[key], isTrue);
+
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      await tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onAlertThresholdsChanged(
+            (current) => current.withConnection(
+              ProviderConnections.codexPlan,
+              const ConnectionAlertThresholds(
+                plan: AlertPercentThreshold(at: 85),
+              ),
+            ),
+          );
+      await tester.pumpAndSettle();
+      expect(
+        rules.value.forConnection(ProviderConnections.codexPlan).plan.at,
+        85,
+      );
+      expect(notifier.posts, [key]);
+      expect(notifier.bodies, ['Reached your alert threshold: 20% left.']);
+      expect(markers.values, {key: true});
+    } finally {
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+    }
+  });
+
+  testWidgets(
+    'a read begun during a delivery toggle cannot replace the saved Off',
+    (tester) async {
+      final store = _DelayedAlertPreferenceStore();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: ValueDashboardRepository(DashboardSnapshot.empty()),
+          alertNotificationStore: store,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      final settings = tester.widget<SettingsScreen>(
+        find.byType(SettingsScreen),
+      );
+      store
+        ..holdRead = true
+        ..holdWrite = true;
+      final saving = settings.onAlertNotificationsChanged(false);
+      await store.writeStarted.future;
+      final refreshing = settings.onRefresh();
+      await store.readStarted.future;
+      store.releaseWrite.complete();
+      await saving;
+      store.releaseRead.complete();
+      await refreshing;
+      await tester.pumpAndSettle();
+      final toggle = find.widgetWithText(SwitchListTile, 'Alert notifications');
+      await tester.scrollUntilVisible(
+        toggle,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(store.enabled, isFalse);
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+    },
+  );
+
+  testWidgets(
+    'saved Alert Off suppresses an older On read without replaying the crossing',
+    (tester) async {
+      const key = AlertConditionKey(
+        provider: 'claude',
+        accountId: 'account-a',
+        connection: 'anthropic.plan',
+        target: AllowanceAlertTarget(
+          source: AllowanceSource.plan,
+          id: 'weekly',
+        ),
+      );
+      DashboardSnapshot source(AlertCondition condition) =>
+          DashboardSnapshot.fromJson({
+            ...DashboardSnapshot.empty().toJson(),
+            'alertConditions': [condition.toJson()],
+          });
+      final clear = source(const AlertCondition.clear(key: key));
+      final crossed = source(
+        const AlertCondition.crossed(
+          key: key,
+          alert: AlertSummary(
+            severity: 'warning',
+            message: 'Configured threshold',
+          ),
+        ),
+      );
+      final repository = _PublicationRepository(clear);
+      final preference = _DelayedAlertPreferenceStore();
+      final markers = _MemoryAlertConditions();
+      final notifier = _FakeAlertNotifier();
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      try {
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            applyAlertSettings: (snapshot, _) => snapshot,
+            alertNotificationStore: preference,
+            alertConditionStore: markers,
+            alertNotifier: notifier,
+            watchSyncService: _FakeWatchSyncService(),
+            syncScheduler: scheduler,
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Settings'));
+        await tester.pumpAndSettle();
+        final settings = tester.widget<SettingsScreen>(
+          find.byType(SettingsScreen),
+        );
+        repository.snapshot = crossed;
+        preference.holdRead = true;
+        scheduler.tick();
+        await tester.pump();
+        await preference.readStarted.future;
+        expect(markers.values[key], isTrue);
+        await settings.onAlertNotificationsChanged(false);
+        expect(preference.enabled, isFalse);
+        preference.holdRead = false;
+        preference.releaseRead.complete();
+        await tester.pumpAndSettle();
+        expect(notifier.posts, isEmpty);
+        expect(markers.values[key], isTrue);
+
+        repository.snapshot = clear;
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(markers.values[key], isFalse);
+        repository.snapshot = crossed;
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(markers.values[key], isTrue);
+        expect(notifier.posts, isEmpty);
+
+        await settings.onAlertNotificationsChanged(true);
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(notifier.posts, isEmpty);
+        expect(markers.values[key], isTrue);
+        repository.snapshot = clear;
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(markers.values[key], isFalse);
+        repository.snapshot = crossed;
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(notifier.posts, [key]);
+      } finally {
+        preference.holdRead = false;
+        if (!preference.releaseRead.isCompleted)
+          preference.releaseRead.complete();
+        try {
+          await tester.pumpWidget(const SizedBox());
+        } finally {
+          await tester.pumpAndSettle();
+        }
+      }
+    },
+  );
+
+  testWidgets(
+    'saved Recovery Off during validation preserves tracking and wake work',
+    (tester) async {
+      const window = (
+        accountId: 'account-a',
+        allowanceId: 'weekly',
+        historyOwner: null,
+      );
+      final repository = _PublicationRepository(DashboardSnapshot.empty());
+      final preference = _MemoryRecoveryNotificationStore();
+      final watchlist = _MemoryRecoveryWatchlistStore();
+      final notifier = _BlockedRecoveryNotifier();
+      final wake = _RecordingRecoveryWake();
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      var spent = true;
+      try {
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            recoveryNotificationStore: preference,
+            recoveryWatchlistStore: watchlist,
+            recoveryNotifier: notifier,
+            recoveryWake: wake,
+            watchSyncService: _FakeWatchSyncService(),
+            readExhaustedWindows: (_) => spent ? const [window] : const [],
+            readPlanRecoveries:
+                (_, remembered) => [
+                  for (final key in remembered)
+                    (
+                      accountId: key.accountId,
+                      historyOwner: null,
+                      provider: 'claude',
+                      allowanceId: key.allowanceId,
+                      label: 'Weekly plan',
+                      resetsAt: null,
+                    ),
+                ],
+            syncScheduler: scheduler,
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Settings'));
+        await tester.pumpAndSettle();
+        final settings = tester.widget<SettingsScreen>(
+          find.byType(SettingsScreen),
+        );
+        expect(watchlist.keys, const [window]);
+        expect(wake.cancelled, 1);
+        spent = false;
+        preference.beforeRead = () {
+          preference.beforeRead = null;
+          repository.delayNextValidation = true;
+        };
+        scheduler.tick();
+        await tester.pump();
+        await repository.validationEntered.future;
+        await settings.onRecoveryNotificationsChanged(false);
+        expect(preference.enabled, isFalse);
+        expect(watchlist.keys, const [window]);
+        repository.validation.complete(true);
+        await tester.pumpAndSettle();
+        expect(notifier.reported, isEmpty);
+        expect(watchlist.reads, 2);
+        expect(watchlist.keys, isEmpty);
+        expect(wake.cancelled, 2);
+        expect(wake.booked, isEmpty);
+      } finally {
+        if (!repository.validation.isCompleted)
+          repository.validation.complete(true);
+        try {
+          await tester.pumpWidget(const SizedBox());
+        } finally {
+          await tester.pumpAndSettle();
+        }
+      }
+    },
+  );
+
+  testWidgets(
+    'scheduled delivery retains the rules used for its accepted observations',
+    (tester) async {
+      const key = AlertConditionKey(
+        provider: 'claude',
+        accountId: 'account-a',
+        connection: 'anthropic.plan',
+        target: AllowanceAlertTarget(
+          source: AllowanceSource.plan,
+          id: 'weekly',
+        ),
+      );
+      DashboardSnapshot source(AlertCondition condition) =>
+          DashboardSnapshot.fromJson({
+            ...DashboardSnapshot.empty().toJson(),
+            'alertConditions': [condition.toJson()],
+          });
+      final clear = source(const AlertCondition.clear(key: key));
+      final repository = _PublicationRepository(clear);
+      final rules =
+          _MemoryAlertThresholdStore()
+            ..value = const AlertThresholdPreferences(
+              connections: {
+                'anthropic.plan': ConnectionAlertThresholds(
+                  plan: AlertPercentThreshold(at: 80),
+                ),
+              },
+            );
+      final notifier = _FakeAlertNotifier();
+      final markers = _MemoryAlertConditions();
+      final watch = _HoldingWatchSyncService();
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          applyAlertSettings: (snapshot, _) => snapshot,
+          alertThresholdStore: rules,
+          alertConditionStore: markers,
+          alertNotifier: notifier,
+          watchSyncService: watch,
+          syncScheduler: scheduler,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      repository.snapshot = source(
+        const AlertCondition.crossed(
+          key: key,
+          alert: AlertSummary(
+            severity: 'warning',
+            message: 'Configured threshold',
+          ),
+        ),
+      );
+      watch.hold = true;
+      scheduler.tick();
+      await tester.pump();
+      await watch.entered.future;
+      final nextLoad = Completer<DashboardSnapshot>();
+      repository.response = nextLoad.future;
+      rules.value = const AlertThresholdPreferences();
+      final refreshing =
+          tester
+              .widget<SettingsScreen>(find.byType(SettingsScreen))
+              .onRefresh();
+      await tester.pump();
+      final loadsBeforeRelease = repository.loads;
+      watch.release.complete();
+      await tester.pump();
+      final consumedBeforeNextLoad = markers.values[key];
+      watch.hold = false;
+      nextLoad.complete(clear);
+      await refreshing;
+      await tester.pumpAndSettle();
+      expect(loadsBeforeRelease, 3);
+      expect(consumedBeforeNextLoad, isFalse);
+      expect(notifier.posts, isEmpty);
+    },
+  );
 
   testWidgets('hides mock data outside debug builds', (tester) async {
     await tester.pumpWidget(
@@ -2030,25 +8009,296 @@ void main() {
   });
 }
 
+Future<void> _notificationLifecycle(
+  WidgetTester tester,
+  AppLifecycleState state,
+) async {
+  await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+    SystemChannels.lifecycle.name,
+    SystemChannels.lifecycle.codec.encodeMessage(
+      'AppLifecycleState.${state.name}',
+    ),
+    (_) {},
+  );
+}
+
+Widget _notificationApp(
+  PhoneNotificationCoordinator coordinator, {
+  DashboardRepository? repository,
+  AlertNotificationPreferenceStore? alerts,
+  RecoveryNotificationPreferenceStore? recoveries,
+}) => WardPulseApp(
+  repository: repository ?? ValueDashboardRepository(DashboardSnapshot.empty()),
+  notificationCoordinator: coordinator,
+  alertNotificationStore:
+      alerts ?? const DefaultAlertNotificationPreferenceStore(),
+  recoveryNotificationStore:
+      recoveries ?? const DefaultRecoveryNotificationPreferenceStore(),
+  scheduleHeadlessSync: (_) async {},
+);
+
+final class _NotificationChoice
+    implements
+        AlertNotificationPreferenceStore,
+        RecoveryNotificationPreferenceStore {
+  bool enabled = true;
+  int writes = 0;
+  bool failRead = false;
+  Future<void>? hold;
+  @override
+  Future<bool> read() async {
+    final value = enabled;
+    await hold;
+    if (failRead) throw StateError('Delivery choice unavailable.');
+    return value;
+  }
+
+  @override
+  Future<void> write(bool value) async {
+    writes++;
+    enabled = value;
+  }
+}
+
+Finder _credentialValueField() => find.ancestor(
+  of: find.byWidgetPredicate(
+    (widget) =>
+        widget is TextField &&
+        (widget.decoration?.labelText?.startsWith('Value') ?? false),
+  ),
+  matching: find.byType(TextFormField),
+);
+
 /// Mock fixture as a real connection: mock accounts hold no metric slots.
 DashboardSnapshot _asConnection(DashboardSnapshot snapshot) {
   final account =
       Map<String, Object?>.from(snapshot.primaryAccount!.toJson())
         ..['accountId'] = 'anthropic-platform'
         ..['provider'] = 'claude'
-        ..['connection'] = 'anthropic.platform';
+        ..['connection'] = ProviderConnections.anthropicPlatform.storageKey;
   return DashboardSnapshot.fromJson({
     ...snapshot.toJson(),
     'accounts': [account],
   });
 }
 
+const _expenseRingId = 'budget.openai.platform.today';
+const _expenseAlertKey = AlertConditionKey(
+  provider: 'openai',
+  accountId: 'openai-report',
+  connection: 'openai.platform',
+  target: BudgetAlertTarget(period: AlertBudgetPeriod.today),
+);
+const _savedExpenseRules = AlertThresholdPreferences(
+  connections: {
+    'openai.platform': ConnectionAlertThresholds(
+      today: AlertPercentThreshold(at: 80),
+      week: AlertPercentThreshold(at: 85),
+      month: AlertPercentThreshold(at: 95),
+      budget: ConnectionBudget(today: 1000, week: 2600, month: 4000),
+    ),
+    'openai.plan': ConnectionAlertThresholds(
+      plan: AlertPercentThreshold(at: 90),
+    ),
+  },
+);
+
+Future<void> _unavailablePreference() async =>
+    throw StateError('Preference unavailable');
+
+Future<void> _openPlatformBudgetAction(WidgetTester tester) async {
+  await tester.tap(find.text('Providers'));
+  await tester.pumpAndSettle();
+  final button = find.descendant(
+    of: find.widgetWithText(ProviderConnectionRow, 'Platform reporting'),
+    matching: find.byTooltip('Budget limits'),
+  );
+  await tester.scrollUntilVisible(
+    button,
+    300,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+  expect(button.hitTestable(), findsOneWidget);
+  await tester.tap(button);
+  await tester.pumpAndSettle();
+}
+
+// Supply only the test's reporting connection and Today's alert observation
+// through the app's core evaluation seam.
+DashboardSnapshot _applyExpenseRules(
+  DashboardSnapshot source,
+  AlertThresholdPreferences preferences,
+) {
+  final rules = preferences.forConnection(ProviderConnections.openAiPlatform);
+  final reporting = source.accounts.first;
+  Map<String, Object?> budget(BudgetState actual, int? cap) {
+    final spent = actual.spent!.minorUnits;
+    return {
+      ...actual.toJson(),
+      'limit': cap == null ? null : {'minorUnits': cap, 'currency': 'USD'},
+      'remaining':
+          cap == null ? null : {'minorUnits': cap - spent, 'currency': 'USD'},
+      'usedPercent': cap == null ? null : spent * 100 / cap,
+    };
+  }
+
+  final today = budget(reporting.today, rules.budget.today);
+  final at = rules.today.at;
+  final used = today['usedPercent'] as double?;
+  const alert = AlertSummary(
+    severity: 'warning',
+    message: 'Configured threshold',
+  );
+  final condition =
+      at == null || used == null
+          ? null
+          : used >= at
+          ? const AlertCondition.crossed(key: _expenseAlertKey, alert: alert)
+          : const AlertCondition.clear(key: _expenseAlertKey);
+  return DashboardSnapshot.fromJson({
+    ...source.toJson(),
+    'accounts': [
+      {
+        ...reporting.toJson(),
+        'today': today,
+        'week': budget(reporting.week, rules.budget.week),
+        'month': budget(reporting.month, rules.budget.month),
+      },
+      for (final account in source.accounts.skip(1)) account.toJson(),
+    ],
+    'alertConditions': [if (condition != null) condition.toJson()],
+    'alerts': [
+      if (condition?.state == AlertConditionState.crossed) alert.toJson(),
+    ],
+  });
+}
+
+DashboardSnapshot _surfaceSelectionSnapshot({
+  int spent = 100,
+  bool purchased = false,
+  String connection = 'openai.platform',
+}) {
+  final empty = DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 6));
+  return DashboardSnapshot.fromJson({
+    ...empty.toJson(),
+    'accounts': [
+      {
+        'accountId': 'openai-report',
+        'provider': 'openai',
+        'connection': connection,
+        'status': 'ok',
+        'credits': <Object>[],
+        'allowances': [
+          if (purchased)
+            {
+              'id': 'purchased',
+              'source': 'purchased',
+              'label': 'Purchased',
+              'usedPercent': 40.0,
+              'remaining': {'value': '60', 'unit': 'credits'},
+              'status': 'ok',
+            },
+        ],
+        'buckets': <Object>[],
+        'modelBreakdown': <Object>[],
+        for (final period in ['today', 'week', 'month'])
+          period: {
+            ...BudgetState.unknownPeriod(period).toJson(),
+            'spent': {'minorUnits': spent, 'currency': 'USD'},
+            'limit': {'minorUnits': 1000, 'currency': 'USD'},
+            'remaining': {'minorUnits': 1000 - spent, 'currency': 'USD'},
+            'usedPercent': spent / 10,
+            'status': 'ok',
+          },
+      },
+    ],
+  });
+}
+
+DashboardSnapshot _alertTestSnapshot({
+  bool includeWindow = true,
+  String windowLabel = 'Window A',
+  double usedPercent = 75,
+}) {
+  final empty = DashboardSnapshot.empty(
+    generatedAt: DateTime.utc(2026, 10, 26),
+  );
+  final budget = {
+    ...empty.todayTotal.toJson(),
+    'spent': {'minorUnits': 2501, 'currency': 'USD'},
+    'limit': {'minorUnits': 2500, 'currency': 'USD'},
+    'remaining': {'minorUnits': -1, 'currency': 'USD'},
+    'usedPercent': 100.04,
+    'status': 'warning',
+  };
+  final account = {
+    'accountId': 'plan-a',
+    'provider': 'codex',
+    'connection': ProviderConnections.codexPlan.storageKey,
+    'status': 'ok',
+    'today': budget,
+    'week': empty.weekTotal.toJson(),
+    'month': empty.monthTotal.toJson(),
+    'credits': <Object>[],
+    'allowances': [
+      if (includeWindow)
+        {
+          'id': 'window-a',
+          'source': 'plan',
+          'label': windowLabel,
+          'usedPercent': usedPercent,
+          'status': 'ok',
+        },
+    ],
+    'buckets': <Object>[],
+    'modelBreakdown': <Object>[],
+  };
+  return DashboardSnapshot.fromJson({
+        ...empty.toJson(),
+        'overallStatus': 'authRequired',
+        'todayTotal': budget,
+        'accounts': [
+          account,
+          for (final status in ['warning', 'rateLimited', 'authRequired'])
+            {
+              ...account,
+              'accountId': 'source-$status',
+              'provider': 'claude',
+              'connection': ProviderConnections.claudePlan.storageKey,
+              'status': status,
+              'allowances': <Object>[],
+            },
+        ],
+      })
+      .withConnectionVersions({
+        ProviderConnections.codexPlan.storageKey: {'generation': 'g1'},
+      })
+      .withReportingOutcomes([
+        const ConnectionReportingOutcome(
+          connection: ProviderConnections.openAiPlatform,
+          category: ReportingOutcomeCategory.accessDenied,
+          source: ReportingOutcomeSource.live,
+        ),
+      ])
+      .withSyncIssue(
+        DashboardSyncIssue.permissionDenied,
+        details: 'Sanitized source issue',
+      );
+}
+
 class _MemoryRecoveryNotificationStore
     implements RecoveryNotificationPreferenceStore {
   bool enabled = true;
+  bool failRead = false;
+  void Function()? beforeRead;
 
   @override
-  Future<bool> read() async => enabled;
+  Future<bool> read() async {
+    beforeRead?.call();
+    if (failRead) throw StateError('Preference unavailable.');
+    return enabled;
+  }
 
   @override
   Future<void> write(bool value) async => enabled = value;
@@ -2057,9 +8307,10 @@ class _MemoryRecoveryNotificationStore
 /// Android refusing the permission, which the switch alone cannot detect.
 class _BlockedRecoveryNotifier implements RecoveryNotifier {
   var asked = 0;
+  final reported = <PlanRecovery>[];
 
   @override
-  Future<void> notify(PlanRecovery recovery) async {}
+  Future<void> notify(PlanRecovery recovery) async => reported.add(recovery);
 
   @override
   Future<bool> requestPermission() async {
@@ -2070,16 +8321,112 @@ class _BlockedRecoveryNotifier implements RecoveryNotifier {
 
 class _MemoryRecoveryWatchlistStore implements RecoveryWatchlistStore {
   List<WindowKey> keys = const [];
+  int reads = 0;
+  Future<void> Function()? beforeRead;
 
   @override
-  Future<List<WindowKey>> read() async => keys;
+  Future<List<WindowKey>> read() async {
+    reads++;
+    await beforeRead?.call();
+    return keys;
+  }
 
   @override
   Future<void> write(List<WindowKey> value) async => keys = value;
 }
 
+class _RecordingRecoveryWake implements RecoveryWakeScheduler {
+  final booked = <DateTime>[];
+  var cancelled = 0;
+
+  @override
+  Future<void> scheduleAt(DateTime resetsAt) async => booked.add(resetsAt);
+
+  @override
+  Future<void> cancel() async => cancelled++;
+}
+
+class _DelayedAlertPreferenceStore implements AlertNotificationPreferenceStore {
+  bool enabled = true;
+  bool holdRead = false;
+  bool holdWrite = false;
+  final readStarted = Completer<void>();
+  final writeStarted = Completer<void>();
+  final releaseRead = Completer<void>();
+  final releaseWrite = Completer<void>();
+  @override
+  Future<bool> read() async {
+    final captured = enabled;
+    if (holdRead) {
+      readStarted.complete();
+      await releaseRead.future;
+    }
+    return captured;
+  }
+
+  @override
+  Future<void> write(bool value) async {
+    if (holdWrite) {
+      writeStarted.complete();
+      await releaseWrite.future;
+    }
+    enabled = value;
+  }
+}
+
+class _MemoryAlertConditions implements AlertConditionStore {
+  final values = <AlertConditionKey, bool>{};
+  final reads = <AlertConditionKey>[];
+  Future<void> Function(AlertConditionKey)? beforeRead;
+
+  @override
+  Future<bool> read(AlertConditionKey key) async {
+    reads.add(key);
+    if (beforeRead case final hook?) await hook(key);
+    return values[key] ?? false;
+  }
+
+  @override
+  Future<void> write(AlertConditionKey key, bool value) async =>
+      values[key] = value;
+}
+
+class _FakeAlertNotifier implements AlertNotifier {
+  int asked = 0;
+  final posts = <AlertConditionKey>[];
+  final bodies = <String>[];
+  @override
+  Future<bool> canPost() async => true;
+  @override
+  Future<bool> requestPermission() async {
+    asked++;
+    return false;
+  }
+
+  @override
+  Future<void> notify(
+    AlertConditionKey key, {
+    required String title,
+    required String body,
+  }) async {
+    posts.add(key);
+    bodies.add(body);
+  }
+}
+
 class _FakeWatchSyncService implements WatchSyncService {
   final syncedSnapshots = <DashboardSnapshot>[];
+  final syncedPreferences = <WatchRingPreferences>[];
+  Map<String, dynamic> get payload =>
+      jsonDecode(
+            WatchDashboardSummaryPayload.fromSnapshot(
+              syncedSnapshots.last,
+              syncedPreferences.last,
+            ).encode(),
+          )
+          as Map<String, dynamic>;
+  final mockModes = <bool>[];
+  bool fail = false;
   void Function()? refreshHandler;
 
   @override
@@ -2090,6 +8437,9 @@ class _FakeWatchSyncService implements WatchSyncService {
     bool mockDataMode = false,
   }) async {
     syncedSnapshots.add(snapshot);
+    syncedPreferences.add(ringPreferences);
+    mockModes.add(mockDataMode);
+    if (fail) throw StateError('Watch unavailable');
   }
 
   @override
@@ -2100,6 +8450,71 @@ class _FakeWatchSyncService implements WatchSyncService {
   @override
   void unbindWatchRefreshListener() {
     refreshHandler = null;
+  }
+}
+
+class _HoldingWatchSyncService extends _FakeWatchSyncService {
+  bool hold = false;
+  final entered = Completer<void>();
+  final release = Completer<void>();
+  @override
+  Future<void> sync(
+    DashboardSnapshot snapshot,
+    WatchRingPreferences preferences, {
+    DateTime? manualRefreshAnchorAt,
+    bool mockDataMode = false,
+  }) async {
+    if (hold) {
+      if (!entered.isCompleted) entered.complete();
+      await release.future;
+    }
+    await super.sync(
+      snapshot,
+      preferences,
+      manualRefreshAnchorAt: manualRefreshAnchorAt,
+      mockDataMode: mockDataMode,
+    );
+  }
+}
+
+class _FakePhoneWidgetSyncService implements PhoneWidgetSyncService {
+  final syncedSnapshots = <DashboardSnapshot>[];
+  final syncedPreferences = <PhoneWidgetPreferences>[];
+  PhoneWidgetPayload get payload =>
+      buildPhoneWidgetPayload(syncedSnapshots.last, syncedPreferences.last);
+  bool fail = false;
+
+  @override
+  Future<void> sync(
+    DashboardSnapshot snapshot,
+    PhoneWidgetPreferences preferences, {
+    PhoneWidgetSyncGuard? isCurrent,
+  }) async {
+    if (isCurrent != null && !await isCurrent()) return;
+    syncedSnapshots.add(snapshot);
+    syncedPreferences.add(preferences);
+    if (fail) throw StateError('Widget unavailable');
+  }
+}
+
+final class _QueuedPhoneWidgetSyncService implements PhoneWidgetSyncService {
+  _QueuedPhoneWidgetSyncService(this.coordinator);
+
+  final PhoneWidgetSyncCoordinator coordinator;
+  final requests = <Future<void>>[];
+
+  @override
+  Future<void> sync(
+    DashboardSnapshot snapshot,
+    PhoneWidgetPreferences preferences, {
+    PhoneWidgetSyncGuard? isCurrent,
+  }) {
+    final request =
+        isCurrent == null
+            ? coordinator.sync(snapshot, preferences)
+            : coordinator.sync(snapshot, preferences, isCurrent: isCurrent);
+    requests.add(request);
+    return request;
   }
 }
 
@@ -2124,58 +8539,201 @@ class _FailingWatchSyncService implements WatchSyncService {
 }
 
 final class _FailingDashboardRepository extends DashboardRepository {
-  const _FailingDashboardRepository(this.issue, [this.details]);
+  const _FailingDashboardRepository(this.issue, [this.details, this.rejection]);
 
   final DashboardSyncIssue issue;
   final String? details;
+  final ConnectionRejection? rejection;
 
   @override
   Future<DashboardSnapshot> load() {
-    return Future.error(DashboardLoadException(issue: issue, details: details));
+    return Future.error(
+      DashboardLoadException(
+        issue: issue,
+        details: details,
+        syncRejection: rejection,
+      ),
+    );
   }
 }
 
 final class _CountingDashboardRepository extends DashboardRepository {
-  _CountingDashboardRepository(this._load);
+  _CountingDashboardRepository(
+    this._load, {
+    this.beforeObservedLoad,
+    this.validateSnapshot,
+  });
 
   final DashboardSnapshot Function() _load;
+  final Future<void> Function(ReportingObserver)? beforeObservedLoad;
+  final Future<bool> Function(DashboardSnapshot)? validateSnapshot;
 
   @override
   Future<DashboardSnapshot> load() async => _load();
+
+  @override
+  Future<DashboardSnapshot> loadObserved(ReportingObserver observer) {
+    final beforeLoad = beforeObservedLoad;
+    return beforeLoad == null
+        ? load()
+        : beforeLoad(observer).then((_) => load());
+  }
+
+  @override
+  Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) =>
+      validateSnapshot?.call(snapshot) ?? super.isSnapshotCurrent(snapshot);
 }
 
 class _MemoryPhoneWidgetStore implements PhoneWidgetPreferenceStore {
   PhoneWidgetPreferences value = const PhoneWidgetPreferences();
+  final writes = <PhoneWidgetPreferences>[];
+  int reads = 0;
+  Future<void> Function()? beforeRead;
+  Future<void> Function(PhoneWidgetPreferences)? beforeWrite;
 
   @override
-  Future<PhoneWidgetPreferences> read() async => value;
+  Future<PhoneWidgetPreferences> read() async {
+    reads++;
+    final captured = value;
+    await beforeRead?.call();
+    return captured;
+  }
 
   @override
   Future<void> write(PhoneWidgetPreferences next) async {
+    writes.add(next);
+    await beforeWrite?.call(next);
     value = next;
   }
 }
 
+Widget _watchPicker({
+  required DashboardSnapshot snapshot,
+  required WatchRingPreferences initial,
+  required ValueChanged<WatchRingPreferences> onChanged,
+}) {
+  var preferences = initial;
+  return MaterialApp(
+    home: Scaffold(
+      body: StatefulBuilder(
+        builder:
+            (context, setState) => WatchfaceScreen(
+              snapshot: snapshot,
+              ringPreferences: preferences,
+              onRefresh: () async {},
+              onRingPreferencesChanged: (
+                update, {
+                String? ringId,
+                bool? selected,
+              }) async {
+                final next = update(preferences);
+                if (identical(next, preferences)) return;
+                onChanged(next);
+                setState(() => preferences = next);
+              },
+            ),
+      ),
+    ),
+  );
+}
+
+/// Synthetic catalogue with all three supported pairs and an optional unknown half.
+DashboardSnapshot _threePairDashboard({double? fableUsed = 90}) {
+  final source = DashboardSnapshot.fromJsonString(
+    File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+  );
+  return DashboardSnapshot.fromJson(
+    source.toJson()
+      ..['accounts'] = [
+        for (final (provider, connection, limits) in [
+          (
+            'claude',
+            'anthropic.plan',
+            [
+              ('claude-five-hour', '5h', 40.0),
+              ('claude-seven-day-fable', 'Fable weekly', fableUsed),
+            ],
+          ),
+          (
+            'codex',
+            'openai.plan',
+            [
+              ('codex-primary', '5h', 30.0),
+              ('spark-primary', 'Spark 5h', 20.0),
+            ],
+          ),
+          (
+            'cursor',
+            'cursor.plan',
+            [
+              ('cursor-plan-models', 'Cursor Models', 70.0),
+              ('cursor-plan-other', 'Other Models', 20.0),
+            ],
+          ),
+        ])
+          {
+            ...source.primaryAccount!.toJson(),
+            'provider': provider,
+            'connection': connection,
+            'allowances': [
+              for (final (id, label, used) in limits)
+                {
+                  'id': id,
+                  'label': label,
+                  'source': 'plan',
+                  'usedPercent': used,
+                  'status': used == null ? 'unknown' : 'ok',
+                },
+            ],
+          },
+      ],
+  );
+}
+
 class _MemoryWatchRingStore implements WatchRingPreferenceStore {
   WatchRingPreferences value = const WatchRingPreferences();
+  final writes = <WatchRingPreferences>[];
+  int reads = 0;
+  Future<void> Function()? beforeRead;
+  Future<void> Function(WatchRingPreferences)? beforeWrite;
 
   @override
-  Future<WatchRingPreferences> read() async => value;
+  Future<WatchRingPreferences> read() async {
+    reads++;
+    final captured = value;
+    await beforeRead?.call();
+    return captured;
+  }
 
   @override
   Future<void> write(WatchRingPreferences next) async {
+    writes.add(next);
+    await beforeWrite?.call(next);
     value = next;
   }
 }
 
 class _MemoryAlertThresholdStore implements AlertThresholdPreferenceStore {
   AlertThresholdPreferences value = const AlertThresholdPreferences();
+  int reads = 0;
+  int writes = 0;
+  bool failRead = false;
+  bool failNextWrite = false;
 
   @override
-  Future<AlertThresholdPreferences> read() async => value;
+  Future<AlertThresholdPreferences> read() async {
+    reads++;
+    if (failRead) throw StateError('Storage unavailable');
+    return value;
+  }
 
   @override
   Future<void> write(AlertThresholdPreferences next) async {
+    writes++;
+    if (failNextWrite) {
+      failNextWrite = false;
+      throw StateError('Storage unavailable');
+    }
     value = next;
   }
 }
@@ -2184,6 +8742,7 @@ class _MemoryCredentialStore
     implements ProviderCredentialStore, VersionedProviderCredentialStore {
   final _generations = <ProviderConnectionId, int>{};
   Future<void>? pendingWrite;
+  Future<void> Function(ProviderConnectionId)? beforeReadLabel;
   bool failLabelWrite = false;
   bool failKeyWrite = false;
   bool failDeleteAfterRetirement = false;
@@ -2221,16 +8780,23 @@ class _MemoryCredentialStore
   }
 
   @override
-  Future<void> deleteSecret(ProviderConnectionId id) async {
+  Future<void> deleteSecret(
+    ProviderConnectionId id, {
+    void Function(CredentialVersion)? onRetired,
+  }) async {
     _generations[id] = (_generations[id] ?? 0) + 1;
     _secrets.remove(id);
+    onRetired?.call(version(id));
     if (failDeleteAfterRetirement)
       throw StateError('Synthetic cleanup failure');
     _labels.remove(id);
   }
 
   @override
-  Future<String?> readLabel(ProviderConnectionId id) async => _labels[id];
+  Future<String?> readLabel(ProviderConnectionId id) async {
+    await beforeReadLabel?.call(id);
+    return _labels[id];
+  }
 
   @override
   Future<void> writeLabel(ProviderConnectionId id, String? value) async {
@@ -2246,12 +8812,19 @@ class _MemoryCredentialStore
 
 class _MemoryDebugDataPreferenceStore implements DebugDataPreferenceStore {
   bool value = false;
+  bool failWrite = false;
+  int writes = 0;
+  Future<void>? pendingWrite;
 
   @override
   Future<bool> readMockDataEnabled() async => value;
 
   @override
   Future<void> writeMockDataEnabled(bool value) async {
+    writes++;
+    if (failWrite) throw StateError('Debug preferences unavailable');
+    final pending = pendingWrite;
+    if (pending != null) await pending;
     this.value = value;
   }
 }
@@ -2293,19 +8866,42 @@ class _ManualProviderSyncScheduler implements ProviderSyncScheduler {
 class _PublicationRepository extends DashboardRepository {
   _PublicationRepository(this.snapshot);
   DashboardSnapshot snapshot;
+  int loads = 0;
+  bool failLoad = false;
+  bool failClear = false;
+  Future<DashboardSnapshot>? response;
+  bool current = true;
   bool delayNextValidation = false;
   bool validationStarted = false;
+  final validationEntered = Completer<void>();
   final validation = Completer<bool>();
   @override
-  Future<DashboardSnapshot> load() async => snapshot;
+  Future<DashboardSnapshot> load() async {
+    loads++;
+    if (failLoad) throw const DashboardLoadException();
+    if (response != null) return response!;
+    return snapshot;
+  }
+
+  @override
+  Future<void> clearPersistentSnapshots() async {
+    if (failClear) throw StateError('Snapshot cache unavailable');
+    await super.clearPersistentSnapshots();
+  }
+
+  // The failed request can be current after its previous data loses ownership.
+  @override
+  Future<bool> isFailureCurrent(DashboardLoadException failure) async => true;
+
   @override
   Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) async {
     if (delayNextValidation) {
       delayNextValidation = false;
       validationStarted = true;
+      if (!validationEntered.isCompleted) validationEntered.complete();
       return validation.future;
     }
-    return true;
+    return current;
   }
 }
 
@@ -2339,6 +8935,16 @@ MergingConnectionRepository _reportingRepository(
 );
 
 final class _MemoryCredentialAccess implements ConnectionCredentialAccess {
+  @override
+  Future<void> observeLifecycle(
+    void Function(String, CredentialVersion?) observer,
+  ) async {
+    final value = await store.readSecret(id);
+    observer(value == null ? 'deleted' : 'active', store.version(id));
+  }
+
+  @override
+  Future<void> admitAutomatic(CredentialVersion expected) async {}
   const _MemoryCredentialAccess(this.store, this.id);
   final _MemoryCredentialStore store;
   final ProviderConnectionId id;
@@ -2365,4 +8971,106 @@ final class _OutcomeFailureRepository extends DashboardRepository {
         issue: DashboardSyncIssue.authentication,
         reportingOutcomes: outcomes,
       );
+}
+
+final class _RejectionNotices implements ConnectionRejectionNoticeStore {
+  _RejectionNotices(ConnectionRejectionNotice event) : _event = event;
+  _RejectionNotices.empty();
+  ConnectionRejectionNotice? _event;
+  ConnectionRejectionNotice get event => _event!;
+  bool failDismiss = false;
+  Future<List<ConnectionRejectionNotice>>? nextRead;
+  @override
+  Future<List<ConnectionRejectionNotice>> read() {
+    final pending = nextRead;
+    nextRead = null;
+    return pending ?? Future.value([if (_event case final event?) event]);
+  }
+
+  @override
+  Future<bool> dismiss(ConnectionRejectionNotice notice) async {
+    if (failDismiss) throw StateError('Synthetic storage failure');
+    if (notice.eventId != event.eventId) return false;
+    _event = ConnectionRejectionNotice(
+      connection: event.connection,
+      eventId: event.eventId,
+      dismissed: true,
+    );
+    return true;
+  }
+}
+
+final class _PlanCodexTransport implements CodexHttpTransport {
+  @override
+  Future<CodexHttpResponse> send(
+    String method,
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+  }) async => CodexHttpResponse(
+    statusCode: 200,
+    body: jsonEncode(
+      uri.path.endsWith('/profiles/me')
+          ? {
+            'stats': {'daily_usage_buckets': <Object>[]},
+          }
+          : {
+            'plan_type': 'plus',
+            'rate_limit': {
+              'primary_window': {
+                'used_percent': 20,
+                'limit_window_seconds': 18000,
+                'reset_at': 1795006800,
+              },
+            },
+            'credits': {
+              'has_credits': false,
+              'unlimited': false,
+              'balance': '0',
+            },
+          },
+    ),
+  );
+}
+
+final class _PlanReportingTransport implements ProviderHttpTransport {
+  @override
+  Future<ProviderHttpResponse> get(
+    Uri uri, {
+    required Map<String, String> headers,
+  }) async {
+    final now = DateTime.utc(2026, 11, 17, 12);
+    final response =
+        uri.path == '/api/usage-summary'
+            ? {
+              'billingCycleStart':
+                  now.subtract(const Duration(days: 1)).toIso8601String(),
+              'billingCycleEnd':
+                  now.add(const Duration(days: 29)).toIso8601String(),
+              'membershipType': 'pro',
+              'isUnlimited': false,
+              'individualUsage': {
+                'plan': {
+                  'enabled': true,
+                  'used': 20,
+                  'limit': 100,
+                  'remaining': 80,
+                  'totalPercentUsed': 20,
+                },
+              },
+            }
+            : {'object': 'page', 'has_more': false, 'data': <Object>[]};
+    return ProviderHttpResponse(
+      statusCode: 200,
+      headers: const {},
+      body: jsonEncode(response),
+    );
+  }
+
+  @override
+  Future<ProviderHttpResponse> post(
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+  }) async => throw StateError('Unexpected synthetic reporting request.');
 }

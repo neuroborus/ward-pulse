@@ -10,8 +10,235 @@ import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_screen.dart';
 import 'package:ward_pulse_phone/dashboard/status_pill.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
+import 'package:ward_pulse_phone/providers/connection_rejection_notice.dart';
 
 void main() {
+  for (final independent in [false, true]) {
+    testWidgets(
+      'dismissed key rejection ${independent ? 'retains independent sync failure' : 'suppresses matching generic feedback'}',
+      (tester) async {
+        const notice = ConnectionRejectionNotice(
+          connection: ProviderConnections.openAiPlatform,
+          eventId: 'synthetic-event',
+          dismissed: true,
+        );
+        final issue =
+            independent
+                ? DashboardSyncIssue.providerUnavailable
+                : DashboardSyncIssue.authentication;
+        final snapshot = DashboardSnapshot.empty()
+            .withReportingOutcomes([
+              ConnectionReportingOutcome(
+                connection: notice.connection,
+                category: ReportingOutcomeCategory.authenticationRejected,
+                source: ReportingOutcomeSource.live,
+                credentialVersion: CredentialVersion({
+                  'committedConnection': notice.eventId,
+                }),
+              ),
+            ])
+            .withSyncIssue(
+              issue,
+              rejection:
+                  independent
+                      ? null
+                      : (
+                        connection: notice.connection.storageKey,
+                        eventId: notice.eventId,
+                      ),
+            );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DashboardScreen(
+                snapshot: snapshot,
+                rejectionNotices: const [notice],
+                onRefresh: () async {},
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.text(issue.message),
+          independent ? findsOneWidget : findsNothing,
+        );
+        expect(
+          find.textContaining('OpenAI · Platform reporting: Key rejected'),
+          findsNothing,
+        );
+      },
+    );
+  }
+
+  testWidgets(
+    'nonempty Dashboard preserves unmatched safe diagnostic details',
+    (tester) async {
+      const issue = DashboardSyncIssue.providerUnavailable;
+      const details = 'Usage · HTTP 503 · service_unavailable';
+      final snapshot = DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      ).withSyncIssue(issue, details: details);
+      expect(snapshot.accounts, isNotEmpty);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DashboardScreen(snapshot: snapshot, onRefresh: () async {}),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final message = '${issue.message}\n$details';
+      final diagnostic = find.byTooltip(message);
+      expect(find.text(issue.message), findsOneWidget);
+      expect(diagnostic, findsOneWidget);
+      expect(find.byTooltip(issue.message), findsNothing);
+      await tester.longPress(diagnostic);
+      await tester.pumpAndSettle();
+      expect(find.text(message), findsOneWidget);
+      expect(find.byType(AlertDialog), findsNothing);
+    },
+  );
+
+  for (final brightness in Brightness.values) {
+    testWidgets(
+      'historical feedback preserves status and independent actions at large text in $brightness',
+      (tester) async {
+        const notice = ConnectionRejectionNotice(
+          connection: ProviderConnections.claudePlan,
+          eventId: 'synthetic-event',
+          dismissed: false,
+        );
+        const keyNotice = ConnectionRejectionNotice(
+          connection: ProviderConnections.openAiPlatform,
+          eventId: 'synthetic-key-event',
+          dismissed: true,
+        );
+        final snapshot = DashboardSnapshot.empty()
+            .withReportingOutcomes([
+              ConnectionReportingOutcome(
+                connection: ProviderConnections.openAiPlatform,
+                category: ReportingOutcomeCategory.authenticationRejected,
+                source: ReportingOutcomeSource.live,
+                credentialVersion: CredentialVersion({
+                  'committedConnection': keyNotice.eventId,
+                }),
+              ),
+              const ConnectionReportingOutcome(
+                connection: ProviderConnections.cursorPlatform,
+                category: ReportingOutcomeCategory.accessDenied,
+                source: ReportingOutcomeSource.live,
+              ),
+            ])
+            .withSyncIssue(
+              DashboardSyncIssue.claudeAuthentication,
+              rejection: (
+                connection: notice.connection.storageKey,
+                eventId: notice.eventId,
+              ),
+            );
+        final before = dashboardProblems(snapshot);
+        ProviderConnectionId? revealed;
+        ConnectionRejectionNotice? dismissed;
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(brightness: brightness),
+            home: Scaffold(
+              body: MediaQuery(
+                data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+                child: DashboardScreen(
+                  snapshot: snapshot,
+                  onRefresh: () async {},
+                  rejectionNotices: const [notice, keyNotice],
+                  onRevealConnection: (id) => revealed = id,
+                  onDismissRejection: (event) => dismissed = event,
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        const bodyLabel =
+            'Anthropic · Claude plan: a saved connection was rejected. '
+            'Open Providers to review this connection.';
+        const closeLabel = 'Dismiss Anthropic · Claude plan rejection warning';
+        final body = find.widgetWithText(TextButton, bodyLabel);
+        final close = find.byTooltip(closeLabel);
+        await tester.ensureVisible(body);
+        await tester.pumpAndSettle();
+        final bodySemantics = find.semantics.byLabel(bodyLabel);
+        // IconButton exposes its accessible name through its internal Tooltip.
+        final closeSemantics = find.semantics.byPredicate(
+          (node) => node.getSemanticsData().tooltip == closeLabel,
+        );
+        expect(bodySemantics, findsOneWidget);
+        expect(closeSemantics, findsOneWidget);
+        final bodyNode = bodySemantics.evaluate().single;
+        final closeNode = closeSemantics.evaluate().single;
+        expect(
+          bodyNode,
+          isSemantics(
+            label: bodyLabel,
+            isButton: true,
+            hasEnabledState: true,
+            isEnabled: true,
+            hasTapAction: true,
+          ),
+        );
+        expect(
+          closeNode,
+          isSemantics(
+            tooltip: closeLabel,
+            isButton: true,
+            hasEnabledState: true,
+            isEnabled: true,
+            hasTapAction: true,
+          ),
+        );
+        expect(bodyNode.id, isNot(closeNode.id));
+        tester.semantics.tap(bodySemantics);
+        await tester.pump();
+        expect(revealed, ProviderConnections.claudePlan);
+        expect(dismissed, isNull);
+        revealed = null;
+        dismissed = null;
+        tester.semantics.tap(closeSemantics);
+        await tester.pump();
+        expect(dismissed, same(notice));
+        expect(revealed, isNull);
+        revealed = null;
+        dismissed = null;
+        await tester.tap(body);
+        expect(revealed, ProviderConnections.claudePlan);
+        expect(dismissed, isNull);
+        revealed = null;
+        dismissed = null;
+        await tester.ensureVisible(close);
+        await tester.tap(close);
+        expect(dismissed, same(notice));
+        expect(revealed, isNull);
+        expect(
+          find.text(DashboardSyncIssue.claudeAuthentication.message),
+          findsNothing,
+        );
+        expect(
+          find.textContaining('OpenAI · Platform reporting: Key rejected'),
+          findsNothing,
+        );
+        expect(
+          find.textContaining('Cursor · Team Admin API: Access denied'),
+          findsOneWidget,
+        );
+        expect(dashboardProblems(snapshot), before);
+        expect(snapshot.overallStatus, ProviderStatus.ok);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets(
     'empty configured feedback names every failure and repairs the exact connection',
     (tester) async {
@@ -22,13 +249,8 @@ void main() {
           source: ReportingOutcomeSource.live,
         ),
         ConnectionReportingOutcome(
-          connection: ProviderConnections.anthropicPlatform,
-          category: ReportingOutcomeCategory.accessDenied,
-          source: ReportingOutcomeSource.live,
-        ),
-        ConnectionReportingOutcome(
           connection: ProviderConnections.cursorPlatform,
-          category: ReportingOutcomeCategory.transientFailure,
+          category: ReportingOutcomeCategory.accessDenied,
           source: ReportingOutcomeSource.live,
         ),
       ];
@@ -65,7 +287,7 @@ void main() {
       expect(find.text('Edit key'), findsNWidgets(2));
       await tester.ensureVisible(find.text('Edit key').at(1));
       await tester.tap(find.text('Edit key').at(1));
-      expect(repaired, ProviderConnections.anthropicPlatform);
+      expect(repaired, ProviderConnections.cursorPlatform);
       expect(tester.takeException(), isNull);
     },
   );
@@ -177,33 +399,6 @@ void main() {
     expect(problems.status, ProviderStatus.error);
   });
 
-  testWidgets('aggregate spend card shows money and nothing to measure it', (
-    tester,
-  ) async {
-    final state = BudgetState.fromJson({
-      'period': 'today',
-      'spent': {'minorUnits': 1240, 'currency': 'USD'},
-      'limit': null,
-      'remaining': null,
-      'usedPercent': null,
-      'projectedTotal': null,
-      'status': 'unknown',
-    });
-
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: wardPulseLightTheme,
-        home: Scaffold(body: BudgetSummaryCard(title: 'Today', state: state)),
-      ),
-    );
-
-    expect(find.text('USD 12.40'), findsOneWidget);
-    // Limits are per connection, so the total has no ceiling: a bar or a pill
-    // here could only say Unknown, next to a sum that is exactly known.
-    expect(find.byType(LinearProgressIndicator), findsNothing);
-    expect(find.byType(StatusPill), findsNothing);
-  });
-
   testWidgets('shows allowances from every connected provider', (tester) async {
     final source = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
@@ -249,7 +444,7 @@ void main() {
     );
 
     expect(find.text('Codex'), findsOneWidget);
-    expect(find.text('Purchased credits'), findsOneWidget);
+    expect(find.text('Codex · Purchased credits'), findsOneWidget);
     expect(find.text('Unlimited'), findsOneWidget);
     expect(find.text('Unknown'), findsNothing);
     // Healthy families say nothing at all.
@@ -257,21 +452,21 @@ void main() {
 
     expect(find.text('OpenAI'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('Usage history'),
+      find.text('OpenAI · Source 2 · Usage history'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Usage history'), findsOneWidget);
+    expect(find.text('OpenAI · Source 2 · Usage history'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('Model usage'),
+      find.text('OpenAI · Source 2 · Model usage'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Model usage'), findsOneWidget);
+    expect(find.text('OpenAI · Source 2 · Model usage'), findsOneWidget);
 
     await tester.scrollUntilVisible(
-      find.text('Platform spend'),
-      300,
+      find.text('Today'),
+      -300,
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Today'), findsOneWidget);
@@ -331,21 +526,376 @@ void main() {
       ),
     );
 
-    expect(find.text('Cursor Models'), findsOneWidget);
-    expect(find.text('Other Models'), findsOneWidget);
+    expect(find.text('Cursor · Cursor Models'), findsOneWidget);
+    expect(find.text('Cursor · Other Models'), findsOneWidget);
     expect(find.text('53% left'), findsOneWidget);
     expect(find.text('0% left'), findsOneWidget);
+    for (final (label, color, value) in const [
+      ('Cursor Models', Color(0xFF7E93B8), 0.53),
+      ('Other Models', Color(0xFF67E8D4), 0.0),
+    ]) {
+      final progress = tester.widget<LinearProgressIndicator>(
+        find.descendant(
+          of: find.byWidgetPredicate(
+            (widget) =>
+                widget is AllowanceSummaryCard &&
+                widget.allowance.label == label,
+          ),
+          matching: find.byType(LinearProgressIndicator),
+        ),
+      );
+      expect(progress.color, color, reason: label);
+      expect(progress.value, value, reason: label);
+    }
     expect(find.byIcon(Icons.speed), findsOneWidget);
     // A card marks a deviation, never health, and the header says how many
     // deviate below it (PHONE_DASHBOARD_DESIGN.md).
-    expect(_pillsInCardOf(find.text('Cursor Models')), findsNothing);
-    expect(_pillsInCardOf(find.text('Other Models')), findsOneWidget);
+    expect(_pillsInCardOf(find.text('Cursor · Cursor Models')), findsNothing);
+    expect(_pillsInCardOf(find.text('Cursor · Other Models')), findsOneWidget);
     expect(find.widgetWithText(Badge, '1'), findsOneWidget);
   });
 
-  testWidgets('always shows platform spend when budgets are available', (
+  testWidgets('Cursor pool colors follow provider, source and stable ID', (
     tester,
   ) async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final ownPool = {
+      'id': 'cursor-plan-models',
+      'source': 'plan',
+      'label': 'Renamed pool',
+      'usedPercent': 25.0,
+      'used': null,
+      'limit': null,
+      'remaining': null,
+      'unlimited': false,
+      'windowMinutes': null,
+      'resetsAt': null,
+      'status': 'warning',
+    };
+    final cursor =
+        source.primaryAccount!.toJson()
+          ..['accountId'] = 'cursor-local'
+          ..['provider'] = 'cursor'
+          ..['allowances'] = [
+            {...ownPool, 'id': 'cursor-plan-unknown', 'label': 'Cursor Models'},
+            {...ownPool, 'source': 'purchased', 'label': 'Purchased credits'},
+            ownPool,
+          ]
+          ..['buckets'] = <Object>[]
+          ..['modelBreakdown'] = <Object>[];
+    final nonCursor = {
+      ...cursor,
+      'accountId': 'codex-local',
+      'provider': 'codex',
+      'allowances': [
+        {...ownPool, 'label': 'Non-Cursor pool'},
+      ],
+    };
+    final dashboard = source.toJson()..['accounts'] = [cursor, nonCursor];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: wardPulseLightTheme,
+        home: Scaffold(
+          body: DashboardScreen(
+            onRefresh: _noRefresh,
+            snapshot: DashboardSnapshot.fromJson(dashboard),
+          ),
+        ),
+      ),
+    );
+
+    for (final (label, color, value) in const [
+      ('Cursor Models', Color(0xFF67E8D4), 0.75),
+      ('Purchased credits', Color(0xFF67E8D4), 0.25),
+      ('Renamed pool', Color(0xFF7E93B8), 0.75),
+      ('Non-Cursor pool', Color(0xFF65D78A), 0.75),
+    ]) {
+      final progress = tester.widget<LinearProgressIndicator>(
+        find.descendant(
+          of: find.byWidgetPredicate(
+            (widget) =>
+                widget is AllowanceSummaryCard &&
+                widget.allowance.label == label,
+          ),
+          matching: find.byType(LinearProgressIndicator),
+        ),
+      );
+      expect(progress.color, color, reason: label);
+      expect(progress.value, value, reason: label);
+    }
+  });
+
+  testWidgets('Fable accent follows exact provider, Plan source and identity', (
+    tester,
+  ) async {
+    final source = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    for (final (provider, allowanceSource, id, used, color) in const [
+      ('claude', 'plan', 'claude-seven-day-fable', 25.0, Color(0xFFFF603D)),
+      ('claude', 'plan', 'claude-seven-day-fable', 100.0, Color(0xFFFF603D)),
+      ('claude', 'plan', 'claude-seven-day-fable', null, Color(0xFFFF603D)),
+      ('claude', 'plan', 'claude-seven-day', 25.0, Color(0xFFE8915A)),
+      (
+        'claude',
+        'plan',
+        'claude-seven-day-fable-other',
+        25.0,
+        Color(0xFFE8915A),
+      ),
+      (
+        'claude',
+        'purchased',
+        'claude-seven-day-fable',
+        25.0,
+        Color(0xFFE8915A),
+      ),
+      ('codex', 'plan', 'claude-seven-day-fable', 25.0, Color(0xFF65D78A)),
+    ]) {
+      final account =
+          source.primaryAccount!.toJson()
+            ..['accountId'] = '$provider-local'
+            ..['provider'] = provider
+            ..['allowances'] = [
+              {
+                'id': id,
+                'source': allowanceSource,
+                'label': 'Fable weekly',
+                'usedPercent': used,
+                'used': null,
+                'limit': null,
+                'remaining': null,
+                'windowMinutes': 10080,
+                'resetsAt': null,
+                'status':
+                    used == null
+                        ? 'unknown'
+                        : used >= 100
+                        ? 'rateLimited'
+                        : 'ok',
+              },
+            ]
+            ..['buckets'] = <Object>[]
+            ..['modelBreakdown'] = <Object>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: wardPulseLightTheme,
+          home: Scaffold(
+            body: DashboardScreen(
+              onRefresh: _noRefresh,
+              snapshot: DashboardSnapshot.fromJson({
+                ...source.toJson(),
+                'accounts': [account],
+              }),
+            ),
+          ),
+        ),
+      );
+      final card = find.byType(AllowanceSummaryCard);
+      final progress = find.descendant(
+        of: card,
+        matching: find.byType(LinearProgressIndicator),
+      );
+      if (used == null) {
+        expect(progress, findsNothing);
+        expect(find.text('Unknown left'), findsOneWidget);
+        expect(
+          find.descendant(of: card, matching: find.byType(StatusPill)),
+          findsOneWidget,
+        );
+      } else {
+        final bar = tester.widget<LinearProgressIndicator>(progress);
+        expect(bar.color, color, reason: '$provider/$allowanceSource/$id');
+        expect(
+          bar.value,
+          allowanceSource == 'plan' ? (100 - used) / 100 : used / 100,
+        );
+      }
+    }
+  });
+
+  testWidgets(
+    'Claude Extra usage shows independent monthly Credits and reported percent',
+    (tester) async {
+      final base = DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      );
+      for (final (used, cap, percent) in <(String?, String?, double?)>[
+        ('1250.25', '5000', 25),
+        ('0', '5000', 0),
+        ('1250.25', null, 25),
+        ('1250.25', '0', null),
+        (null, '5000', 25),
+        ('1250.25', '5000', null),
+        (null, null, null),
+      ]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DashboardScreen(
+                onRefresh: _noRefresh,
+                snapshot: DashboardSnapshot.fromJson({
+                  ...base.toJson(),
+                  'accounts': [
+                    {
+                      ...base.primaryAccount!.toJson(),
+                      'provider': 'claude',
+                      'connection': 'anthropic.plan',
+                      'allowances': [
+                        {
+                          'id': 'claude-extra-usage',
+                          'source': 'purchased',
+                          'label': 'Extra usage',
+                          'used':
+                              used == null
+                                  ? null
+                                  : {'value': used, 'unit': 'credits'},
+                          'limit':
+                              cap == null
+                                  ? null
+                                  : {'value': cap, 'unit': 'credits'},
+                          'remaining': {'value': '9999', 'unit': 'credits'},
+                          'usedPercent': percent,
+                          'status': percent == null ? 'unknown' : 'ok',
+                        },
+                      ],
+                      'buckets': <Object>[],
+                      'modelBreakdown': <Object>[],
+                    },
+                  ],
+                }),
+              ),
+            ),
+          ),
+        );
+        final card = find.widgetWithText(
+          AllowanceSummaryCard,
+          'Claude plan · Extra usage',
+        );
+        Finder text(String value) =>
+            find.descendant(of: card, matching: find.text(value));
+        expect(
+          text(
+            used == null
+                ? 'Monthly usage unavailable'
+                : '${formatQuantityValue(used)} credits used this month',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          text(
+            'Monthly cap: ${cap == null ? 'Unavailable' : '${formatQuantityValue(cap)} credits'}',
+          ),
+          findsOneWidget,
+        );
+        final bar = find.descendant(
+          of: card,
+          matching: find.byType(LinearProgressIndicator),
+        );
+        if (percent == null) {
+          expect(bar, findsNothing);
+          expect(
+            find.descendant(of: card, matching: find.textContaining('% used')),
+            findsNothing,
+          );
+        } else {
+          expect(text('${percent.toInt()}% used'), findsOneWidget);
+          expect(
+            tester.widget<LinearProgressIndicator>(bar).value,
+            percent / 100,
+          );
+        }
+        expect(text('Available balance'), findsNothing);
+        expect(text('9,999 credits'), findsNothing);
+        expect(text('Unlimited'), findsNothing);
+        expect(tester.takeException(), isNull);
+      }
+    },
+  );
+
+  testWidgets(
+    'Claude missing monthly data stays honest alongside another purchased source',
+    (tester) async {
+      final base = DashboardSnapshot.fromJsonString(
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync(),
+      );
+      for (final siblingSource in [null, 'plan', 'purchased']) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DashboardScreen(
+                onRefresh: _noRefresh,
+                snapshot: DashboardSnapshot.fromJson({
+                  ...base.toJson(),
+                  'accounts': [
+                    {
+                      ...base.primaryAccount!.toJson(),
+                      'provider': 'claude',
+                      'connection': 'anthropic.plan',
+                      'allowances': <Object>[],
+                      'credits': <Object>[],
+                      'buckets': <Object>[],
+                      'modelBreakdown': <Object>[],
+                    },
+                    if (siblingSource != null)
+                      {
+                        ...base.primaryAccount!.toJson(),
+                        'provider': 'codex',
+                        'connection': 'openai.plan',
+                        'allowances': [
+                          {
+                            'id': 'claude-extra-usage',
+                            'label': 'Sibling balance',
+                            'source': siblingSource,
+                            'usedPercent': 20,
+                            'remaining':
+                                siblingSource == 'purchased'
+                                    ? {'value': '320', 'unit': 'credits'}
+                                    : null,
+                            'status': 'ok',
+                          },
+                        ],
+                        'buckets': <Object>[],
+                        'modelBreakdown': <Object>[],
+                      },
+                  ],
+                }),
+              ),
+            ),
+          ),
+        );
+        expect(
+          find.text('Claude plan · Extra usage: monthly data unavailable.'),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('This account has no purchased credits'),
+          findsNothing,
+        );
+        if (siblingSource == 'plan') {
+          expect(
+            find.text(
+              'Purchased usage: no data reported by other connected plans.',
+            ),
+            findsOneWidget,
+          );
+        }
+        if (siblingSource == 'purchased') {
+          expect(find.text('320 credits'), findsOneWidget);
+          expect(find.text('Available balance'), findsOneWidget);
+        }
+      }
+    },
+  );
+
+  testWidgets('keeps legacy OpenAI expenses inside its source', (tester) async {
     final source = DashboardSnapshot.fromJsonString(
       File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
     );
@@ -367,12 +917,13 @@ void main() {
     );
 
     await tester.scrollUntilVisible(
-      find.text('Platform spend'),
+      find.text('Today'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Platform spend'), findsOneWidget);
-    expect(find.text('Today'), findsWidgets);
+    expect(find.text('Platform spend'), findsNothing);
+    expect(find.text('OpenAI · Expenses'), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
   });
 
   testWidgets('hides plan Unknowns for OpenAI-only and offers Providers help', (
@@ -401,10 +952,23 @@ void main() {
       ),
     );
 
-    expect(find.text('Plan usage'), findsOneWidget);
+    final planUsage = find.text('Plan usage');
+    await tester.scrollUntilVisible(
+      planUsage,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(planUsage, findsOneWidget);
     expect(find.text('Unknown'), findsNothing);
 
-    await tester.tap(find.byTooltip('Why is this hidden?'));
+    final help = find.descendant(
+      of: find.ancestor(of: planUsage, matching: find.byType(ListTile)),
+      matching: find.byTooltip('Why is this hidden?'),
+    );
+    await tester.ensureVisible(help);
+    await tester.pumpAndSettle();
+    expect(help.hitTestable(), findsOneWidget);
+    await tester.tap(help);
     await tester.pumpAndSettle();
     expect(
       find.text(
@@ -417,8 +981,8 @@ void main() {
     expect(openedProviders, isTrue);
 
     await tester.scrollUntilVisible(
-      find.text('Platform spend'),
-      300,
+      find.text('Today'),
+      -300,
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Today'), findsOneWidget);
@@ -464,9 +1028,9 @@ void main() {
     );
 
     expect(find.text('Codex'), findsOneWidget);
-    expect(find.text('Weekly plan'), findsOneWidget);
+    expect(find.text('Codex · Weekly plan'), findsOneWidget);
     expect(find.text('60% left'), findsOneWidget);
-    expect(find.text('Model usage'), findsNothing);
+    expect(find.textContaining('Model usage'), findsNothing);
     expect(find.text('Unknown'), findsNothing);
 
     await tester.scrollUntilVisible(
@@ -527,9 +1091,20 @@ void main() {
 
     expect(find.text('Codex'), findsOneWidget);
     expect(find.text('Claude'), findsOneWidget);
-    expect(find.text('Weekly plan'), findsNWidgets(2));
-    expect(find.text('60% left'), findsOneWidget);
-    expect(find.text('30% left'), findsOneWidget);
+    expect(find.text('Codex · Weekly plan'), findsOneWidget);
+    expect(find.text('Claude · Weekly plan'), findsOneWidget);
+    for (final (title, balance) in const [
+      ('Codex · Weekly plan', '60% left'),
+      ('Claude · Weekly plan', '30% left'),
+    ]) {
+      expect(
+        find.descendant(
+          of: find.widgetWithText(AllowanceSummaryCard, title),
+          matching: find.text(balance),
+        ),
+        findsOneWidget,
+      );
+    }
   });
 
   testWidgets('nests usage history under the owning provider plaque', (
@@ -582,13 +1157,13 @@ void main() {
 
     expect(find.text('Claude'), findsOneWidget);
     expect(find.text('Codex'), findsOneWidget);
-    expect(find.text('Usage history'), findsOneWidget);
-    expect(find.text('Codex usage history'), findsNothing);
-    expect(find.text('Claude usage history'), findsNothing);
+    expect(find.text('Codex · Usage history'), findsOneWidget);
+    expect(find.text('Usage history'), findsNothing);
+    expect(find.text('Claude · Usage history'), findsNothing);
 
     final claudeHeader = tester.getTopLeft(find.text('Claude'));
     final codexHeader = tester.getTopLeft(find.text('Codex'));
-    final historyTitle = tester.getTopLeft(find.text('Usage history'));
+    final historyTitle = tester.getTopLeft(find.text('Codex · Usage history'));
     expect(claudeHeader.dy, lessThan(codexHeader.dy));
     expect(codexHeader.dy, lessThan(historyTitle.dy));
   });
@@ -602,6 +1177,7 @@ void main() {
     final plan =
         source.primaryAccount!.toJson()
           ..['accountId'] = 'cursor-plan'
+          ..['connection'] = ProviderConnections.cursorPlan.storageKey
           ..['provider'] = 'cursor'
           ..['status'] = 'ok'
           ..['allowances'] = [
@@ -624,6 +1200,7 @@ void main() {
     final platform =
         source.primaryAccount!.toJson()
           ..['accountId'] = 'cursor-platform'
+          ..['connection'] = ProviderConnections.cursorPlatform.storageKey
           ..['provider'] = 'cursor'
           ..['status'] = 'warning'
           ..['allowances'] = <Object>[]
@@ -643,12 +1220,24 @@ void main() {
     );
 
     expect(find.text('Cursor'), findsOneWidget);
-    expect(find.text('Cursor Models'), findsOneWidget);
-    expect(find.text('Usage history'), findsOneWidget);
-    expect(find.byTooltip('Warning'), findsOneWidget);
+    expect(find.text('Cursor plan · Cursor Models'), findsOneWidget);
+    expect(
+      find.text('Cursor · Team Admin API · Usage history'),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(Badge, '1'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('source-expenses.cursor-platform')),
+        matching: find.byTooltip('Warning'),
+      ),
+      findsOneWidget,
+    );
 
     final cursorHeader = tester.getTopLeft(find.text('Cursor'));
-    final historyTitle = tester.getTopLeft(find.text('Usage history'));
+    final historyTitle = tester.getTopLeft(
+      find.text('Cursor · Team Admin API · Usage history'),
+    );
     expect(cursorHeader.dy, lessThan(historyTitle.dy));
   });
 
@@ -689,7 +1278,7 @@ void main() {
     );
 
     expect(find.text('Codex'), findsOneWidget);
-    expect(find.text('Weekly plan'), findsOneWidget);
+    expect(find.text('Codex · Weekly plan'), findsOneWidget);
     expect(
       find.text(
         'Purchased usage: none reported. This account has no purchased credits right now.',
@@ -768,6 +1357,7 @@ void main() {
       WidgetTester tester,
       DashboardSnapshot snapshot, {
       FrozenOrder? order,
+      Map<String, Set<String>> configuredBudgetPeriods = const {},
     }) async {
       await tester.pumpWidget(
         MaterialApp(
@@ -776,6 +1366,7 @@ void main() {
             body: DashboardScreen(
               snapshot: snapshot,
               order: order,
+              configuredBudgetPeriods: configuredBudgetPeriods,
               onRefresh: _noRefresh,
             ),
           ),
@@ -808,20 +1399,31 @@ void main() {
     testWidgets('families retain separate connection histories and models', (
       tester,
     ) async {
-      final connections = providerConnectionCatalog();
-      final providers = [
-        'codex',
-        'openai',
-        'claude',
-        'claude',
-        'cursor',
-        'cursor',
+      const cases = <(ProviderConnectionId, String, String)>[
+        (ProviderConnections.codexPlan, 'codex', 'Codex plan'),
+        (
+          ProviderConnections.openAiPlatform,
+          'openai',
+          'OpenAI · Platform reporting',
+        ),
+        (ProviderConnections.claudePlan, 'claude', 'Claude plan'),
+        (
+          ProviderConnections.anthropicPlatform,
+          'claude',
+          'Anthropic · Organization reporting',
+        ),
+        (ProviderConnections.cursorPlan, 'cursor', 'Cursor plan'),
+        (
+          ProviderConnections.cursorPlatform,
+          'cursor',
+          'Cursor · Team Admin API',
+        ),
       ];
       final accounts = [
-        for (final (index, connection) in connections.indexed)
-          account(providers[index])
+        for (final (index, (connection, provider, _)) in cases.indexed)
+          account(provider)
             ..['accountId'] = 'source-$index'
-            ..['connection'] = connection.id.storageKey
+            ..['connection'] = connection.storageKey
             ..['allowances'] = <Object>[]
             ..['buckets'] = [
               {
@@ -853,12 +1455,18 @@ void main() {
         11,
         12,
       ]);
-      for (final (index, connection) in connections.indexed) {
-        final caption = find.text(connection.title);
+      for (final (index, (_, _, title)) in cases.indexed) {
+        final caption = find.text(title);
+        final chart = tester.widget<UsageHistoryChart>(
+          find.widgetWithText(UsageHistoryChart, '$title · Usage history'),
+        );
+        expect(chart.buckets.single.requests, 11 + index);
+        final modelTitle = find.text('$title · Model usage');
         final model = find.text('model-$index');
         final history = find.text('${11 + index} requests');
         expect(caption, findsOneWidget);
         expect(model, findsOneWidget);
+        expect(modelTitle, findsOneWidget);
         expect(history, findsOneWidget);
         final panel = find.ancestor(of: model, matching: find.byType(Card));
         expect(
@@ -871,10 +1479,292 @@ void main() {
         );
         expect(
           tester.getTopLeft(history).dy,
+          lessThan(tester.getTopLeft(modelTitle).dy),
+        );
+        expect(
+          tester.getTopLeft(modelTitle).dy,
           lessThan(tester.getTopLeft(model).dy),
         );
         expect(find.text('source-$index'), findsNothing);
       }
+    });
+
+    testWidgets(
+      'reporting expenses align per source and stay separate from Plan balances',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        const sources = [
+          (
+            ProviderConnections.openAiPlatform,
+            'openai',
+            ProviderConnections.codexPlan,
+            'codex',
+          ),
+          (
+            ProviderConnections.anthropicPlatform,
+            'claude',
+            ProviderConnections.claudePlan,
+            'claude',
+          ),
+          (
+            ProviderConnections.cursorPlatform,
+            'cursor',
+            ProviderConnections.cursorPlan,
+            'cursor',
+          ),
+        ];
+        final asOf = DateTime.utc(2026, 10, 13, 11, 12);
+        for (final (connection, provider, planConnection, planProvider)
+            in sources) {
+          final stale = connection == ProviderConnections.anthropicPlatform;
+          final reporting =
+              account(provider, status: stale ? 'stale' : 'ok')
+                ..['accountId'] = 'reporting-source'
+                ..['connection'] = connection.storageKey
+                ..['allowances'] = <Object>[]
+                ..['lastSuccessfulSyncAt'] = asOf.toIso8601String()
+                ..['buckets'] = [
+                  {
+                    'startAt': '2026-10-12T00:00:00Z',
+                    'endAt': '2026-10-13T00:00:00Z',
+                    'cost': {'minorUnits': 999, 'currency': 'USD'},
+                  },
+                ];
+          for (final (period, spent, cap) in <(String, int?, int?)>[
+            ('today', 1234, null),
+            (
+              'week',
+              0,
+              connection == ProviderConnections.cursorPlatform ? null : 10000,
+            ),
+            ('month', null, 50000),
+          ]) {
+            reporting[period] = {
+              ...BudgetState.unknownPeriod(period).toJson(),
+              'spent':
+                  spent == null
+                      ? null
+                      : {'minorUnits': spent, 'currency': 'USD'},
+              'limit':
+                  cap == null ? null : {'minorUnits': cap, 'currency': 'USD'},
+              'remaining':
+                  spent != null && cap != null
+                      ? {'minorUnits': cap - spent, 'currency': 'USD'}
+                      : null,
+              'usedPercent':
+                  spent != null && cap != null ? spent / cap * 100 : null,
+              'status': spent != null && cap != null ? 'ok' : 'unknown',
+            };
+          }
+          final plan =
+              account(planProvider)
+                ..['accountId'] = 'plan-source'
+                ..['connection'] = planConnection.storageKey
+                ..['allowances'] = [
+                  {
+                    'id': 'included',
+                    'source': 'plan',
+                    'label': 'Included window',
+                    'usedPercent': 40.0,
+                    'resetsAt': '2026-10-14T00:00:00Z',
+                    'status': 'ok',
+                  },
+                  {
+                    'id': 'prepaid',
+                    'source': 'purchased',
+                    'label': 'Prepaid balance',
+                    'remaining': {'value': '320', 'unit': 'credits'},
+                    'status': 'ok',
+                  },
+                  if (planProvider == 'claude')
+                    {
+                      'id': 'claude-extra-usage',
+                      'source': 'purchased',
+                      'label': 'Extra usage',
+                      'used': {'value': '12.5', 'unit': 'credits'},
+                      'limit': {'value': '50', 'unit': 'credits'},
+                      'usedPercent': 25.0,
+                      'status': 'ok',
+                    },
+                ];
+          final snapshot = DashboardSnapshot.fromJson({
+            ...snapshotOf([reporting, plan]).toJson(),
+            'generatedAt': '2026-10-13T13:00:00Z',
+          });
+          for (final width in [360.0, 1200.0]) {
+            tester.view.physicalSize = Size(width, 900);
+            await show(tester, snapshot);
+            await tester.pump();
+            final block = find.byKey(
+              const ValueKey('source-expenses.reporting-source'),
+            );
+            Finder period(String name) => find.descendant(
+              of: block,
+              matching: find.byKey(ValueKey('source-expense.$name')),
+            );
+            Finder inPeriod(String name, String text) =>
+                find.descendant(of: period(name), matching: find.text(text));
+            expect(block, findsOneWidget);
+            expect(
+              find.byKey(const ValueKey('source-expenses.plan-source')),
+              findsNothing,
+            );
+            expect(find.text('Platform spend'), findsNothing);
+            for (final label in ['Today', 'Week', 'Month']) {
+              expect(find.text(label), findsOneWidget);
+            }
+            expect(inPeriod('today', 'USD 12.34'), findsOneWidget);
+            expect(inPeriod('today', 'Local cap: Not set'), findsOneWidget);
+            expect(inPeriod('week', 'USD 0.00'), findsOneWidget);
+            expect(
+              inPeriod(
+                'week',
+                connection == ProviderConnections.cursorPlatform
+                    ? 'Local cap: Not set'
+                    : 'Local cap: USD 100.00',
+              ),
+              findsOneWidget,
+            );
+            expect(inPeriod('month', 'No spend reported'), findsOneWidget);
+            expect(inPeriod('month', 'Local cap: USD 500.00'), findsOneWidget);
+            expect(
+              tester
+                  .widget<UsageHistoryChart>(find.byType(UsageHistoryChart))
+                  .buckets
+                  .single
+                  .cost
+                  ?.minorUnits,
+              999,
+            );
+            expect(
+              find.descendant(
+                of: block,
+                matching: find.byType(LinearProgressIndicator),
+              ),
+              findsNothing,
+            );
+            expect(
+              find.descendant(of: block, matching: find.byType(StatusPill)),
+              stale ? findsOneWidget : findsNothing,
+            );
+            expect(find.byType(Badge), stale ? findsOneWidget : findsNothing);
+            expect(
+              find.descendant(
+                of: block,
+                matching: find.byTooltip(formatUtc(asOf)),
+              ),
+              findsOneWidget,
+            );
+            expect(
+              find.descendant(
+                of: block,
+                matching: find.text('As of ${formatLocal(asOf)}'),
+              ),
+              findsOneWidget,
+            );
+            expect(find.text('320 credits'), findsOneWidget);
+            expect(find.text('60% left'), findsOneWidget);
+            if (planProvider == 'claude') {
+              expect(find.text('12.5 credits used this month'), findsOneWidget);
+              expect(find.text('Monthly cap: 50 credits'), findsOneWidget);
+            }
+            final today = tester.getRect(period('today'));
+            final week = tester.getRect(period('week'));
+            final month = tester.getRect(period('month'));
+            if (width < 760) {
+              expect(today.left, week.left);
+              expect(today.right, month.right);
+              expect(today.bottom, lessThan(week.top));
+              expect(week.bottom, lessThan(month.top));
+              final amounts = ['today', 'week', 'month'].map(
+                (name) => tester.getRect(
+                  inPeriod(
+                    name,
+                    name == 'today'
+                        ? 'USD 12.34'
+                        : name == 'week'
+                        ? 'USD 0.00'
+                        : 'No spend reported',
+                  ),
+                ),
+              );
+              expect(amounts.map((rect) => rect.right).toSet(), hasLength(1));
+            } else {
+              expect(today.top, week.top);
+              expect(today.top, month.top);
+              expect(today.width, closeTo(week.width, 0.01));
+              expect(today.width, closeTo(month.width, 0.01));
+            }
+            expect(tester.takeException(), isNull);
+          }
+          if (connection == ProviderConnections.cursorPlatform) {
+            reporting['status'] = 'unknown';
+            reporting['lastSuccessfulSyncAt'] = null;
+            reporting['buckets'] = <Object>[];
+            for (final period in ['today', 'week', 'month']) {
+              reporting[period] = BudgetState.unknownPeriod(period).toJson();
+            }
+            await show(tester, snapshotOf([reporting]));
+            expect(find.text('Cursor · Team Admin API'), findsOneWidget);
+            expect(find.text('No spend reported'), findsNWidgets(3));
+            expect(
+              find.text('Last successful report unavailable'),
+              findsOneWidget,
+            );
+            expect(find.text('Spend'), findsNothing);
+            expect(find.byType(StatusPill), findsOneWidget);
+            expect(tester.takeException(), isNull);
+          }
+        }
+      },
+    );
+
+    testWidgets('evaluated cap currency takes precedence over saved presence', (
+      tester,
+    ) async {
+      final reporting = {
+        ...account('openai'),
+        'accountId': 'reporting-source',
+        'connection': ProviderConnections.openAiPlatform.storageKey,
+        'allowances': <Object>[],
+        'today': const BudgetState.unknownPeriod('today').toJson(),
+        'week': {
+          ...const BudgetState.unknownPeriod('week').toJson(),
+          'spent': {'minorUnits': 0, 'currency': 'EUR'},
+          'limit': {'minorUnits': 12345, 'currency': 'EUR'},
+          'remaining': {'minorUnits': 12345, 'currency': 'EUR'},
+          'usedPercent': 0.0,
+          'status': 'ok',
+        },
+        'month': {
+          ...const BudgetState.unknownPeriod('month').toJson(),
+          'limit': {'minorUnits': 4321, 'currency': 'GBP'},
+        },
+      };
+      await show(
+        tester,
+        snapshotOf([reporting]),
+        configuredBudgetPeriods: {
+          ProviderConnections.openAiPlatform.storageKey: {
+            'today',
+            'week',
+            'month',
+          },
+        },
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Local cap: Configured · Awaiting report'),
+        findsOneWidget,
+      );
+      expect(find.text('Local cap: EUR 123.45'), findsOneWidget);
+      expect(find.text('Local cap: GBP 43.21'), findsOneWidget);
+      expect(find.text('EUR 0.00'), findsOneWidget);
+      expect(find.text('No spend reported'), findsNWidgets(2));
+      expect(find.text('Local cap: Not set'), findsNothing);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('keeps meters and history separate within a connection', (
@@ -899,13 +1789,39 @@ void main() {
             'requests': 21 + index,
           },
         ];
+        data['modelBreakdown'] = [
+          {'model': 'shared-model', 'requests': 31 + index},
+        ];
       }
       await show(tester, snapshotOf(accounts.reversed.toList()));
 
       expect(find.text('Anthropic'), findsOneWidget);
       final balances = ['1,234.6 credits', '50 tokens'];
       for (final (index, balance) in balances.indexed) {
-        final caption = find.text('Claude plan · Source ${index + 1}');
+        final title = 'Claude plan · Source ${index + 1}';
+        final caption = find.text(title);
+        final chart = tester.widget<UsageHistoryChart>(
+          find.widgetWithText(UsageHistoryChart, '$title · Usage history'),
+        );
+        expect(chart.buckets.single.requests, 21 + index);
+        expect(find.text('$title · Model usage'), findsOneWidget);
+        final source =
+            find.ancestor(of: caption, matching: find.byType(Column)).first;
+        expect(
+          find.descendant(of: source, matching: find.text('shared-model')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: source,
+            matching: find.text('${31 + index} requests'),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.widgetWithText(AllowanceSummaryCard, '$title · claude plan'),
+          findsOneWidget,
+        );
         final history = find.text('${21 + index} requests');
         expect(caption, findsOneWidget);
         expect(find.text(balance), findsOneWidget);
@@ -943,72 +1859,146 @@ void main() {
 
       expect(find.text('Mock'), findsOneWidget);
       expect(find.text('other'), findsOneWidget);
-      expect(find.text('mock plan'), findsOneWidget);
+      expect(find.text('Mock · mock plan'), findsOneWidget);
+      expect(find.text('other · Model usage'), findsOneWidget);
+      expect(
+        tester.widget<UsageHistoryChart>(find.byType(UsageHistoryChart)).title,
+        'other · Usage history',
+      );
       expect(find.text('fallback-model'), findsOneWidget);
       expect(find.text('Cursor'), findsOneWidget);
       expect(find.byType(UsageHistoryChart), findsOneWidget);
       expect(dashboardProblems(snapshotOf([mock, other])).first, 'mock');
     });
 
-    testWidgets('counts a cardless failed sibling and keeps the valid source', (
+    testWidgets('invalid source metadata never borrows a sibling identity', (
       tester,
     ) async {
-      final plan =
-          account('codex', status: 'warning')
-            ..['connection'] = ProviderConnections.codexPlan.storageKey
-            ..['buckets'] = source.primaryAccount!.toJson()['buckets'];
-      final cards = plan['allowances'] as List;
-      cards.add({...cards.single as Map<String, dynamic>, 'id': 'second-card'});
-      final failed =
-          account('openai', status: 'error')
-            ..['connection'] = ProviderConnections.openAiPlatform.storageKey
-            ..['allowances'] = <Object>[];
-      const failure = ConnectionReportingOutcome(
-        connection: ProviderConnections.openAiPlatform,
-        category: ReportingOutcomeCategory.accessDenied,
-        source: ReportingOutcomeSource.live,
-      );
-      final snapshot = snapshotOf([
-        failed,
-        plan,
-      ]).withReportingOutcomes([failure]);
-      ProviderConnectionId? repaired;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: DashboardScreen(
-              snapshot: snapshot,
-              onRefresh: _noRefresh,
-              onEditReportingKey: (id) => repaired = id,
+      for (final connection in [null, 'unknown.platform', 'openai.platform']) {
+        final fallback =
+            account('claude')
+              ..['accountId'] = 'private-source'
+              ..['connection'] = connection
+              ..['buckets'] = [
+                {
+                  'startAt': '2026-10-10T00:00:00Z',
+                  'endAt': '2026-10-11T00:00:00Z',
+                  'requests': 17,
+                },
+              ]
+              ..['modelBreakdown'] = [
+                {'model': 'fallback-model', 'requests': 101},
+              ];
+        final sibling =
+            account('claude')
+              ..['accountId'] = 'reporting-sibling'
+              ..['connection'] =
+                  ProviderConnections.anthropicPlatform.storageKey
+              ..['allowances'] = <Object>[]
+              ..['buckets'] = [
+                {
+                  'startAt': '2026-10-11T00:00:00Z',
+                  'endAt': '2026-10-12T00:00:00Z',
+                  'requests': 23,
+                },
+              ];
+        await show(tester, snapshotOf([sibling, fallback]));
+
+        final chart = tester.widget<UsageHistoryChart>(
+          find.widgetWithText(UsageHistoryChart, 'Claude · Usage history'),
+        );
+        expect(chart.buckets.single.requests, 17);
+        final siblingChart = tester.widget<UsageHistoryChart>(
+          find.widgetWithText(
+            UsageHistoryChart,
+            'Anthropic · Organization reporting · Usage history',
+          ),
+        );
+        expect(siblingChart.buckets.single.requests, 23);
+        expect(find.text('Claude · claude plan'), findsOneWidget);
+        expect(find.text('Claude · Model usage'), findsOneWidget);
+        expect(find.text('fallback-model'), findsOneWidget);
+        expect(find.text('private-source'), findsNothing);
+        expect(find.text('reporting-sibling'), findsNothing);
+        expect(find.textContaining('openai.platform'), findsNothing);
+        expect(find.textContaining('unknown.platform'), findsNothing);
+        expect(find.textContaining('OpenAI ·'), findsNothing);
+      }
+    });
+
+    testWidgets(
+      'counts a failed reporting sibling and keeps the valid source',
+      (tester) async {
+        final plan =
+            account('codex', status: 'warning')
+              ..['connection'] = ProviderConnections.codexPlan.storageKey
+              ..['buckets'] = source.primaryAccount!.toJson()['buckets'];
+        final cards = plan['allowances'] as List;
+        cards.add({
+          ...cards.single as Map<String, dynamic>,
+          'id': 'second-card',
+        });
+        final failed =
+            account('openai', status: 'error')
+              ..['connection'] = ProviderConnections.openAiPlatform.storageKey
+              ..['allowances'] = <Object>[];
+        const failure = ConnectionReportingOutcome(
+          connection: ProviderConnections.openAiPlatform,
+          category: ReportingOutcomeCategory.accessDenied,
+          source: ReportingOutcomeSource.live,
+        );
+        final snapshot = snapshotOf([
+          failed,
+          plan,
+        ]).withReportingOutcomes([failure]);
+        ProviderConnectionId? repaired;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: DashboardScreen(
+                snapshot: snapshot,
+                onRefresh: _noRefresh,
+                onEditReportingKey: (id) => repaired = id,
+              ),
             ),
           ),
-        ),
-      );
-      expect(dashboardProblems(snapshot), (
-        sections: 1,
-        status: ProviderStatus.error,
-        first: 'openai',
-      ));
-      expect(find.byType(Badge), findsOneWidget);
-      expect(
-        find.descendant(of: find.byType(Badge), matching: find.text('3')),
-        findsOneWidget,
-      );
-      expect(find.byType(StatusPill), findsNWidgets(2));
-      expect(find.byType(UsageHistoryChart), findsOneWidget);
-      expect(
-        find.textContaining('${failure.connectionLabel}: Access denied'),
-        findsOneWidget,
-      );
-      await tester.tap(find.text('Edit key'));
-      expect(repaired, ProviderConnections.openAiPlatform);
+        );
+        expect(dashboardProblems(snapshot), (
+          sections: 1,
+          status: ProviderStatus.error,
+          first: 'openai',
+        ));
+        expect(find.byType(Badge), findsOneWidget);
+        expect(
+          find.descendant(of: find.byType(Badge), matching: find.text('3')),
+          findsOneWidget,
+        );
+        expect(find.byType(StatusPill), findsNWidgets(3));
+        expect(
+          find.descendant(
+            of: find.byKey(const ValueKey('source-expenses.openai-local')),
+            matching: find.byTooltip('Error'),
+          ),
+          findsOneWidget,
+        );
+        expect(find.byType(UsageHistoryChart), findsOneWidget);
+        expect(
+          find.textContaining('${failure.connectionLabel}: Access denied'),
+          findsOneWidget,
+        );
+        await tester.tap(find.text('Edit key'));
+        expect(repaired, ProviderConnections.openAiPlatform);
 
-      // The failed account remains reachable even without any sibling data.
-      await show(tester, snapshotOf([failed]).withReportingOutcomes([failure]));
-      expect(find.text('OpenAI'), findsOneWidget);
-      expect(find.byType(UsageHistoryChart), findsNothing);
-      expect(dashboardProblems(snapshotOf([failed])).sections, 1);
-    });
+        // The failed account remains reachable even without any sibling data.
+        await show(
+          tester,
+          snapshotOf([failed]).withReportingOutcomes([failure]),
+        );
+        expect(find.text('OpenAI'), findsOneWidget);
+        expect(find.byType(UsageHistoryChart), findsNothing);
+        expect(dashboardProblems(snapshotOf([failed])).sections, 1);
+      },
+    );
 
     for (final width in [360.0, 411.0]) {
       for (final textScale in [1.0, 1.3]) {

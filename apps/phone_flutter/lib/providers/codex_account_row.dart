@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../sync/codex_account_client.dart';
 import 'codex_account_service.dart';
 import 'connected_account_dialog.dart';
+import 'connection_lifecycle.dart';
 import 'provider_connection.dart';
 import 'provider_connection_row.dart';
 
@@ -18,6 +19,7 @@ class CodexAccountRow extends StatefulWidget {
     required this.accountService,
     required this.onCredentialsChanged,
     required this.buildControls,
+    this.onInitialRead,
   });
 
   final ProviderConnection connection;
@@ -25,39 +27,56 @@ class CodexAccountRow extends StatefulWidget {
   final VoidCallback onCredentialsChanged;
   final ConnectionRowControlsBuilder buildControls;
 
+  /// Registers the initial local read with the containing reveal layout.
+  final VoidCallback Function()? onInitialRead;
+
   @override
   State<CodexAccountRow> createState() => _CodexAccountRowState();
 }
 
-class _CodexAccountRowState extends State<CodexAccountRow> {
-  bool? _hasAccount;
-  bool _isConnecting = false;
+class _CodexAccountRowState extends State<CodexAccountRow>
+    with PlanConnectionState<CodexAccountRow> {
+  VoidCallback? _finishInitialRead;
 
   @override
   void initState() {
     super.initState();
+    _finishInitialRead = widget.onInitialRead?.call();
     _loadState();
   }
 
+  @override
+  Object ownerOf(CodexAccountRow widget) => widget.accountService;
+
+  @override
+  Future<bool> readConnected() => widget.accountService.isConnected();
+
+  @override
+  Future<void> observeConnection(CredentialLifecycleObserver observer) =>
+      widget.accountService.observeLifecycle(observer);
+
+  @override
+  void credentialsChanged() => widget.onCredentialsChanged();
+
   Future<void> _loadState() async {
     try {
-      final value = await widget.accountService.isConnected();
-      if (mounted) {
-        setState(() {
-          _hasAccount = value;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _hasAccount = false;
-        });
-      }
+      await loadConnectionState();
+    } finally {
+      _finishInitialRead?.call();
+      _finishInitialRead = null;
     }
   }
 
+  @override
+  void dispose() {
+    _finishInitialRead?.call();
+    _finishInitialRead = null;
+    super.dispose();
+  }
+
   Future<void> _editAccount() async {
-    if (_hasAccount == true) {
+    final owner = widget.accountService;
+    if (hasAccount == true) {
       final action = await showDialog<AccountAction>(
         context: context,
         builder:
@@ -69,25 +88,10 @@ class _CodexAccountRowState extends State<CodexAccountRow> {
             ),
       );
       if (action == AccountAction.disconnect) {
-        try {
-          await widget.accountService.disconnect();
-        } on CodexAccountException catch (error) {
-          if (mounted) {
-            _showMessage(error.details ?? 'Could not disconnect Codex');
-          }
-          return;
-        } catch (_) {
-          if (mounted) {
-            _showMessage('Could not disconnect Codex');
-          }
-          return;
-        }
-        if (mounted) {
-          setState(() {
-            _hasAccount = false;
-          });
-          widget.onCredentialsChanged();
-        }
+        await disconnectConnection(
+          owner: owner,
+          remove: (onRetired) => owner.disconnect(onRetired: onRetired),
+        );
         return;
       }
       if (action != AccountAction.reconnect) {
@@ -95,12 +99,14 @@ class _CodexAccountRowState extends State<CodexAccountRow> {
       }
     }
 
+    if (!mounted || !identical(owner, widget.accountService)) return;
+    final revision = beginConnectionOperation();
     setState(() {
-      _isConnecting = true;
+      connecting = true;
     });
     try {
-      final attempt = await widget.accountService.startLogin();
-      if (!mounted) {
+      final attempt = await owner.startLogin();
+      if (!ownsConnectionOperation(revision, owner)) {
         attempt.cancel();
         return;
       }
@@ -109,24 +115,26 @@ class _CodexAccountRowState extends State<CodexAccountRow> {
         barrierDismissible: false,
         builder: (context) => _CodexLoginDialog(attempt: attempt),
       );
-      if (connected == true && mounted) {
+      if (connected == true && ownsConnectionOperation(revision, owner)) {
         setState(() {
-          _hasAccount = true;
+          hasAccount = true;
         });
         widget.onCredentialsChanged();
       }
     } on CodexAccountException catch (error) {
-      if (mounted && error.failure != CodexAccountFailure.cancelled) {
+      if (ownsConnectionOperation(revision, owner) &&
+          error.failure != CodexAccountFailure.cancelled) {
         _showMessage(error.details ?? 'Could not start Codex sign-in');
       }
     } catch (_) {
-      if (mounted) {
+      if (ownsConnectionOperation(revision, owner)) {
         _showMessage('Could not start Codex sign-in');
       }
     } finally {
-      if (mounted) {
+      if (ownsConnectionOperation(revision, owner)) {
         setState(() {
-          _isConnecting = false;
+          connecting = false;
+          if (hasAccount == null) connectionUnavailable = true;
         });
       }
     }
@@ -134,20 +142,19 @@ class _CodexAccountRowState extends State<CodexAccountRow> {
 
   @override
   Widget build(BuildContext context) {
-    final controls = widget.buildControls(
-      status: switch ((_hasAccount, _isConnecting)) {
-        (_, true) || (null, _) => const RowProgress(),
-        (true, _) => const Text('Connected'),
-        (false, _) => const Text('Not connected'),
-      },
-    );
+    final controls = widget.buildControls(status: connectionStatus());
     return ProviderConnectionRow(
       icon: Icons.account_circle_outlined,
       title: widget.connection.listTitle,
       subtitle: widget.connection.listSubtitle,
       status: controls.status,
       actions: controls.actions,
-      onTap: _hasAccount == null || _isConnecting ? null : _editAccount,
+      onTap:
+          (hasAccount == null && !connectionUnavailable) ||
+                  connecting ||
+                  disconnecting
+              ? null
+              : _editAccount,
     );
   }
 

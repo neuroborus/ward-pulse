@@ -30,8 +30,59 @@ FIXTURE_SCHEMAS = {
     "snapshots/dashboard_today.json": "dashboard_snapshot.schema.json",
     "snapshots/dashboard_week.json": "dashboard_snapshot.schema.json",
     "snapshots/dashboard_alerts.json": "dashboard_snapshot.schema.json",
+    "snapshots/dashboard_watch_fractional.json": "dashboard_snapshot.schema.json",
     "snapshots/watch_dashboard_summary.json": "watch_dashboard_summary.schema.json",
     "snapshots/watch_dashboard_summary_paired.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_fractional.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_fractional_pair.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_credits_only.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_selected_ring_unavailable.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_plan_credits.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n1_full_below.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n1_full_above.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n1_pair_zero_full.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n1_pair_tiny_near_full.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n1_pair_below_above.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n1_pair_above_below.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n1_pair_near_full_tiny.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n1_pair_full_zero.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n1_pair_both_zero.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n1_week_near_full.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_week_day.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_month_month.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_inner_pair_below.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_inner_pair_above.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_inner_full_below.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_inner_full_above.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_outer_pair_below.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_outer_pair_above.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_pairs_zero_tiny.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_pairs_tiny_zero.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_full_zero_tiny.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_full_tiny_near_full.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_full_full.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n2_full_zero.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_middle_pair_below.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_middle_pair_above.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_inner_pair_below.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_inner_pair_above.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_inner_full_below.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_inner_full_above.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_outer_pair_below.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_outer_pair_above.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_pairs_zero_tiny.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_pairs_tiny_zero.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_outer_pair_zero_tiny.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_outer_pair_tiny_zero.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_full_tiny.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_zero_tracks.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_pairs_near_full.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_pairs_full_near.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_pairs_full_full.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_full_near_full.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_full_full.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_reorder_before.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_n3_reorder_after.json": "watch_dashboard_summary.schema.json",
     "snapshots/plan_recovery.json": "plan_recovery.schema.json",
 }
 
@@ -39,7 +90,8 @@ SUPPORTED = {
     "$schema", "$id", "$defs", "$ref", "title", "description",
     "type", "properties", "additionalProperties", "required", "items",
     "enum", "const", "anyOf", "allOf",
-    "minimum", "maximum", "minLength", "maxLength", "maxItems", "pattern",
+    "minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems",
+    "uniqueItems", "pattern",
     "format",
 }
 
@@ -53,9 +105,20 @@ TYPES = {
 }
 
 
+def reject_constant(token: str) -> Any:
+    raise ValueError(f"invalid JSON constant {token}")
+
+
+def load_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"), parse_constant=reject_constant)
+    except ValueError as failure:
+        raise ValueError(f"{path.relative_to(ROOT)}: {failure}") from failure
+
+
 def load_schemas() -> dict[str, Any]:
     return {
-        path.name: json.loads(path.read_text(encoding="utf-8"))
+        path.name: load_json(path)
         for path in sorted(ROOT.glob("schemas/*.schema.json"))
     }
 
@@ -115,8 +178,16 @@ def check(
         if "maximum" in schema and value > schema["maximum"]:
             errors.append(f"{where}: {value} is above maximum {schema['maximum']}")
     if isinstance(value, list):
+        if "minItems" in schema and len(value) < schema["minItems"]:
+            errors.append(f"{where}: {len(value)} items fall below minItems {schema['minItems']}")
         if "maxItems" in schema and len(value) > schema["maxItems"]:
             errors.append(f"{where}: {len(value)} items exceed maxItems {schema['maxItems']}")
+        if schema.get("uniqueItems") and any(
+            json_equal(item, previous)
+            for index, item in enumerate(value)
+            for previous in value[:index]
+        ):
+            errors.append(f"{where}: duplicate items violate uniqueItems")
         item_schema = schema.get("items")
         if item_schema is not None:
             for index, item in enumerate(value):
@@ -125,6 +196,21 @@ def check(
         errors += check_object(value, schema, schemas, current, where)
 
     return errors
+
+
+def json_equal(left: Any, right: Any) -> bool:
+    """JSON equality keeps booleans distinct from numbers, including in containers."""
+    if isinstance(left, bool) or isinstance(right, bool):
+        return type(left) is type(right) and left == right
+    if isinstance(left, dict) and isinstance(right, dict):
+        return left.keys() == right.keys() and all(
+            json_equal(value, right[key]) for key, value in left.items()
+        )
+    if isinstance(left, list) and isinstance(right, list):
+        return len(left) == len(right) and all(
+            json_equal(a, b) for a, b in zip(left, right)
+        )
+    return left == right
 
 
 def check_string(value: str, schema: Any, where: str) -> list[str]:
@@ -139,9 +225,11 @@ def check_string(value: str, schema: Any, where: str) -> list[str]:
     # because a timestamp the shells cannot parse is the bug this gate is for.
     if schema.get("format") == "date-time":
         try:
-            datetime.fromisoformat(value.replace("Z", "+00:00"))
+            instant = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if instant.tzinfo is None or instant.utcoffset() is None:
+                raise ValueError("missing timezone")
         except ValueError:
-            errors.append(f"{where}: {value!r} is not a date-time")
+            errors.append(f"{where}: {value!r} is not a timezone-aware date-time")
     return errors
 
 
@@ -246,10 +334,10 @@ def main() -> int:
     errors: list[str] = []
     for path in paths:
         try:
-            json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as failure:
+            load_json(path)
+        except ValueError as failure:
             # Name the file: a decoder message alone says "line 48" of nothing.
-            errors.append(f"{path.relative_to(ROOT)}: {failure}")
+            errors.append(str(failure))
     if errors:
         # Nothing below can be trusted while a file refuses to parse.
         return report(errors)
@@ -262,7 +350,10 @@ def main() -> int:
                 f"schemas/{path.name}: not named *.schema.json, so nothing reads it"
             )
 
-    schemas = load_schemas()
+    try:
+        schemas = load_schemas()
+    except ValueError as failure:
+        return report([str(failure)])
     errors += check_schema_version(schemas)
     for name, schema in schemas.items():
         errors += check_keywords(name, schema)
@@ -275,7 +366,11 @@ def main() -> int:
 
     for relative, schema_name in sorted(FIXTURE_SCHEMAS.items()):
         fixture = ROOT / "fixtures" / relative
-        instance = json.loads(fixture.read_text(encoding="utf-8"))
+        try:
+            instance = load_json(fixture)
+        except ValueError as failure:
+            errors.append(str(failure))
+            continue
         errors += check(instance, schemas[schema_name], schemas, schema_name, relative)
 
     if errors:

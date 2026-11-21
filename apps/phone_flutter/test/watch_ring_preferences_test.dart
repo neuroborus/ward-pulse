@@ -4,25 +4,70 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
+import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
+import 'package:ward_pulse_phone/sync/credit_request_runway.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 
 void main() {
   final snapshot = DashboardSnapshot.fromJsonString(
     File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
   );
 
+  test('dated metric selection fits six widget rows and two watch pairs', () {
+    // Generated seed-280 IDs; Rust owns the detailed percentage/date assertions.
+    final source = _threePairSnapshot(fableUsed: 36.9).toJson();
+    final codex = (source['accounts'] as List).first as Map<String, dynamic>;
+    (codex['allowances'] as List).add(
+      _purchasedAllowance(remaining: 1200)..['id'] = 'codex-purchased-credits',
+    );
+    final dashboard = DashboardSnapshot.fromJson(source);
+    const widgetIds = [
+      'allowance.codex.codex-primary',
+      'allowance.claude.claude-five-hour',
+      'allowance.claude.claude-seven-day',
+      claudeFableRingId,
+      cursorOwnPoolId,
+      cursorOtherPoolId,
+    ];
+    expect(
+      resolvePhoneWidgetMetrics(
+        dashboard,
+        const PhoneWidgetPreferences(selectedIds: widgetIds),
+      ).map((ring) => ring.id),
+      widgetIds,
+    );
+    expect(purchasedCreditsRemainingForProvider(dashboard, 'codex'), 1200);
+    const selected = [
+      codexPlanRingId,
+      claudePlanRingId,
+      claudeFableRingId,
+      cursorOwnPoolId,
+      cursorOtherPoolId,
+    ];
+    expect(watchRingCapacityReason(selected), isNull);
+    final bands = pairWatchRings(
+      resolveWatchRings(
+        dashboard,
+        const WatchRingPreferences(selectedIds: selected),
+      ),
+    );
+    expect(bands, hasLength(3));
+    expect(bands.where((band) => band.$2 != null), hasLength(2));
+  });
+
   test('mock accounts offer no rings at all', () {
     expect(watchRingCatalog(snapshot), isEmpty);
     expect(watchRingCatalog(null), isEmpty);
   });
 
-  test('offers a budget ring per period a connection reports spend for', () {
+  test('keeps supported Anthropic budget periods visible when unavailable', () {
     final catalog = watchRingCatalog(_planAndBudgetSnapshot());
 
-    // Week reports no spend, so it never becomes a slot.
     expect(catalog.map((ring) => ring.id), [
       'allowance.codex.codex-weekly',
       'budget.anthropic.platform.today',
+      'budget.anthropic.platform.week',
       'budget.anthropic.platform.month',
     ]);
     final today = catalog[1];
@@ -30,8 +75,219 @@ void main() {
     // The reason names the budget entry, not the alert dialog.
     expect(today.unavailableReason, contains('Providers · Budget limits'));
     expect(today.catalogTitle, 'Anthropic platform · Today');
+    expect(catalog[2].isAvailable, isFalse);
+    expect(catalog[2].unavailableReason, contains('Reported spend'));
     expect(catalog.last.isAvailable, isTrue);
   });
+
+  test(
+    'Cursor calendar budget IDs and saved choices survive unavailable periods',
+    () {
+      const todayId = 'budget.cursor.platform.today';
+      const weekId = 'budget.cursor.platform.week';
+      const monthId = 'budget.cursor.platform.month';
+      const selected = WatchRingPreferences(selectedIds: [monthId, weekId]);
+      for (final (spent, limit, reason) in <(Money?, Money?, String?)>[
+        (
+          null,
+          const Money(minorUnits: 10000, currency: 'USD'),
+          'Reported spend',
+        ),
+        (
+          const Money(minorUnits: 0, currency: 'USD'),
+          null,
+          'Set this period’s limit',
+        ),
+        (
+          const Money(minorUnits: 0, currency: 'USD'),
+          const Money(minorUnits: 0, currency: 'USD'),
+          'positive limit in USD',
+        ),
+        (
+          const Money(minorUnits: 0, currency: 'USD'),
+          const Money(minorUnits: 10000, currency: 'EUR'),
+          'positive limit in USD',
+        ),
+        (
+          const Money(minorUnits: 0, currency: 'USD'),
+          const Money(minorUnits: 10000, currency: 'USD'),
+          null,
+        ),
+      ]) {
+        final json = _planAndBudgetSnapshot().toJson();
+        final account = (json['accounts'] as List).last as Map<String, dynamic>;
+        account['provider'] = 'cursor';
+        account['connection'] = 'cursor.platform';
+        account['accountId'] = 'cursor-platform';
+        account['today'] = {
+          ..._spentBudget('today', usedPercent: 0),
+          'spent': spent?.toJson(),
+          'limit': limit?.toJson(),
+        };
+        final snapshot = DashboardSnapshot.fromJson(json);
+        final catalog =
+            watchRingCatalog(snapshot)
+                .where((metric) => metric.id.startsWith('budget.cursor.'))
+                .toList();
+        expect(catalog.map((metric) => metric.id), [todayId, weekId, monthId]);
+        expect(catalog.first.isAvailable, reason == null);
+        expect(catalog.first.usedPercent, reason == null ? 0 : null);
+        expect(
+          catalog.first.unavailableReason,
+          reason == null ? isNull : contains(reason),
+        );
+        expect(catalog[1].unavailableReason, contains('Reported spend'));
+        expect(catalog.last.limit?.minorUnits, 10000);
+        expect(catalog.last.usedPercent, 40);
+        expect(watchRingSelectionIds(snapshot, selected), selected.selectedIds);
+        expect(
+          resolveWatchRings(snapshot, selected).map((metric) => metric.id),
+          [monthId],
+        );
+        expect(
+          resolveWatchRings(
+            snapshot,
+            const WatchRingPreferences(selectedIds: []),
+          ),
+          isEmpty,
+        );
+      }
+      final failed = DashboardSnapshot.empty().withReportingOutcomes([
+        const ConnectionReportingOutcome(
+          connection: ProviderConnections.cursorPlatform,
+          category: ReportingOutcomeCategory.transientFailure,
+          source: ReportingOutcomeSource.live,
+        ),
+      ]);
+      final cold = watchRingCatalog(
+        null,
+        reportingOutcomes: failed.reportingOutcomes,
+      );
+      expect(cold.map((metric) => metric.id), [todayId, weekId, monthId]);
+      expect(cold.every((metric) => !metric.isAvailable), isTrue);
+      expect(watchRingSelectionIds(failed, selected), selected.selectedIds);
+      expect(resolveWatchRings(failed, selected), isEmpty);
+      expect(
+        watchRingSelectionIds(failed, const WatchRingPreferences()),
+        isEmpty,
+      );
+      expect(
+        phoneWidgetCatalog(
+          null,
+          reportingOutcomes: failed.reportingOutcomes,
+        ).map((metric) => metric.id),
+        [todayId, weekId, monthId],
+      );
+    },
+  );
+
+  test('budget percentages need reported spend and a usable ceiling', () {
+    final cases = <(Money?, Money?, double, String?)>[
+      (
+        null,
+        const Money(minorUnits: 10000, currency: 'USD'),
+        40,
+        'Reported spend',
+      ),
+      (
+        const Money(minorUnits: 4000, currency: 'USD'),
+        null,
+        40,
+        'Set this period’s limit',
+      ),
+      (
+        const Money(minorUnits: 4000, currency: 'USD'),
+        const Money(minorUnits: 0, currency: 'USD'),
+        40,
+        'positive limit in USD',
+      ),
+      (
+        const Money(minorUnits: 4000, currency: 'USD'),
+        const Money(minorUnits: 10000, currency: 'EUR'),
+        40,
+        'positive limit in USD',
+      ),
+      (
+        const Money(minorUnits: 0, currency: 'USD'),
+        const Money(minorUnits: 10000, currency: 'USD'),
+        0,
+        null,
+      ),
+    ];
+    for (final (spent, limit, usedPercent, reason) in cases) {
+      final json = _planAndBudgetSnapshot().toJson();
+      final account = (json['accounts'] as List)[1] as Map<String, dynamic>;
+      account['today'] = {
+        ..._spentBudget('today', usedPercent: usedPercent),
+        'spent': spent?.toJson(),
+        'limit': limit?.toJson(),
+        'remaining': null,
+      };
+      final catalog = watchRingCatalog(DashboardSnapshot.fromJson(json));
+      final today = catalog.singleWhere(
+        (metric) => metric.id == 'budget.anthropic.platform.today',
+      );
+      expect(today.isAvailable, reason == null);
+      expect(today.usedPercent, reason == null ? usedPercent : null);
+      expect(today.limit?.toJson(), limit?.toJson());
+      expect(
+        today.unavailableReason,
+        reason == null ? isNull : contains(reason),
+      );
+    }
+  });
+
+  test(
+    'cold reporting failures retain removable budget IDs without plan rows',
+    () {
+      final failed = DashboardSnapshot.empty().withReportingOutcomes([
+        const ConnectionReportingOutcome(
+          connection: ProviderConnections.anthropicPlatform,
+          category: ReportingOutcomeCategory.accessDenied,
+          source: ReportingOutcomeSource.live,
+        ),
+      ]);
+      final catalog = watchRingCatalog(failed);
+      final withoutSnapshot = watchRingCatalog(
+        null,
+        reportingOutcomes: failed.reportingOutcomes,
+      );
+      final widgetCatalog = phoneWidgetCatalog(
+        null,
+        reportingOutcomes: failed.reportingOutcomes,
+      );
+      expect(
+        withoutSnapshot.map((metric) => metric.id),
+        catalog.map((metric) => metric.id),
+      );
+      expect(
+        widgetCatalog.map((metric) => metric.id),
+        catalog.map((metric) => metric.id),
+      );
+      expect(catalog.map((metric) => metric.id), [
+        'budget.anthropic.platform.today',
+        'budget.anthropic.platform.week',
+        'budget.anthropic.platform.month',
+      ]);
+      expect(catalog.every((metric) => !metric.isAvailable), isTrue);
+      const selected = WatchRingPreferences(
+        selectedIds: ['budget.anthropic.platform.week'],
+      );
+      expect(watchRingSelectionIds(failed, selected), selected.selectedIds);
+      expect(resolveWatchRings(failed, selected), isEmpty);
+      expect(
+        watchRingSelectionIds(failed, const WatchRingPreferences()),
+        isEmpty,
+      );
+      expect(
+        watchRingSelectionIds(
+          failed,
+          const WatchRingPreferences(selectedIds: []),
+        ),
+        isEmpty,
+      );
+    },
+  );
 
   test('defaults to the first available percent metrics when unset', () {
     final rings = resolveWatchRings(
@@ -74,13 +330,16 @@ void main() {
     ]);
   });
 
-  test('clamps stored ids to three slots', () {
+  test('keeps invalid stored ids for correction instead of trimming', () {
     const preferences = WatchRingPreferences(
       selectedIds: ['a', 'b', 'c', 'd', 'e'],
     );
 
-    expect(preferences.clampedIds, ['a', 'b', 'c']);
-    expect(jsonEncode(preferences.clampedIds), '["a","b","c"]');
+    expect(preferences.migratedIds, preferences.selectedIds);
+    expect(
+      watchRingCapacityReason(preferences.migratedIds),
+      contains('3 bands'),
+    );
   });
 
   test('the surface keeps four rings when they are three bands', () {
@@ -108,10 +367,8 @@ void main() {
   });
 
   test(
-    'a pool still joins its partner from behind a ring that does not fit',
+    'migration preserves an over-capacity selection including both halves',
     () {
-      // The second pool is free once the first is in, so a full budget must not
-      // hide it: stopping at the first misfit would send the watch half a pair.
       const crowded = WatchRingPreferences(
         selectedIds: [
           'allowance.claude.plan',
@@ -126,9 +383,11 @@ void main() {
         'allowance.claude.plan',
         'budget.anthropic.platform.week',
         cursorOwnPoolId,
+        'budget.anthropic.platform.today',
         cursorOtherPoolId,
       ]);
-      expect(watchRingSlotCost(crowded.clampedIds), 3);
+      expect(watchRingSlotCost(crowded.migratedIds), 4);
+      expect(watchRingCapacityReason(crowded.migratedIds), contains('3 bands'));
     },
   );
 
@@ -153,6 +412,143 @@ void main() {
     label: id,
     usedPercent: used,
     status: ProviderStatus.ok,
+  );
+
+  test('Fable keeps its own catalogue row, title and weekly subtitle', () {
+    final catalog = watchRingCatalog(_threePairSnapshot());
+    final claude = catalog.singleWhere((ring) => ring.id == claudePlanRingId);
+    final fable = catalog.singleWhere((ring) => ring.id == claudeFableRingId);
+    expect(claude.catalogTitle, 'Claude plan');
+    expect(claude.label, '5h');
+    expect(claude.usedPercent, 40);
+    expect(fable.catalogTitle, 'Claude · Fable');
+    expect(fable.catalogSubtitle, 'Fable weekly · 10% left · OK');
+    expect(fable.usedPercent, 90);
+    expect(
+      migrateWatchRingSelectedIds([
+        claudeFableRingId,
+        claudePlanRingId,
+        claudeFableRingId,
+      ]),
+      [claudeFableRingId, claudePlanRingId],
+    );
+  });
+
+  for (final innerIsTighter in [true, false]) {
+    test(
+      'Claude stays inside Fable when tighter half changes: $innerIsTighter',
+      () {
+        final claude = ring(claudePlanRingId, innerIsTighter ? 100 : 10);
+        final fable = ring(claudeFableRingId, innerIsTighter ? 10 : 100);
+        final middle = ring(codexPlanRingId, 50);
+        final surface = orderWatchRingsForSurface([middle, fable, claude]);
+        expect(pairWatchRings(surface), [(claude, fable), (middle, null)]);
+        for (final half in [claude, fable]) {
+          expect(pairWatchRings([half]), [(half, null)]);
+        }
+      },
+    );
+  }
+
+  test(
+    'defaults admit catalogue order and reject the third pair completion',
+    () {
+      final dashboard = _threePairSnapshot();
+      final selected = watchRingSelectionIds(
+        dashboard,
+        const WatchRingPreferences(),
+      );
+      expect(selected, [
+        codexPlanRingId,
+        codexSparkRingId,
+        cursorOwnPoolId,
+        cursorOtherPoolId,
+        claudePlanRingId,
+      ]);
+      expect(watchRingCapacityReason(selected), isNull);
+      expect(watchRingSlotCost([...selected, claudeFableRingId]), 3);
+      expect(
+        watchRingCapacityReason([...selected, claudeFableRingId]),
+        contains('two paired bands'),
+      );
+      // Surface ordering must not conceal an invalid explicit selection.
+      final explicit = WatchRingPreferences(
+        selectedIds: [...selected, claudeFableRingId],
+      );
+      final ordered = orderWatchRingsForSurface(
+        resolveWatchRings(dashboard, explicit),
+      );
+      expect(ordered, hasLength(6));
+      expect(watchRingSelectionIds(dashboard, explicit), explicit.selectedIds);
+      expect(
+        watchRingPayloadSubtitle(dashboard, explicit),
+        contains('correct ring choices'),
+      );
+    },
+  );
+
+  test(
+    'capacity counts saved unknown halves without treating them as zero',
+    () {
+      final dashboard = _threePairSnapshot(fableUsed: null);
+      const preferences = WatchRingPreferences(
+        selectedIds: [claudePlanRingId, claudeFableRingId],
+      );
+      final fable = watchRingCatalog(
+        dashboard,
+      ).singleWhere((ring) => ring.id == claudeFableRingId);
+      expect(fable.isAvailable, isFalse);
+      expect(fable.usedPercent, isNull);
+      expect(
+        watchRingSelectionIds(dashboard, preferences),
+        preferences.selectedIds,
+      );
+      expect(
+        resolveWatchRings(dashboard, preferences).single.id,
+        claudePlanRingId,
+      );
+      final zero = watchRingCatalog(
+        _threePairSnapshot(fableUsed: 100),
+      ).singleWhere((ring) => ring.id == claudeFableRingId);
+      expect(zero.isAvailable, isTrue);
+      expect(zero.remainingPercent, 0);
+      expect(
+        watchRingCapacityReason([
+          codexPlanRingId,
+          codexSparkRingId,
+          cursorOwnPoolId,
+          cursorOtherPoolId,
+          claudePlanRingId,
+          claudeFableRingId,
+        ]),
+        contains('two paired bands'),
+      );
+    },
+  );
+
+  test(
+    'secure preferences preserve invalid choices through partial correction',
+    () async {
+      const key = 'wardpulse.watch.ringIds';
+      const ids = [
+        codexPlanRingId,
+        codexSparkRingId,
+        cursorOwnPoolId,
+        cursorOtherPoolId,
+        claudePlanRingId,
+        claudeFableRingId,
+        'missing',
+      ];
+      FlutterSecureStorage.setMockInitialValues({key: jsonEncode(ids)});
+      const storage = FlutterSecureStorage();
+      final store = SecureWatchRingPreferenceStore(storage: storage);
+      expect((await store.read()).selectedIds, ids);
+      expect(jsonDecode((await storage.read(key: key))!), ids);
+      final corrected = ids.where((id) => id != 'missing').toList();
+      await store.write(WatchRingPreferences(selectedIds: corrected));
+      expect((await store.read()).selectedIds, corrected);
+      expect(watchRingCapacityReason(corrected), contains('two paired bands'));
+    },
   );
 
   for (final innerIsTighter in [true, false]) {
@@ -1007,7 +1403,7 @@ void main() {
 }
 
 /// A plan window plus a spend-reporting platform connection: Anthropic
-/// platform reports Today (no limit yet) and Month (limit set), never Week.
+/// platform reports Today (no limit yet) and Month (limit set); Week is unavailable.
 DashboardSnapshot _planAndBudgetSnapshot() {
   final source = DashboardSnapshot.fromJsonString(
     File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
@@ -1081,6 +1477,58 @@ Map<String, dynamic> _spentBudget(String period, {double? usedPercent}) {
     'projectedTotal': null,
     'status': 'ok',
   };
+}
+
+/// Synthetic catalogue order: two complete pairs before the Claude/Fable pair.
+DashboardSnapshot _threePairSnapshot({double? fableUsed = 90}) {
+  final source = _claudeCodexSnapshot(
+    fiveHourUsed: 40,
+    sevenDayUsed: 20,
+    codexUsed: 10,
+  );
+  final claude = source.accounts.first.toJson();
+  claude['allowances'] = [
+    ...source.accounts.first.allowances.map((a) => a.toJson()),
+    {
+      ..._planAllowance(
+        id: 'claude-seven-day-fable',
+        label: 'Fable weekly',
+        usedPercent: fableUsed ?? 0,
+        windowMinutes: 10080,
+      ),
+      'usedPercent': fableUsed,
+      'status':
+          fableUsed == null
+              ? 'unknown'
+              : fableUsed >= 100
+              ? 'rateLimited'
+              : 'ok',
+    },
+  ];
+  final codex =
+      source.accounts.last.toJson()
+        ..['allowances'] = [
+          _planAllowance(
+            id: 'codex-primary',
+            label: '5h',
+            usedPercent: 10,
+            windowMinutes: 300,
+          ),
+          _planAllowance(
+            id: 'spark-primary',
+            label: 'Spark 5h',
+            usedPercent: 20,
+            windowMinutes: 300,
+          ),
+        ];
+  return DashboardSnapshot.fromJson(
+    source.toJson()
+      ..['accounts'] = [
+        codex,
+        _cursorPairAndCodexSnapshot().accounts.first.toJson(),
+        claude,
+      ],
+  );
 }
 
 DashboardSnapshot _claudeCodexSnapshot({

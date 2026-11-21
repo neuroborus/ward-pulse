@@ -1,16 +1,142 @@
 import 'dart:convert';
 
 import '../providers/connection_lifecycle.dart';
+import '../providers/provider_connection.dart';
 import 'dashboard_models.dart';
 
 final class CapturedConnectionCache {
-  const CapturedConnectionCache(this.version, this.snapshot);
+  const CapturedConnectionCache(
+    this.version,
+    this.record, {
+    this.minimumEra,
+    this.order,
+  });
   final CredentialVersion? version;
-  final DashboardSnapshot? snapshot;
+  final ConnectionCacheRecord? record;
+  final int? minimumEra;
+  final String? order;
+
+  DashboardSnapshot? get snapshot => record?.snapshot;
+  SnapshotCacheObservation? get observation {
+    final cacheOrder = order;
+    return cacheOrder == null
+        ? null
+        : (order: cacheOrder, rowId: record?.rowId);
+  }
+}
+
+final class ConnectionCacheRecord {
+  const ConnectionCacheRecord(
+    this.snapshot, {
+    this.era,
+    this.confirmed = false,
+    this.rowId,
+    this.cacheObservation,
+  });
+  final DashboardSnapshot snapshot;
+  final int? era;
+  final bool confirmed;
+  final String? rowId;
+  final SnapshotCacheObservation? cacheObservation;
+
+  ConnectionCacheRecord withCacheObservation(
+    SnapshotCacheObservation? observation,
+  ) =>
+      confirmed || observation == null || observation == cacheObservation
+          ? this
+          : ConnectionCacheRecord(
+            snapshot,
+            era: era,
+            cacheObservation: observation,
+          );
+
+  // Only a confirmed legacy payload belongs to the initial era.
+  int get selectionEra => era ?? (confirmed ? 0 : -1);
+
+  bool isEligible(int? minimumEra) =>
+      minimumEra == null || selectionEra >= minimumEra;
+
+  bool isNewerThan(ConnectionCacheRecord other) {
+    final comparison =
+        era == null && other.era == null
+            ? 0
+            : selectionEra.compareTo(other.selectionEra);
+    return comparison > 0 ||
+        (comparison == 0 &&
+            snapshot.generatedAt.isAfter(other.snapshot.generatedAt));
+  }
+
+  bool supersedes(ConnectionCacheRecord candidate) =>
+      (era != null && candidate.era == null) || isNewerThan(candidate);
+}
+
+enum SnapshotWriteStatus { stored, older, storageFailure, superseded }
+
+typedef SnapshotWriteResult = ({SnapshotWriteStatus status, int? minimumEra});
+
+/// Validates the complete selection through the shared native lifecycle gate.
+Future<bool> validateSnapshotSelection(
+  DashboardSnapshot snapshot,
+  ConnectionCachePlatform platform, {
+  bool allowUnstampedAccounts = false,
+}) async {
+  final versions = {...snapshot.connectionVersions};
+  for (final outcome in snapshot.reportingOutcomes) {
+    final previous = versions[outcome.connection.storageKey];
+    if (previous?.containsKey('absentRead') == true &&
+        outcome.category == ReportingOutcomeCategory.success)
+      return false;
+    final version = outcome.credentialVersion;
+    if (version == null) continue;
+    if (version.isAbsent) return false;
+    if (previous != null && !version.sameCache(CredentialVersion(previous)))
+      return false;
+    versions[outcome.connection.storageKey] = version.values;
+  }
+  for (final account in snapshot.accounts) {
+    final values = versions[account.connection];
+    if (values != null && CredentialVersion(values).isAbsent) return false;
+    // Cacheless reports can carry a credential version without a history owner.
+    if (allowUnstampedAccounts && account.historyOwner == null) continue;
+    final owner =
+        values == null || account.connection == null
+            ? null
+            : HistoryOwner.fromVersion(
+              account.connection!,
+              CredentialVersion(values),
+            );
+    if (account.historyOwner != owner) return false;
+  }
+  final attemptEras = <String, int>{};
+  final payloadOrders = <String, Map<String, Object>>{};
+  final cacheOrders = <String, String>{};
+  for (final MapEntry(:key, :value) in snapshot.snapshotOrdering.entries) {
+    if (value.selectionUnverified) return false;
+    if (value.attemptEra case final era?) attemptEras[key] = era;
+    if (value.payload case final payload?) {
+      payloadOrders[key] = {
+        'era': payload.era,
+        'generatedAt': payload.generatedAtMicros,
+        if (value.confirmedRowId case final id?) 'rowId': id,
+      };
+    }
+    if ((value.emptyCacheOrder ?? value.cacheObservation?.order)
+        case final order?) {
+      cacheOrders[key] = order;
+    }
+  }
+  return await platform.invoke('validAll', {
+        'versions': versions,
+        if (attemptEras.isNotEmpty) 'attemptClockEras': attemptEras,
+        if (payloadOrders.isNotEmpty) 'payloadOrders': payloadOrders,
+        if (cacheOrders.isNotEmpty) 'emptyCacheOrders': cacheOrders,
+      }) ==
+      true;
 }
 
 /// Only canonical normalized data for the owning connection is persisted.
 final class ConnectionSnapshotCache {
+  static const _cursorMonetaryBasis = 'cursor-extra-paid-calendar-v1';
   ConnectionSnapshotCache({
     required this.connection,
     required Future<CredentialVersion?> Function() readCredentialVersion,
@@ -32,30 +158,15 @@ final class ConnectionSnapshotCache {
   });
   Future<bool> valid(CredentialVersion version) async =>
       await _invoke('valid', version) == true;
-  Future<bool> validSnapshot(DashboardSnapshot snapshot) async {
-    final versions = {...snapshot.connectionVersions};
-    for (final outcome in snapshot.reportingOutcomes) {
-      final version = outcome.credentialVersion;
-      if (version == null) continue;
-      final previous = versions[outcome.connection.storageKey];
-      if (previous != null && !version.sameCache(CredentialVersion(previous)))
-        return false;
-      versions[outcome.connection.storageKey] = version.values;
-    }
-    return await _platform.invoke('validAll', {'versions': versions}) == true;
-  }
+  Future<bool> validSnapshot(DashboardSnapshot snapshot) =>
+      validateSnapshotSelection(snapshot, _platform);
 
   bool owns(DashboardSnapshot snapshot) => snapshot.accounts.every(
     (account) =>
         account.connection == connection && account.provider == _provider,
   );
-  String get _provider => switch (connection) {
-    'openai.plan' => 'codex',
-    'openai.platform' => 'openai',
-    'anthropic.plan' || 'anthropic.platform' => 'claude',
-    'cursor.plan' || 'cursor.platform' => 'cursor',
-    _ => '',
-  };
+  String get _provider =>
+      ProviderConnectionId.fromStorageKey(connection)?.legacyProvider ?? '';
   DashboardSnapshot parse(String encoded) {
     final json = jsonDecode(encoded);
     _validate(json);
@@ -126,65 +237,171 @@ final class ConnectionSnapshotCache {
   DashboardSnapshot stamp(
     DashboardSnapshot snapshot,
     CredentialVersion version,
-  ) => snapshot.withConnectionVersions({connection: version.values});
+  ) {
+    if (version.isAbsent)
+      throw const FormatException('Invalid connection history owner.');
+    final owner = HistoryOwner.fromVersion(connection, version);
+    if (!owns(snapshot) ||
+        snapshot.accounts.any(
+          (account) =>
+              account.historyOwner != null && account.historyOwner != owner,
+        ))
+      throw const FormatException('Invalid connection history owner.');
+    return snapshot
+        .withAccounts([
+          for (final account in snapshot.accounts)
+            ProviderSnapshot.fromJson({
+              ...account.toJson(),
+              if (owner != null) 'historyOwner': owner.toJson(),
+            }),
+        ])
+        .withConnectionVersions({connection: version.values});
+  }
 
-  Future<CapturedConnectionCache> capture({CredentialVersion? expected}) async {
-    var version = expected ?? await _readCredentialVersion();
+  Future<CapturedConnectionCache> capture({
+    CredentialVersion? expected,
+    bool forSelection = false,
+  }) async {
+    final version = expected ?? await _readCredentialVersion();
     if (version == null) return const CapturedConnectionCache(null, null);
     String? encoded;
+    int? minimumEra;
+    int? era;
+    String? order;
+    String? rowId;
+    bool? nativeValid;
+    var legacyTimestamp = true;
     try {
-      encoded = await _invoke('readSnapshot', version) as String?;
+      final reply = await _invoke('readSnapshot', version, {
+        'ordered': true,
+        if (forSelection) 'forSelection': true,
+      });
+      if (reply is Map) {
+        nativeValid = reply['valid'] == true;
+        encoded = reply['snapshot'] as String?;
+        minimumEra = reply['minimumEra'] as int?;
+        era = reply['era'] as int?;
+        order = reply['order'] as String?;
+        rowId = reply['rowId'] as String?;
+        legacyTimestamp = reply['legacyTimestamp'] == true;
+      } else {
+        encoded = reply as String?;
+      }
     } catch (_) {
+      // A successful refresh needs a current ordering floor.
+      if (forSelection) rethrow;
       return CapturedConnectionCache(version, null);
     }
-    if (encoded == null) {
-      if (!await valid(version))
-        version = expected == null ? await _readCredentialVersion() : null;
-      return CapturedConnectionCache(version, null);
+    if (nativeValid == false ||
+        (encoded == null && nativeValid == null && !await valid(version))) {
+      return CapturedConnectionCache(
+        expected == null ? await _readCredentialVersion() : null,
+        null,
+      );
     }
+    CapturedConnectionCache result([ConnectionCacheRecord? record]) =>
+        CapturedConnectionCache(
+          version,
+          record,
+          minimumEra: minimumEra,
+          order: order,
+        );
+    if (encoded == null) return result();
     try {
-      final snapshot = parse(encoded);
+      String normalized = encoded;
+      if (connection == 'cursor.platform') {
+        final Object? wrapper;
+        try {
+          wrapper = jsonDecode(encoded);
+        } catch (_) {
+          // Unmarked old bytes are a basis miss, including unreadable old payloads.
+          return result();
+        }
+        if (wrapper is! Map ||
+            wrapper['monetaryBasis'] != _cursorMonetaryBasis) {
+          return result();
+        }
+        normalized = jsonEncode(wrapper['snapshot']);
+      }
+      final snapshot = parse(normalized);
       if (!owns(snapshot))
         throw const FormatException('Invalid connection cache.');
-      try {
-        await _invoke('upgradeSnapshotTimestamp', version, {
-          'snapshot': encoded,
-          'generatedAt': snapshot.generatedAt.microsecondsSinceEpoch,
-        });
-      } catch (_) {
-        /* Ordering metadata upgrades are best effort payload I/O. */
+      if (!forSelection && legacyTimestamp) {
+        try {
+          await _invoke('upgradeSnapshotTimestamp', version, {
+            'snapshot': encoded,
+            'generatedAt': snapshot.generatedAt.microsecondsSinceEpoch,
+          });
+        } catch (_) {
+          /* Ordering metadata upgrades are best effort payload I/O. */
+        }
       }
-      return CapturedConnectionCache(version, stamp(snapshot, version));
+      return result(
+        ConnectionCacheRecord(
+          stamp(snapshot, version),
+          era: era,
+          confirmed: true,
+          rowId: rowId,
+        ),
+      );
     } catch (_) {
       // Purging advances the epoch. A reporting load must keep the version of
       // the credential it actually read; a fresh write can replace this corrupt
       // payload without retiring that in-flight read.
-      if (expected != null) return CapturedConnectionCache(version, null);
+      if (expected != null) return result();
       try {
         await clear(version);
       } catch (_) {
         /* A corrupt payload remains a cache miss if its purge fails. */
       }
-      version = await _readCredentialVersion();
-      return CapturedConnectionCache(version, null);
+      return CapturedConnectionCache(await _readCredentialVersion(), null);
     }
   }
 
   Future<bool> store(
     DashboardSnapshot snapshot,
     CredentialVersion version,
-  ) async {
+  ) async =>
+      (await storeOrdered(snapshot, version)).status ==
+      SnapshotWriteStatus.stored;
+
+  Future<SnapshotWriteResult> storeOrdered(
+    DashboardSnapshot snapshot,
+    CredentialVersion version, {
+    ConnectionFetchStamp? fetchStamp,
+  }) async {
     if (!owns(snapshot))
       throw const FormatException('Invalid connection snapshot.');
+    snapshot = stamp(snapshot, version);
     try {
-      return await _invoke('writeSnapshot', version, {
-            'snapshot': snapshot.toJsonString(),
-            'generatedAt': snapshot.generatedAt.microsecondsSinceEpoch,
-          }) ==
-          true;
+      final reply = await _invoke('writeSnapshot', version, {
+        'ordered': true,
+        if (fetchStamp != null) 'stamp': fetchStamp.token,
+        'snapshot':
+            connection == 'cursor.platform'
+                ? jsonEncode({
+                  'monetaryBasis': _cursorMonetaryBasis,
+                  'snapshot': snapshot.toJson(),
+                })
+                : snapshot.toJsonString(),
+        'generatedAt': snapshot.generatedAt.microsecondsSinceEpoch,
+      });
+      if (reply is Map) {
+        return (
+          status: SnapshotWriteStatus.values.byName(reply['status'] as String),
+          minimumEra: reply['minimumEra'] as int?,
+        );
+      }
+      return (
+        status:
+            reply == true
+                ? SnapshotWriteStatus.stored
+                : SnapshotWriteStatus.older,
+        minimumEra: null,
+      );
     } catch (_) {
-      return false;
       /* A live response remains usable when payload persistence fails. */
+      return (status: SnapshotWriteStatus.storageFailure, minimumEra: null);
     }
   }
 

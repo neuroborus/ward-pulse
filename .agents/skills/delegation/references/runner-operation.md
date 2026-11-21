@@ -1,15 +1,22 @@
 # Runner operation contract
 
 Read completely before choosing or operating a Runner route from [delegation](../SKILL.md).
+Use [planning research](planning-research.md) to supply primary evidence and require a concrete repair choice during authoring.
 
 ## Actual execution and checks
 
 Use `plan-authoring` followed by `plan-execution` by default. Code must be authored by an actual
-Agent Runner code-producing execution step and pass the pipeline's independent review steps;
-an approved plan or an author's self-review is not execution or independent review. Outside
+Agent Runner code-producing execution step and pass the [owner-selected mode's](owner-selected-mode.md) required verification;
+an approved plan or self-review is not code-producing execution or independent review. Outside
 Runner, supply requirements, measurements, findings and acceptance criteria, not a prewritten
 implementation patch for Runner merely to apply. Subagents may coordinate, operate, read and
 review Runner work, but may not implement it independently.
+
+Before recreating repeated operational logic, check the responsible skill's scripts and existing supported recipes or stock tools. Reuse a sufficient entrypoint; if a genuinely repeated gap remains, queue the smallest Runner-authored helper beside its responsible skill with a short invocation/limits reference. Keep existing project/build/test tools with their owners, and do not turn optional consolidation into a blocker for active product work or a general command framework.
+
+Before launching direct declarative `plan-execution`, qualify the exact submitted plan bytes with the installed stock parser and its serializer/round-trip; retain the accepted step/check scope bound to those bytes. Do not guess the grammar or prepend explanatory Markdown the parser has not accepted. A parsing failure holds launch; preserve the failed packet and prepare a fresh supported correction without changing frozen inputs.
+
+Alongside parser/round-trip qualification for a reused commit plan, bind its next runner-selected subject to the actual current HEAD and remaining work. Under the inspected stock guard, unchanged HEAD already carrying that exact subject requires plan revision even for a different remaining correction. Return that correction to fresh read-only Runner authoring with an applicable scope and subject; do not rename or replay the old plan to evade the guard. Preserve rejected frozen inputs and follow [supported recovery](#frozen-configuration-and-backend-recovery): `plan_revision_required` requires a revised plan and a new run.
 
 Choose supported pipelines and worker steps by their current capabilities, not just their
 names. `polishing` finalizes and stages an existing change set without committing; do not
@@ -19,6 +26,13 @@ separate authorized coordinator commit. Verify the execution route's commit beha
 starting; do not invent a no-commit mode. If the task forbids commits and no supported
 noncommitting route fits, report that conflict and continue independent authorized work
 rather than implement by hand.
+
+Before launch, qualify clean-start `plan-execution` versus supported `polishing` for retained
+dirty Runner-authored WIP. Preserve the WIP; do not discard it or make a pre-check commit
+merely to force clean admission. Polishing remains stage-only, followed by required HOST
+acceptance, the coordinator's full independent ZERO and a separate scoped authorized commit.
+
+Codex-managed `COMMIT` is readiness-only: the pinned adapter admits a limited set of Git verbs, so an ordinarily read-only command can still be rejected. The operator qualifies the actual pinned policy; the managed role uses only admitted read-only operations and leaves additional operator Git preflight outside that turn. Readiness must not stage or create the commit; the constrained executor owns those effects. Handle rejection through [error classification](#classify-runner-failures-and-report-new-defects) and [supported recovery](#frozen-configuration-and-backend-recovery).
 
 **Who runs which check is settled in
 [agent-runner.md](../../finalization/agent-runner.md).** It carries the division between what
@@ -32,7 +46,53 @@ division to the step**, and it is authoritative for that step — so every runne
 required checks explicitly, says which ones the owner runs afterwards, and points at
 `agent-runner.md` for the reasoning.
 
+## Classify Runner failures and report new defects
+
+Classify the actual symptom against the current supported contract before opening a Runner
+issue. Retain concise English operational facts: actual route/run/mode, expected and observed
+behavior, relevant Source/configuration, public evidence and explicit Unknowns. A failed command,
+expected configuration/budget/environment HOLD, ordinary slowness or quota rejection alone does
+not establish a Runner defect. Ordinary Source/test/acceptance findings stay actual Runner work.
+
+Bare known MCP `Transport closed`, a stale client after an update, client restart or deferred
+runtime activation alone is insufficient issue evidence. Briefly state the symptom, qualified
+recovery route and next action. Prefer an already-authorized healthy documented CLI route with
+its actual current runtime and guide over speculative issue churn or repeated owner intervention.
+A working CLI does not prove the failed MCP connection recovered; an unrecovered known client
+connection does not by itself block that healthy CLI. Preserve frozen inputs and ownership; no
+blind replay, forced readiness, model substitution or new authority follows from route recovery.
+Actual confirmed Opus quota exhaustion alone permits the reconciled fresh all-Sol fallback under
+[owner-selected mode](owner-selected-mode.md); ordinary failure or slowness does not.
+
+For EVERY NEW genuinely unexpected Runner incident or credible concrete supported-contract
+violation, the coordinator creates a separate NEW issue through supported `unexpected_issue_report`.
+Do not append a new occurrence to or reuse an existing issue, or edit issue-store files manually.
+A repeated observation of the same old frozen failure is not a new incident. State the concrete
+observed deviation and suspected/confirmed classification truthfully; an unknown engine-code cause
+remains Unknown. Include no credentials, private prompts/transcripts or sensitive payloads, and
+retain the actual issue ID and supported report receipt.
+
+Notify the owner on Telegram, then STOP/end execution pending repair and explicit owner resumption.
+Complete only safe known lifecycle/custody closure before stopping; no fresh launch, blind retry or
+Worker switch around a supported new defect. If supported reporting is unavailable, retain a
+private report explicitly pending publication, notify Telegram and stop on the same terms; never
+claim it was published. A convenient alternative route does not override this stop once a new
+supported defect is established.
+
+This classification/recovery policy grants no global updates, client restarts, process kills,
+profile changes or frozen-input mutations. Use only existing explicit authorization and the
+documented supported recovery controls.
+
 ## Frozen configuration and backend recovery
+
+During active owner-authorized work, an offered `operator_paused` null-resume remains
+autonomous without renewed owner or Telegram confirmation, after actual run/checkpoint and
+ownership qualification. Inspect the actual public `pause.nextActions` projection before
+choosing a control: the same `no_progress` label does not imply uniform recovery. Do not
+guess extra-fix applicability or reset markers; use an offered action or a separately
+owner-authorized fresh disposition, preserving frozen inputs, history and gates. An explicit
+owner pause or stop overrides the standing resume rule. Keep one qualified controller;
+resume does not waive defect stops, environment/capability restrictions or quota/model recovery.
 
 - **Trusted-check configuration is frozen at run start.** Editing
   `LOCAL_ARTIFACTS/agent-runner.json` while a run exists leaves that run unable to resume *and*
@@ -50,19 +110,163 @@ required checks explicitly, says which ones the owner runs afterwards, and point
   --project … --task …` — where both probes see one binary, which also puts the real error on
   stderr instead of leaving it to be dug out of `state.json`.
 
+For external configuration, qualify the actual selected config file against its effective
+`infrastructure.rootPath` and canonical `projectPath`, including config-path containment under
+that root. Copying or successfully parsing/resolving old configuration does not rebind its root;
+preserve a precreation binding rejection and correct only the unfrozen input.
+
+Before freezing a commit-capable run, qualify the actual repository commit-clarification path
+and its Git-ignore status; external configuration does not relocate it. Prefer omitting
+`artifactRoot` for the supported ignored `LOCAL_ARTIFACTS` default unless the actual
+alternative canonical commit path is qualified. Guidance/configuration loading alone is
+not commit-workspace preflight PASS. Preserve/reconcile rejected frozen runs before fresh
+configuration; do not change Source or ignore rules, or edit frozen inputs, to recover.
+
 Aliases live in the runner-root catalog or in the project's own
 `LOCAL_ARTIFACTS/agent-runner.json`; a project selection replaces the root selection, so list
 every alias the pipeline needs. Trusted commands execute in the project directory and inherit
 the runner's environment. `local.properties` in each Android module removes the `ANDROID_HOME`
 dependency for Gradle.
 
+Before an audit launch, verify its actual workspace kind and qualify primary-source membership and
+protected/control-root snapshot footprints separately. Git selection can still leave reserved roots
+such as `.claude` recursively capturing ignored/generated trees; external infrastructure alone does
+not remove source-side controls. Use supported scope/placement controls and keep custody/receipt
+writers outside the active snapshot target. Preserve unrelated dirty copies; a smaller Git selection
+is not move/deletion authorization. A plain source export is warranted only when the actual footprint
+includes unsuitable ignored/generated content and no supported bounded selection is available. Then
+verify all tracked blobs/modes and use supported external infrastructure, without clone/worktree/ref
+writes or ad hoc snapshot exclusions.
+
+On `workspace_changed`, distinguish the actual failing snapshot from a later comparison. Identify
+native bookkeeping through its actual producer and path/type/mode; explicitly admit already-existing
+state only before a fresh freeze, never by repairing a frozen baseline or relaxing its guard.
+A later sample cannot reconstruct an unretained failed capture.
+
+Compare configured profile aliases and effective canonical directories in their own semantic
+domains; alias-to-directory resolution is not a mismatch and does not authorize private-store access.
+
+After `invalid_discovery`, inspect supported diagnostics and the owning schema/semantic contract;
+unretained fields/body leave the exact cause Unknown. Retry only with a concrete supported correction:
+targeted same-run feedback when available, or fresh reviewed requirements when an evidenced contract
+gap supplies a new corrective change. Otherwise preserve the blocker without blind retry, new run or
+manual report repair. Keep the same authorized scope, roles and guards.
+
+Follow the [owner-selected direction](owner-selected-mode.md). Explicitly select
+`combined` for fresh `plan-authoring`, `plan-execution` and `polishing` runs and
+their replacements. Explicitly select `independent` for every fresh `audit` and
+audit replacement. Apply the qualified role selections and authorized quota
+fallback in the linked direction.
+The managing operator verifies the owning run's actual public mode through the supported API before acceptance or an authorized coordinator commit; defaults are insufficient.
+Managed code roles report their assigned mode/protocol and complete that mode's actual verification, without managing their own Runner or adding a CLI self-status/admission/retirement probe.
+Operator mode observation and HOST work are not additional Native checks or completion/commit prerequisites. For Combined coding pipelines, report evidence of primary convergence followed by the full independent review gate.
+The operator uses a supported stop on mismatch; preserve required checks and the coordinator's full independent ZERO.
+
+Before a fresh start, reconcile one self-contained role-facing task/context against the current scoped Native
+catalogue and changed guarantees. Identify its complete Runner Native `requiredChecks` inventory separately
+from mandatory post-DONE HOST obligations; historical inventories are provenance, not competing catalogues.
+The discovery catalogue is the union of Native commands applicable somewhere in the complete canonical plan, not all repository recipes; per-step assignment follows separately. Every selected command enters discovery and needs that global relevance; remove unrelated selections only before the fresh run. Preflight known Native capability needs against the exact task-local configuration's selected trusted command/vector and capability identity; definitions alone, an empty selection or another config do not qualify the check. For example, a JVM `mktemp` check needs its admitted scratch-enabled definition selected. Read-only resolution/preview is not preparation or execution PASS; if a frozen run lacks it, use supported terminal reconciliation before a fresh admitted config/run, without frozen/global edits, broader grants or HOST substitution.
+Inspect the FIRST role's published discovery `requiredChecks` immediately (`plan-execution`: `bootstrapProgress.worker.work.discovery.requiredChecks`, before `workerValidation`). Use a supported stop/reconciliation for an admitted-check/global-relevance mismatch; never treat extra HOST checks as informational or wait for merge/writable work.
+Before claiming a required capture is missing or stopping for that reason, freshly read its retained files and drain the existing owned controller's available output; reconcile the receipt before control.
+Distinguish the capture's recorded timestamp/revision from when the operator reads it: null bootstrap work after completion or quiet stdout does not establish historical absence.
+Require phase-bound receipt evidence; a later snapshot cannot manufacture an unretained earlier PASS. Verified check/step mismatches still require supported stop/reconciliation.
+For `plan-execution`, independently verify merged `validationSchedule.commands` against the admitted complete-plan Native union and resolve every step's command-index mapping against that step's admitted commands before accepting the schedule. Compare `pipelineState.requiredChecks` with the current step's resolved subset before accepting it, not with the complete-plan union. Compare exact command identities, not local C-IDs, which may be renumbered between discovery and steps. Preserve every admitted check: missing/extra commands or incorrect step mappings require supported stop/reconciliation. Apply this domain distinction to other routes only when they expose those domains; do not assume these `plan-execution` fields exist in authoring or another route.
+For a supported public `validationAmendment`, verify its affected step, exact command identities
+and accepted confirmation fingerprint against the finalization/review evidence. Treat that accepted
+step-local overlay separately from original discovery/schedule history, preserving unaffected
+assignments and all mandatory obligations. A proposed or unconfirmed amendment does not change
+admitted checks.
+Put read-only discovery versus workspace-write FINALIZE and real extra-authority needs in that task/context;
+local operator guidance is not injected. Report genuine Native needs truthfully, never force empty reports.
+Treat assigned Worker `workspace-write` separately from Runner-trusted `sourceProjection`, which creates an extra owned disposable Source copy for an exact selected check. Ordinary generated outputs beside inputs do not alone establish an unmet capability; require an actual command-specific limitation of the assigned executor before declaring that extra projection. If an accepted declaration needs correction, preserve it through [supported terminal reconciliation](#frozen-configuration-and-backend-recovery) and start a fresh run, without frozen-report edits or authority added merely to clear admission.
+Before attributing an admission failure or changing authority, qualify the actual
+`capabilityRequirements`/`environmentBlockers` against their owning schema and the command's
+assigned executor and phase. Inability during nonexecuting read-only DISCOVERY alone belongs
+in `summary` as phase rationale, not as an unmet requirement of an assigned Worker's writable
+FINALIZE; this applicability distinction is not a schema ban or proof that genuine execution
+needs are absent. Every accepted environment-only row participates in admission even with
+empty `capabilityRequirements` or evidence denying an eventual restriction; reconciliation
+cannot erase it. Preserve genuinely evidenced nondelegated restrictions of the assigned
+executor without forcing empty reports, grant workarounds, HOST substitution or frozen-report
+repair, and hold if a genuine unmet need remains.
+A check assigned solely to HOST stays mandatory outside Native inventory/capability/environment-blocker
+reports; an unselected HOST command does not acquire Native applicability merely because it is mandatory.
+Keep mandatory HOST acceptance after whole DONE, run-owned process retirement and fresh separate
+quiescent ownership; if the route used a foreground owning CLI, also require its actual exit.
+HOST is not a Native check or Native-commit prerequisite. Preserve every scope-appropriate gate.
+
+For a custom STDIO client, intermediate `run_wait` activity requires `progress:true` and
+`tools/call` `params._meta.progressToken`, beside `params.name` and `params.arguments`, not
+inside the tool arguments. Dispatch `notifications/progress` while awaiting the same call's
+response, matching `params.progressToken`; `params.progress` is the public activity revision
+and `params.message` its message, not a heartbeat, finding count, percentage or full status.
+Intermediate progress does not resolve `run_wait`: keep that one wait until terminal state,
+required input, proved owner loss or timeout; do not replace it with status polling or start
+a second wait.
+
+### Single-wait observation helper
+
+Use [observe-run-wait.mjs](../scripts/observe-run-wait.mjs) for one owned STDIO observation.
+First qualify the Node executable, Runner entry, canonical project/run binding and sole
+observation interval independently. The two assertion flags record that caller responsibility;
+neither cwd nor this helper discovers ownership. Keep other controllers and the live audit untouched.
+Supply absolute paths and a fresh output directory whose parent already exists:
+
+```bash
+"$qualified_node" .agents/skills/delegation/scripts/observe-run-wait.mjs \
+  --node "$qualified_node" --runner-entry "$qualified_runner_entry" \
+  --project "$canonical_project" --run-id "$qualified_run_id" \
+  --cursor 0 --wait-ms 900000 --output "$fresh_receipt_directory" \
+  --qualified-binding --sole-observer
+```
+
+The helper initializes protocol `2025-11-25` and sends exactly one `run_wait`, with no
+discovery, polling, retry or run control. There is no shorter client request deadline.
+Matched progress is appended to `progress.jsonl` before immediate JSONL dispatch to stdout;
+unmatched tokens are ignored. `outcome.json` retains the actual final JSON-RPC response,
+including `structuredContent`, and takes `activityCursor` only from that response. Missing
+final responses/cursors remain `Unknown`. `returned` means the wait returned, not that the
+run passed; `timedOut` is a normal server result. JSON-RPC/tool errors and protocol,
+transport, EOF, process, interruption and receipt failures remain distinct.
+
+The directory is created exclusively with mode `0700`; the three receipt files use exclusive
+creation and mode `0600`. `stderr.log` retains at most the first 64 KiB of the owned server's
+stderr, with observed/retained byte counts and truncation metadata in the outcome. Collect only
+public protocol/diagnostics, never provider stores, transcripts, prompts, credentials or environment dumps.
+Receipt failures preserve partial files and report failure; an absent or incomplete outcome is
+not evidence of success. The helper ends its own stdin normally after a response or client
+failure, observes process exit and stream closure for at most five seconds, then releases local
+handles without signaling the server or durable run. Cleanup reports actual exit or `Unknown`
+and whether the limit was reached. Exit code zero requires a normal wait result, no client
+failures and observed successful cleanup; it proves neither run retirement nor product acceptance.
+The single [controlled protocol test](../scripts/observe-run-wait.test.mjs) uses local streams,
+never a live run: `node --test .agents/skills/delegation/scripts/observe-run-wait.test.mjs`.
+
+### Controller ownership and retirement
+
+Bind managed controllers by `/proc` executable identity, the pinned Runner entry and exact
+project/run arguments appropriate to their supported route; Node can expose `comm=MainThread`.
+
+Installed launchers can execute from immutable runtime payloads outside the outer installation;
+qualify the actual entry using its public payload manifest and launcher modules, rather than
+an installation-path prefix. A different directory alone proves neither foreign ownership nor
+a version mismatch, and a negative outer-prefix-only census does not establish retirement.
+
+Revalidate PID + startTicks before comparisons; name/CWD alone or an empty `node`/`nodejs`
+comm-filter result proves neither ownership nor retirement. Keep the census scoped,
+including separately tracked owned descendants. An unreadable known or evidenced in-scope
+identity leaves retirement unresolved; unrelated unreadable processes do not create a global
+blocker. Public DONE or CPU/I/O activity alone proves neither owned-process exit nor semantic
+progress/command success. Record match results/hashes instead of raw argv, environment,
+prompts or authentication.
+
 ## Observed environment limits
 
-- **`spawnSync python3` is denied (`EPERM`)**, so `just render-designs` can never finish inside
-  a runner step — `tools/render-watch-ring-designs.mjs` shells out to python3 and Pillow in
-  `assertLabelsFit`. Trusted checks execute in a different environment where python3 works,
-  which is why `just check-designs` passes as a gate while the generator behind it cannot be
-  run as work.
+- A historical `spawnSync python3` denial (`EPERM`) blocked `assertLabelsFit` in
+  `tools/render-watch-ring-designs.mjs` inside that Runner executor; a separate trusted
+  `just check-designs` environment ran Python/Pillow successfully. Current `assertLabelsFit`
+  uses asynchronous `runFile` (`execFile`), not `spawnSync`: evaluate it in the actual executor.
+  Neither fact proves current Native generation availability/PASS; preserve the task's Native/HOST division and authorship.
 - **Sockets are denied**, so Gradle never starts: `just check-wear`, `just check-watchface`.
 - **No network**, so a recipe that fetches needs a pinned artifact or it is the owner's.
 

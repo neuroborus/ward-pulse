@@ -5,4 +5,7 @@
     <string name="ward_pulse_widget_stale">Stale</string>
     <string name="ward_pulse_widget_empty">No metrics</string>
     <string name="ward_pulse_widget_resize">Resize widget</string>
+    <string name="ward_pulse_widget_percent_remaining">%1$s remaining</string>
+    <string name="ward_pulse_widget_purchased_credits">%1$s purchased credits</string>
+    <string name="ward_pulse_widget_preview_description" formatted="false">Widget preview. Illustrative example only. Codex, Weekly plan, 0% remaining, 42.6K purchased credits, Reset 06 Nov 07:25. Cursor, Other Models, 64% remaining, Reset 18 Nov 18:52. Claude, Weekly plan, 66% remaining, Reset 08 Nov 08:00. Claude, Fable weekly, 100% remaining, Reset 08 Nov 08:00. Cursor, Models, 100% remaining, Reset 18 Nov 18:52. OpenAI, Today, 100% remaining, USD 12.34 spent, Cap USD 10000.00.</string>
 </resources>

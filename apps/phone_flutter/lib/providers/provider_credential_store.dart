@@ -9,7 +9,10 @@ abstract interface class ProviderCredentialStore {
 
   Future<void> writeSecret(ProviderConnectionId id, String value);
 
-  Future<void> deleteSecret(ProviderConnectionId id);
+  Future<void> deleteSecret(
+    ProviderConnectionId id, {
+    void Function(CredentialVersion)? onRetired,
+  });
 
   Future<String?> readLabel(ProviderConnectionId id);
 
@@ -124,11 +127,14 @@ final class SecureProviderCredentialStore
   }
 
   @override
-  Future<void> deleteSecret(ProviderConnectionId id) async {
+  Future<void> deleteSecret(
+    ProviderConnectionId id, {
+    void Function(CredentialVersion)? onRetired,
+  }) async {
     if (_isOAuth(id)) {
       await deleteLegacySecret(id);
     } else {
-      await _credentials(id).delete();
+      await _credentials(id).delete(onRetired: onRetired);
     }
     await _storage.delete(key: _labelKey(id));
   }
@@ -159,7 +165,10 @@ final class EmptyProviderCredentialStore implements ProviderCredentialStore {
   Future<void> writeSecret(ProviderConnectionId id, String value) async {}
 
   @override
-  Future<void> deleteSecret(ProviderConnectionId id) async {}
+  Future<void> deleteSecret(
+    ProviderConnectionId id, {
+    void Function(CredentialVersion)? onRetired,
+  }) async {}
 
   @override
   Future<String?> readLabel(ProviderConnectionId id) async => null;

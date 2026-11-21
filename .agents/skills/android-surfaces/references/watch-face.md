@@ -13,6 +13,14 @@ Read for WFF, its generator/resources, complication metadata or face-like previe
   the screen, so raising it softens every edge on the face. Do not raise it to sharpen type:
   WFF rounds each glyph of a `TextCircular` to a whole canvas unit, and the answer to that is
   baking, not resolution.
+- Every `Group` in the shared canonical resources, including nested border/mask groups,
+  needs a valid stable `name`. Preserve compatibility with both legacy and Push packaging.
+  A standalone official WFF2 validator PASS does not replace the actual pinned Push
+  validator's semantic result or `just check-wear`; a Java/process exit code 0 can accompany
+  an unsuccessful validation result. Inspect the nested cause and repair the owning
+  generator through Runner; do not bypass validation or change format to hide the error.
+  Keep raw validation tokens out of logs, notes and agent packets. Existing Native/HOST
+  check and retirement boundaries still apply.
 - Keep WFF declarative and minimal; follow the same concentric language as Wear (not
   side-by-side `RING 1` / `RING 2` placeholders).
 - **A scene holds at most eight `ComplicationSlot` elements** — the same in format versions 2, 4
@@ -38,15 +46,22 @@ Read for WFF, its generator/resources, complication metadata or face-like previe
   their own sunk strip; no separate strip slots are added. Keep strip wells **equal width**
   and inside the clear aperture. Every strip TEXT = full label (`46%` or `100% · 500`);
   accents use `[COMPLICATION.RANGED_VALUE_COLORS]` for the inner pool. Combined TITLE bases
-  `split`, `split:cursor-other`, `split:spark` keep the outer marker's family identity;
+  `split`, `split:cursor-other`, `split:spark`, `split:fable` keep the outer marker's family identity;
   known zero suffixes must preserve marker selection. Cursor's marker is static `#67E8D4`,
-  Spark's `#186020`, both 3x14. Marker equivalence was measured 2026-10-12; a live Codex/Spark
+  Spark's `#186020`, Fable's approved warm red with an orange tint `#FF603D`, all 3x14.
+  Fable is exact metric
+  `allowance.claude.claude-seven-day-fable`, outside/right of ordinary Claude `#E8915A`
+  under the selected 2026-11-01 revision. Phone admission enforces three bands and two
+  completed pairs before publication, including saved halves whose data is absent. Invalid
+  stored choices remain removable and retain the last summary until correction; do not
+  increase slot capacity or trim a half to fit. Fable native acceptance remains Pending.
+  Marker equivalence for the earlier pools was measured 2026-10-12; a live Codex/Spark
   payload remains a separate unverified condition. New measurements need a date and actual device; the planned target is the
   round API-36 `wardpulse_wear_round_api36_1` emulator, not shipped watch hardware.
   Avoid `length(TITLE)` Conditions — they are unreliable on WFF. Draw strips after `DigitalClock` so the clock does not cover them.
 - A ring slot's TITLE carries an empty token for an ordinary positive plan, `zero` for an
-  exhausted ordinary plan, or one paired base (`split`, `split:cursor-other`, `split:spark`)
-  optionally suffixed with `:zero-inner`, `:zero-outer`, `:zero-both` (twelve closed paired
+  exhausted ordinary plan, or one paired base (`split`, `split:cursor-other`, `split:spark`, `split:fable`)
+  optionally suffixed with `:zero-inner`, `:zero-outer`, `:zero-both` (sixteen closed paired
   spellings). Match the full closed vocabulary, not loose prefix tests. Budget period tokens
   (`D` / `7D` / `M`) remain unchanged. For a budget ring the
   face repeats it around that band as background-colour cut-out type, branching on

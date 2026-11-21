@@ -2,6 +2,11 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../providers/connection_lifecycle.dart';
 import '../providers/provider_connection.dart';
+import '../providers/connection_rejection_notice.dart';
+import '../sync/claude_account_client.dart';
+import '../sync/codex_account_client.dart';
+import '../sync/openai_reporting_client.dart';
+import '../sync/provider_reporting_clients.dart';
 import 'connection_snapshot_cache.dart';
 import '../providers/claude_account_service.dart';
 import '../providers/claude_account_store.dart';
@@ -20,16 +25,24 @@ final class PhoneLiveBindings {
     required this.codexAccountService,
     required this.claudeAccountService,
     required this.repository,
+    this.rejectionNotices = const NativeConnectionRejectionNoticeStore(),
   });
 
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
   final DashboardRepository repository;
+  final ConnectionRejectionNoticeStore rejectionNotices;
 
   factory PhoneLiveBindings.create({
     FlutterSecureStorage? secureStorage,
     ConnectionCachePlatform? cachePlatform,
+    CodexAccountClient? codexClient,
+    ClaudeAccountClient? claudeClient,
+    OpenAiReportingClient? openAiClient,
+    AnthropicReportingClient? anthropicClient,
+    CursorPlanClient? cursorClient,
+    CursorPlatformClient? cursorReportingClient,
   }) {
     final platform =
         cachePlatform ?? const MethodChannelConnectionCachePlatform();
@@ -66,22 +79,35 @@ final class PhoneLiveBindings {
         },
       );
     }
-    final codexAccountService = MobileCodexAccountService(store: codexStore);
-    final claudeAccountService = MobileClaudeAccountService(store: claudeStore);
+    final codexAccountService = MobileCodexAccountService(
+      store: codexStore,
+      client: codexClient,
+    );
+    final claudeAccountService = MobileClaudeAccountService(
+      store: claudeStore,
+      client: claudeClient,
+    );
     final openAiAndCodex = codexDashboardRepository(
       accountService: codexAccountService,
       cache: caches[ProviderConnections.codexPlan.storageKey],
       fallback: openAiDashboardRepository(
         credentialStore: credentialStore,
+        client: openAiClient,
         cache: caches[ProviderConnections.openAiPlatform.storageKey],
       ),
     );
     return PhoneLiveBindings(
+      rejectionNotices: NativeConnectionRejectionNoticeStore(
+        platform: platform,
+      ),
       credentialStore: credentialStore,
       codexAccountService: codexAccountService,
       claudeAccountService: claudeAccountService,
       repository: buildLiveProviderStack(
         caches: caches,
+        anthropicReportingClient: anthropicClient,
+        cursorSessionClient: cursorClient,
+        cursorReportingClient: cursorReportingClient,
         credentialStore: credentialStore,
         claudeAccountService: claudeAccountService,
         openAiAndCodex: openAiAndCodex,

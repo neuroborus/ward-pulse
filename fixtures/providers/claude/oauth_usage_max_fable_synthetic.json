@@ -1,0 +1,56 @@
+{
+  "_fixture": "Synthetic owner-reported-Max projection derived only from SAFE_CONTRACT_OBSERVATIONS.json, SAFE_JOIN_FIELD_SHAPES.json and SAFE_JOIN_MEASUREMENTS.json. This is not a verbatim captured response or evidence of positive consumption. The generatedAt envelope is synthetic.",
+  "generatedAt": "2026-11-01T00:00:00Z",
+  "five_hour": {
+    "utilization": 0.0,
+    "resets_at": null
+  },
+  "seven_day": {
+    "utilization": 0.0,
+    "resets_at": "2026-11-08T08:00:00+00:00"
+  },
+  "seven_day_opus": null,
+  "seven_day_sonnet": null,
+  "limits": [
+    {
+      "kind": "session",
+      "group": "session",
+      "percent": 0,
+      "severity": "normal",
+      "resets_at": null,
+      "scope": null,
+      "is_active": true
+    },
+    {
+      "kind": "weekly_all",
+      "group": "weekly",
+      "percent": 0,
+      "severity": "normal",
+      "resets_at": "2026-11-08T08:00:00+00:00",
+      "scope": null,
+      "is_active": false
+    },
+    {
+      "kind": "weekly_scoped",
+      "group": "weekly",
+      "percent": 0,
+      "severity": "normal",
+      "resets_at": "2026-11-08T08:00:00+00:00",
+      "scope": {
+        "model": {
+          "id": null,
+          "display_name": "Fable"
+        },
+        "surface": null
+      },
+      "is_active": false
+    }
+  ],
+  "weekly_scoped_shares": [
+    {
+      "limit_index": 2,
+      "used_percent_of_weekly": 0,
+      "allowance_percent_of_weekly": 50
+    }
+  ]
+}

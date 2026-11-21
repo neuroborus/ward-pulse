@@ -10,9 +10,9 @@ Each connection is independent.
 | Anthropic | <span id="claude-subscription">[Claude plan](/guide/providers-anthropic#claude-plan)</span> | <span id="anthropic-organization-reporting">[Organization reporting](/guide/providers-anthropic#organization-reporting)</span> |
 | Cursor | <span id="cursor-plan">[Cursor plan](/guide/providers-cursor#cursor-plan)</span> | <span id="cursor-team-admin-api">[Team Admin API](/guide/providers-cursor#team-admin-api)</span> |
 
-![Providers showing separate plan and reporting connections with their statuses in the light theme.](/screenshots/phone-providers-light.png)
-
-![Providers showing separate plan and reporting connections with their statuses in the dark theme.](/screenshots/phone-providers-dark.png)
+Claude Plan extra usage is read through the Claude plan connection. It is separate from
+Console organization API expenses and from Cursor Team API expenses. Reporting keys need
+organization/team access independently of personal plan eligibility.
 
 Plan and reporting connections have separate statuses. Connected rows do not confirm a
 fresh Dashboard report.
@@ -29,20 +29,27 @@ by <span id="save-the-token">[saving the token in WardPulse](/guide/providers-cu
 
 ## Check the connection
 
-Saving a reporting key starts a check. Read the result beside the same connection:
+Use the key type for the reporting row: OpenAI organization **Admin**, Anthropic **ordinary
+organization-scoped**, or Cursor **Team**. Each needs the account's corresponding reporting
+rights; a personal plan login does not supply them. Anthropic Console Admin values are
+rejected locally, including on replacement, without changing the previous saved state.
+For an accepted reporting value, saving the key starts a check. Read the result beside
+the same connection:
 
 | Status | What to do |
 | --- | --- |
 | **Checking…** | Wait for the report request to finish. |
 | **Connected** | Reporting succeeded. Open Dashboard to read the available data. |
 | **Not verified** | Reporting access for the saved key has not been confirmed. Refresh when available. |
-| **Key rejected** | Check or replace the key in this reporting row. |
+| **Key rejected** | Check or replace the key in this reporting row. Anthropic Console Admin keys need an ordinary organization-scoped replacement. |
 | **Access denied** | Check the key's reporting permissions and the account's access at the provider. |
 | **Could not check** | Check the phone's connection and retry when available. |
 
 A saved key alone does not mean Connected. A working plan login also does not confirm the
-reporting key beside it. Connected can still show zero or no history before the provider
-has usage to report. See [Troubleshooting](/guide/troubleshooting) for other messages.
+reporting key beside it. Connected describes current live access, not complete published
+data. A source can have unknown totals or partial history while cost buckets are still
+unpublished; retained Stale data keeps its original successful time. See
+[Troubleshooting](/guide/troubleshooting) for other messages.
 
 ## Reconnect, change or remove a connection
 
@@ -55,15 +62,44 @@ has usage to report. See [Troubleshooting](/guide/troubleshooting) for other mes
   Label names this connection on your phone.
 - **Remove** clears the selected pasted credential. **Cancel** leaves it unchanged.
 
-Disconnecting or removing a connection clears its local credential and prevents obsolete
-data from being reused. It does not revoke a key at the provider. Revoke it in that
+Confirmed removal prevents the local credential and obsolete data from being reused.
+It does not revoke a reporting key at the provider. Revoke it in that
 provider's key settings if needed; other WardPulse connections remain independent.
+
+A plan with confirmed local removal switches to **Not connected** in the open row and leaves
+usage views even if a later cleanup step fails. A separate message explains remaining local
+cleanup or in-app Cursor session cleanup. If the row says **Unavailable · Retry check**, tap
+that control to check its current state, or tap the row to reconnect. That unavailable state
+does not confirm removal.
+Checking again does not repeat a confirmed removal. Codex can still be removed locally when
+its encrypted sign-in material cannot be read, provided local removal can be confirmed.
+Provider sign-out is best effort when that material is available; local removal does not
+guarantee provider-side revocation.
+
+A saved rejection warning on Dashboard opens Providers at its exact connection. For an
+unconnected **Codex plan** or **Claude plan**, tap the row to start sign-in; for a connected
+plan, tap the row and choose **Reconnect** if needed. Tap an unconnected **Cursor plan** row
+to sign in to its dashboard, or choose **Sign in again** for a connected session. Reporting
+rows keep their key editor. Review the row's current status before
+changing it: the warning records a past rejection and can remain after recovery.
+
+Reconnecting, Disconnect and Remove do not dismiss that historical warning. Use its **X**
+on Dashboard when you want to dismiss it. Opening it and returning to Dashboard also
+leaves it visible.
 
 ## Budget limits and alert thresholds
 
-The **bell icon** opens **Alert thresholds**. Reporting rows also have a **piggy-bank icon**
-for **Budget limits**. These are WardPulse settings; they do not change your provider's plan
-or billing limits. Follow the [Dashboard examples](/guide/dashboard#set-budget-limits-and-alert-thresholds).
+The **bell icon** opens **Alert thresholds**. For a plan connection, set a shared Plan
+threshold or separate thresholds for its reported windows. Choose a preset or
+**Custom % left** to enter a whole number from **0 to 100**. Reporting periods need a limit
+under the **piggy-bank icon's** **Budget limits** before their percentage threshold is available.
+Saved limits stay available when you reopen the editor, even before spend is reported.
+Dashboard shows **Local cap: Configured · Awaiting report** for that connection and period
+until its amount and reporting currency can be shown. Missing spend stays unknown, so a
+saved limit alone does not supply a percentage, remaining amount or threshold alert.
+
+These are WardPulse settings; they do not change your provider's plan or billing limits.
+Follow the [Dashboard examples](/guide/dashboard#set-budget-limits-and-alert-thresholds).
 
 ## Keep credentials private
 

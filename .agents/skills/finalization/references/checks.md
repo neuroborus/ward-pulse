@@ -46,8 +46,14 @@ just check-docs
 
 ## 5. Emulator Check
 
-Automated gates do not exercise the app. Unit tests use fakes, so they never load
-`libward_pulse_ffi.so`, never resolve an exported symbol, and never render a screen.
+Tests prove the paths and artifacts they actually execute. Tests that simulate FFI results
+do not establish real library loading or export resolution. A host regression invoking the
+production Dart binding can load `libward_pulse_ffi.so` and resolve exports even when storage
+or lifecycle dependencies use fakes; identify the actual host library loaded. Host FFI
+execution does not establish Android ABI packaging, installed/active app-library identity,
+Android startup or native rendering.
+Apply [ui-verification](../../ui-verification/SKILL.md) for actual UI acceptance, including
+logical metric mapping, active artifact/state identity and original native-frame review.
 
 Run the app on an emulator when the change could only fail there:
 

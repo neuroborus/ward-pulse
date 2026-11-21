@@ -26,7 +26,7 @@ pub fn build_dashboard_snapshot(
     // bury Ok provider sync behind a misleading Unknown chrome.
     let overall_status = ProviderStatus::worst(accounts.iter().map(|account| account.status));
 
-    // Alerts stay empty until the shell applies user rules via calculate_alerts.
+    // Alerts and observations stay empty until the shell applies user rules.
     let watch_summary = WatchSummary {
         today_used_percent: today_total.used_percent,
         week_used_percent: week_total.used_percent,
@@ -41,6 +41,7 @@ pub fn build_dashboard_snapshot(
         week_total,
         month_total,
         alerts: Vec::new(),
+        alert_conditions: Vec::new(),
         watch_summary,
     }
 }
@@ -118,8 +119,11 @@ mod tests {
     fn provider_snapshot(account_id: &str, today: BudgetState) -> ProviderSnapshot {
         ProviderSnapshot {
             account_id: account_id.to_string(),
-            provider: crate::model::ProviderKind::Mock,
-            connection: None,
+            source: crate::model::ProviderSource::from_legacy(
+                crate::model::ProviderKind::Mock,
+                None,
+            ),
+            history_owner: None,
             status: ProviderStatus::Ok,
             today,
             week: budget_state(BudgetPeriod::Week, usd(0), usd(100)),
@@ -172,8 +176,11 @@ mod tests {
             DateTimeUtc::from("2026-06-27T18:42:00Z"),
             vec![ProviderSnapshot {
                 account_id: "codex".to_string(),
-                provider: crate::model::ProviderKind::Mock,
-                connection: None,
+                source: crate::model::ProviderSource::from_legacy(
+                    crate::model::ProviderKind::Mock,
+                    None,
+                ),
+                history_owner: None,
                 status: ProviderStatus::Ok,
                 today: open_budget.clone(),
                 week: open_budget.clone(),

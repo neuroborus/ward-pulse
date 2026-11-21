@@ -59,6 +59,12 @@ The Dashboard nests three scopes, and each has a different job:
 7. **Glyphs stay distinct per status** — rate limit, key, clock, warning, error. The vocabulary
    is not the problem and does not need replacing; repeating one entry of it down the screen is.
 
+**Pool metric identity — clarification 2026-11-01.** Cursor plan-bar fills use the existing
+`docs/DESIGN_ASSETS.md` metric colors: Cursor Models (`cursor-plan-models`) is `#7E93B8`, and
+Other Models (`cursor-plan-other`) is `#67E8D4`. Match the Cursor provider and raw plan
+allowance ID, independent of label, order, status, percentage or sibling presence. Family
+accents, status marks and non-pool allowance fallbacks keep their existing meanings.
+
 **Implemented 2026-10-11 — the rules are in the code.** Until today this document told its
 reader the marks were unbuilt: *one badge widget renders at every level, at one size*. That was
 true when the rules were locked on 2026-08-13; the sentence outlived the defect it described.
@@ -74,9 +80,9 @@ Each rule, and the guard or function that enforces it:
 | 6, the top mark is a way in | the app-bar badge is an `InkResponse` calling `_revealProblem`, which selects the Dashboard tab and then scrolls to `dashboardProblems(…).first`, read off the same order the screen renders with |
 | 7, distinct glyphs | `_statusIcon` in `status_pill.dart`, one icon per status |
 
-Four tests in `dashboard_screen_test.dart` hold it: *aggregate spend card shows money and
-nothing to measure it* (a card with nothing to mark carries no pill), *shows allowances from
-every connected provider* (healthy families render no `Badge` at all), *shows Cursor Models and
+Tests in `dashboard_screen_test.dart` hold it: *reporting expenses align per source and stay
+separate from Plan balances* (Money stays independent of caps and account status),
+*shows allowances from every connected provider* (healthy families render no `Badge` at all), *shows Cursor Models and
 Other Models plan pools* (the healthy pool carries no pill, the rate-limited one carries its
 own glyph, and the header carries the count `1`), and *a family joining reranks, and the badge
 follows the cards* (what the app-bar mark scrolls to follows the rendered order).
@@ -114,6 +120,17 @@ whole.
 
 ## Family and source ownership
 
+**Metric-color revision 2026-11-01.** Only a Claude Plan allowance with exact ID
+`claude-seven-day-fable` uses `#FF603D`; display labels never choose this accent.
+Ordinary Claude and legacy windows keep `#E8915A`. Anthropic family headers,
+provider/status chrome, purchased usage, budgets and unrelated IDs retain their
+existing colors. Known zero retains its real remaining bar; unknown usage has no
+fabricated bar. This is a selected Source color rule, not native/public acceptance.
+
+**Approved palette follow-up 2026-11-01.** Replace Fable `#FF8A00` with `#FF603D`,
+a warm red with an orange tint. New-palette native/public proof remains **Pending**;
+earlier observations retain their dated scope.
+
 **Clarification 2026-10-17.** Dashboard sections use `providerFamilyOf` and
 `providerFamilyLabel` from `provider_connection.dart`: OpenAI contains Codex plan
 and Platform reporting; Anthropic contains Claude plan and Organization reporting;
@@ -127,18 +144,52 @@ same provider kind. Periods, units and unknown values remain source-owned.
 Nonempty requests-only histories render; empty histories do not. A source without
 allowance or activity detail remains represented, including its unhealthy state
 when applicable.
-Source captions use existing provider or connection catalog metadata, with an
-ordinal when captions would otherwise be ambiguous. They expose no raw account
-or connection IDs or personal account data. Existing labels remain available;
-this change adds no saved-Label loading or display.
+
+**History completeness clarification 2026-11-16.** Prefer complete comparable cost,
+then complete tokens, then complete requests. Without a complete alternative, retain
+known token bars before request bars and show `No totals`. Every reported interval
+keeps its position; an unknown count remains distinct from measured zero and supplies
+neither a bar nor a complete range total. Token counts retain reported-total authority
+and the existing component/cached-token conventions. Native acceptance remains pending.
+
+**Local-source heading revision 2026-11-05.** Source captions and independently readable
+history, Model usage and allowance headings use existing provider or connection catalog
+metadata. Canonical plan titles remain Codex plan, Claude plan and Cursor plan; reporting
+titles include their family, such as OpenAI · Platform reporting. Resolve each account's
+context once, retaining the existing Source N disambiguation in its local headings and
+missing Extra usage notice. Missing or mismatched connection metadata retains the account's
+safe provider-label fallback; neither siblings, model names nor colors supply identity.
+No raw account/connection IDs or personal account data are exposed. Dashboard does not
+load saved Labels. Budget and Alerts dialogs also use canonical source titles independently
+of Labels, preserving exact editor targets and Save/Cancel behavior, including Alerts · Cursor
+plan. Native fit and public capture acceptance for this revision remain pending.
 
 Family identity and source placement depend on stable keys, independently of
 display copy. `_providerDashboardSections` orders families by the existing
 severity scale, then admissible same-currency month spend, then family key.
 Month spend is aggregated only for ordering; mixed currencies are never added.
 `FrozenOrder` holds the result through number-only refreshes and label edits,
-reranking on the existing family identity/status changes. No new source total or
-common Plan/API remainder is displayed; unrelated Dashboard summaries remain.
+reranking on the existing family identity/status changes. No common Plan/API remainder
+is displayed; unrelated Dashboard summaries remain.
+
+**Source expense revision 2026-11-03.** Reporting connections `openai.platform`,
+`anthropic.platform` and `cursor.platform` each render one compact `_SourceExpenseBlock`
+inside their owning account, using aligned Today/Week/Month rows or equal-width columns
+at the existing 760px source-width breakpoint. Known Plan connections are excluded;
+legacy/OpenAI/Mock accounts retain their existing per-account budget-capability fallback.
+The source caption, account status and original successful As of time appear once inside
+the block. **Legacy heading clarification 2026-11-05:** a source without a distinct caption
+uses its resolved safe source title followed by · Expenses inside the block. Today/Week/Month
+remain fields. Narrow allowance content stretches consistently. There are no duplicate global
+Platform spend cards; domain totals, caps, Alerts, navigation, ranking and rollups remain.
+
+Known positive and zero Money remain visible without a cap. Missing cost says No spend
+reported, even with partial history. Local cap: Not set invents neither a percentage nor
+an unhealthy source mark; the account status remains authoritative. Retained Stale reports
+keep their original successful time. Histories and models remain below their own source;
+Claude Plan monthly Extra Credits and prepaid available balances remain independent.
+HOST/native presentation acceptance remains pending; this revision establishes no new device
+measurement or positive live Console expense.
 
 The locked status and balance rules above and below still apply: count each
 account's unhealthy cards, otherwise one for an unhealthy account, and sum these
@@ -160,6 +211,9 @@ separately pending.
 **Revision 2026-10-17.** A saved reporting key is not proof of reporting access. These
 rules apply to **OpenAI · Platform reporting**, **Anthropic · Organization reporting**
 and **Cursor · Team Admin API**, independently of each family's plan connection.
+**Integration correction, 2026-11-03:** Console again participates in the active catalogue
+and shared collection route. These feedback guarantees apply to all three reporting rows;
+a healthy sibling, cached report or saved label never verifies a reporting credential.
 
 - Saving or replacing a key starts one check through the existing live-load lifecycle.
   **Checking…** means that request is running; **Not verified** means reporting access
@@ -172,6 +226,11 @@ and **Cursor · Team Admin API**, independently of each family's plan connection
   insufficient reporting access, and distinct wording for request, rate-limit,
   saved-key-read and reporting-data failures. An optional user label supplements the
   connection name; it never replaces the family and connection kind.
+- Anthropic Console Admin-marker rejection is local, current and credential-versioned.
+  Show explicit ordinary-organization-key replacement guidance and the same Edit key action;
+  it cannot establish Connected or erase the saved secret, label, cache or selections.
+  The optional Anthropic-only editor validator also rejects nonempty replacements, while
+  blank-value label edits, Cancel and Remove retain their existing semantics.
 - **Edit key**, where offered, opens that exact reporting connection's key editor.
   A reporting failure must not direct the user to the sibling plan login. Providers
   keeps status and supporting text below the connection details, readable when text
@@ -183,7 +242,42 @@ and **Cursor · Team Admin API**, independently of each family's plan connection
 - These messages preserve the existing glyph vocabulary, severity scale and rollup
   rules. Reporting failures do not create automatic alerts; alerts remain user-configured.
 
+## Saved connection rejection warnings
+
+**Revision 2026-11-05.** Dashboard retains one historical rejection warning per saved
+connection after an explicitly classified authentication rejection. Claude and Fable share
+the Claude plan connection. Record only future proved rejections; missing credentials or
+an old Not connected state do not supply a historical reason.
+
+Warnings use the existing feedback area, including empty and failed loads. Their past-tense
+copy describes the rejection without claiming that a recovered connection is still broken.
+The body opens Providers and reveals/focuses that exact row with its existing plan, session
+or key controls. It does not open a key editor for an OAuth plan. The independent accessible
+X dismisses only that event and never navigates. Keep wrapping, compact spacing and readable
+light/dark and enlarged-text presentation.
+
+Refresh, navigation, restart, successful reconnect and ordinary Disconnect/Remove retain the
+warning until X; Android Clear storage removes all local records. Dismissal survives repeated
+failures of the same committed connection. A later explicitly committed connection can produce
+a new warning on rejection, even with the same credential or account. Stale failures and stale
+X actions cannot change a newer event. Failed notice writes retain the confirmed view.
+
+Historical warnings never determine current Connected/reporting verification, problem counts,
+allowance status, alerts or freshness. Suppress only matching transient authentication feedback,
+including for a dismissed event; independent access, service and data failures remain visible.
+Controlled phone-emulator checks verify saved-warning persistence and dismissal for OpenAI
+Platform reporting, including exact-row recovery at system font scales 1.0 and 1.6.
+
 ## Balances
+
+**Claude monthly Extra usage revision, 2026-11-03.** Only Claude Plan's purchased
+`claude-extra-usage` meter presents monthly reported used amount and applicable cap
+independently through existing Credits formatting, plus percentage only when reported.
+Use monthly-data-unavailable wording for absent/disabled/missing figures. A known zero
+stays known; missing or zero cap implies neither Unlimited nor exhaustion. This is not an
+available/prepaid balance and supplies no currency, daily history or monthly reset.
+Ordinary windows, Fable identity/accent, other purchased cards and user thresholds remain.
+Source changes do not establish Native/HOST/UI acceptance; that qualification remains pending.
 
 **Locked 2026-10-11.** A purchased allowance card drew its balance as
 `62479.294375 credits` — read off a real payload on 2026-10-11, where the same balance reached

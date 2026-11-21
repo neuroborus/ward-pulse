@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 9,
+  "dataMode": "live",
+  "generatedAt": "2026-06-27T18:42:00.000Z",
+  "overallStatus": "ok",
+  "manualRefreshAllowed": true,
+  "manualRefreshAvailableAt": null,
+  "rings": [
+    {
+      "id": "allowance.cursor.cursor-plan-models",
+      "label": "Cursor Models",
+      "usedPercent": 0.04,
+      "status": "ok",
+      "spent": null,
+      "limit": null,
+      "split": {
+        "id": "allowance.cursor.cursor-plan-other",
+        "label": "Other Models",
+        "usedPercent": 0.03,
+        "status": "ok"
+      }
+    }
+  ],
+  "creditsGlance": null,
+  "today": {
+    "period": "today",
+    "spent": {
+      "minorUnits": 4,
+      "currency": "USD"
+    },
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
+    "projectedTotal": null,
+    "status": "unknown"
+  },
+  "week": {
+    "period": "week",
+    "spent": null,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
+    "projectedTotal": null,
+    "status": "unknown"
+  },
+  "allowances": [
+    {
+      "source": "plan",
+      "label": "Cursor · Cursor Models",
+      "usedPercent": 0.04,
+      "remaining": null,
+      "resetsAt": null,
+      "status": "ok"
+    },
+    {
+      "source": "plan",
+      "label": "Cursor · Other Models",
+      "usedPercent": 0.03,
+      "remaining": null,
+      "resetsAt": null,
+      "status": "ok"
+    }
+  ],
+  "providers": [
+    {
+      "provider": "cursor",
+      "status": "ok",
+      "todaySpent": {
+        "minorUnits": 4,
+        "currency": "USD"
+      }
+    }
+  ],
+  "alerts": [],
+  "isStale": false
+}

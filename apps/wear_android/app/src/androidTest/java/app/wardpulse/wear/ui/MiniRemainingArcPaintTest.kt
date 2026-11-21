@@ -12,6 +12,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import org.junit.Assert.assertEquals
@@ -93,7 +94,56 @@ class MiniRemainingArcPaintTest {
         }
     }
 
-    private fun paint(remaining: Float, color: Int, side: Int, stroke: Float): IntArray {
+    @Test
+    fun genuineFullHasAUniformClosedContourWhileRoundedFullRemainsPartial() {
+        scales.forEach { scale ->
+            val side = (39f * scale).roundToInt()
+            val stroke = 5f * scale
+            val center = side / 2.0
+            val outerRadius = center
+            val innerRadius = outerRadius - stroke
+            val colors = pairedColors + listOf(RingFamily.CLAUDE, RingFamily.CLAUDE_FABLE)
+            colors.forEach { color ->
+                val context = "scale=$scale color=0x${"%08X".format(color)} side=$side stroke=$stroke"
+                val full = paint(1f, color, side, stroke, isFull = true)
+                assertEquals("Full centre: $context", background, full[(side / 2) * side + side / 2])
+                listOf(0.0, 90.0, 180.0, 270.0).forEach { angle ->
+                    assertEquals("Full centreline at $angle: $context", color, full[pointAt(angle, side, stroke)])
+                }
+                // Guard both antialiased edges by one pixel; the core includes the top join.
+                full.forEachIndexed { index, pixel ->
+                    val x = index % side
+                    val y = index / side
+                    val distance = hypot(x + 0.5 - center, y + 0.5 - center)
+                    val pixelContext = "$context pixel=($x,$y) distance=$distance"
+                    when {
+                        distance >= innerRadius + 1.0 && distance <= outerRadius - 1.0 ->
+                            assertEquals("Full stroke core: $pixelContext", color, pixel)
+                        distance < innerRadius - 1.0 || distance > outerRadius + 1.0 ->
+                            assertEquals("Full background: $pixelContext", background, pixel)
+                    }
+                }
+                // Both a displayed 100% partial and a partial rounded to Float 1
+                // must retain the compensated join rather than the closed contour.
+                listOf(0.999f, 1f).forEach { remaining ->
+                    val partial = paint(remaining, color, side, stroke)
+                    val top = pointAt(0.0, side, stroke)
+                    assertTrue(
+                        "Partial promoted to full: $context remaining=$remaining",
+                        colorDistance(partial[top], color) > colorDistance(full[top], color),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun paint(
+        remaining: Float,
+        color: Int,
+        side: Int,
+        stroke: Float,
+        isFull: Boolean = false,
+    ): IntArray {
         val bitmap = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
         try {
             CanvasDrawScope().draw(
@@ -103,7 +153,7 @@ class MiniRemainingArcPaintTest {
                 size = Size(side.toFloat(), side.toFloat()),
             ) {
                 drawRect(Color(background))
-                drawMiniRemainingArc(remaining, Color(color), stroke)
+                drawMiniRemainingArc(remaining, Color(color), stroke, isFull)
             }
             return IntArray(side * side).also {
                 bitmap.getPixels(it, 0, side, 0, 0, side, side)

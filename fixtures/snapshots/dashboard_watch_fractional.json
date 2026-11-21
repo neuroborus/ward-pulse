@@ -1,0 +1,77 @@
+{
+  "generatedAt": "2026-06-27T18:42:00Z",
+  "overallStatus": "ok",
+  "accounts": [
+    {
+      "accountId": "openai-platform-local",
+      "provider": "openai",
+      "connection": "openai.platform",
+      "status": "ok",
+      "today": {
+        "period": "today",
+        "spent": { "minorUnits": 4, "currency": "USD" },
+        "limit": { "minorUnits": 10000, "currency": "USD" },
+        "remaining": { "minorUnits": 9996, "currency": "USD" },
+        "usedPercent": 0.04,
+        "projectedTotal": null,
+        "status": "ok"
+      },
+      "week": {
+        "period": "week",
+        "spent": null,
+        "limit": null,
+        "remaining": null,
+        "usedPercent": null,
+        "projectedTotal": null,
+        "status": "unknown"
+      },
+      "month": {
+        "period": "month",
+        "spent": null,
+        "limit": null,
+        "remaining": null,
+        "usedPercent": null,
+        "projectedTotal": null,
+        "status": "unknown"
+      },
+      "credits": [],
+      "buckets": [],
+      "modelBreakdown": [],
+      "lastSuccessfulSyncAt": "2026-06-27T18:42:00Z",
+      "lastError": null
+    }
+  ],
+  "todayTotal": {
+    "period": "today",
+    "spent": { "minorUnits": 4, "currency": "USD" },
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
+    "projectedTotal": null,
+    "status": "unknown"
+  },
+  "weekTotal": {
+    "period": "week",
+    "spent": null,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
+    "projectedTotal": null,
+    "status": "unknown"
+  },
+  "monthTotal": {
+    "period": "month",
+    "spent": null,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
+    "projectedTotal": null,
+    "status": "unknown"
+  },
+  "alerts": [],
+  "watchSummary": {
+    "todayUsedPercent": null,
+    "weekUsedPercent": null,
+    "status": "ok"
+  }
+}

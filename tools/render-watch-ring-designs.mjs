@@ -4,18 +4,87 @@
  * (`docs/product/WATCH_RING_DESIGN.md`).
  *
  * Usage: node tools/render-watch-ring-designs.mjs [--check]
+ *
+ * One local UNAPPROVED PREVIEW ONLY active face, without canonical export writes:
+ *   node tools/render-watch-ring-designs.mjs --clock-preview-up <450-unit-offset> \
+ *     --clock-preview-output LOCAL_ARTIFACTS/<new-directory>
+ * The offset must be positive in 0.1-unit increments; no offset is approved here.
+ * One local whole-composition illustration using retained historical incident data:
+ *   node tools/render-watch-ring-designs.mjs \
+ *     --viewport-preview-output LOCAL_ARTIFACTS/<new-directory>
+ * It uses the same 225/202 composition scale as ordinary boards on the unchanged
+ * 450 canvas. Its retained incident values are illustrative, not live data.
+ * Viewport and clock preview flags cannot be combined, or used with other flags.
+ * The destination's parent must exist, and its resolved path must stay inside
+ * LOCAL_ARTIFACTS. The destination must be new. Preview flags cannot use --check.
+ * Produces one 450x450 logo-composited PNG, its intermediate SVG, and metadata
+ * with the exact invocation, content, source/input hashes and output identities.
+ * Host review art does not establish native WFF fit or approve runtime adoption.
  */
 
-import { execFileSync } from 'node:child_process'
+import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { mkdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 
 import { FONT_FILE, emit, renderPreviews } from './design-output.mjs'
 
+const runFile = promisify(execFile)
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const checking = process.argv.includes('--check')
+const viewportPreview = parseViewportPreview(process.argv.slice(2))
+const clockPreview = viewportPreview ? null : parseClockPreview(process.argv.slice(2))
+
+function parseViewportPreview(args) {
+  if (!args.includes('--viewport-preview-output')) return null
+  if (args.length !== 2 || args[0] !== '--viewport-preview-output' ||
+      !args[1] || args[1].startsWith('--')) {
+    throw new Error('use viewport preview output exactly once, without clock flags, --check or other flags')
+  }
+  return { output: args[1] }
+}
+
+function parseClockPreview(args) {
+  if (args.length === 0 || (args.length === 1 && args[0] === '--check')) return null
+  const values = new Map()
+  for (let index = 0; index < args.length; index += 2) {
+    const flag = args[index]
+    const value = args[index + 1]
+    if (!['--clock-preview-up', '--clock-preview-output'].includes(flag) ||
+        values.has(flag) || !value || value.startsWith('--')) {
+      throw new Error('use both clock preview flags exactly once, without --check or other flags')
+    }
+    values.set(flag, value)
+  }
+  const up = Number(values.get('--clock-preview-up'))
+  if (values.size !== 2 || !Number.isFinite(up) || up <= 0 || up !== Number(up.toFixed(1))) {
+    throw new Error('clock preview requires an output directory and a positive offset in 0.1-unit increments')
+  }
+  return { up, output: values.get('--clock-preview-output') }
+}
+
+async function clockPreviewDirectory(output, resolveParent = realpath) {
+  const localRoot = join(root, 'LOCAL_ARTIFACTS')
+  const requested = resolve(root, output)
+  const insideLocal = (path) => {
+    const fromLocal = relative(localRoot, path)
+    return fromLocal !== '' && fromLocal !== '..' &&
+      !fromLocal.startsWith(`..${sep}`) && !isAbsolute(fromLocal)
+  }
+  if (!insideLocal(requested)) {
+    throw new Error('clock preview output must be a new directory inside LOCAL_ARTIFACTS')
+  }
+  const directory = join(await resolveParent(dirname(requested)), basename(requested))
+  if (!insideLocal(directory)) {
+    throw new Error('clock preview output resolves outside LOCAL_ARTIFACTS')
+  }
+  return directory
+}
 
 const SURFACE = '#101412'
 const TRACK = '#2E3632'
@@ -34,18 +103,19 @@ const CELL_RIM = '#242A27'
 
 /**
  * The cells above the clock, in the face's own units. The readings are the
- * shipped default: the day of the week is a complication, the temperature and
- * the UV index are the face's own chrome and cost no slot.
+ * illustrative Auto state with a known Celsius source: the day of the week is
+ * a complication, the temperature and UV are the face's own chrome and cost no slot.
  */
 const CELL = {
-  size: 42,
-  fontSize: 14,
+  size: 52,
+  fontSize: 18,
+  textWidth: 46,
   /**
-   * The occupied-cell border widens inward: a stroke of 1.5 on a path of 40.5
-   * spans radius 19.5 to 21.0, preserving the well's edge and band clearance.
+   * The occupied-cell border is inscribed: a stroke of 1.5 on a path of 50.5
+   * spans radius 24.5 to 26.0.
    * An empty cell wears none, so a ring means occupied and a recess means free.
    */
-  ringDiameter: 40.5,
+  ringDiameter: 50.5,
   ringThickness: 1.5,
   /** `0xaa` of the face's text colour, and the arcs' own ambient proportion. */
   ringAmbientAlpha: 140,
@@ -60,13 +130,13 @@ const CELL = {
    * too — a preview draws what the face draws.
    */
   readings: [
-    { x: 152, y: 114, text: 'Tue', wellOpacity: 1 },
-    { x: 204, y: 100, text: '18°C', wellOpacity: 0xeb / 255 },
-    { x: 256, y: 114, text: 'UV 7', wellOpacity: 0xeb / 255 },
+    { x: 147, y: 109, text: 'Tue', wellOpacity: 1 },
+    { x: 199, y: 95, text: '18°C', temperature: 18, wellOpacity: 0xeb / 255 },
+    { x: 251, y: 109, text: 'UV 7', uv: 7, wellOpacity: 0xeb / 255 },
   ],
 }
 
-/** The WFF border's smoothstep stops, including the watermark's six-percent floor. */
+/** The WFF outward fade, also normalized for the lateral bottom masks. */
 const CELL_RING_FADE = [
   { position: 0, alpha: 0xaa },
   { position: 0.5, alpha: 0xaa },
@@ -83,6 +153,7 @@ const STRIP_AMBIENT_ALPHA = 90
 /** The one family accent worn by two entries — a plan ring and a budget ring share it. */
 const ANTHROPIC = '#E8915A'
 const CODEX_SPARK = '#186020'
+const CLAUDE_FABLE = '#FF603D'
 
 /** SIL OFL-1.1. Bold for watch-scale labels; the file itself is `FONT_FILE`. */
 const FONT = 'Noto Sans'
@@ -90,9 +161,17 @@ const FONT = 'Noto Sans'
 /** The canvas the face was measured on; every absolute number below is in its units. */
 const FACE = 450
 
+const COMPOSITION_SCALE = 225 / 202
+const compositionTransform = (size) =>
+  `translate(${size / 2} ${size / 2}) scale(${COMPOSITION_SCALE}) translate(${-size / 2} ${-size / 2})`
+
+// Preserve the measured N3 model, including its historical ambient approximation.
+// It is deliberately distinct from the runtime's nominal 20-unit bands / 4-unit gaps.
+const REVIEW_N3 = { outerCenterline: 450 * 0.4264, width: 450 * 0.0449, gap: 450 * 0.0084 }
+
 /**
- * Measured off the face, never derived from the canvas: `watchface.xml` fixes 88x18 boxes
- * stepping 21 from y=283, with a 12pt label inside a 78-unit text region. Sizing a box to
+ * Fixed in the 450-unit language: 132x26 boxes stepping 27 from y=259,
+ * with 20/18/16-unit labels inside a centred 120-unit text region. Sizing a box to
  * its content instead is what let review art drift a stack wider than the watch draws.
  *
  * The accent is what the face paints, not what its markup declares: a 3x14 arc under a
@@ -100,27 +179,29 @@ const FACE = 450
  * box edge. Same path-versus-paint trap the design document flags for the ring bands.
  */
 const STRIP = {
-  x: 181,
+  x: 159,
   /** The top row of a full stack; a shorter one starts further down. */
-  y: 283,
-  width: 88,
-  height: 18,
-  pitch: 21,
+  y: 259,
+  width: 132,
+  height: 26,
+  pitch: 27,
   radius: 6,
   accentWidth: 4.5,
   accentHeight: 17,
   textInset: 6,
-  textWidth: 78,
-  fontSize: 12,
+  textWidth: 120,
+  fontSize: 20,
 }
 
 /**
- * How far above the canvas centre the clock sits, measured off the face: `watchface.xml`
- * declares a `TimeText` box 20 up, and WFF renders the digits 21.7 up. The measured number is
- * the one that counts, here as everywhere in `WATCH_RING_DESIGN.md` — a board that centred the
- * time geometrically argued for a screen nobody ships.
+ * Both modes share the approved active clock's size and reference baseline;
+ * ambient retains weight 100. Host SVG metrics are illustrative, not native fit
+ * or optical alignment acceptance; time strings retain their natural optics.
  */
-const TIME_LIFT = 21.7
+const CLOCK = {
+  active: { fontSize: 86, baseline: 240.78125, weight: 700 },
+  ambient: { fontSize: 86, baseline: 240.78125, weight: 100 },
+}
 
 /**
  * The ring type drawn as texture: the budget period repeated round the band and punched out in
@@ -156,6 +237,12 @@ const TEXTURE = {
   },
 }
 
+// New-radius fits mirror the face's ADAPTIVE_REPEATS; N3 type repeats stay unchanged.
+const ADAPTIVE_REPEATS = {
+  1: { D: [11], '7D': [7], M: [9] },
+  2: { D: [15, 11], '7D': [9, 6], M: [12, 9] },
+}
+
 const CATALOG = {
   codex: {
     id: 'codex',
@@ -172,6 +259,11 @@ const CATALOG = {
     id: 'claude',
     used: 0.61,
     color: ANTHROPIC,
+  },
+  // Synthetic illustration only; no positive Fable consumption was captured.
+  claudeFable: {
+    id: 'claude', used: 0.18, color: ANTHROPIC,
+    split: { id: 'fable', used: 0.59, color: CLAUDE_FABLE },
   },
   cursor: {
     id: 'cursor',
@@ -232,31 +324,49 @@ const CATALOG = {
 /** Aggregate remaining purchased credits on the center (first) strip (not LLM tokens). */
 const CREDITS_GLANCE = '500'
 
+function stripFontSize(text) {
+  return text.length >= 12 ? 16 : text.length === 11 ? 18 : STRIP.fontSize
+}
+
 /**
- * Widths now guard the labels instead of placing them: the box is a measured constant, so a
- * label that outgrows the text region has to fail here rather than silently overhang, the way
- * the face would ellipsize it. A missing font or Pillow fails too — the old silent fallback
- * shifted baselines by 0.3 and made committed art depend on the machine that rendered it.
+ * Widths guard the labels instead of placing them: a supported label that
+ * outgrows the fixed region must fail rather than silently overhang. A missing
+ * font or Pillow fails too; substituted metrics would change the review art.
  */
-function assertLabelsFit(texts) {
-  const out = execFileSync(
+async function assertLabelsFit(texts, { fontSize = stripFontSize, width = STRIP.textWidth } = {}) {
+  const controller = new AbortController()
+  const interrupt = () => controller.abort()
+  process.on('SIGINT', interrupt)
+  process.on('SIGTERM', interrupt)
+  const metrics = runFile(
     'python3',
     [
       '-c',
       [
         'import json',
         'from PIL import ImageFont',
-        `font = ImageFont.truetype(${JSON.stringify(FONT_FILE)}, ${STRIP.fontSize})`,
-        `texts = ${JSON.stringify(texts)}`,
-        'print(json.dumps({t: font.getbbox(t)[2] - font.getbbox(t)[0] for t in texts}))',
+        `font_file = ${JSON.stringify(FONT_FILE)}`,
+        `labels = ${JSON.stringify(texts.map((text) => [text, fontSize(text)]))}`,
+        'fonts = {size: ImageFont.truetype(font_file, size) for _, size in labels}',
+        'print(json.dumps({t: fonts[size].getbbox(t)[2] - fonts[size].getbbox(t)[0] for t, size in labels}))',
       ].join('\n'),
     ],
-    { encoding: 'utf8' },
+    { encoding: 'utf8', signal: controller.signal },
   )
-  for (const [text, width] of Object.entries(JSON.parse(out))) {
-    if (width > STRIP.textWidth) {
+  const closed = new Promise((resolve) => metrics.child.once('close', resolve))
+  let stdout
+  try {
+    stdout = (await metrics).stdout
+    controller.signal.throwIfAborted()
+  } finally {
+    await closed
+    process.off('SIGINT', interrupt)
+    process.off('SIGTERM', interrupt)
+  }
+  for (const [text, measuredWidth] of Object.entries(JSON.parse(stdout))) {
+    if (measuredWidth > width) {
       throw new Error(
-        `strip label "${text}" is ${width} units wide, past the ${STRIP.textWidth}-unit region`,
+        `label "${text}" is ${measuredWidth} units wide, past the ${width}-unit region`,
       )
     }
   }
@@ -274,88 +384,89 @@ function twoCapCutoff(r, thickness) {
   return (2 * capLength) / (2 * Math.PI * r)
 }
 
-function ringArcBranchGeometry(r, thickness, remaining, nearEmpty) {
+function ringArcGeometry(r, thickness, remaining) {
   const circ = 2 * Math.PI * r
   const left = Math.min(Math.max(remaining, 0), 0.999)
+  const cap = thickness / 2 / r
+  const inset = Math.min(cap, left * 2 * Math.PI / 4)
   return {
-    circ,
-    left,
-    nearEmpty,
-    strokeCap: nearEmpty ? 'butt' : 'round',
-    paint: circ * left - (nearEmpty ? 0 : thickness),
-    used: circ * (1 - left) + (nearEmpty ? 0 : thickness / 2),
+    circ, left, inset,
+    tangent: thickness / 2 * Math.tan(inset) / Math.tan(cap),
+    paint: circ * left - 2 * r * inset,
+    used: circ * (1 - left) + r * inset,
   }
-}
-
-function ringArcGeometry(r, thickness, remaining) {
-  const left = Math.min(Math.max(remaining, 0), 0.999)
-  return ringArcBranchGeometry(r, thickness, left, left <= twoCapCutoff(r, thickness))
-}
-
-function visibleRingArcLength(geometry, thickness) {
-  return geometry.paint + (geometry.strokeCap === 'round' ? thickness : 0)
 }
 
 function assertNearExhaustedArcs() {
   const epsilon = 0.000001
   const tolerance = 0.000000001
-  for (const diameter of [404, 356, 308]) {
-    const r = diameter / 2
-    const thickness = 40
+  const geometries = [1, 2, 3].flatMap((count) => {
+    const width = [44, 32, 20][count - 1]
+    return Array.from({ length: count }, (_, index) => {
+      // Preserve the accepted measured N3 art, including its ambient model.
+      const modes = count === 3 ? [false, true] : [false]
+      return modes.flatMap((ambient) => {
+        const pitchWidth = count === 3 ? 450 * (ambient ? 0.0403 : 0.0449) : width
+        const band = ambient ? pitchWidth * 0.75 : pitchWidth
+        const r = count === 3
+          ? 450 * 0.4264 - index * (pitchWidth + 450 * 0.0084)
+          : 202 - index * (width + 4) - width / 2
+        return [[r, band, 'ordinary'], ...ringArcPair(r, band)
+          .map(([radius, half], index) => [radius, half, index === 0 ? 'main' : 'extra'])]
+      })
+    }).flat()
+  })
+  for (const [nominalRadius, nominalThickness, role] of geometries) {
+    const r = nominalRadius + (role === 'main' ? 0.5 : 0)
+    const thickness = nominalThickness + (role === 'main' ? 1 : 0)
+    const draw = (remaining) => ringArc({
+      cx: 225, cy: 225, r: nominalRadius, thickness: nominalThickness,
+      remaining, color: '#ffffff', ambient: false, paired: role !== 'ordinary', pairedMain: role === 'main',
+    })
     const cutoff = twoCapCutoff(r, thickness)
-    const belowRemaining = cutoff - epsilon
-    const below = ringArcGeometry(r, thickness, belowRemaining)
-    if (
-      !below.nearEmpty ||
-      below.strokeCap !== 'butt' ||
-      below.paint <= 0 ||
-      Math.abs(visibleRingArcLength(below, thickness) - below.circ * belowRemaining) > tolerance
-    ) {
-      throw new Error(
-        `ring ${diameter}: a remainder below the two-cap cutoff must stay visible and proportional`,
-      )
+    const saturation = 2 * cutoff
+    const h = thickness / 2
+    const c = h / r
+    const k = h / (Math.sqrt(r * r - h * h) * Math.tan(c))
+    for (const remaining of [0.0000001, cutoff - epsilon, cutoff + epsilon,
+      saturation - epsilon, saturation, saturation + epsilon, 0.37, 0.99, 0.996, 0.999]) {
+      const geometry = ringArcGeometry(r, thickness, remaining)
+      const extent = Math.atan(geometry.tangent / Math.sqrt(r * r - h * h))
+      const footprint = geometry.paint / r + 2 * extent
+      const bound = 2 * Math.abs(k - 1) * Math.tan(geometry.inset)
+      if (geometry.paint <= 0 || geometry.paint < geometry.circ * geometry.left / 2 - tolerance ||
+          geometry.tangent <= 0 || geometry.tangent > h + tolerance ||
+          Math.abs(footprint - geometry.left * 2 * Math.PI) > bound + tolerance ||
+          Math.abs(geometry.tangent / Math.tan(geometry.inset) - h / Math.tan(c)) > tolerance ||
+          (remaining >= saturation && Math.abs(geometry.tangent - h) > tolerance)) {
+        throw new Error(`ring ${r * 2}: compressed caps lost their scaling, containment or ordinary silhouette`)
+      }
+      const markup = draw(remaining)
+      if (!markup.includes('<mask ') || !markup.includes('stroke-linecap="butt"') ||
+          [...markup.matchAll(/<ellipse /g)].length !== 2 ||
+          !markup.includes(`r="${r}" fill="none" stroke="#ffffff"\n          stroke-width="${thickness}"`) ||
+          !markup.includes(`stroke-width="${thickness + (role !== 'ordinary' ? 2 : 0)}" mask=`)) {
+        throw new Error(`ring ${r * 2}: partial art must use one core/cap mask`)
+      }
     }
-
-    const aboveRemaining = cutoff + epsilon
-    const above = ringArcGeometry(r, thickness, aboveRemaining)
-    const expectedPaint = above.circ * aboveRemaining - thickness
-    const expectedUsed = above.circ * (1 - aboveRemaining) + thickness / 2
-    if (
-      above.nearEmpty ||
-      above.strokeCap !== 'round' ||
-      above.paint !== expectedPaint ||
-      above.used !== expectedUsed ||
-      Math.abs(visibleRingArcLength(above, thickness) - above.circ * aboveRemaining) > tolerance
-    ) {
-      throw new Error(`ring ${diameter}: geometry above the two-cap cutoff must stay inset`)
-    }
-
-    const buttAtCutoff = ringArcBranchGeometry(r, thickness, cutoff, true)
-    const roundAtCutoff = ringArcBranchGeometry(r, thickness, cutoff, false)
-    const cutoffLength = buttAtCutoff.circ * cutoff
-    if (
-      Math.abs(visibleRingArcLength(buttAtCutoff, thickness) - cutoffLength) > tolerance ||
-      Math.abs(visibleRingArcLength(roundAtCutoff, thickness) - cutoffLength) > tolerance
-    ) {
-      throw new Error(`ring ${diameter}: arc branches must meet at the two-cap cutoff`)
-    }
-
-    const markupArgs = { cx: 225, cy: 225, r, thickness, color: '#ffffff', ambient: false }
-    if (
-      !ringArc({ ...markupArgs, remaining: belowRemaining }).includes(
-        'stroke-linecap="butt"',
-      ) ||
-      !ringArc({ ...markupArgs, remaining: aboveRemaining }).includes(
-        'stroke-linecap="round"',
-      )
-    ) {
-      throw new Error(`ring ${diameter}: generated markup must select the branch cap`)
+    for (const remaining of [0, 1]) {
+      const markup = draw(remaining)
+      if (markup.includes('<mask ') || markup.includes('<ellipse ') ||
+          [...markup.matchAll(/<circle /g)].length !== (remaining === 0 ? 1 : 2) ||
+          !markup.includes(`r="${nominalRadius}" fill="none" stroke="${TRACK}"\n      stroke-width="${nominalThickness}"`) ||
+          (remaining === 1 && !markup.includes(`r="${r}" fill="none" stroke="#ffffff"\n      stroke-width="${thickness}"`))) {
+        throw new Error('zero and full art must retain their existing circles')
+      }
     }
   }
+
 }
 
-function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
+function ringArc({ cx, cy, r, thickness, remaining, color, ambient, paired = false, pairedMain = false }) {
   const valueColor = ambient ? '#8A968F' : color
+  // Tracks stay nominal; only the positive MAIN pool covers the shared edge.
+  const paintRadius = r + (pairedMain ? 0.5 : 0)
+  const paintThickness = thickness + (pairedMain ? 1 : 0)
   if (remaining <= 0) {
     return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
@@ -368,22 +479,31 @@ function ringArc({ cx, cy, r, thickness, remaining, color, ambient }) {
     return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
       stroke-width="${thickness}" />
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${valueColor}"
-      stroke-width="${thickness}" />`
+    <circle cx="${cx}" cy="${cy}" r="${paintRadius}" fill="none" stroke="${valueColor}"
+      stroke-width="${paintThickness}" />`
   }
-  const geometry = ringArcGeometry(r, thickness, remaining)
-  // Round caps reach half a thickness past each end, so the drawn span is
-  // shortened by one cap on each side and started half a cap later. Below that
-  // two-cap cutoff the proportional centreline stays uninset and uses straight
-  // ends so its visible length remains equal to the value.
+  const geometry = ringArcGeometry(paintRadius, paintThickness, remaining)
+  const mask = `arc-${cx}-${cy}-${r}-${thickness}`
+  const endpoints = [geometry.used / paintRadius, (geometry.used + geometry.paint) / paintRadius]
+  const caps = endpoints.map((angle) => `<ellipse cx="${cx}" cy="${cy - paintRadius}" rx="${geometry.tangent}" ry="${paintThickness / 2}"
+        fill="#ffffff" transform="rotate(${angle * 180 / Math.PI} ${cx} ${cy})" />`).join('\n      ')
+  // The review model retains its measured radii and 360-degree circumference;
+  // like WFF it colors one opaque core/cap union, never overlapping alpha layers.
   return `
     <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${TRACK}"
       stroke-width="${thickness}" />
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${valueColor}"
-      stroke-width="${thickness}" stroke-linecap="${geometry.strokeCap}"
-      stroke-dasharray="${geometry.paint.toFixed(2)} ${geometry.circ.toFixed(2)}"
-      stroke-dashoffset="${(-geometry.used).toFixed(2)}"
-      transform="rotate(-90 ${cx} ${cy})" />`
+    <defs>
+      <mask id="${mask}" maskUnits="userSpaceOnUse" x="0" y="0" width="${cx * 2}" height="${cy * 2}">
+        <circle cx="${cx}" cy="${cy}" r="${paintRadius}" fill="none" stroke="#ffffff"
+          stroke-width="${paintThickness}" stroke-linecap="butt"
+          stroke-dasharray="${geometry.paint} ${geometry.circ}"
+          stroke-dashoffset="${-geometry.used}" transform="rotate(-90 ${cx} ${cy})" />
+        ${caps}
+      </mask>
+    </defs>
+    <circle cx="${cx}" cy="${cy}" r="${paintRadius}" fill="none" stroke="${valueColor}"
+      stroke-width="${paintThickness + (paired ? 2 : 0)}" mask="url(#${mask})" />`
+
 }
 
 /** Inner half first, then outer: the same order the payload packs a pair in. */
@@ -394,12 +514,12 @@ function ringArcPair(r, band) {
   ]
 }
 
-function ringTexture({ cx, cy, r, thickness, period, fromOutside }) {
-  const repeats = TEXTURE.repeats[period]?.[fromOutside]
+function ringTexture({ cx, cy, r, thickness, period, fromOutside, count }) {
+  const repeats = (count === 3 ? TEXTURE.repeats : ADAPTIVE_REPEATS[count])?.[period]?.[fromOutside]
   if (!repeats) {
     throw new Error(`no measured repeat count for "${period}" on ring ${fromOutside + 1}`)
   }
-  const cap = thickness * TEXTURE.capOfBand
+  const cap = count === 3 ? thickness * TEXTURE.capOfBand : 15.756 * (cx * 2 / FACE)
   // Baseline half a cap height below the centre line leaves the cap centred on the band.
   const y = (cy - r + cap / 2).toFixed(1)
   const pitch = 360 / TEXTURE.sweeps
@@ -458,17 +578,20 @@ function zeroLabelMarkup(text, layer) {
   }).join(' · ')
 }
 
+function cellFontSize({ text, temperature, uv }) {
+  if (temperature !== undefined) {
+    if (temperature <= -100) return 12
+    return temperature < 0 || temperature >= 100 ? 14 : CELL.fontSize
+  }
+  if (uv !== undefined) return uv >= 10 ? 14 : CELL.fontSize
+  return text.length >= 7 ? 12 : text.length >= 5 ? 14 : CELL.fontSize
+}
+
 /**
- * The three cells above the clock, as a fresh install shows them: the left one
- * bound to the day of the week, the other two left empty over the face's own
- * weather chrome. The same integer origins as WFF keep both the translated
- * curved row and its radial fade directions identical to the installed face
- * (`WATCH_RING_DESIGN.md`, Upper cells, rules 1 and 11).
- *
- * Most boards show the shipped default, which is the state a wearer meets first.
- * A cell the wearer cleared shows the graded recess of rule 10 instead — the one
- * thing that tells an empty cell from a broken one — so one board carries that
- * state and `just check-designs` gates it with the rest.
+ * The three cells as a fresh install shows them when weather is available: a
+ * day-of-week complication, then the face's own temperature and UV chrome.
+ * Integer origins, outward fades and border-only lateral bottom masks match WFF.
+ * A cleared cell shows the graded recess instead.
  */
 function upperCells({ size, ambient, clearedCells = [] }) {
   const k = size / FACE
@@ -483,7 +606,7 @@ function upperCells({ size, ambient, clearedCells = [] }) {
   // Gradient stops carry the original `0xaa`; ambient dims the whole part.
   const ringOpacity = ambient ? CELL.ringAmbientAlpha / 255 : 1
   return CELL.readings
-    .map(({ x, y, text, wellOpacity }, index) => {
+    .map(({ x, y, text, temperature, uv, wellOpacity }, index) => {
       const cellX = x + CELL.size / 2
       const cellY = y + CELL.size / 2
       const cx = cellX * k
@@ -501,9 +624,7 @@ function upperCells({ size, ambient, clearedCells = [] }) {
       if ([r, ringRadius, ringWidth, distance].some((value) => !Number.isFinite(value) || value <= 0)) {
         throw new Error('Cell border geometry requires finite positive size, radius, stroke and distance from the face centre')
       }
-      const dx = (ringRadius * vx) / distance
-      const dy = (ringRadius * vy) / distance
-      // Match the rounded circle centre, so the darkest point lies on its axis.
+      // Match the rounded circle centre for both independent gradient axes.
       const gradientX = Number(cx.toFixed(1))
       const gradientY = Number(cy.toFixed(1))
       const coordinate = (value) => {
@@ -512,27 +633,38 @@ function upperCells({ size, ambient, clearedCells = [] }) {
         }
         return Number(value.toFixed(6))
       }
+      const bottomMask = vx === 0 ? '' : `
+      <linearGradient id="cellBottom${index}" gradientUnits="userSpaceOnUse"
+        x1="${coordinate(gradientX)}" y1="${coordinate(gradientY - ringRadius)}"
+        x2="${coordinate(gradientX)}" y2="${coordinate(gradientY + ringRadius)}">
+${CELL_RING_FADE.map(({ position, alpha }) => `        <stop offset="${position}" stop-color="white" stop-opacity="${Math.round(alpha * 255 / 0xaa) / 255}" />`).join('\n')}
+      </linearGradient>
+      <mask id="cellBottomMask${index}" maskUnits="userSpaceOnUse"
+        x="${coordinate(cx - r)}" y="${coordinate(cy - r)}" width="${coordinate(2 * r)}" height="${coordinate(2 * r)}">
+        <rect x="${coordinate(cx - r)}" y="${coordinate(cy - r)}" width="${coordinate(2 * r)}" height="${coordinate(2 * r)}" fill="url(#cellBottom${index})" />
+      </mask>`
       const gradient = `
     <defs>
       <linearGradient id="cellRing${index}" gradientUnits="userSpaceOnUse"
-        x1="${coordinate(gradientX - dx)}" y1="${coordinate(gradientY - dy)}"
-        x2="${coordinate(gradientX + dx)}" y2="${coordinate(gradientY + dy)}">
+        x1="${coordinate(gradientX - ringRadius * vx / distance)}" y1="${coordinate(gradientY - ringRadius * vy / distance)}"
+        x2="${coordinate(gradientX + ringRadius * vx / distance)}" y2="${coordinate(gradientY + ringRadius * vy / distance)}">
 ${CELL_RING_FADE.map(({ position, alpha }) => `        <stop offset="${position}" stop-color="${LABEL}" stop-opacity="${alpha / 255}" />`).join('\n')}
-      </linearGradient>
+      </linearGradient>${bottomMask}
     </defs>`
+      const fontSize = cellFontSize({ text, temperature, uv })
       return `${disc(WELL, wellOpacity)}
 ${gradient}
     <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${ringRadius.toFixed(2)}" fill="none"
       stroke="url(#cellRing${index})" stroke-width="${ringWidth.toFixed(2)}"
-      stroke-opacity="${ringOpacity}" />
+      stroke-opacity="${ringOpacity}"${vx === 0 ? '' : ` mask="url(#cellBottomMask${index})"`} />
     <text x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" text-anchor="middle" dominant-baseline="central"
-      font-family="${FONT}, sans-serif" font-size="${(CELL.fontSize * k).toFixed(1)}"
+      font-family="${FONT}, sans-serif" font-size="${(fontSize * k).toFixed(1)}"
       font-weight="700" fill="${LABEL}" fill-opacity="${textOpacity}">${esc(text)}</text>`
     })
     .join('')
 }
 
-function providerBars({ layers, showPlan, showCredits, size, ambient }) {
+async function providerBars({ layers, showPlan, showCredits, size, ambient }) {
   const ordered = showPlan ? sortByRemaining(layers) : layers.slice(0, 1)
   const rows = ordered
     .map((layer) => ({
@@ -546,7 +678,7 @@ function providerBars({ layers, showPlan, showCredits, size, ambient }) {
   if (rows.length === 0) {
     return ''
   }
-  assertLabelsFit(rows.map((row) => row.text))
+  await assertLabelsFit(rows.map((row) => row.text))
 
   // The face lays the stack out in its own 450 units; only the canvas scale differs here.
   const k = size / FACE
@@ -578,7 +710,7 @@ function providerBars({ layers, showPlan, showCredits, size, ambient }) {
       rx="${((STRIP.accentWidth / 2) * k).toFixed(1)}" fill="${layer.color}" />
     <text x="${textX.toFixed(1)}" y="${(y + (STRIP.height / 2) * k).toFixed(1)}"
       text-anchor="middle" dominant-baseline="central"
-      font-family="${FONT}, sans-serif" font-size="${(STRIP.fontSize * k).toFixed(1)}"
+      font-family="${FONT}, sans-serif" font-size="${(stripFontSize(text) * k).toFixed(1)}"
       font-weight="700" fill="${LABEL}">${zeroLabelMarkup(text, layer)}</text>`
     if (layer.split) {
       // The far end names the second pool; its colour can only come from a slot
@@ -598,7 +730,7 @@ function providerBars({ layers, showPlan, showCredits, size, ambient }) {
   return out
 }
 
-function faceSvg({
+async function faceSvg({
   name,
   size,
   layers = [],
@@ -606,19 +738,21 @@ function faceSvg({
   showPlan = true,
   showCredits = false,
   clearedCells = [],
+  clockUp = 0,
+  viewport = false,
 }) {
   const cx = size / 2
   const cy = size / 2
   // Measured off the device, not taken from watchface.xml: `thickness="40"`
   // renders a 20.2-unit band on a 450 face at a 24-unit pitch, and `width` sets
   // the band's outer edge, so the outermost centre line sits at 202 - 20.2/2.
-  const outer = size * 0.4264
-  const gap = size * 0.0084
-  const thickness = Math.max(8, size * (ambient ? 0.0403 : 0.0449))
+  let outer = size * 0.4264
+  let gap = size * 0.0084
+  let thickness = Math.max(8, size * (ambient ? 0.0403 : 0.0449))
   // Ambient art paints a thinner band than it reserves; the ring pitch stays on `thickness`
   // while the stroke and the type punched into it take `band`, so a cap set for the full
   // width cannot overflow the thinned stroke.
-  const band = ambient ? thickness * 0.75 : thickness
+  let band = ambient ? thickness * 0.75 : thickness
   const hasPercent = (value) => Number.isFinite(value) && value >= 0
   const knownLayers = layers.flatMap((layer) => {
     if (!hasPercent(layer.used)) {
@@ -629,6 +763,22 @@ function faceSvg({
     return [{ ...layer, split: hasPercent(layer.split?.used) ? layer.split : null }]
   })
   const planLayers = sortByRemaining(knownLayers)
+  if (planLayers.length > 3) throw new Error('the face supports at most three bands')
+  if (planLayers.length > 0 && planLayers.length < 3) {
+    const scale = size / FACE
+    thickness = [44, 32, 20][planLayers.length - 1] * scale
+    outer = 202 * scale - thickness / 2
+    gap = 4 * scale
+    band = thickness
+  }
+  if (viewport) {
+    assert.equal(size, FACE, 'composition illustration must retain the 450-unit canvas')
+    assert.equal(ambient, false, 'composition illustration is active only')
+    assert.equal(showPlan, true, 'composition illustration must show its plan bands')
+    assert.equal(planLayers.length, MAX_RINGS, 'composition illustration requires three bands')
+    assert.equal(clockUp, 0, 'composition illustration must retain the reference clock')
+    assert.deepEqual(clearedCells, [], 'composition illustration must retain the filled default cells')
+  }
   const stripLayers = showPlan ? planLayers : layers.slice(0, 1)
 
   let ringMarkup = ''
@@ -641,7 +791,10 @@ function faceSvg({
       if (split) {
         // Halves of one band: centre lines a quarter-band either side of it,
         // each half as thick, exactly as the face draws them.
-        ringArcPair(r, band).forEach(([radius, halfBand], half) => {
+        const halves = ringArcPair(r, band)
+        // Match runtime scene order: extra before MAIN, including its own track.
+        for (const half of [1, 0]) {
+          const [radius, halfBand] = halves[half]
           ringMarkup += ringArc({
             cx,
             cy,
@@ -650,8 +803,10 @@ function faceSvg({
             remaining: 1 - (half === 0 ? planLayers[i].used : split.used),
             color: half === 0 ? planLayers[i].color : split.color,
             ambient,
+            paired: true,
+            pairedMain: half === 0,
           })
-        })
+        }
       } else {
         ringMarkup += ringArc({
           cx,
@@ -671,6 +826,7 @@ function faceSvg({
           thickness: band,
           period: planLayers[i].period,
           fromOutside,
+          count: planLayers.length,
         })
       }
     }
@@ -680,14 +836,17 @@ function faceSvg({
       stroke="${TRACK}" stroke-width="${(size * 0.018).toFixed(1)}" />`
   }
 
-  const timeSize = ambient ? size * 0.18 : size * 0.155
-  const timeY = cy - TIME_LIFT * (size / FACE) + timeSize * 0.36
+  const clock = ambient ? CLOCK.ambient : CLOCK.active
+  const timeSize = clock.fontSize * size / FACE
+  // The public offset remains in final 450-unit coordinates, after the carrier.
+  const referenceY = Number((clock.baseline * size / FACE).toFixed(1))
+  const timeY = referenceY - clockUp * size / FACE / COMPOSITION_SCALE
   let content = upperCells({ size, ambient, clearedCells })
   content += `
-    <text x="${cx}" y="${timeY.toFixed(1)}" text-anchor="middle"
+    <text x="${cx}" y="${clockUp === 0 ? timeY.toFixed(1) : timeY}" text-anchor="middle"
       font-family="${FONT}, sans-serif" font-size="${timeSize.toFixed(1)}"
-      font-weight="700" fill="${LABEL}">10:08</text>`
-  content += providerBars({
+      font-weight="${clock.weight}" fill="${LABEL}">10:08</text>`
+  content += await providerBars({
     layers: stripLayers,
     showPlan,
     showCredits,
@@ -695,7 +854,7 @@ function faceSvg({
     ambient,
   })
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="${esc(name)}">
   <defs>
     <radialGradient id="lift" cx="50%" cy="48%" r="62%">
@@ -709,19 +868,21 @@ function faceSvg({
       <stop offset="100%" stop-color="${CELL_RIM}"/>
     </radialGradient>
   </defs>
+  <g id="composition" transform="${compositionTransform(size)}">
   <rect width="${size}" height="${size}" fill="url(#lift)"/>
   ${ringMarkup}
   ${content}
+  </g>
 </svg>
 `.replace(/^[ \t]+$/gm, '')
+  assert.equal((svg.match(/\bscale\(/g) ?? []).length, 1, 'each board must scale its complete composition exactly once')
+  assert.equal((svg.match(/<g id="composition"/g) ?? []).length, 1, 'each board needs one composition owner')
+  assert.ok(svg.includes(`transform="${compositionTransform(size)}"`), 'board must use the common centered scale')
+  return svg
 }
 
 const wearDir = join(root, 'apps/wear_android/design')
 const wffDir = join(root, 'apps/watchface_wff/design')
-if (!checking) {
-  await mkdir(wearDir, { recursive: true })
-  await mkdir(wffDir, { recursive: true })
-}
 
 const three = [CATALOG.codex, CATALOG.claude, CATALOG.cursor]
 const two = [CATALOG.codex, CATALOG.claude]
@@ -745,7 +906,46 @@ const budgetPeriods = [
   CATALOG.anthropicBudgetToday,
 ]
 
+const adaptiveBudgets = {
+  D: CATALOG.anthropicBudgetToday,
+  '7D': CATALOG.anthropicBudgetWeek,
+  M: CATALOG.anthropicBudgetMonth,
+}
+const periods = Object.keys(adaptiveBudgets)
+
+const adaptiveVariants = [
+  { file: 'round-1-plan-split.svg', name: 'One adaptive band with two pools', layers: [CATALOG.cursorPair] },
+  { file: 'round-2-plan-two-pairs.svg', name: 'Two adaptive bands with two pairs', layers: [CATALOG.codexPair, CATALOG.cursorPair] },
+  ...[false, true].flatMap((ambient) => periods.map((period) => ({
+    file: `round-${ambient ? 'ambient-' : ''}1-budget-${period.toLowerCase()}.svg`,
+    name: `One adaptive budget band · ${period}${ambient ? ' · ambient' : ''}`,
+    layers: [adaptiveBudgets[period]], ambient,
+  }))),
+  // Rotate distinct periods across both radii. Synthetic money/usage agree,
+  // and no board invents a duplicate budget for one connection and period.
+  ...[false, true].flatMap((ambient) => periods.map((period, index) => ({
+    file: `round-${ambient ? 'ambient-' : ''}2-budget-${period.toLowerCase()}.svg`,
+    name: `Two adaptive budget bands · ${period}${ambient ? ' · ambient' : ''}`,
+    layers: [
+      { ...adaptiveBudgets[period], used: 0.25, budget: '$25.00/100' },
+      { ...adaptiveBudgets[periods[(index + 1) % periods.length]], used: 0.5, budget: '$50.00/100' },
+    ], ambient,
+  }))),
+].map((variant) => ({ ...variant, showPlan: true, showCredits: false }))
+
 const variants = [
+  ...adaptiveVariants,
+  {
+    file: 'round-plan-fable.svg',
+    name: 'Synthetic Claude / Fable pair · fixed halves · illustrative usage',
+    layers: [CATALOG.claudeFable], showPlan: true, showCredits: false,
+  },
+  {
+    file: 'round-plan-fable-zero.svg',
+    name: 'Synthetic Claude / Fable pair · both exhausted · illustrative usage',
+    layers: [{ ...CATALOG.claudeFable, used: 1, split: { ...CATALOG.claudeFable.split, used: 1 } }],
+    showPlan: true, showCredits: false,
+  },
   {
     file: 'round-3-plan-credits.svg',
     name: 'Round · 3 providers · plan + credits',
@@ -883,6 +1083,9 @@ const variants = [
 ]
 
 const wffFiles = new Set([
+  ...adaptiveVariants.map(({ file }) => file),
+  'round-plan-fable.svg',
+  'round-plan-fable-zero.svg',
   'round-1-plan-exhausted.svg',
   'round-3-plan-exhausted-claude.svg',
   'round-plan-pair-inner-zero.svg',
@@ -933,12 +1136,33 @@ function watermarkBox() {
     ))
     .find((attrs) => attrs.alpha !== '0')
   if (!part) throw new Error('watchface.xml draws no visible watermark PartImage')
-  return {
+  const owner = Object.fromEntries([...group[0].slice(0, group[0].indexOf('>')).matchAll(/(\w+)="([^"]*)"/g)]
+    .map(([, key, value]) => [key, value]))
+  assert.deepEqual(['x', 'y', 'width', 'height', 'scaleX', 'scaleY', 'pivotX', 'pivotY'].map((key) => Number(owner[key])),
+    [0, 0, FACE, FACE, COMPOSITION_SCALE, COMPOSITION_SCALE, 0.5, 0.5],
+    'watermark must use the common full-face carrier')
+  const reference = {
     x: Number(part.x),
     y: Number(part.y),
     width: Number(part.width),
     height: Number(part.height),
+  }
+  const nominal = {
+    x: FACE / 2 + (reference.x - FACE / 2) * COMPOSITION_SCALE,
+    y: FACE / 2 + (reference.y - FACE / 2) * COMPOSITION_SCALE,
+    width: reference.width * COMPOSITION_SCALE,
+    height: reference.height * COMPOSITION_SCALE,
+  }
+  // Round the two edges once; rounding width independently can shift the far edge.
+  const x = Math.round(nominal.x)
+  const y = Math.round(nominal.y)
+  return {
+    x, y,
+    width: Math.round(nominal.x + nominal.width) - x,
+    height: Math.round(nominal.y + nominal.height) - y,
     alpha: Number(part.alpha) / 255,
+    reference, nominal,
+    rounding: 'Round each effective raster edge once; width/height are edge differences.',
   }
 }
 
@@ -980,22 +1204,402 @@ const pickerPreview = {
   },
 }
 
-assertNearExhaustedArcs()
-
-for (const variant of variants) {
-  const svg = faceSvg({
-    name: variant.name,
-    size: 450,
-    layers: variant.layers,
-    ambient: variant.ambient === true,
-    showPlan: variant.showPlan,
-    showCredits: variant.showCredits,
-    clearedCells: variant.clearedCells ?? [],
-  })
-  await emit(join(wearDir, variant.file), svg, 'render-designs')
-  if (wffFiles.has(variant.file)) {
-    await emit(join(wffDir, variant.file), svg, 'render-designs')
-  }
+// Historical incident values illustrate the completed geometry, independently of current Live.
+const viewportProposal = {
+  name: 'Round · whole-composition illustration · historical data',
+  viewport: true,
+  showPlan: true,
+  showCredits: true,
+  layers: [
+    { ...CATALOG.claudeFable, used: 0.12, split: { ...CATALOG.claudeFable.split, used: 0 } },
+    { ...CATALOG.cursorPairUntouched, split: { ...CATALOG.cursorPairUntouched.split, used: 0.36 } },
+    { ...CATALOG.codex, used: 1, credits: '49.7K' },
+  ],
 }
 
-await renderPreviews([...previews, pickerPreview])
+function assertClockOnlyPreview(reference, preview, up) {
+  const clock = (svg) => {
+    const matches = [...svg.matchAll(/<text\b[^>]*>10:08<\/text>/g)]
+    assert.equal(matches.length, 1, 'preview must retain the single whole 10:08 clock')
+    const markup = matches[0][0]
+    const y = markup.match(/\by="([^"]+)"/)
+    assert.ok(y, 'clock must have a y coordinate')
+    return { markup, y: y[1] }
+  }
+  const before = clock(reference)
+  const after = clock(preview)
+  const restored = preview.replace(after.markup, after.markup.replace(/\by="[^"]+"/, `y="${before.y}"`))
+  assert.equal(restored, reference, 'preview may change only the clock y coordinate')
+  assert.ok(Math.abs((Number(before.y) - Number(after.y)) * COMPOSITION_SCALE - up) < 1e-9,
+    'preview must move upward by the requested 450-unit offset')
+  assert.ok(Number(after.y) > 0 && Number(after.y) < Number(before.y),
+    'preview clock baseline must remain positive and move upward')
+  return { referenceY: Number(before.y), previewY: Number(after.y) }
+}
+
+async function sha256(path) {
+  return createHash('sha256').update(await readFile(path)).digest('hex')
+}
+
+async function renderClockPreview({ up, output }) {
+  const directory = await clockPreviewDirectory(output)
+  const primary = variants.find(({ file }) => file === 'round-3-plan-credits.svg')
+  const reference = await faceSvg({ ...primary, size: FACE })
+  const svg = await faceSvg({ ...primary, size: FACE, clockUp: up })
+  const clock = assertClockOnlyPreview(reference, svg, up)
+  const referencePath = join(wearDir, primary.file)
+  assert.equal(reference, await readFile(referencePath, 'utf8'),
+    'preview reference must match the accepted Primary board')
+  const inputPaths = [
+    'tools/render-watch-ring-designs.mjs',
+    'tools/design-output.mjs',
+    'tools/render-watchface.mjs',
+    'apps/watchface_wff/src/main/res/raw/watchface.xml',
+    'apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png',
+    relative(root, referencePath),
+    relative(root, join(wffDir, primary.file)),
+    FONT_FILE,
+  ]
+  const inputHashes = Object.fromEntries(await Promise.all(inputPaths.map(async (path) =>
+    [path, await sha256(resolve(root, path))])))
+  const { stdout: rendererVersion } = await runFile('convert', ['-version'], { encoding: 'utf8' })
+  // Exclusive creation keeps existing candidates, links and canonical files out of the write set.
+  await mkdir(directory, { mode: 0o700 })
+  const stem = join(directory, 'UNAPPROVED-PREVIEW-ONLY')
+  const svgPath = `${stem}.input.svg`
+  const pngPath = `${stem}.png`
+  await writeFile(svgPath, svg, { flag: 'wx' })
+  await renderPreviews([{
+    svg: svgPath,
+    png: pngPath,
+    density: pickerPreview.density,
+    overlay: pickerPreview.overlay,
+  }])
+  const png = await readFile(pngPath)
+  assert.ok(png.length >= 24 &&
+    png.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) &&
+    png.toString('ascii', 12, 16) === 'IHDR', 'preview output must be a PNG')
+  const width = png.readUInt32BE(16)
+  const height = png.readUInt32BE(20)
+  assert.equal(width, FACE, 'preview must retain the 450-unit canvas width')
+  assert.equal(height, FACE, 'preview must retain the 450-unit canvas height')
+  const metadata = {
+    status: 'UNAPPROVED PREVIEW ONLY',
+    evidence: 'Host review art only; no native WFF fit or runtime approval.',
+    invocation: { cwd: process.cwd(), argv: [process.execPath, ...process.argv.slice(1)] },
+    tools: { node: process.version, imageMagick: rendererVersion.trim() },
+    inputHashes,
+    reference: relative(root, referencePath),
+    clock: {
+      upwardOffset450: up, referenceGeometry: clock, compositionScale: COMPOSITION_SCALE,
+      effectiveReferenceY: FACE / 2 + (clock.referenceY - FACE / 2) * COMPOSITION_SCALE,
+      effectivePreviewY: FACE / 2 + (clock.previewY - FACE / 2) * COMPOSITION_SCALE,
+    },
+    displayedContent: {
+      time: '10:08',
+      cells: CELL.readings.map(({ text }) => text),
+      legend: sortByRemaining(primary.layers).map((layer) => ({
+        provider: layer.id,
+        text: barLabel(layer, primary),
+      })),
+      layers: primary.layers,
+    },
+    logo: pickerPreview.overlay,
+    outputs: {
+      intermediateSvg: { file: basename(svgPath), sha256: await sha256(svgPath) },
+      fullFacePng: { file: basename(pngPath), width, height, sha256: await sha256(pngPath) },
+    },
+  }
+  await writeFile(`${stem}.json`, `${JSON.stringify(metadata, null, 2)}\n`, { flag: 'wx' })
+  console.log(`UNAPPROVED PREVIEW ONLY: ${pngPath}`)
+}
+
+async function renderViewportPreview({ output }) {
+  const directory = await clockPreviewDirectory(output)
+  const primary = variants.find(({ file }) => file === 'round-3-plan-credits.svg')
+  const referencePath = join(wearDir, primary.file)
+  assert.equal(await faceSvg({ ...primary, size: FACE }), await readFile(referencePath, 'utf8'),
+    'viewport reference must match the accepted Primary board')
+  const svg = await faceSvg({ ...viewportProposal, size: FACE })
+  const inputPaths = [
+    'tools/render-watch-ring-designs.mjs',
+    'tools/design-output.mjs',
+    'tools/render-watchface.mjs',
+    'docs/product/WATCH_RING_DESIGN.md',
+    'apps/watchface_wff/src/main/res/raw/watchface.xml',
+    'apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png',
+    relative(root, referencePath),
+    relative(root, join(wffDir, primary.file)),
+    FONT_FILE,
+  ]
+  const inputHashes = Object.fromEntries(await Promise.all(inputPaths.map(async (path) =>
+    [path, await sha256(resolve(root, path))])))
+  assert.equal(inputHashes[relative(root, pickerPreview.overlay.image)],
+    '599a722e2c08bb5d952e87ceb0ea02c228c77554e0dc3572e7eeb992b96d1cef',
+    'composition illustration must retain the original logo pixels')
+  const { stdout: rendererVersion } = await runFile('convert', ['-version'], { encoding: 'utf8' })
+  await mkdir(directory, { mode: 0o700 })
+  const stem = join(directory, 'viewport-preview')
+  const svgPath = `${stem}.input.svg`
+  const pngPath = `${stem}.png`
+  const metadataPath = `${stem}.json`
+  await writeFile(svgPath, svg, { flag: 'wx' })
+  await renderPreviews([{
+    svg: svgPath,
+    png: pngPath,
+    density: pickerPreview.density,
+    overlay: pickerPreview.overlay,
+  }])
+  const png = await readFile(pngPath)
+  assert.ok(png.length >= 24 &&
+    png.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) &&
+    png.toString('ascii', 12, 16) === 'IHDR', 'viewport output must be a PNG')
+  const width = png.readUInt32BE(16)
+  const height = png.readUInt32BE(20)
+  assert.equal(width, FACE, 'viewport preview must retain the full canvas width')
+  assert.equal(height, FACE, 'viewport preview must retain the full canvas height')
+  const metadata = {
+    status: 'COMPLETED COMPOSITION ILLUSTRATION — HISTORICAL DATA',
+    evidence: 'Illustrative retained incident data; no fresh-live, healthy-public or native seam-repair acceptance.',
+    invocation: { cwd: process.cwd(), argv: [process.execPath, ...process.argv.slice(1)] },
+    tools: { node: process.version, imageMagick: rendererVersion.trim() },
+    inputHashes,
+    reference: relative(root, referencePath),
+    geometry: {
+      canvas: { width: FACE, height: FACE },
+      center: { x: FACE / 2, y: FACE / 2 },
+      reference: { runtimeOuterEdge: 202, runtimeWidth: 20, runtimeGap: 4, measuredReview: REVIEW_N3 },
+      scale: { numerator: 225, denominator: 202, value: COMPOSITION_SCALE, pivot: { x: 225, y: 225 }, applications: 1 },
+      effective: {
+        runtimeOuterEdge: 225, runtimeBorder: 0,
+        reviewWidth: REVIEW_N3.width * COMPOSITION_SCALE,
+        reviewGap: REVIEW_N3.gap * COMPOSITION_SCALE,
+        reviewOuterEdge: (REVIEW_N3.outerCenterline + REVIEW_N3.width / 2) * COMPOSITION_SCALE,
+        reviewCenterlinesOuterToInner: Array.from({ length: MAX_RINGS }, (_, index) =>
+          (REVIEW_N3.outerCenterline - index * (REVIEW_N3.width + REVIEW_N3.gap)) * COMPOSITION_SCALE),
+      },
+      rasterRounding: {
+        portrait: pickerPreview.overlay.rounding,
+        periodTextures: 'ceil(referenceDiameter * 225 / 202), integer numerator first; unchanged reference WFF image boxes.',
+      },
+    },
+    displayedContent: {
+      provenance: 'Historical incident illustration; values/order are not current Live or native acceptance.',
+      time: '10:08',
+      clock: {
+        reference: { ...CLOCK.active, renderedBaseline: Number(CLOCK.active.baseline.toFixed(1)) },
+        effectiveFontSize: CLOCK.active.fontSize * COMPOSITION_SCALE,
+        effectiveBaseline: FACE / 2 + (Number(CLOCK.active.baseline.toFixed(1)) - FACE / 2) * COMPOSITION_SCALE,
+      },
+      referenceCells: { size: CELL.size, readings: CELL.readings },
+      effectiveCells: CELL.readings.map(({ x, y, ...reading }) => ({
+        ...reading,
+        x: FACE / 2 + (x - FACE / 2) * COMPOSITION_SCALE,
+        y: FACE / 2 + (y - FACE / 2) * COMPOSITION_SCALE,
+        size: CELL.size * COMPOSITION_SCALE,
+      })),
+      referenceLegendWell: STRIP,
+      effectiveLegendWell: { width: STRIP.width * COMPOSITION_SCALE, height: STRIP.height * COMPOSITION_SCALE,
+        pitch: STRIP.pitch * COMPOSITION_SCALE, radius: STRIP.radius * COMPOSITION_SCALE },
+      legend: sortByRemaining(viewportProposal.layers).map((layer) => ({
+        provider: layer.id,
+        text: barLabel(layer, viewportProposal),
+        referenceFontSize: stripFontSize(barLabel(layer, viewportProposal)),
+        effectiveFontSize: stripFontSize(barLabel(layer, viewportProposal)) * COMPOSITION_SCALE,
+      })),
+      layersOuterToInner: viewportProposal.layers,
+    },
+    logo: pickerPreview.overlay,
+    outputs: {
+      intermediateSvg: { file: basename(svgPath), sha256: await sha256(svgPath) },
+      fullFacePng: { file: basename(pngPath), width, height, sha256: await sha256(pngPath) },
+      metadata: { file: basename(metadataPath) },
+    },
+  }
+  await writeFile(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, { flag: 'wx' })
+  console.log(`Historical whole-composition illustration: ${pngPath}`)
+  // A metadata file cannot contain its own digest; retain that identity in the delivery receipt.
+  console.log(`metadata: ${metadataPath} (sha256 ${await sha256(metadataPath)})`)
+}
+
+async function writeDesigns(preview, {
+  writePreview = renderClockPreview,
+  emitSvg = emit,
+  renderImages = renderPreviews,
+} = {}) {
+  if (preview) {
+    await writePreview(preview)
+    return
+  }
+  if (!checking) {
+    await mkdir(wearDir, { recursive: true })
+    await mkdir(wffDir, { recursive: true })
+  }
+  for (const variant of variants) {
+    const svg = await faceSvg({
+      name: variant.name,
+      size: FACE,
+      layers: variant.layers,
+      ambient: variant.ambient === true,
+      showPlan: variant.showPlan,
+      showCredits: variant.showCredits,
+      clearedCells: variant.clearedCells ?? [],
+    })
+    await emitSvg(join(wearDir, variant.file), svg, 'render-designs')
+    if (wffFiles.has(variant.file)) {
+      await emitSvg(join(wffDir, variant.file), svg, 'render-designs')
+    }
+  }
+  await renderImages([...previews, pickerPreview])
+}
+
+async function assertClockPreviewIsolation() {
+  // Synthetic guard inputs do not select or publish a design offset or candidate.
+  const flags = ['--clock-preview-up', '1', '--clock-preview-output', 'LOCAL_ARTIFACTS/preview-guard']
+  const preview = parseClockPreview(flags)
+  assert.equal(parseClockPreview([]), null)
+  assert.equal(parseClockPreview(['--check']), null)
+  assert.throws(() => parseClockPreview([...flags, '--check']), /without --check/)
+  assert.throws(() => parseClockPreview(flags.slice(0, 2)), /requires an output directory/)
+  for (const offset of ['0', '-1', 'NaN', '0.01']) {
+    assert.throws(() => parseClockPreview([flags[0], offset, ...flags.slice(2)]), /positive offset/)
+  }
+  const parentUnchanged = async (path) => path
+  assert.equal(await clockPreviewDirectory(preview.output, parentUnchanged), resolve(root, preview.output))
+  for (const output of ['LOCAL_ARTIFACTS', 'apps/watchface_wff/design', 'LOCAL_ARTIFACTS/../brand']) {
+    await assert.rejects(clockPreviewDirectory(output, parentUnchanged), /inside LOCAL_ARTIFACTS/)
+  }
+  await assert.rejects(clockPreviewDirectory(preview.output, async () => wearDir), /resolves outside/)
+  const primary = variants.find(({ file }) => file === 'round-3-plan-credits.svg')
+  const reference = await faceSvg({ ...primary, size: FACE })
+  const candidate = await faceSvg({ ...primary, size: FACE, clockUp: preview.up })
+  assertClockOnlyPreview(reference, candidate, preview.up)
+  let previewWrites = 0
+  const rejectCanonicalWrite = () => assert.fail('preview must not write or render canonical exports')
+  await writeDesigns(preview, {
+    writePreview: async (options) => {
+      assert.deepEqual(options, preview)
+      previewWrites += 1
+    },
+    emitSvg: rejectCanonicalWrite,
+    renderImages: rejectCanonicalWrite,
+  })
+  assert.equal(previewWrites, 1, 'preview must dispatch exactly one candidate')
+}
+
+async function assertViewportPreviewIsolation() {
+  const flags = ['--viewport-preview-output', 'LOCAL_ARTIFACTS/viewport-guard']
+  const preview = parseViewportPreview(flags)
+  const clockFlags = ['--clock-preview-up', '1', '--clock-preview-output', 'LOCAL_ARTIFACTS/clock-guard']
+  for (const args of [[], ['--check'], clockFlags]) assert.equal(parseViewportPreview(args), null)
+  for (const args of [flags.slice(0, 1), [...flags, ...flags], [...flags, '--check'],
+    ['--check', ...flags], [...flags, '--unknown'], [...flags, ...clockFlags],
+    [...clockFlags, ...flags], [flags[0], '--check']]) {
+    assert.throws(() => parseViewportPreview(args), /viewport preview output exactly once/)
+  }
+  assert.throws(() => parseClockPreview(flags), /without --check or other flags/)
+  assert.throws(() => parseClockPreview(['--unknown']), /without --check or other flags/)
+  const parentUnchanged = async (path) => path
+  assert.equal(await clockPreviewDirectory(preview.output, parentUnchanged), resolve(root, preview.output))
+  for (const output of ['LOCAL_ARTIFACTS', 'LOCAL_ARTIFACTS/../brand', 'apps/watchface_wff/design']) {
+    await assert.rejects(clockPreviewDirectory(output, parentUnchanged), /inside LOCAL_ARTIFACTS/)
+  }
+  await assert.rejects(clockPreviewDirectory(preview.output, async () => wffDir), /resolves outside/)
+  for (const [key, value] of Object.entries({ outerCenterline: 191.88, width: 20.205, gap: 3.78 })) {
+    assert.ok(Math.abs(REVIEW_N3[key] - value) < 1e-12, 'retain the measured N3 reference geometry within binary rounding')
+  }
+  assert.ok(Math.abs(202 * COMPOSITION_SCALE - 225) < 1e-12, 'the common scale must reach the effective viewport edge')
+  assert.deepEqual(CLOCK.active, { fontSize: 86, baseline: 240.78125, weight: 700 })
+  assert.equal(CELL.size, 52)
+  assert.deepEqual(CELL.readings.map(({ text }) => text), ['Tue', '18°C', 'UV 7'])
+  assert.deepEqual([STRIP.width, STRIP.height, STRIP.fontSize], [132, 26, 20])
+  const { image, x, y, width, height, alpha, reference: logoReference, nominal } = pickerPreview.overlay
+  assert.equal(image, join(root, 'apps/watchface_wff/src/main/res/drawable/wardpulse_mono.png'))
+  assert.deepEqual({ x, y, width, height, alpha }, { x: 189, y: 131, width: 72, height: 72, alpha: 95 / 255 })
+  assert.deepEqual(logoReference, { x: 193, y: 141, width: 64, height: 64 })
+  assert.equal(nominal.width, 64 * COMPOSITION_SCALE)
+  const ordered = sortByRemaining(viewportProposal.layers)
+  assert.deepEqual(ordered.map((layer) => [layer.id, layer.used, layer.split?.id, layer.split?.used]), [
+    ['codex', 1, undefined, undefined], ['cursor', 0, 'cursor-other', 0.36], ['claude', 0.12, 'fable', 0],
+  ])
+  assert.deepEqual(ordered.map((layer) => [layer.color, layer.split?.color]), [
+    ['#65D78A', undefined], ['#7E93B8', '#67E8D4'], ['#E8915A', '#FF603D'],
+  ])
+  assert.deepEqual(ordered.map((layer) => barLabel(layer, viewportProposal)),
+    ['0% · 49.7K', '100% · 64%', '88% · 100%'])
+  const reference = await faceSvg({ ...viewportProposal, viewport: false, size: FACE })
+  const candidate = await faceSvg({ ...viewportProposal, size: FACE })
+  assert.equal(candidate, reference, 'fixed illustration must consume the ordinary composition without a geometry override')
+  const cells = upperCells({ size: FACE, ambient: false })
+  const content = (svg) => {
+    const start = svg.indexOf(cells)
+    assert.ok(start >= 0, 'composition illustration must retain all default cell markup')
+    assert.equal(svg.indexOf(cells, start + cells.length), -1, 'default cells must appear once')
+    return svg.slice(start)
+  }
+  assert.equal(content(candidate), content(reference),
+    'fixed illustration must preserve all center content')
+  assert.ok(candidate.includes('y="240.8" text-anchor="middle"'), 'clock must retain its reference baseline beneath the scale')
+  assert.ok(candidate.includes('<tspan fill="#FFB4AB">0%</tspan> · 49.7K'),
+    'only the exhausted percentage token must turn red')
+  for (const [index, layer] of ordered.entries()) {
+    const r = REVIEW_N3.outerCenterline - (MAX_RINGS - 1 - index) * (REVIEW_N3.width + REVIEW_N3.gap)
+    const halves = layer.split ? ringArcPair(r, REVIEW_N3.width) : [[r, REVIEW_N3.width]]
+    const paints = halves.map(([radius, thickness], half) => {
+      const pool = half === 0 ? layer : layer.split
+      return ringArc({
+        cx: FACE / 2, cy: FACE / 2, r: radius, thickness,
+        remaining: 1 - pool.used, color: pool.color, ambient: false, paired: Boolean(layer.split),
+        pairedMain: Boolean(layer.split) && half === 0,
+      })
+    })
+    for (const paint of paints) {
+      assert.ok(candidate.includes(paint), 'each historical pool must paint its own value and color at the reference radius')
+    }
+    if (layer.split) {
+      assert.ok(candidate.indexOf(paints[1]) < candidate.indexOf(paints[0]), 'extra paint must precede MAIN coverage')
+    }
+  }
+  await assert.rejects(faceSvg({ ...viewportProposal, size: FACE, ambient: true }), /active only/)
+  await assert.rejects(faceSvg({ ...viewportProposal, size: FACE, clockUp: 1 }), /reference clock/)
+  let previewWrites = 0
+  const rejectCanonicalWrite = () => assert.fail('viewport preview must not write or render canonical exports')
+  await writeDesigns(preview, {
+    writePreview: async (options) => {
+      assert.deepEqual(options, preview)
+      previewWrites += 1
+    },
+    emitSvg: rejectCanonicalWrite,
+    renderImages: rejectCanonicalWrite,
+  })
+  assert.equal(previewWrites, 1, 'viewport preview must dispatch exactly one candidate')
+}
+
+assertNearExhaustedArcs()
+
+// Common and compact-bound labels must remain complete at the selected size.
+// Extreme signed money and arbitrary provider text retain runtime ellipsis.
+await assertLabelsFit([
+  '100% · 64%', '82% · 59.5K', '100% · 100%', '100% · 999.9T',
+  '$999.99/999', '$999.99/999.9T', '$999.9T/999.9T', '$-12.34/100',
+  '0% · 0%', '0% · 0',
+])
+
+// Weather branches use the original numeric value and device-provided scale.
+const cellFitReadings = [
+  { text: 'Sat' }, { text: 'Wed' },
+  { text: '18°C', temperature: 18 }, { text: '48°F', temperature: 48 },
+  { text: '-10°C', temperature: -10 }, { text: '100°F', temperature: 100 },
+  { text: '-100°C', temperature: -100 },
+  { text: 'UV 7', uv: 7 }, { text: 'UV 11', uv: 11 },
+]
+await assertLabelsFit(cellFitReadings.map(({ text }) => text), {
+  fontSize: (text) => cellFontSize(cellFitReadings.find((reading) => reading.text === text)),
+  width: CELL.textWidth,
+})
+
+await assertClockPreviewIsolation()
+await assertViewportPreviewIsolation()
+await writeDesigns(viewportPreview ?? clockPreview, {
+  writePreview: viewportPreview ? renderViewportPreview : renderClockPreview,
+})

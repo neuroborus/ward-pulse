@@ -118,7 +118,10 @@ also include `actionlint .github/workflows/*.yml`, `just check-doc-citations`,
 documented in [AGENTS.md](../../AGENTS.md#required-checks). Record actual outcomes and any
 unexecuted gates; Source review is not a runtime pass.
 Injected publisher tests also cover state options, draft staging before publication, exact
-notes/identity/assets, conflicts, tag peeling and preservation of uncertain effects.
+notes/identity/assets, friendly-name transfers with exact sizes/hashes, conflicts, tag peeling
+and preservation of uncertain effects. Synthetic workflow tests cover staging, the upload
+allowlist and both transfer receipts with injected signer/Git responses. They establish source
+contract consistency, not an actual production signed staging run; hosted acceptance stays pending.
 
 ## Initial candidate
 
@@ -128,16 +131,51 @@ Root verified that GitHub release `421214319` for `v0.1.0` was a draft with no p
 timestamp, deleted that exact draft and observed an empty release list. No `v0.1.0` tag
 existed. These observations do not establish Google Play upload or delivery history.
 
-To correct the incomplete initial notes, the verified unpublished ledger input was reset
+In that 2026-10-23 correction, the verified unpublished ledger input was reset
 to `0.0.0` and the incomplete changelog removed. A standard initial minor fragment supplied
 candidate coverage; the existing tooling patch retained its meaningful notes. Actual stock
 Changesets CLI 3.0.3 generated one complete `0.1.0` manifest/changelog and consumed both
 fragments. The existing workspace lock already matched the resulting version, so no lock
 reconciliation was needed. Generated output was not edited by hand.
 
-All four Android versionNames remain `0.1.0`, with phone/Wear/legacy/Push codes `1/2/1/1`;
-their source files are unchanged. This was unpublished ledger regeneration, without a native
-version transition. Root/docs remain `0.0.0`; Cargo and Dart metadata are independent.
+At that ledger regeneration all four Android versionNames remained `0.1.0`, with
+phone/Wear/legacy/Push codes `1/2/1/1`; native source files were unchanged. That was
+unpublished ledger regeneration, without a native version transition. The later adaptive
+compatibility change initially allocated `3/4/2/2`, retaining `0.1.0`, package/signing identities
+and `native_state`'s enforced Wear = phone + 1 parity. The subsequent structural correction
+allocated Push default code `3`; the
+[current guarded allocation](../../docs/product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30)
+advances only Push's default to `5`. These scoped changes do not perform a release cut/preparation.
+HOST read-only `just release-status` against final metadata remains Pending. Root/docs remain
+`0.0.0`; Cargo and Dart metadata are independent.
+
+On 2026-11-04, the Owner retained the unpublished initial `0.1.0` and selected complete
+coverage of `f7da9b3` through `24a682c`. The replacement restored the original Minor outcome
+text from `d525c89` and the exact tooling Patch from `46a2af2`, retained the five later Patch
+inputs with the reviewed Glance append, and added one consolidated Minor for the missing
+product outcomes and accepted Roadmap menu click. Final Docs/screenshots support those
+outcomes; workflow-only changes require no separate product note.
+
+With all eight standard product-only inputs ready, the ledger was temporarily reset to
+`0.0.0` and the incomplete generated changelog removed. Actual stock CLI 3.0.3 planning
+selected only `@wardpulse/app` at `0.1.0`; stock generation consumed all eight inputs and
+produced one complete entry. The existing workspace lock already matched, so no npm lock
+reconciliation was needed. All four native source files remained byte-identical, with
+versionNames `0.1.0` and phone/Wear/legacy/Push codes `3/4/2/5`. The native bridge was not
+used as the regeneration engine, and generated notes were not edited by hand.
+
+At this implementation checkpoint, required Native `git diff --check HEAD` and full
+`just check-docs` execution is reserved for dedicated FINALIZE; no result is claimed here.
+Mandatory post-DONE HOST acceptance, final readiness and same-target byte-identity evidence
+remain Pending under [HOST acceptance](#host-acceptance). Actual development-input status
+selected `0.2.0` before the ledger reset; that was not authority for a different release.
+After consumption, actual `just release-status` exited 1 with the stock changed-package/
+no-changeset error. That error is retained, not converted to an empty plan or a green status.
+Root's 2026-11-04 publication observation found draft `422333810`, no publication timestamp,
+no assets and no current tag ref; it does not establish never-published or Play history and
+does not authorize deleting the draft. Browser/audio evidence remains bounded to the
+accepted Roadmap menu cases, without new device, authentication or billing acceptance.
+
 Local preparation, generated notes, a tag alone or a draft do not prove publication. Verify
 actual publication records before correcting an initial candidate; preserve published
 notes, tags and delivered artifacts. Conflicting publication evidence requires stopping and
@@ -151,6 +189,21 @@ artifact verification and the independent manual GitHub and Google Play workflow
 release preparation does not authorize remote mutations, tags, credentials or publication.
 The [Google Play owner](../release-google-play/README.md) retains its historical published
 artifact contract.
+
+The producer stages three direct installers as `WardPulse-V-Android.apk`,
+`WardPulse-V-WearOS.apk` and `WardPulse-V-WatchFace-WearOS5Plus.apk`, where V is the
+coherent version from the immutable dispatch source. These are byte-identical copies of
+verified producer outputs, with no repacking or re-signing. The three AABs and standalone
+technical Push APK retain `wardpulse-<surface>-<version>-code<code>` names. Push remains
+embedded in the Wear app, not a fourth direct installer. The artifact envelope and originating
+run/attempt identity are unchanged: exactly seven binaries plus two receipts, without aliases.
+
+The workflow's `WARDPULSE_APK_NAMING: friendly-v1` declaration records its naming contract.
+The current Play helper reads that declaration as data at the trusted release `source_sha`;
+historical producer source without a declaration keeps its old filenames, even at the same
+version and codes. It never infers names from the executing checkout or published assets,
+executes historical code, renames historical assets or rewrites receipts. See the
+[Play preparation contract](../release-google-play/README.md#preparation-interface).
 
 The GitHub workflow defaults to `draft=true`, `prerelease=false`, `latest=false`. Draft and
 prerelease are independent markers; tags remain stable `vMAJOR.MINOR.PATCH`. Latest accepts

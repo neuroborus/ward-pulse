@@ -1,0 +1,18 @@
+{
+  "usageEvents": [
+    { "timestamp": "1784455200000", "isChargeable": true, "chargedCents": 12.25 },
+    { "timestamp": "1784458800000", "isChargeable": true, "chargedCents": 7.25 },
+    { "timestamp": "1783944000000", "isChargeable": true, "chargedCents": 30.5 },
+    { "timestamp": "1782907200000", "isChargeable": true, "chargedCents": 4275.62 },
+    { "timestamp": "1784458800000", "isChargeable": false, "chargedCents": 999 }
+  ],
+  "totalUsageEventsCount": 5,
+  "pagination": {
+    "numPages": 1,
+    "currentPage": 1,
+    "pageSize": 1000,
+    "hasNextPage": false,
+    "hasPreviousPage": false
+  },
+  "period": { "startDate": 1782864000000, "endDate": 1784462399999 }
+}

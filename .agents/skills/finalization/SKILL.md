@@ -14,6 +14,9 @@ description: Post-change finalization checklist for WardPulse (Rust core, Flutte
 Complete the applicable sections below; read their linked checklists before deciding what
 applies. Runner steps also follow [agent-runner.md](agent-runner.md) for the task-authoritative
 Native/HOST division. These routes do not waive checks or change authorship/commit authority.
+For Runner review roles, apply the current [owner-selected mode](../delegation/references/owner-selected-mode.md)
+over older independent-Reviewer wording in linked references; coordinator and delegated
+design/documentation reviews remain independent.
 
 ## 1. Scope Review
 
@@ -44,6 +47,9 @@ changes and explicit skip reasons. Tests alone do not establish that the app run
 Complete [Documentation Review](references/review.md#6-documentation-review).
 
 ## 7. Staging And Commit Boundary
+
+Apply [Focused Commit Boundaries](references/commit-boundaries.md) before integration or
+staging; it owns backlog-item ordering, cohesive plans and isolated implementation streams.
 
 Follow the standing commit authorization in [AGENTS.md](../../../AGENTS.md#working-agreements).
 For a coordinator commit, finish all applicable checks and the full independent zero-findings

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../providers/codex_account_store.dart';
+import '../providers/connection_lifecycle.dart';
 
 enum CodexAccountFailure {
   authentication,
@@ -16,10 +17,19 @@ enum CodexAccountFailure {
 typedef CodexSessionChanged = Future<void> Function(CodexAccountSession value);
 
 final class CodexAccountException implements Exception {
-  const CodexAccountException(this.failure, [this.details]);
+  const CodexAccountException(
+    this.failure, [
+    this.details,
+    this.rejectionEventId,
+    this.credentialVersion,
+  ]);
 
   final CodexAccountFailure failure;
   final String? details;
+  final String? rejectionEventId;
+
+  /// Non-secret ownership of a failed saved-session fetch, when known.
+  final CredentialVersion? credentialVersion;
 }
 
 final class CodexDeviceCode {
@@ -379,8 +389,7 @@ final class CodexAccountClient {
     final main = <String, dynamic>{
       'limitId': 'codex',
       'limitName': null,
-      'primary': _normalizeWindow(rateLimit?['primary_window']),
-      'secondary': _normalizeWindow(rateLimit?['secondary_window']),
+      ..._normalizeBucket('codex', rateLimit),
       'credits':
           credits == null
               ? null
@@ -393,25 +402,39 @@ final class CodexAccountClient {
       'rateLimitReachedType': response['rate_limit_reached_type'],
     };
     final additional = <String, Map<String, dynamic>>{};
+    var rootCollision = false;
+    var unknownFeatures =
+        response['additional_rate_limits'] != null &&
+        response['additional_rate_limits'] is! List;
     if (response['additional_rate_limits'] case final List<Object?> values) {
       for (final value in values) {
         final raw = _optionalMap(value);
         final feature = _nonEmptyString(raw?['metered_feature']);
         final known = _additionalRateLimits[feature];
         final nested = _optionalMap(raw?['rate_limit']);
-        if (known == null || nested == null) {
+        if (feature == 'codex') {
+          rootCollision = true;
+          _retainBucketCollision(main, _normalizeBucket('codex', nested));
+          continue;
+        }
+        if (known == null) {
+          unknownFeatures = true;
+          continue;
+        }
+        final bucket = _normalizeBucket(feature!, nested);
+        if (additional.containsKey(known.id)) {
+          _retainBucketCollision(additional[known.id]!, bucket);
           continue;
         }
         additional[known.id] = {
           'limitId': known.id,
           'limitName': known.name,
-          'primary': _normalizeWindow(nested['primary_window']),
-          'secondary': _normalizeWindow(nested['secondary_window']),
+          ...bucket,
         };
       }
     }
-    if (additional.isEmpty) {
-      return {'rateLimits': main};
+    if (additional.isEmpty && !rootCollision) {
+      return {'rateLimits': main, 'unknownFeatures': unknownFeatures};
     }
 
     final mainWithoutCredits = Map<String, dynamic>.from(main)
@@ -419,6 +442,54 @@ final class CodexAccountClient {
     return {
       'rateLimits': main,
       'rateLimitsByLimitId': {'codex': mainWithoutCredits, ...additional},
+      'unknownFeatures': unknownFeatures,
+    };
+  }
+
+  void _retainBucketCollision(
+    Map<String, dynamic> existing,
+    Map<String, dynamic> bucket,
+  ) {
+    // Keep the first valid value per slot and retain every known constraint.
+    final evidence = existing['evidence'] as Map<String, dynamic>;
+    for (final slot in ['primary', 'secondary']) {
+      if (existing[slot] == null && bucket[slot] != null) {
+        existing[slot] = bucket[slot];
+        evidence[slot] = 'valid';
+      }
+    }
+    evidence['collision'] = true;
+    evidence['loss'] = true;
+  }
+
+  Map<String, dynamic> _normalizeBucket(String id, Map<String, dynamic>? raw) {
+    final primary = _normalizeWindow(raw?['primary_window']);
+    final secondary = _normalizeWindow(raw?['secondary_window']);
+    String state(String key, Map<String, dynamic>? window) {
+      if (raw == null || !raw.containsKey(key)) return 'omitted';
+      if (raw[key] == null) return 'null';
+      return window == null ? 'malformed' : 'valid';
+    }
+
+    final primaryState = state('primary_window', primary);
+    final secondaryState = state('secondary_window', secondary);
+    final allowed = raw?['allowed'];
+    final reached = raw?['limit_reached'];
+    return {
+      'primary': primary,
+      'secondary': secondary,
+      'evidence': {
+        'bucketId': id,
+        'allowed': allowed is bool ? allowed : null,
+        'limitReached': reached is bool ? reached : null,
+        'primary': primaryState,
+        'secondary': secondaryState,
+        'collision': false,
+        'loss':
+            raw == null ||
+            primaryState == 'malformed' ||
+            secondaryState == 'malformed',
+      },
     };
   }
 

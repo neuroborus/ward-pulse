@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/providers/codex_account_service.dart';
 import 'package:ward_pulse_phone/providers/codex_account_store.dart';
 import 'package:ward_pulse_phone/sync/codex_account_client.dart';
@@ -114,6 +115,18 @@ void main() {
     );
   });
 
+  test(
+    'disconnect forwards retirement reached during malformed-session cleanup',
+    () async {
+      final store = _MalformedStore();
+      final service = MobileCodexAccountService(store: store);
+      final receipts = <CredentialVersion>[];
+      await service.disconnect(onRetired: receipts.add);
+      expect(store.deletions, 1);
+      expect(receipts, hasLength(1));
+    },
+  );
+
   test('removes a malformed stored session', () async {
     final store = _MalformedStore();
     final service = MobileCodexAccountService(
@@ -122,14 +135,60 @@ void main() {
     );
 
     expect(await service.isConnected(), isFalse);
-    expect(store.deleted, isTrue);
+    expect(store.deletions, 1);
   });
+
+  test(
+    'malformed-session cleanup failure is not swallowed or retried',
+    () async {
+      final store = _MalformedStore()..failDelete = true;
+      final receipts = <CredentialVersion>[];
+      await expectLater(
+        MobileCodexAccountService(
+          store: store,
+        ).disconnect(onRetired: receipts.add),
+        throwsA(isA<CodexAccountException>()),
+      );
+      expect(store.deletions, 1);
+      expect(receipts, hasLength(1));
+    },
+  );
+
+  for (final revokeFails in [false, true]) {
+    test('readable disconnect retires locally before revoke '
+        '${revokeFails ? 'failure' : 'success'}', () async {
+      final store = _MemoryStore(_activeSession(now));
+      var requests = 0;
+      final transport = _QueueTransport([
+        const CodexHttpResponse(statusCode: 200, body: '{}'),
+      ]);
+      transport.onSend = (uri, body) {
+        expect(store.value, isNull);
+        expect(store.deletions, 1);
+        expect(uri.path, '/oauth/revoke');
+        expect(jsonDecode(body!)['token'], 'refresh-token');
+        requests++;
+        if (revokeFails) {
+          throw const CodexAccountException(CodexAccountFailure.unavailable);
+        }
+      };
+      final service = MobileCodexAccountService(
+        store: store,
+        client: CodexAccountClient(transport: transport, clock: () => now),
+      );
+      await service.disconnect();
+      expect(store.deletions, 1);
+      expect(store.value, isNull);
+      expect(requests, 1);
+    });
+  }
 }
 
 final class _MemoryStore implements CodexAccountStore {
   _MemoryStore(this.value);
 
   CodexAccountSession? value;
+  int deletions = 0;
 
   @override
   Future<CodexAccountSession?> read() async => value;
@@ -140,7 +199,8 @@ final class _MemoryStore implements CodexAccountStore {
   }
 
   @override
-  Future<void> delete() async {
+  Future<void> delete({void Function(CredentialVersion)? onRetired}) async {
+    deletions++;
     value = null;
   }
 }
@@ -154,11 +214,13 @@ final class _FailingStore implements CodexAccountStore {
       Future.error(StateError('storage'));
 
   @override
-  Future<void> delete() => Future.error(StateError('storage'));
+  Future<void> delete({void Function(CredentialVersion)? onRetired}) =>
+      Future.error(StateError('storage'));
 }
 
 final class _MalformedStore implements CodexAccountStore {
-  bool deleted = false;
+  int deletions = 0;
+  bool failDelete = false;
 
   @override
   Future<CodexAccountSession?> read() {
@@ -169,8 +231,16 @@ final class _MalformedStore implements CodexAccountStore {
   Future<void> write(CodexAccountSession value) async {}
 
   @override
-  Future<void> delete() async {
-    deleted = true;
+  Future<void> delete({void Function(CredentialVersion)? onRetired}) async {
+    deletions++;
+    onRetired?.call(
+      CredentialVersion({
+        'generation': 'retired',
+        'revision': 'retired',
+        'epoch': 'retired',
+      }),
+    );
+    if (failDelete) throw StateError('Synthetic cleanup failure.');
   }
 }
 
@@ -179,6 +249,7 @@ final class _QueueTransport implements CodexHttpTransport {
 
   final List<CodexHttpResponse> _responses;
   final List<Uri> requests = [];
+  void Function(Uri, String?)? onSend;
 
   @override
   Future<CodexHttpResponse> send(
@@ -188,6 +259,7 @@ final class _QueueTransport implements CodexHttpTransport {
     String? body,
   }) async {
     requests.add(uri);
+    onSend?.call(uri, body);
     return _responses.removeAt(0);
   }
 }

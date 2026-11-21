@@ -23,14 +23,81 @@ final class ConnectionReportingUpdate {
     required this.connection,
     this.credentialVersion,
     this.outcome,
-  });
+    this.attemptEra,
+  }) : _failureSelection = null;
+
+  ConnectionReportingUpdate.completed(
+    ConnectionReportingOutcome result,
+    SnapshotOrdering? ordering,
+  ) : connection = result.connection,
+      credentialVersion = result.credentialVersion,
+      outcome = result,
+      attemptEra = ordering?.attemptEra,
+      _failureSelection = result.failed ? ordering : null;
 
   final ProviderConnectionId connection;
   final CredentialVersion? credentialVersion;
 
   /// Null while the versioned request is actively running.
   final ConnectionReportingOutcome? outcome;
+
+  /// Native ordering evidence for the completed outcome.
+  final int? attemptEra;
+
+  // Before a fetch is stamped, failure feedback depends on the cache selection.
+  final SnapshotOrdering? _failureSelection;
+
   bool get checking => outcome == null;
+}
+
+/// The display proof for reporting updates with confirmed credential versions.
+DashboardSnapshot reportingUpdatesProof(
+  Iterable<ConnectionReportingUpdate> updates,
+) => DashboardSnapshot.empty()
+    .withConnectionVersions(
+      {
+        for (final update in updates)
+          update.connection.storageKey: update.credentialVersion!.values,
+      },
+      snapshotOrdering: {
+        for (final update in updates)
+          if (update.attemptEra case final era?)
+            update.connection.storageKey: SnapshotOrdering(attemptEra: era)
+          else if (update._failureSelection case final selection?)
+            update.connection.storageKey: selection,
+      },
+    )
+    .withReportingOutcomes([
+      for (final update in updates)
+        if (update.outcome case final outcome?) outcome,
+    ]);
+
+/// Keeps versioned feedback that can be published together.
+Future<void> pruneUnverifiedReportingUpdates(
+  Map<ProviderConnectionId, ConnectionReportingUpdate> updates,
+  Future<bool> Function(DashboardSnapshot proof) validate,
+) async {
+  Future<bool> current(Iterable<ConnectionReportingUpdate> candidates) async {
+    try {
+      return await validate(reportingUpdatesProof(candidates));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Recheck the survivors together after any individual probes.
+  while (updates.isNotEmpty && !await current(updates.values)) {
+    final obsolete = <ProviderConnectionId>[];
+    for (final entry in updates.entries) {
+      if (!await current([entry.value])) obsolete.add(entry.key);
+    }
+    if (obsolete.isEmpty) {
+      // Individual checks cannot replace the complete publication gate.
+      if (!await current(updates.values)) updates.clear();
+      break;
+    }
+    for (final id in obsolete) updates.remove(id);
+  }
 }
 
 /// Phone-only result for an exact connection, independent of account data.
@@ -44,6 +111,7 @@ final class ConnectionReportingOutcome {
     required this.source,
     this.freshness = ReportingOutcomeFreshness.unknown,
     this.credentialVersion,
+    this.provisionalReadFailure = false,
   });
 
   final ProviderConnectionId connection;
@@ -51,6 +119,9 @@ final class ConnectionReportingOutcome {
   final ReportingOutcomeSource source;
   final ReportingOutcomeFreshness freshness;
   final CredentialVersion? credentialVersion;
+
+  /// An unversioned reader error without a managed storage observation.
+  final bool provisionalReadFailure;
 
   bool get failed => category != ReportingOutcomeCategory.success;
   bool get canEditKey =>
@@ -72,6 +143,10 @@ final class ConnectionReportingOutcome {
 
   String get supportingCopy => switch (category) {
     ReportingOutcomeCategory.success => '',
+    ReportingOutcomeCategory.authenticationRejected
+        when connection == ProviderConnections.anthropicPlatform &&
+            source == ReportingOutcomeSource.local =>
+      anthropicReportingKeyGuidance,
     ReportingOutcomeCategory.authenticationRejected =>
       'Check the key and try again.',
     ReportingOutcomeCategory.accessDenied =>
@@ -154,7 +229,7 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
       DashboardSyncIssue.credentialUnavailable =>
         'The saved key could not be read. Re-enter it on the Providers tab.',
       DashboardSyncIssue.authentication =>
-        'The provider rejected the credential. Check that you pasted the full key or token.',
+        'The credential was not accepted. Check that you pasted the full key or token.',
       DashboardSyncIssue.permissionDenied =>
         'This credential cannot read the requested usage data. Use a credential with the right permissions.',
       DashboardSyncIssue.rateLimited =>
@@ -185,6 +260,37 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
   }
 }
 
+typedef SnapshotPayloadOrder = ({int era, int generatedAtMicros});
+typedef SnapshotCacheObservation = ({String order, String? rowId});
+
+/// Phone-only evidence tied to one connection's cache epoch.
+final class SnapshotOrdering {
+  const SnapshotOrdering({
+    this.payload,
+    this.confirmedRowId,
+    this.cacheObservation,
+    this.attemptEra,
+    this.emptyCacheOrder,
+    this.selectionUnverified = false,
+  });
+
+  final SnapshotPayloadOrder? payload;
+
+  /// Write identity from the paired native read, when the payload is durable.
+  final String? confirmedRowId;
+
+  /// Paired native observation against which a RAM payload was selected.
+  final SnapshotCacheObservation? cacheObservation;
+  final int? attemptEra;
+
+  /// Native order of the observed payload (or its absence) and clock floor.
+  /// This also qualifies a retained payload when failure precedes admission.
+  final String? emptyCacheOrder;
+
+  /// A failed selection without enough evidence to qualify publication.
+  final bool selectionUnverified;
+}
+
 class DashboardSnapshot {
   DashboardSnapshot({
     required this.generatedAt,
@@ -195,14 +301,18 @@ class DashboardSnapshot {
     required this.monthTotal,
     required this.alerts,
     required this.watchSummary,
+    this.alertConditions = const [],
     this.syncIssue,
     this.syncDetails,
+    this.syncRejection,
     Map<String, Map<String, String>> connectionVersions = const {},
+    Map<String, SnapshotOrdering> snapshotOrdering = const {},
     Iterable<ConnectionReportingOutcome> reportingOutcomes = const [],
   }) : connectionVersions = Map.unmodifiable({
          for (final entry in connectionVersions.entries)
            entry.key: Map<String, String>.unmodifiable(entry.value),
        }),
+       snapshotOrdering = Map.unmodifiable(snapshotOrdering),
        reportingOutcomes = List.unmodifiable(reportingOutcomes);
 
   final DateTime generatedAt;
@@ -212,12 +322,17 @@ class DashboardSnapshot {
   final BudgetState weekTotal;
   final BudgetState monthTotal;
   final List<AlertSummary> alerts;
+  final List<AlertCondition> alertConditions;
   final WatchSummary watchSummary;
   final DashboardSyncIssue? syncIssue;
   final String? syncDetails;
+  final ConnectionRejection? syncRejection;
 
-  /// Phone-only lifecycle provenance; never serialized into shared contracts.
+  /// Phone-only lifecycle evidence for reads, selected data and attempts.
   final Map<String, Map<String, String>> connectionVersions;
+
+  /// Phone-only ordering evidence for connection selections and attempts.
+  final Map<String, SnapshotOrdering> snapshotOrdering;
 
   /// Phone-only reporting results, including failures with no account data.
   final List<ConnectionReportingOutcome> reportingOutcomes;
@@ -266,6 +381,10 @@ class DashboardSnapshot {
       weekTotal: BudgetState.fromJson(_jsonMap(json['weekTotal'])),
       monthTotal: BudgetState.fromJson(_jsonMap(json['monthTotal'])),
       alerts: _jsonList(json['alerts'], AlertSummary.fromJson),
+      alertConditions:
+          json['alertConditions'] == null
+              ? const []
+              : _jsonList(json['alertConditions'], AlertCondition.fromJson),
       watchSummary: WatchSummary.fromJson(_jsonMap(json['watchSummary'])),
     );
   }
@@ -280,6 +399,9 @@ class DashboardSnapshot {
     'weekTotal': weekTotal.toJson(),
     'monthTotal': monthTotal.toJson(),
     'alerts': alerts.map((alert) => alert.toJson()).toList(),
+    if (alertConditions.isNotEmpty)
+      'alertConditions':
+          alertConditions.map((condition) => condition.toJson()).toList(),
     'watchSummary': watchSummary.toJson(),
   };
 
@@ -290,6 +412,7 @@ class DashboardSnapshot {
   DashboardSnapshot withStaleStatus({
     DashboardSyncIssue? syncIssue,
     String? syncDetails,
+    ConnectionRejection? syncRejection,
   }) {
     return DashboardSnapshot(
       generatedAt: generatedAt,
@@ -301,15 +424,22 @@ class DashboardSnapshot {
       weekTotal: weekTotal,
       monthTotal: monthTotal,
       alerts: alerts,
+      alertConditions: alertConditions,
       watchSummary: watchSummary._withStatus(ProviderStatus.stale),
       syncIssue: syncIssue,
       syncDetails: syncDetails,
+      syncRejection: syncRejection,
       connectionVersions: connectionVersions,
+      snapshotOrdering: snapshotOrdering,
       reportingOutcomes: reportingOutcomes,
     );
   }
 
-  DashboardSnapshot withSyncIssue(DashboardSyncIssue issue, {String? details}) {
+  DashboardSnapshot withSyncIssue(
+    DashboardSyncIssue issue, {
+    String? details,
+    ConnectionRejection? rejection,
+  }) {
     return DashboardSnapshot(
       generatedAt: generatedAt,
       overallStatus: overallStatus,
@@ -318,17 +448,21 @@ class DashboardSnapshot {
       weekTotal: weekTotal,
       monthTotal: monthTotal,
       alerts: alerts,
+      alertConditions: alertConditions,
       watchSummary: watchSummary,
       syncIssue: issue,
       syncDetails: details,
+      syncRejection: rejection,
       connectionVersions: connectionVersions,
+      snapshotOrdering: snapshotOrdering,
       reportingOutcomes: reportingOutcomes,
     );
   }
 
   DashboardSnapshot withConnectionVersions(
-    Map<String, Map<String, String>> versions,
-  ) => DashboardSnapshot(
+    Map<String, Map<String, String>> versions, {
+    Map<String, SnapshotOrdering>? snapshotOrdering,
+  }) => DashboardSnapshot(
     generatedAt: generatedAt,
     overallStatus: overallStatus,
     accounts: accounts,
@@ -336,12 +470,34 @@ class DashboardSnapshot {
     weekTotal: weekTotal,
     monthTotal: monthTotal,
     alerts: alerts,
+    alertConditions: alertConditions,
     watchSummary: watchSummary,
     syncIssue: syncIssue,
     syncDetails: syncDetails,
+    syncRejection: syncRejection,
     connectionVersions: versions,
+    snapshotOrdering: snapshotOrdering ?? this.snapshotOrdering,
     reportingOutcomes: reportingOutcomes,
   );
+
+  DashboardSnapshot withAccounts(List<ProviderSnapshot> values) =>
+      DashboardSnapshot(
+        generatedAt: generatedAt,
+        overallStatus: overallStatus,
+        accounts: values,
+        todayTotal: todayTotal,
+        weekTotal: weekTotal,
+        monthTotal: monthTotal,
+        alerts: alerts,
+        alertConditions: alertConditions,
+        watchSummary: watchSummary,
+        syncIssue: syncIssue,
+        syncDetails: syncDetails,
+        syncRejection: syncRejection,
+        connectionVersions: connectionVersions,
+        snapshotOrdering: snapshotOrdering,
+        reportingOutcomes: reportingOutcomes,
+      );
 
   DashboardSnapshot withReportingOutcomes(
     Iterable<ConnectionReportingOutcome> outcomes,
@@ -353,12 +509,58 @@ class DashboardSnapshot {
     weekTotal: weekTotal,
     monthTotal: monthTotal,
     alerts: alerts,
+    alertConditions: alertConditions,
     watchSummary: watchSummary,
     syncIssue: syncIssue,
     syncDetails: syncDetails,
+    syncRejection: syncRejection,
     connectionVersions: connectionVersions,
+    snapshotOrdering: snapshotOrdering,
     reportingOutcomes: outcomes,
   );
+}
+
+/// Private history scope from an accepted credential's lifecycle identity digest.
+/// Currentness stamps and normalized account IDs remain separate.
+final class HistoryOwner {
+  const HistoryOwner({required this.connection, required this.identity});
+
+  final String connection;
+  final String identity;
+
+  /// Only successfully committed, captured credentials can own history.
+  static HistoryOwner? fromVersion(
+    String connection,
+    CredentialVersion version,
+  ) {
+    final identity = version.values['identity'];
+    final committed = version.values['committedConnection'];
+    if (identity == null ||
+        identity.isEmpty ||
+        committed == null ||
+        committed.isEmpty)
+      return null;
+    return HistoryOwner(connection: connection, identity: identity);
+  }
+
+  factory HistoryOwner.fromJson(Map<String, dynamic> json) => HistoryOwner(
+    connection: json['connection'] as String,
+    identity: json['identity'] as String,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'connection': connection,
+    'identity': identity,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is HistoryOwner &&
+      other.connection == connection &&
+      other.identity == identity;
+
+  @override
+  int get hashCode => Object.hash(connection, identity);
 }
 
 class ProviderSnapshot {
@@ -366,6 +568,7 @@ class ProviderSnapshot {
     required this.accountId,
     required this.provider,
     this.connection,
+    this.historyOwner,
     required this.status,
     required this.today,
     required this.week,
@@ -386,6 +589,7 @@ class ProviderSnapshot {
   /// Carried verbatim so the round trip back into the core keeps alert rules
   /// keyed by connection rather than by provider family.
   final String? connection;
+  final HistoryOwner? historyOwner;
   final ProviderStatus status;
   final BudgetState today;
   final BudgetState week;
@@ -402,6 +606,10 @@ class ProviderSnapshot {
       accountId: json['accountId'] as String,
       provider: json['provider'] as String,
       connection: json['connection'] as String?,
+      historyOwner:
+          json['historyOwner'] == null
+              ? null
+              : HistoryOwner.fromJson(_jsonMap(json['historyOwner'])),
       status: _statusFromJson(json['status']),
       today: BudgetState.fromJson(_jsonMap(json['today'])),
       week: BudgetState.fromJson(_jsonMap(json['week'])),
@@ -425,6 +633,7 @@ class ProviderSnapshot {
     'accountId': accountId,
     'provider': provider,
     if (connection != null) 'connection': connection,
+    if (historyOwner != null) 'historyOwner': historyOwner!.toJson(),
     'status': status.name,
     'today': today.toJson(),
     'week': week.toJson(),
@@ -444,6 +653,7 @@ class ProviderSnapshot {
       accountId: accountId,
       provider: provider,
       connection: connection,
+      historyOwner: historyOwner,
       status: value,
       today: today,
       week: week,
@@ -546,8 +756,42 @@ class UsageBucket {
 
 enum AllowanceSource { plan, purchased }
 
+/// Necessary included Plan constraints, scoped to the allowance's account and owner.
+class RecoveryRequirements {
+  const RecoveryRequirements({
+    required this.allowanceIds,
+    required this.complete,
+  });
+
+  final List<String> allowanceIds;
+  final bool complete;
+
+  static RecoveryRequirements? maybeFromJson(Object? value) {
+    if (value is! Map<String, dynamic> ||
+        value.keys.any((key) => key != 'allowanceIds' && key != 'complete') ||
+        value['complete'] is! bool ||
+        value['allowanceIds'] is! List)
+      return null;
+    final ids = value['allowanceIds'] as List;
+    if (ids.isEmpty ||
+        ids.any((id) => id is! String || id.isEmpty) ||
+        ids.toSet().length != ids.length)
+      return null;
+    return RecoveryRequirements(
+      allowanceIds: ids.cast<String>(),
+      complete: value['complete'] as bool,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'allowanceIds': allowanceIds,
+    'complete': complete,
+  };
+}
+
 class AllowanceState {
   const AllowanceState({
+    this.recoveryRequirements,
     required this.id,
     required this.source,
     required this.label,
@@ -561,6 +805,7 @@ class AllowanceState {
     required this.status,
   });
 
+  final RecoveryRequirements? recoveryRequirements;
   final String id;
   final AllowanceSource source;
   final String label;
@@ -575,6 +820,9 @@ class AllowanceState {
 
   factory AllowanceState.fromJson(Map<String, dynamic> json) {
     return AllowanceState(
+      recoveryRequirements: RecoveryRequirements.maybeFromJson(
+        json['recoveryRequirements'],
+      ),
       id: json['id'] as String,
       source: switch (json['source']) {
         'purchased' => AllowanceSource.purchased,
@@ -595,6 +843,8 @@ class AllowanceState {
   Map<String, dynamic> toJson() => {
     'id': id,
     'source': source.name,
+    if (recoveryRequirements != null)
+      'recoveryRequirements': recoveryRequirements!.toJson(),
     'label': label,
     'usedPercent': usedPercent,
     'used': used?.toJson(),
@@ -906,6 +1156,157 @@ class AlertSummary {
   }
 
   Map<String, dynamic> toJson() => {'severity': severity, 'message': message};
+}
+
+enum AlertBudgetPeriod { today, week, month }
+
+sealed class AlertConditionTarget {
+  const AlertConditionTarget();
+
+  factory AlertConditionTarget.fromJson(Map<String, dynamic> json) {
+    return switch (json['kind']) {
+      'allowance' => AllowanceAlertTarget(
+        source: AllowanceSource.values.byName(json['source'] as String),
+        id: json['id'] as String,
+      ),
+      'budget' => BudgetAlertTarget(
+        period: AlertBudgetPeriod.values.byName(json['period'] as String),
+      ),
+      _ => throw const FormatException('Unknown alert condition target.'),
+    };
+  }
+
+  Map<String, dynamic> toJson();
+}
+
+final class AllowanceAlertTarget extends AlertConditionTarget {
+  const AllowanceAlertTarget({required this.source, required this.id});
+
+  final AllowanceSource source;
+  final String id;
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'kind': 'allowance',
+    'source': source.name,
+    'id': id,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is AllowanceAlertTarget && other.source == source && other.id == id;
+
+  @override
+  int get hashCode => Object.hash(source, id);
+}
+
+final class BudgetAlertTarget extends AlertConditionTarget {
+  const BudgetAlertTarget({required this.period});
+
+  final AlertBudgetPeriod period;
+
+  @override
+  Map<String, dynamic> toJson() => {'kind': 'budget', 'period': period.name};
+
+  @override
+  bool operator ==(Object other) =>
+      other is BudgetAlertTarget && other.period == period;
+
+  @override
+  int get hashCode => period.hashCode;
+}
+
+/// Structural identity supplied by Rust, including its resolved connection key.
+final class AlertConditionKey {
+  const AlertConditionKey({
+    required this.provider,
+    required this.accountId,
+    required this.connection,
+    this.historyOwner,
+    required this.target,
+  });
+
+  final String provider;
+  final String accountId;
+  final String connection;
+  final HistoryOwner? historyOwner;
+  final AlertConditionTarget target;
+
+  factory AlertConditionKey.fromJson(Map<String, dynamic> json) =>
+      AlertConditionKey(
+        provider: json['provider'] as String,
+        accountId: json['accountId'] as String,
+        connection: json['connection'] as String,
+        historyOwner:
+            json['historyOwner'] == null
+                ? null
+                : HistoryOwner.fromJson(_jsonMap(json['historyOwner'])),
+        target: AlertConditionTarget.fromJson(_jsonMap(json['target'])),
+      );
+
+  Map<String, dynamic> toJson() => {
+    'provider': provider,
+    'accountId': accountId,
+    'connection': connection,
+    if (historyOwner != null) 'historyOwner': historyOwner!.toJson(),
+    'target': target.toJson(),
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is AlertConditionKey &&
+      other.provider == provider &&
+      other.accountId == accountId &&
+      other.connection == connection &&
+      other.historyOwner == historyOwner &&
+      other.target == target;
+
+  @override
+  int get hashCode =>
+      Object.hash(provider, accountId, connection, historyOwner, target);
+}
+
+enum AlertConditionState { crossed, clear, unknown }
+
+/// Rust's observation only; decoding never evaluates a threshold in Dart.
+final class AlertCondition {
+  const AlertCondition.crossed({required this.key, required AlertSummary alert})
+    : state = AlertConditionState.crossed,
+      alert = alert;
+
+  const AlertCondition.clear({required this.key})
+    : state = AlertConditionState.clear,
+      alert = null;
+
+  const AlertCondition.unknown({required this.key})
+    : state = AlertConditionState.unknown,
+      alert = null;
+
+  final AlertConditionKey key;
+  final AlertConditionState state;
+  final AlertSummary? alert;
+
+  factory AlertCondition.fromJson(Map<String, dynamic> json) {
+    final key = AlertConditionKey.fromJson(_jsonMap(json['key']));
+    final state = AlertConditionState.values.byName(json['state'] as String);
+    if (state != AlertConditionState.crossed && json.containsKey('alert')) {
+      throw const FormatException('Only a crossed condition carries an alert.');
+    }
+    return switch (state) {
+      AlertConditionState.crossed => AlertCondition.crossed(
+        key: key,
+        alert: AlertSummary.fromJson(_jsonMap(json['alert'])),
+      ),
+      AlertConditionState.clear => AlertCondition.clear(key: key),
+      AlertConditionState.unknown => AlertCondition.unknown(key: key),
+    };
+  }
+
+  Map<String, dynamic> toJson() => {
+    'key': key.toJson(),
+    'state': state.name,
+    if (alert != null) 'alert': alert!.toJson(),
+  };
 }
 
 class WatchSummary {

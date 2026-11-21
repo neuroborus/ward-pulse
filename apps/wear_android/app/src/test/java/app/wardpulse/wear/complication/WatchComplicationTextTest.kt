@@ -1,8 +1,13 @@
 package app.wardpulse.wear.complication
 
+import androidx.wear.watchface.complications.data.ColorRamp
+import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.NoDataComplicationData
+import androidx.wear.watchface.complications.data.PlainComplicationText
+import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import app.wardpulse.wear.model.AllowanceSummary
 import app.wardpulse.wear.model.CreditsGlance
+import app.wardpulse.wear.model.Money
 import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.ProviderSummary
 import app.wardpulse.wear.model.PulseStatus
@@ -39,22 +44,79 @@ class WatchComplicationTextTest {
     fun zeroHalvesPublishZeroRangedValuesAtTheirExistingOrdinal() {
         val zero = cursorPair.copy(usedPercent = 100.0, split = cursorPair.split!!.copy(usedPercent = 100.0))
         var innerCalled = false
-        val inner = ringComplicationData(listOf(zero), 0) { _, remaining, title ->
+        val inner = ringComplicationData(listOf(zero), 0) { _, remaining, title, count ->
             innerCalled = true
             assertEquals(0f, remaining)
             assertEquals("split:cursor-other:zero-both", title)
-            rangedComplicationBuilder(remaining, title, RingFamily.CURSOR_OWN, text = "0% · 0%").build()
+            rangedComplicationBuilder(remaining, title, RingFamily.CURSOR_OWN, text = "0% · 0%", ringCount = count).build()
         }
         assertTrue(innerCalled)
-        assertTrue(inner is androidx.wear.watchface.complications.data.RangedValueComplicationData)
+        assertTrue(inner is RangedValueComplicationData)
+        assertEquals(200f, (inner as RangedValueComplicationData).max)
         var outerCalled = false
-        outerHalfComplicationData(listOf(zero, codexPair), 0) { half, outside ->
+        val outer = outerHalfComplicationData(listOf(zero, codexPair), 0) { half, outside, count ->
             outerCalled = true
             assertEquals(1, outside)
+            assertEquals(2, count)
             assertEquals(0f, WatchComplicationText.remainingPercent(half.usedPercent))
-            NoDataComplicationData()
+            rangedComplicationBuilder(
+                WatchComplicationText.remainingPercent(half.usedPercent), outside.toString(), ringCount = count,
+            ).build()
         }
         assertTrue(outerCalled)
+        assertEquals(400f, (outer as RangedValueComplicationData).max)
+        assertEquals(0f, outer.value)
+    }
+
+    @Test
+    fun resolvedBandsEncodeCountWithoutChangingSelectionOrSemanticPercent() {
+        val ordinary = cursorPair.copy(split = null, usedPercent = 99.96)
+        val cases = listOf(
+            emptyList<RingSummary>(),
+            listOf(ordinary),
+            listOf(ordinary.copy(usedPercent = 100.0), cursorPair),
+            listOf(cursorPair, ordinary, codexPair),
+            PreviewWatchDashboardSummary.value.rings, // Independent same-family budgets.
+        )
+        for (rings in cases) {
+            assertEquals(rings.size, resolvedBandCount(rings))
+            for (outside in rings.indices) {
+                val expected = rings[rings.lastIndex - outside]
+                val data = ringComplicationData(rings, outside) { ring, percent, title, count ->
+                    assertEquals(expected, ring)
+                    assertEquals(WatchComplicationText.remainingPercent(expected.usedPercent), percent)
+                    rangedComplicationBuilder(percent, title, ringCount = count).build()
+                } as RangedValueComplicationData
+                val factor = (1 shl rings.size).toFloat()
+                assertEquals(100f * factor, data.max)
+                assertEquals(WatchComplicationText.remainingPercent(expected.usedPercent) / 100f, data.value / data.max)
+                assertEquals(RangedValueComplicationData.TYPE_UNDEFINED, data.valueType)
+            }
+            assertTrue(ringComplicationData(rings, rings.size) { _, _, _, _ ->
+                error("Obsolete main slot must return NoData")
+            } is NoDataComplicationData)
+        }
+    }
+
+    @Test
+    fun malformedResolvedDataCannotSupplyAnAdaptiveCountEvenToAnotherValidEntry() {
+        val ordinary = cursorPair.copy(split = null)
+        val invalidLists = listOf(
+            List(4) { ordinary },
+            listOf(cursorPair, codexPair, cursorPair), // Only two outer-half services exist.
+            listOf(ordinary, cursorPair.copy(usedPercent = Double.NaN)),
+            listOf(ordinary, cursorPair.copy(usedPercent = -1.0)),
+            listOf(ordinary, cursorPair.copy(split = cursorPair.split!!.copy(usedPercent = Double.POSITIVE_INFINITY))),
+        )
+        for (rings in invalidLists) {
+            assertNull(resolvedBandCount(rings))
+            assertTrue(ringComplicationData(rings, 0) { _, _, _, _ ->
+                error("Invalid resolved data must clear the main")
+            } is NoDataComplicationData)
+            assertTrue(outerHalfComplicationData(rings, 0) { _, _, _ ->
+                error("Invalid resolved data must clear the extra")
+            } is NoDataComplicationData)
+        }
     }
 
     @Test
@@ -118,6 +180,228 @@ class WatchComplicationTextTest {
         split = RingHalf("allowance.codex.spark", "Spark 5h", 59.0, PulseStatus.OK),
     )
 
+    private val n2DiagnosticSummary = PreviewWatchDashboardSummary.value.copy(
+        rings = listOf(
+            codexPair.copy(usedPercent = 63.0, split = null),
+            cursorPair.copy(usedPercent = 63.0, split = cursorPair.split!!.copy(usedPercent = 63.0)),
+        ),
+    )
+
+    @Test
+    fun n1DiagnosticsRequireOptInAndTheExactMockCaseAndStopAtTheProcessLimit() {
+        val pair = codexPair.copy(usedPercent = 63.0, split = codexPair.split!!.copy(usedPercent = 63.0))
+        val summary = PreviewWatchDashboardSummary.value.copy(rings = listOf(pair))
+        val records = mutableListOf<String>()
+        val data = rangedComplicationBuilder(37f, "0", RingFamily.CODEX_SPARK, ringCount = 1).build()
+        val route = N1PairDiagnostics.Route(0, 0, 1)
+        N1PairDiagnostics(false, records::add).observe(summary, 0, data, route) {
+            error("Disabled diagnostics must not inspect TITLE")
+        }
+        val observer = N1PairDiagnostics(true, records::add)
+        for (rejected in listOf(
+            null,
+            summary.copy(schemaVersion = 8), summary.copy(dataMode = WatchDataMode.LIVE),
+            summary.copy(rings = emptyList()), summary.copy(rings = listOf(pair, pair)),
+            summary.copy(rings = listOf(pair.copy(id = "allowance.claude.plan"))),
+            summary.copy(rings = listOf(pair.copy(usedPercent = 62.0))),
+            summary.copy(rings = listOf(pair.copy(split = null))),
+            summary.copy(rings = listOf(pair.copy(split = pair.split!!.copy(id = "allowance.codex.other")))),
+            summary.copy(rings = listOf(pair.copy(split = pair.split!!.copy(usedPercent = 62.0)))),
+            summary.copy(rings = listOf(pair.copy(status = PulseStatus.STALE))),
+        )) {
+            observer.observe(rejected, 0, data, route) { error("Rejected case must not inspect TITLE") }
+        }
+        observer.observe(summary, 1, data, route) { error("Second ordinal is outside this case") }
+        assertTrue(records.isEmpty())
+        repeat(N1PairDiagnostics.MAX_RECORDS + 2) {
+            observer.observe(summary, 0, data, route) { actual ->
+                assertSame(data, actual)
+                "0"
+            }
+        }
+        assertEquals(N1PairDiagnostics.MAX_RECORDS, records.size)
+        assertEquals(
+            "case=N1_PAIR stage=service_return ordinal=0 payload=0 outside=0 bands=1 " +
+                "type=ranged_value value=74.0 min=0.0 max=200.0 valueType=undefined title=index0 ramp=spark",
+            records.first(),
+        )
+    }
+
+    @Test
+    fun n1DiagnosticsReportActualFieldsAndKeepUnexpectedLiteralsAndUnavailableStagesClosed() {
+        val pair = codexPair.copy(usedPercent = 63.0, split = codexPair.split!!.copy(usedPercent = 63.0))
+        val summary = PreviewWatchDashboardSummary.value.copy(rings = listOf(pair))
+        fun record(data: ComplicationData?, route: N1PairDiagnostics.Route? = null, title: () -> CharSequence?): String {
+            val records = mutableListOf<String>()
+            N1PairDiagnostics(true, records::add).observe(summary, 0, data, route) { title() }
+            return records.single()
+        }
+        // Constructed observer inputs are not an execution of the Android service boundary.
+        val unexpected = rangedComplicationBuilder(12f, "unexpected", RingFamily.CLAUDE).build()
+        assertTrue(record(unexpected) { "unexpected" }.endsWith(
+            "type=ranged_value value=12.0 min=0.0 max=100.0 valueType=undefined title=other ramp=other",
+        ))
+        for ((literal, category) in listOf(null to "absent", "" to "empty", "1" to "index1", "2" to "index2")) {
+            assertTrue(record(unexpected) { literal }.contains("title=$category "))
+        }
+        assertTrue(record(unexpected) { error("Synthetic unreadable TITLE") }.contains("title=unknown "))
+        val unbounded = RangedValueComplicationData.Builder(
+            value = 901f, min = 0f, max = 1000f,
+            contentDescription = PlainComplicationText.Builder("Synthetic range").build(),
+        ).build()
+        assertTrue(record(unbounded) { null }.contains("value=out_of_range min=0.0 max=out_of_range"))
+        assertTrue(record(unbounded) { null }.endsWith("title=absent ramp=absent"))
+        assertTrue(record(unexpected, N1PairDiagnostics.Route(-1, 8, 4)) { "0" }.contains(
+            "payload=out_of_range outside=out_of_range bands=out_of_range",
+        ))
+        for (data in listOf(null, NoDataComplicationData())) {
+            val result = record(data) { error("Non-ranged data has no TITLE") }
+            assertTrue(result.contains("payload=unknown outside=unknown bands=unknown"))
+            assertTrue(result.endsWith("value=unknown min=unknown max=unknown valueType=unknown title=unknown ramp=unknown"))
+        }
+        // No title, label, request identifier or exception text can pass through a category.
+        assertTrue(!record(unexpected) { "Synthetic label" }.contains("Synthetic"))
+        N1PairDiagnostics(true) { error("Synthetic sink failure") }.observe(summary, 0, unexpected, null) { "0" }
+    }
+
+    @Test
+    fun n2DiagnosticsRequireOptInAndTheExactOrderedMockCaseBeforeReadingTitle() {
+        val summary = n2DiagnosticSummary
+        val codex = summary.rings[0]
+        val cursor = summary.rings[1]
+        val money = Money(0, "USD")
+        val records = mutableListOf<String>()
+        val data = rangedComplicationBuilder(12f, "0", RingFamily.CURSOR).build()
+        val route = N1PairDiagnostics.Route(1, 0, 2)
+        var titleReads = 0
+        val readTitle: (RangedValueComplicationData) -> CharSequence? = { actual ->
+            assertSame(data, actual)
+            titleReads++
+            "0"
+        }
+        N1PairDiagnostics(false, records::add).observe(summary, 0, data, route, readTitle)
+        val observer = N1PairDiagnostics(true, records::add)
+        val rejectedRings = listOf(
+            emptyList(), listOf(codex), listOf(cursor), listOf(cursor, codex), listOf(codex, cursor, codex),
+        ) + listOf(
+            codex.copy(id = "allowance.claude.plan"), codex.copy(usedPercent = 62.0),
+            codex.copy(status = PulseStatus.STALE), codex.copy(spent = money), codex.copy(limit = money),
+            codex.copy(split = codexPair.split),
+        ).map { listOf(it, cursor) } + listOf(
+            cursor.copy(id = "allowance.cursor.other"), cursor.copy(usedPercent = 62.0),
+            cursor.copy(status = PulseStatus.STALE), cursor.copy(spent = money), cursor.copy(limit = money),
+            cursor.copy(split = null),
+            cursor.copy(split = cursor.split!!.copy(id = "allowance.codex.spark")),
+            cursor.copy(split = cursor.split!!.copy(usedPercent = 62.0)),
+            cursor.copy(split = cursor.split!!.copy(status = PulseStatus.STALE)),
+        ).map { listOf(codex, it) }
+        for (rejected in listOf(null, summary.copy(schemaVersion = 8), summary.copy(dataMode = WatchDataMode.LIVE)) +
+            rejectedRings.map { summary.copy(rings = it) }
+        ) {
+            observer.observe(rejected, 0, data, route, readTitle)
+        }
+        for (ordinal in listOf(-1, 1)) observer.observe(summary, ordinal, data, route, readTitle)
+        assertTrue(records.isEmpty())
+        assertEquals(0, titleReads)
+        observer.observe(summary, 0, data, route, readTitle)
+        assertEquals(1, titleReads)
+        assertEquals(
+            "case=N2_PLAN_PAIR stage=service_return ordinal=0 payload=1 outside=0 bands=2 " +
+                "type=ranged_value value=12.0 min=0.0 max=100.0 valueType=undefined title=index0 ramp=cursor_cyan",
+            records.single(),
+        )
+    }
+
+    @Test
+    fun n1AndN2DiagnosticsShareOneProcessBudgetAndStopReadingAfterFourRecords() {
+        val pair = codexPair.copy(usedPercent = 63.0, split = codexPair.split!!.copy(usedPercent = 63.0))
+        val n1 = n2DiagnosticSummary.copy(rings = listOf(pair))
+        val records = mutableListOf<String>()
+        val observer = N1PairDiagnostics(true, records::add)
+        val data = rangedComplicationBuilder(12f, "0").build()
+        var titleReads = 0
+        repeat(N1PairDiagnostics.MAX_RECORDS + 2) { index ->
+            observer.observe(if (index % 2 == 0) n1 else n2DiagnosticSummary, 0, data, null) {
+                titleReads++
+                "0"
+            }
+        }
+        assertEquals(4, titleReads)
+        assertEquals(
+            listOf("case=N1_PAIR", "case=N2_PLAN_PAIR", "case=N1_PAIR", "case=N2_PLAN_PAIR"),
+            records.map { it.substringBefore(' ') },
+        )
+    }
+
+    @Test
+    fun n2DiagnosticsCategorizeActualFieldsInsteadOfPredictingTheExpectedReturn() {
+        fun record(data: ComplicationData?, title: CharSequence? = "Synthetic label"): String {
+            val records = mutableListOf<String>()
+            N1PairDiagnostics(true, records::add).observe(
+                n2DiagnosticSummary, 0, data, N1PairDiagnostics.Route(2, 1, 3),
+            ) { title }
+            return records.single()
+        }
+        // Deliberately unlike the predicted N2 tuple; these are constructed observer inputs only.
+        val actual = RangedValueComplicationData.Builder(
+            value = 12f, min = 5f, max = 80f,
+            contentDescription = PlainComplicationText.Builder("Synthetic description").build(),
+        ).setValueType(RangedValueComplicationData.TYPE_RATING)
+            .setColorRamp(ColorRamp(intArrayOf(RingFamily.CURSOR), false))
+            .build()
+        assertEquals(
+            "case=N2_PLAN_PAIR stage=service_return ordinal=0 payload=2 outside=1 bands=3 " +
+                "type=ranged_value value=12.0 min=5.0 max=80.0 valueType=rating title=other ramp=cursor_cyan",
+            record(actual),
+        )
+        for ((colors, category) in listOf(
+            intArrayOf(RingFamily.CODEX_SPARK) to "spark",
+            intArrayOf(RingFamily.CURSOR_OWN) to "other",
+            intArrayOf(RingFamily.CURSOR, RingFamily.CURSOR) to "other",
+        )) {
+            val ramp = rangedComplicationBuilder(12f, "0").setColorRamp(ColorRamp(colors, false)).build()
+            assertTrue(record(ramp, "0").endsWith("title=index0 ramp=$category"))
+        }
+        for ((data, type) in listOf(null to "absent", NoDataComplicationData() to "no_data")) {
+            assertTrue(record(data).endsWith(
+                "type=$type value=unknown min=unknown max=unknown valueType=unknown title=unknown ramp=unknown",
+            ))
+        }
+    }
+
+    @Test
+    fun n2SelectionObservesTheSameObjectDespiteTitleOrSinkFailure() {
+        for (titleFails in listOf(true, false)) {
+            val summary = n2DiagnosticSummary
+            val built = rangedComplicationBuilder(12f, "0", RingFamily.CURSOR).build()
+            var route: N1PairDiagnostics.Route? = null
+            var builds = 0
+            val returned = outerHalfComplicationData(summary.rings, 0) { half, outside, count ->
+                builds++
+                assertSame(summary.rings[1].split, half)
+                route = N1PairDiagnostics.Route(summary.rings.indexOfFirst { it.split === half }, outside, count)
+                built
+            }
+            val records = mutableListOf<String>()
+            var titleReads = 0
+            val observer = N1PairDiagnostics(true) {
+                records.add(it)
+                if (!titleFails) error("Synthetic sink failure")
+            }
+            observer.observe(summary, 0, returned, route) { actual ->
+                titleReads++
+                assertSame(returned, actual)
+                if (titleFails) error("Synthetic TITLE failure")
+                "0"
+            }
+            assertSame(built, returned)
+            assertEquals(1, builds)
+            assertEquals(1, titleReads)
+            assertTrue(records.single().contains("payload=1 outside=0 bands=2"))
+            assertTrue(records.single().endsWith("title=${if (titleFails) "unknown" else "index0"} ramp=cursor_cyan"))
+        }
+    }
+
     @Test
     fun outerHalfServicesSelectTheirSplitOrdinalAndMirrorTheBandIndex() {
         val single = RingSummary("allowance.claude.plan", "Weekly", 30.0, PulseStatus.OK)
@@ -132,8 +416,9 @@ class WatchComplicationTextTest {
             val built = NoDataComplicationData()
             var called = false
             val result =
-                outerHalfComplicationData(rings, ordinal) { actualHalf, actualIndex ->
+                outerHalfComplicationData(rings, ordinal) { actualHalf, actualIndex, count ->
                     called = true
+                    assertEquals(rings.size, count)
                     assertEquals(half, actualHalf)
                     assertEquals(outsideIndex, actualIndex)
                     built
@@ -171,7 +456,7 @@ class WatchComplicationTextTest {
             )
         for ((rings, ordinal) in cases) {
             val result =
-                outerHalfComplicationData(rings, ordinal) { _, _ ->
+                outerHalfComplicationData(rings, ordinal) { _, _, _ ->
                     error("Missing or invalid split must clear the arc")
                 }
             assertTrue(result is NoDataComplicationData)
@@ -186,7 +471,8 @@ class WatchComplicationTextTest {
             val built = NoDataComplicationData()
             var captured: String? = null
             val result =
-                ringComplicationData(listOf(ring), 0) { actualRing, remaining, title ->
+                ringComplicationData(listOf(ring), 0) { actualRing, remaining, title, count ->
+                    assertEquals(1, count)
                     assertEquals(ring, actualRing)
                     assertEquals(82f, remaining)
                     captured = title
@@ -198,7 +484,7 @@ class WatchComplicationTextTest {
 
         assertEquals("", normalTitle(single))
         val loneOuter =
-            outerHalfComplicationData(listOf(single), 0) { _, _ ->
+            outerHalfComplicationData(listOf(single), 0) { _, _, _ ->
                 error("A lone pool must not publish outer-half data")
             }
         assertTrue(loneOuter is NoDataComplicationData)
@@ -209,8 +495,9 @@ class WatchComplicationTextTest {
         val builtOuter = NoDataComplicationData()
         var outerBuilt = false
         val pairedOuter =
-            outerHalfComplicationData(listOf(cursorPair), 0) { half, outerSlot ->
+            outerHalfComplicationData(listOf(cursorPair), 0) { half, outerSlot, count ->
                 outerBuilt = true
+                assertEquals(1, count)
                 assertEquals(cursorPair.split, half)
                 assertEquals(0, outerSlot)
                 builtOuter
@@ -596,6 +883,40 @@ class WatchComplicationTextTest {
                 RingSummary("budget.cursor.month", "Month", 12.0, PulseStatus.OK),
             ),
         )
+    }
+
+    @Test
+    fun fableTokensKeepKnownZeroIdentityAndPercentageOnlyStrips() {
+        assertEquals("fable", WatchComplicationText.splitPoolToken("allowance.claude.claude-seven-day-fable"))
+        for (id in listOf("allowance.claude.plan", "allowance.claude.claude-seven-day-fable-other", "claude-seven-day-fable")) {
+            assertNull(WatchComplicationText.splitPoolToken(id))
+        }
+        val pair = RingSummary(
+            "allowance.claude.plan", "Weekly", 18.0, PulseStatus.OK,
+            split = RingHalf("allowance.claude.claude-seven-day-fable", "Fable weekly", 59.0, PulseStatus.OK),
+        )
+        for ((inner, outer, title) in listOf(
+            Triple(18.0, 59.0, "split:fable"),
+            Triple(100.0, 59.0, "split:fable:zero-inner"),
+            Triple(18.0, 100.0, "split:fable:zero-outer"),
+            Triple(100.0, 100.0, "split:fable:zero-both"),
+        )) {
+            val ring = pair.copy(usedPercent = inner, split = pair.split!!.copy(usedPercent = outer))
+            assertEquals(title, WatchComplicationText.ringTitleToken(ring))
+            assertEquals("fable", WatchComplicationText.stripTitleToken(ring))
+            val summary = PreviewWatchDashboardSummary.value.copy(
+                rings = listOf(ring),
+                allowances = listOf(AllowanceSummary(
+                    source = "purchased", label = "Claude · Extra usage", usedPercent = null,
+                    remaining = Quantity("80", "credits"), unlimited = false, resetsAt = null,
+                    status = PulseStatus.OK,
+                )),
+            )
+            assertEquals("${(100 - inner).toInt()}% · ${(100 - outer).toInt()}%", WatchComplicationText.stripLabel(summary, 0))
+        }
+        val unknown = pair.copy(split = pair.split!!.copy(usedPercent = Double.NaN))
+        assertNull(WatchComplicationText.stripTitleToken(unknown))
+        assertEquals("", WatchComplicationText.ringTitleToken(unknown))
     }
 
     @Test

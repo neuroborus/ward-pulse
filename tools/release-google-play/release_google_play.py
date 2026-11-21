@@ -37,6 +37,7 @@ SOURCES = {
     "push": "apps/wear_android/watchface_push/build.gradle.kts",
 }
 TOOL = "tools/release-google-play/release_google_play.py"
+PRODUCER = ".github/workflows/release-github.yml"
 SHA = r"[0-9a-f]{40}"
 HASH = r"[0-9a-f]{64}"
 STABLE = r"v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
@@ -179,7 +180,7 @@ class Checkout:
             raise PreparationError("Required immutable Git data unavailable.") from None
 
     def source(self, sha, path):
-        require(matches(SHA, sha) and path in (*SOURCES.values(), TOOL))
+        require(matches(SHA, sha) and path in (*SOURCES.values(), TOOL, PRODUCER))
         text = self.git("show", sha + ":" + path)
         require(len(text) <= JSON_LIMIT)
         return text
@@ -217,7 +218,15 @@ def binary_contract(checkout, sha, tag):
         codes[surface] = int(code)
     require(all(0 < code <= 2147483647 for code in codes.values()))
     require(codes["phone"] % 2 == 1 and codes["wear"] == codes["phone"] + 1)
-    return {f"wardpulse-{surface}-{tag[1:]}-code{code}.{extension}":
+    # Read the producer's declaration as data, never execute historical workflow code.
+    workflow = checkout.source(sha, PRODUCER)
+    declarations = [line for line in workflow.splitlines() if "WARDPULSE_APK_NAMING" in line]
+    require(not declarations or declarations == ["  WARDPULSE_APK_NAMING: friendly-v1"],
+            "Unsupported or ambiguous producer APK naming convention.")
+    installers = {"phone": "Android", "wear": "WearOS", "legacy": "WatchFace-WearOS5Plus"} if declarations else {}
+    return {(f"WardPulse-{tag[1:]}-{installers[surface]}.apk"
+             if extension == "apk" and surface in installers else
+             f"wardpulse-{surface}-{tag[1:]}-code{code}.{extension}"):
             PUSH_PIN if surface == "push" else UPLOAD_PIN
             for surface, code in codes.items()
             for extension in (("apk",) if surface == "push" else ("aab", "apk"))}

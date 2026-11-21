@@ -3,13 +3,18 @@ package app.wardpulse.wear.watchface
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.Button
@@ -30,14 +35,36 @@ internal fun WatchFaceScreen(
     onUpdate: () -> Unit,
     onUse: () -> Unit,
 ) {
-    // Observe once per navigation entry, including a fresh controller after process death.
-    // Activity recreation alone must not check activity immediately after an update.
+    // Check each visit, including a fresh controller after process death. Recreation alone
+    // must not observe Push activity immediately after an update; manual guidance can refresh.
     var checkedOnVisit by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        if (!checkedOnVisit || (state.status == WatchFaceStatus.Checking && !state.busy)) {
+        // A retained in-flight observation needs a request even after saved-state recreation.
+        if (!checkedOnVisit || state.status.isSeparateFace || state.status == WatchFaceStatus.Checking) {
             checkedOnVisit = true
             onCheck()
         }
+    }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val currentState by rememberUpdatedState(state)
+    val currentOnCheck by rememberUpdatedState(onCheck)
+    DisposableEffect(lifecycle) {
+        // Ignore the initial resume: the visit check owns it. Refresh after an external
+        // installation/selector returns, without observing Push activity after an update.
+        var paused = false
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_PAUSE -> paused = true
+                Lifecycle.Event.ON_RESUME -> {
+                    val status = currentState.status
+                    if (paused && (status.isSeparateFace || status == WatchFaceStatus.Checking)) currentOnCheck()
+                    paused = false
+                }
+                else -> Unit
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
     }
     val scrollState = rememberTransformingLazyColumnState()
     val transformationSpec = rememberTransformationSpec()
@@ -64,8 +91,12 @@ internal fun WatchFaceScreen(
                             WatchFaceStatus.Checking -> "Checking watch face…"
                             WatchFaceStatus.CheckFailed -> "Could not check the watch face."
                             WatchFaceStatus.FaceUnsupported -> "WardPulse Watch Face requires Wear OS 5 or later."
-                            WatchFaceStatus.SeparateInstall ->
+                            WatchFaceStatus.SeparateInstalled ->
+                                "Installed. Select WardPulse from your watch-face list."
+                            WatchFaceStatus.SeparateMissing ->
                                 "Install WardPulse Watch Face separately, then select it from your watch-face list."
+                            WatchFaceStatus.SeparateCheckFailed ->
+                                "Could not check whether the separate watch face is installed."
                             WatchFaceStatus.Missing -> "Install the WardPulse watch face."
                             WatchFaceStatus.NoCapacity -> "Watch-face installation is unavailable."
                             WatchFaceStatus.Installed -> "Installed"
@@ -151,6 +182,9 @@ internal fun WatchFaceScreen(
                 WatchFaceStatus.Checking,
                 WatchFaceStatus.CheckFailed,
                 WatchFaceStatus.NoCapacity,
+                WatchFaceStatus.SeparateInstalled,
+                WatchFaceStatus.SeparateMissing,
+                WatchFaceStatus.SeparateCheckFailed,
                 -> "Check again" to onCheck
                 else -> null
             }

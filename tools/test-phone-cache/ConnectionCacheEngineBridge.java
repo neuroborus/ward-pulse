@@ -18,7 +18,8 @@ public final class ConnectionCacheEngineBridge {
         public boolean commit(Map<String, String> values) { if (fail) return false; data = new HashMap<>(values); return true; }
     }
     static final Disk disk = new Disk();
-    static ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+    static long now;
+    static ConnectionCacheEngine engine = new ConnectionCacheEngine(disk, () -> now);
     public static void main(String[] unused) throws Exception {
         BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
         String line;
@@ -41,28 +42,66 @@ public final class ConnectionCacheEngineBridge {
             case "acquire": engine.acquire(owner, connection, args.get("action"), expected, args.get("fetchTicket"),
                 value -> response(id, value, false), error -> response(id, null, true)); return;
             case "acquireFetch": engine.acquireFetch(owner, connection, value -> response(id, value, false)); return;
-            case "releaseFetch": engine.releaseFetch(owner, connection, args.get("fetchTicket")); response(id, null, false); return;
+            case "releaseFetch":
+                String reportAt = args.get("reportAtMillis");
+                engine.releaseFetch(owner, connection, args.get("fetchTicket"), reportAt == null ? null : Long.valueOf(reportAt));
+                response(id, null, false); return;
             case "validFetch": response(id, engine.validFetch(owner, connection, args.get("fetchTicket")), false); return;
+            case "claimAutomatic": response(id, engine.claimAutomatic(owner, connection, args.get("fetchTicket"), expected, Long.parseLong(args.get("intervalMillis"))), false); return;
+            case "stampFetch": response(id, engine.stampFetch(owner, connection, args.get("fetchTicket"), expected), false); return;
             case "finish": response(id, engine.finish(owner, connection, args.get("lease"), args.get("operation"), args.get("identity")), false); return;
             case "prepareMigration": response(id, engine.prepareMigration(owner, connection, args.get("lease")), false); return;
             case "queueLegacyCleanup": engine.queueLegacyCleanup(owner, connection, args.get("lease")); response(id, null, false); return;
             case "acknowledgeCleanup": response(id, engine.acknowledgeCleanup(owner, connection, args.get("lease"),
                 args.getOrDefault("cleaned", "").isEmpty() ? List.of() : List.of(args.get("cleaned").split("\n"))), false); return;
+            case "readNotice": response(id, engine.readNotice(connection), false); return;
+            case "dismissNotice": response(id, engine.dismissNotice(connection, args.get("eventId")), false); return;
             case "valid": response(id, engine.valid(connection, expected), false); return;
             case "validAll":
                 Map<String, Map<String, String>> versions = new HashMap<>();
+                Map<String, Long> attemptClockEras = new HashMap<>();
+                Map<String, Map<String, Object>> payloadOrders = new HashMap<>();
+                Map<String, String> emptyCacheOrders = new HashMap<>();
+                String eraPrefix = "attemptClockEras.";
+                String payloadPrefix = "payloadOrders.";
+                String emptyOrderPrefix = "emptyCacheOrders.";
                 args.forEach((key, value) -> {
+                    if (key.startsWith(eraPrefix)) {
+                        attemptClockEras.put(key.substring(eraPrefix.length()), Long.valueOf(value));
+                        return;
+                    }
+                    if (key.startsWith(payloadPrefix)) {
+                        String suffix = key.substring(payloadPrefix.length());
+                        int dot = suffix.lastIndexOf('.');
+                        String field = suffix.substring(dot + 1);
+                        payloadOrders.computeIfAbsent(suffix.substring(0, dot), ignored -> new HashMap<>())
+                            .put(field, "rowId".equals(field) ? value : Long.valueOf(value));
+                        return;
+                    }
+                    if (key.startsWith(emptyOrderPrefix)) {
+                        emptyCacheOrders.put(key.substring(emptyOrderPrefix.length()), value);
+                        return;
+                    }
                     if (!key.startsWith("versions.")) return;
                     String suffix = key.substring(9); int dot = suffix.lastIndexOf('.');
                     versions.computeIfAbsent(suffix.substring(0, dot), ignored -> new HashMap<>()).put(suffix.substring(dot + 1), value);
                 });
-                response(id, engine.validAll(versions), false); return;
-            case "readSnapshot": response(id, engine.readSnapshot(connection, expected), false); return;
-            case "writeSnapshot": response(id, engine.writeSnapshot(connection, expected, args.get("snapshot"), Long.parseLong(args.get("generatedAt"))), false); return;
+                boolean current = engine.validAll(versions, attemptClockEras, payloadOrders, emptyCacheOrders);
+                response(id, current && !Boolean.parseBoolean(args.get("rejectValidation")), false);
+                return;
+            case "readSnapshot":
+                response(id, Boolean.parseBoolean(args.get("ordered")) ? engine.readSnapshotPair(connection, expected, Boolean.parseBoolean(args.get("forSelection")))
+                    : engine.readSnapshot(connection, expected), false); return;
+            case "writeSnapshot":
+                String snapshot = args.get("snapshot");
+                long generatedAt = Long.parseLong(args.get("generatedAt"));
+                response(id, Boolean.parseBoolean(args.get("ordered")) ? engine.writeSnapshotOrdered(owner, connection, expected, snapshot, generatedAt, args.get("stamp"))
+                    : engine.writeSnapshot(connection, expected, snapshot, generatedAt), false); return;
             case "upgradeSnapshotTimestamp": response(id, engine.upgradeSnapshotTimestamp(connection, expected, args.get("snapshot"), Long.parseLong(args.get("generatedAt"))), false); return;
             case "clearSnapshot": engine.clearSnapshot(connection, expected); response(id, null, false); return;
-            case "restart": engine = new ConnectionCacheEngine(disk); response(id, null, false); return;
-            case "reset": disk.data.clear(); disk.fail = false; engine = new ConnectionCacheEngine(disk); response(id, null, false); return;
+            case "restart": engine = new ConnectionCacheEngine(disk, () -> now); response(id, null, false); return;
+            case "reset": disk.data.clear(); disk.fail = false; now = 0; engine = new ConnectionCacheEngine(disk, () -> now); response(id, null, false); return;
+            case "setClock": now = Long.parseLong(args.get("value")); response(id, null, false); return;
             case "setDisk": disk.data.put(args.get("key"), args.get("value")); response(id, null, false); return;
             case "failCommit": disk.fail = Boolean.parseBoolean(args.get("value")); response(id, null, false); return;
             case "detach": engine.detach(owner); response(id, null, false); return;
