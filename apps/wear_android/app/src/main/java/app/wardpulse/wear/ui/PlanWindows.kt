@@ -116,7 +116,7 @@ private fun detailOf(
  */
 private fun backLabel(returnsAt: Instant, now: Instant, zone: ZoneId): String {
     // `atZone().toLocalDate()`, not `LocalDate.ofInstant`: the latter is API 34
-    // and this app runs from 30.
+    // and this app runs from 33.
     val sameDay = returnsAt.atZone(zone).toLocalDate() == now.atZone(zone).toLocalDate()
     val format = if (sameDay) BACK_TODAY_FORMAT else BACK_DATED_FORMAT
     return "back ${format.withZone(zone).format(returnsAt)}"
