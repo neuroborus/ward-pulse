@@ -1,12 +1,224 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/dashboard/claude_dashboard_repository.dart';
+import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
+import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
+import 'package:ward_pulse_phone/providers/claude_account_service.dart';
 import 'package:ward_pulse_phone/providers/claude_account_store.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/sync/claude_account_client.dart';
+import 'package:ward_pulse_phone/sync/provider_sync_logger.dart';
 
 void main() {
   final now = DateTime.utc(2026, 7, 26, 12);
+
+  ClaudeAccountSession savedSession() => ClaudeAccountSession(
+    accessToken: 'synthetic-access',
+    refreshToken: 'synthetic-refresh',
+    expiresAt: now.add(const Duration(hours: 1)),
+    accountId: 'synthetic-account',
+  );
+
+  group('IoClaudeHttpTransport', () {
+    Future<void> expectFailure(
+      HttpClient client,
+      ClaudeAccountFailure failure,
+      String details,
+    ) => expectLater(
+      IoClaudeHttpTransport(client: client).send(
+        'GET',
+        Uri.parse('https://example.test/usage?private=synthetic'),
+        headers: const {},
+      ),
+      throwsA(_accountFailure(failure, '/usage · $details')),
+    );
+
+    test('maps a TLS handshake failure at openUrl to unavailable', () async {
+      await expectFailure(
+        _StubHttpClient(
+          () async => throw const HandshakeException('TLS error'),
+        ),
+        ClaudeAccountFailure.unavailable,
+        'Network unavailable',
+      );
+    });
+
+    test('preserves timeout details', () async {
+      await expectFailure(
+        _StubHttpClient(() async => throw TimeoutException('synthetic detail')),
+        ClaudeAccountFailure.unavailable,
+        'Timed out',
+      );
+    });
+
+    test('preserves request validation with sanitized details', () async {
+      await expectFailure(
+        _StubHttpClient(() async => throw ArgumentError('synthetic detail')),
+        ClaudeAccountFailure.invalidResponse,
+        'Invalid request',
+      );
+    });
+
+    for (final (name, error, failure, details) in const [
+      (
+        'wrapped socket failure',
+        HttpException('Connection reset by peer'),
+        ClaudeAccountFailure.unavailable,
+        'Network unavailable',
+      ),
+      (
+        'wrapped TLS failure',
+        HttpException('Handshake error in client'),
+        ClaudeAccountFailure.unavailable,
+        'Network unavailable',
+      ),
+      (
+        'redirect without a Location header',
+        RedirectException(
+          'Server response has no Location header for redirect',
+          [],
+        ),
+        ClaudeAccountFailure.invalidResponse,
+        'Invalid HTTP redirect',
+      ),
+      (
+        'malformed HTTP status line',
+        HttpException('Invalid response status code with 88'),
+        ClaudeAccountFailure.invalidResponse,
+        'Invalid HTTP response',
+      ),
+      (
+        'malformed HTTP response parsed as a request line',
+        HttpException('Invalid response, invalid HTTP version'),
+        ClaudeAccountFailure.invalidResponse,
+        'Invalid HTTP response',
+      ),
+      (
+        'chunked transfer encoding in HTTP 1.0',
+        HttpException(
+          "Trying to set 'Transfer-Encoding: Chunked' on HTTP 1.0 headers",
+        ),
+        ClaudeAccountFailure.invalidResponse,
+        'Invalid HTTP response',
+      ),
+      (
+        'invalid outgoing content length',
+        HttpException(
+          'No content even though contentLength was specified to be '
+          'greater than 0: 1.',
+        ),
+        ClaudeAccountFailure.invalidResponse,
+        'Invalid request',
+      ),
+    ]) {
+      test('classifies $name at request.close()', () async {
+        await expectFailure(
+          _StubHttpClient.respond(() async => throw error),
+          failure,
+          details,
+        );
+      });
+    }
+
+    for (final (name, message, failure, details) in const [
+      (
+        'premature connection closure',
+        'Connection closed while receiving data',
+        ClaudeAccountFailure.unavailable,
+        'Network unavailable',
+      ),
+      (
+        'malformed chunk size',
+        'Failed to parse HTTP, 88 is expected to be a Hex digit',
+        ClaudeAccountFailure.invalidResponse,
+        'Invalid HTTP response',
+      ),
+    ]) {
+      test('classifies $name while streaming the response', () async {
+        Stream<List<int>> body() async* {
+          yield utf8.encode('{');
+          throw HttpException(message);
+        }
+
+        await expectFailure(
+          _StubHttpClient.respond(() async => _StubHttpResponse(body())),
+          failure,
+          details,
+        );
+      });
+    }
+
+    test('keeps malformed usage JSON on the invalid-response path', () async {
+      final http = _StubHttpClient.respond(
+        () async => _StubHttpResponse.text('{'),
+      );
+      final client = ClaudeAccountClient(
+        transport: IoClaudeHttpTransport(client: http),
+        clock: () => now,
+      );
+      await expectLater(
+        client.fetchReport(savedSession(), onSessionChanged: (_) async {}),
+        throwsA(
+          _accountFailure(
+            ClaudeAccountFailure.invalidResponse,
+            'Claude usage · Invalid JSON',
+          ),
+        ),
+      );
+    });
+  });
+
+  test(
+    'retains Claude usage and the saved session on a connection reset',
+    () async {
+      final session = savedSession();
+      final store = _MemoryClaudeStore(session);
+      final logger = _RecordingSyncLogger();
+      var requests = 0;
+      final http = _StubHttpClient.respond(() async {
+        if (requests++ == 0) {
+          return _StubHttpResponse.text('{"five_hour":{"utilization":42}}');
+        }
+        throw const HttpException('Connection reset by peer');
+      });
+      final repository = claudeDashboardRepository(
+        accountService: MobileClaudeAccountService(
+          store: store,
+          client: ClaudeAccountClient(
+            transport: IoClaudeHttpTransport(client: http),
+            clock: () => now,
+          ),
+        ),
+        fallback: const NoProvidersDashboardRepository(),
+        logger: logger,
+      );
+
+      final initial = await repository.load();
+      final previous = initial.accounts.single;
+      expect(previous.allowances.single.usedPercent, 42);
+      final unavailable = await repository.load();
+      final retained = unavailable.accounts.single;
+
+      expect(unavailable.syncIssue, DashboardSyncIssue.claudeUnavailable);
+      expect(unavailable.syncDetails, '/api/oauth/usage · Network unavailable');
+      expect(logger.events, [
+        ProviderSyncEvent.succeeded,
+        ProviderSyncEvent.unavailable,
+        ProviderSyncEvent.usingCachedSnapshot,
+      ]);
+      expect(retained.status, ProviderStatus.stale);
+      expect(
+        retained.toJson()..remove('status'),
+        previous.toJson()..remove('status'),
+      );
+      expect(await store.read(), same(session));
+      expect(requests, 2);
+    },
+  );
 
   test('builds a PKCE authorize URL for the Claude Code client', () {
     final client = ClaudeAccountClient(
@@ -381,6 +593,79 @@ void main() {
       'authorization_code',
     );
   });
+}
+
+Matcher _accountFailure(ClaudeAccountFailure failure, String details) =>
+    isA<ClaudeAccountException>()
+        .having((error) => error.failure, 'failure', failure)
+        .having((error) => error.details, 'details', details);
+
+final class _StubHttpClient extends Fake implements HttpClient {
+  _StubHttpClient(this._open);
+
+  _StubHttpClient.respond(Future<HttpClientResponse> Function() close)
+    : this(() async => _StubHttpRequest(close));
+
+  final Future<HttpClientRequest> Function() _open;
+
+  @override
+  Future<HttpClientRequest> openUrl(String method, Uri url) => _open();
+}
+
+final class _StubHttpRequest extends Fake implements HttpClientRequest {
+  _StubHttpRequest(this._close);
+
+  final Future<HttpClientResponse> Function() _close;
+
+  @override
+  final HttpHeaders headers = _StubHttpHeaders();
+
+  @override
+  Future<HttpClientResponse> close() => _close();
+}
+
+final class _StubHttpHeaders extends Fake implements HttpHeaders {
+  @override
+  void set(String name, Object value, {bool preserveHeaderCase = false}) {}
+}
+
+final class _StubHttpResponse extends StreamView<List<int>>
+    implements HttpClientResponse {
+  _StubHttpResponse(super.stream);
+
+  _StubHttpResponse.text(String body) : this(Stream.value(utf8.encode(body)));
+
+  @override
+  int get statusCode => HttpStatus.ok;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+final class _MemoryClaudeStore implements ClaudeAccountStore {
+  _MemoryClaudeStore(this._session);
+
+  ClaudeAccountSession? _session;
+
+  @override
+  Future<ClaudeAccountSession?> read() async => _session;
+
+  @override
+  Future<void> write(ClaudeAccountSession value) async {
+    _session = value;
+  }
+
+  @override
+  Future<void> delete({void Function(CredentialVersion)? onRetired}) async {
+    _session = null;
+  }
+}
+
+final class _RecordingSyncLogger implements ProviderSyncLogger {
+  final events = <ProviderSyncEvent>[];
+
+  @override
+  void record(ProviderSyncEvent event, {String? details}) => events.add(event);
 }
 
 class _FixedRandom implements Random {
