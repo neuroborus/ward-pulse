@@ -30,11 +30,12 @@ If loading or errors continue, note the visible status and the step that failed 
 
 A Dashboard warning that says a saved connection was rejected records a past event.
 Tap its text to open the exact connection on **Providers**, then check the row's current
-status. It may already have recovered. Use that plan's sign-in controls, Cursor's own
-session controls or the named reporting row's key editor only if still needed. The warning
-stays after reconnect, refresh, restart and ordinary removal; its **X** dismisses it without
-opening Providers. A dismissed warning stays dismissed for that saved connection, while
-a newly saved or reconnected connection can produce a new warning if rejected later.
+status. Use that plan's sign-in controls, Cursor's own session controls or the named reporting
+row's key editor only if still needed. WardPulse clears the warning automatically after it saves
+a fresh report from the replacement for that same connection. Reconnecting alone, refreshing
+from cache, restarting and ordinary removal leave it visible. Tap its **X** to dismiss it
+without opening Providers. A dismissed warning stays dismissed for that saved connection. A
+newly saved or reconnected connection can produce a new warning if rejected later.
 
 Read the connection name on Dashboard or **Providers**. **Platform reporting** and
 **Team Admin API** are separate from the plan login in the same provider family.

@@ -161,19 +161,20 @@ spending limits or alter billing. Active threshold alerts appear on Dashboard.
 ## Saved rejection warnings
 
 If a saved connection is rejected, Dashboard keeps a warning naming that connection.
-It describes a past rejection, so it can remain after the connection works again.
-Claude and Fable share one Claude plan warning.
+It describes a past rejection. Claude and Fable share one Claude plan warning.
 
 Tap the warning text to open **Providers** at the named connection. Review its current
 status and use its own sign-in or key controls if recovery is still needed. Opening the
 warning does not dismiss it. Tap its **X** to dismiss just that warning without leaving
 Dashboard.
 
-Refresh, switching tabs, restarting the app, reconnecting and **Disconnect** or **Remove**
-keep the warning until X. Repeated failures of that same saved connection do not bring a
-dismissed warning back. A newly saved or reconnected connection can produce another warning
-if it is later rejected. Android **Clear storage** removes all local records, including
-these warnings. Existing disconnections without a recorded rejection do not create a warning.
+WardPulse clears the warning automatically after it saves a fresh report from the replacement
+for that same connection. Reconnecting alone, viewing cached data, switching tabs, restarting
+the app and using **Disconnect** or **Remove** leave a visible warning in place. Repeated
+failures of the same saved connection do not bring a dismissed warning back. A newly saved
+or reconnected connection can produce another warning if it is later rejected. Android
+**Clear storage** removes all local records, including these warnings. Existing disconnections
+without a recorded rejection do not create a warning.
 
 These warnings do not change current connection statuses, problem counts, allowance values
 or update times. Permission, network, service and reporting-data errors remain separate.

@@ -80,12 +80,13 @@ A saved rejection warning on Dashboard opens Providers at its exact connection. 
 unconnected **Codex plan** or **Claude plan**, tap the row to start sign-in; for a connected
 plan, tap the row and choose **Reconnect** if needed. Tap an unconnected **Cursor plan** row
 to sign in to its dashboard, or choose **Sign in again** for a connected session. Reporting
-rows keep their key editor. Review the row's current status before
-changing it: the warning records a past rejection and can remain after recovery.
+rows keep their key editor. The warning records a past rejection. Review the row's current
+status before changing it.
 
-Reconnecting, Disconnect and Remove do not dismiss that historical warning. Use its **X**
-on Dashboard when you want to dismiss it. Opening it and returning to Dashboard also
-leaves it visible.
+WardPulse clears the warning automatically after it saves a fresh report from the replacement
+for that same connection. Reconnecting alone, choosing **Disconnect** or **Remove**, or opening
+the warning and returning to Dashboard leaves it visible. Use its **X** on Dashboard to dismiss
+it manually. The replacement can show a new warning if it is later rejected.
 
 ## Budget limits and alert thresholds
 

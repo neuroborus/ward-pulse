@@ -643,7 +643,7 @@ public final class ConnectionCacheEngine {
             state.put("snapshotClockAt", Long.toString(order.references.get(era)));
         }
         // Payload persistence is best effort and must not fence valid credentials.
-        if (!commitSnapshot(connection, state)) return writeResult("storageFailure", minimumEra);
+        if (!commitSnapshot(connection, state, era != null)) return writeResult("storageFailure", minimumEra);
         if (era == null) observeLegacyTimestamp(connection, state, generatedAt);
         return writeResult("stored", minimumEra);
     }
@@ -686,7 +686,7 @@ public final class ConnectionCacheEngine {
         ClockOrder order = clockOrders.get(connection);
         if (order != null && same(state, order.version, false)) order.observe(0L, generatedAt / 1000L);
     }
-    private boolean commitSnapshot(String connection, Map<String, String> state) {
+    private boolean commitSnapshot(String connection, Map<String, String> state, boolean verifiedLiveReport) {
         Map<String, String> all = readAll();
         String prefix = connection + ".";
         for (String key : SNAPSHOT_KEYS) {
@@ -694,6 +694,12 @@ public final class ConnectionCacheEngine {
             else all.remove(prefix + key);
         }
         all.put(prefix + "epoch", state.get("epoch"));
+        String committed = state.get("committedConnection");
+        String event = state.get("rejectionEvent");
+        if (verifiedLiveReport && committed != null && event != null && !committed.equals(event)
+                && "false".equals(state.get("rejectionDismissed"))) {
+            all.put(prefix + "rejectionDismissed", "true");
+        }
         return commit(all);
     }
     /** Upgrade legacy millisecond ordering without rewriting or racing a newer payload. */
@@ -703,7 +709,7 @@ public final class ConnectionCacheEngine {
         if (!snapshot.equals(state.get("snapshot"))) return false;
         if ("microseconds".equals(state.get("snapshotTimeUnit"))) return true;
         state.put("snapshotAt", Long.toString(generatedAt)); state.put("snapshotTimeUnit", "microseconds");
-        if (!commitSnapshot(connection, state)) return false;
+        if (!commitSnapshot(connection, state, false)) return false;
         if (confirmedEra(state) == null) observeLegacyTimestamp(connection, state, generatedAt);
         return true;
     }
@@ -713,7 +719,7 @@ public final class ConnectionCacheEngine {
         if ("legacy".equals(state.get("mode"))) return;
         state.put("epoch", unique());
         SNAPSHOT_KEYS.forEach(state::remove);
-        if (!commitSnapshot(connection, state)) throw new IllegalStateException("Snapshot storage failed.");
+        if (!commitSnapshot(connection, state, false)) throw new IllegalStateException("Snapshot storage failed.");
         Map<String, String> prior = failedCommitPriorState.get(connection);
         if (prior != null) {
             // Keep a successful cache clear when the credential remains fenced.

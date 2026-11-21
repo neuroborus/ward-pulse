@@ -1654,7 +1654,7 @@ void main() {
                 clock: () => now,
               ),
               claudeClient: ClaudeAccountClient(
-                transport: _RejectedClaudeTransport(),
+                transport: const _StubClaudeTransport(),
                 clock: () => now,
               ),
               openAiClient: OpenAiReportingClient(http: http),
@@ -1724,6 +1724,128 @@ void main() {
         },
       );
     }
+    test(
+      'headless Claude rejection retires after the replacement stores a live report',
+      () async {
+        const id = ProviderConnections.claudePlan;
+        final secure = FakeSecureStorage();
+        final now = DateTime.utc(2026, 11, 21, 12);
+        final store = SecureClaudeAccountStore(
+          storage: secure,
+          platform: bridge.platform('ui'),
+        );
+        ClaudeAccountSession session(String token) => ClaudeAccountSession(
+          accessToken: token,
+          refreshToken: 'synthetic-refresh',
+          accountId: 'synthetic-account',
+          expiresAt: now.add(const Duration(days: 1)),
+        );
+        PhoneLiveBindings createLive(
+          ConnectionCachePlatform platform,
+          ClaudeHttpResponse response,
+        ) => PhoneLiveBindings.create(
+          secureStorage: secure,
+          cachePlatform: platform,
+          claudeClient: ClaudeAccountClient(
+            transport: _StubClaudeTransport(response),
+            clock: () => now,
+          ),
+        );
+
+        await bridge.invoke('test', 'setClock', {
+          'value': now.millisecondsSinceEpoch,
+        });
+        await store.write(session('synthetic-rejected'));
+        final headless = createLive(
+          bridge.platform('headless'),
+          const ClaudeHttpResponse(statusCode: 401, body: '{}'),
+        );
+        final failures = <Object>[];
+        await providerSyncOnce(
+          debugBuild: false,
+          load:
+              (owner) =>
+                  loadProviderSyncWork(owner, createLive: () => headless),
+          markWidgetStale: ({required isCurrent}) async {},
+          logFailure: (_, error, _) => failures.add(error),
+        );
+        final event = (await headless.rejectionNotices.read()).single;
+        expect(event.connection, id);
+        expect(event.dismissed, isFalse);
+        expect((failures.single as DashboardLoadException).syncRejection, (
+          connection: id.storageKey,
+          eventId: event.eventId,
+        ));
+        expect(await store.read(), isNull);
+
+        await store.write(session('synthetic-replacement'));
+        final replacement = (await store.readVersioned())!.version;
+        expect(replacement.values['committedConnection'], isA<String>());
+        expect(replacement.values['committedConnection'], isNot(event.eventId));
+        final unavailable = createLive(
+          bridge.platform('foreground'),
+          const ClaudeHttpResponse(statusCode: 503, body: '{}'),
+        );
+        final notices = unavailable.rejectionNotices;
+        final afterReconnect = (await notices.read()).single;
+        expect(afterReconnect.eventId, event.eventId);
+        expect(afterReconnect.dismissed, isFalse);
+        await expectLater(
+          unavailable.repository.load(),
+          throwsA(
+            isA<DashboardLoadException>().having(
+              (error) => error.issue,
+              'issue',
+              DashboardSyncIssue.claudeUnavailable,
+            ),
+          ),
+        );
+        expect((await notices.read()).single.dismissed, isFalse);
+
+        final platform = ObservingCachePlatform(bridge.platform('foreground'));
+        String? stamp;
+        Object? write;
+        platform.onComplete = (method, arguments, result) {
+          if (method != 'writeSnapshot' ||
+              arguments['connection'] != id.storageKey) {
+            return;
+          }
+          stamp = arguments['stamp'] as String?;
+          write = result;
+        };
+        final live = createLive(
+          platform,
+          const ClaudeHttpResponse(
+            statusCode: 200,
+            body: '{"five_hour":{"utilization":42}}',
+          ),
+        );
+        final snapshot = await live.repository.load();
+        expect(snapshot.accounts.single.connection, id.storageKey);
+        expect(snapshot.accounts.single.allowances.single.usedPercent, 42);
+        expect(stamp, isNotEmpty);
+        expect(write, containsPair('status', 'stored'));
+
+        await bridge.invoke('test', 'restart', {});
+        final cold = bridge.platform('cold');
+        final encoded = await cold.invoke('readSnapshot', {
+          'connection': id.storageKey,
+          'expected': replacement.values,
+        });
+        final cached = DashboardSnapshot.fromJsonString(encoded as String);
+        expect(cached.accounts.single.allowances.single.usedPercent, 42);
+        final coldNotices = NativeConnectionRejectionNoticeStore(
+          platform: cold,
+        );
+        final recovered = (await coldNotices.read()).single;
+        expect(recovered.eventId, event.eventId);
+        expect(
+          recovered.dismissed,
+          isTrue,
+          reason: 'The stored report retires the earlier warning.',
+        );
+      },
+    );
   });
 
   test(
@@ -2681,7 +2803,13 @@ final class _RejectedCodexTransport implements CodexHttpTransport {
   }) async => const CodexHttpResponse(statusCode: 401, body: '{}');
 }
 
-final class _RejectedClaudeTransport implements ClaudeHttpTransport {
+final class _StubClaudeTransport implements ClaudeHttpTransport {
+  const _StubClaudeTransport([
+    this.response = const ClaudeHttpResponse(statusCode: 401, body: '{}'),
+  ]);
+
+  final ClaudeHttpResponse response;
+
   @override
   Future<ClaudeHttpResponse> send(
     String method,
@@ -2689,7 +2817,7 @@ final class _RejectedClaudeTransport implements ClaudeHttpTransport {
     required Map<String, String> headers,
     String? body,
     Duration? timeout,
-  }) async => const ClaudeHttpResponse(statusCode: 401, body: '{}');
+  }) async => response;
 }
 
 final class _ObservedRepository extends DashboardRepository {

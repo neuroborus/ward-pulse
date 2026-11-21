@@ -256,17 +256,26 @@ or key controls. It does not open a key editor for an OAuth plan. The independen
 X dismisses only that event and never navigates. Keep wrapping, compact spacing and readable
 light/dark and enlarged-text presentation.
 
-Refresh, navigation, restart, successful reconnect and ordinary Disconnect/Remove retain the
-warning until X; Android Clear storage removes all local records. Dismissal survives repeated
-failures of the same committed connection. A later explicitly committed connection can produce
-a new warning on rejection, even with the same credential or account. Stale failures and stale
-X actions cannot change a newer event. Failed notice writes retain the confirmed view.
+**Revision 2026-11-21.** The earlier rule kept the warning until X even after a reconnect.
+The owner's Claude Plan reconnect screenshot showed the previous rejection above updated
+usage on the phone Dashboard. This revision retires the warning automatically when the exact
+replacement connection saves its first eligible live report. The snapshot commit marks the
+earlier event dismissed and keeps its ID. Saving a replacement alone, cache-only refreshes,
+navigation, restart and ordinary Disconnect/Remove preserve a visible warning. The exact-row
+reveal, independent X and visual treatment above still apply.
+
+Dismissal survives repeated failures of the same committed connection. A genuine rejection of
+a later committed connection can produce a new warning, even with the same credential or
+account. Stale failures, stale X actions and reports for the rejected identity cannot dismiss
+or replace a newer event. Failed writes retain the confirmed view. Android Clear storage
+removes all local records.
 
 Historical warnings never determine current Connected/reporting verification, problem counts,
 allowance status, alerts or freshness. Suppress only matching transient authentication feedback,
 including for a dismissed event; independent access, service and data failures remain visible.
-Controlled phone-emulator checks verify saved-warning persistence and dismissal for OpenAI
-Platform reporting, including exact-row recovery at system font scales 1.0 and 1.6.
+Controlled phone-emulator checks for the 2026-11-05 rule verified saved-warning persistence
+and dismissal for OpenAI Platform reporting, including exact-row recovery at system font
+scales 1.0 and 1.6.
 
 ## Balances
 

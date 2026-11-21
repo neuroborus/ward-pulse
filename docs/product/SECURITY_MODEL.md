@@ -45,12 +45,15 @@ reporting keys and Cursor sessions keep their existing retention rules. No old d
 reason is inferred or migrated.
 
 Explicit successful connection commitment rotates event eligibility; routine token refresh,
-cancelled reconnect, migration and ordinary removal preserve its historical identity. Exact-event
-dismissal persists a tombstone, so repeated or stale failures cannot revive a dismissed warning,
-and an old dismissal cannot hide a replacement event. Historical feedback survives recovery and
-removal until X; Android Clear storage removes it with the other local records. Metadata-only
-failures retain confirmed notices without fencing valid credentials or retiring cache. Failed
-in-memory preference commits must not leak notice fields into subsequent whole-map writes.
+cancelled reconnect, migration and ordinary removal preserve its historical identity. Manual X
+dismisses the exact event. An eligible, stamped live snapshot write for the current replacement
+sets the dismissal flag in the same commit if the committed identity differs from the undismissed
+event's ID. Both paths keep the event ID, so repeated or stale failures cannot revive a dismissed
+warning. A later committed connection can record a new rejection, and an old dismissal cannot
+hide it. Saving a replacement alone, cache-only activity and ordinary removal preserve the
+warning. Android Clear storage removes the event with the other local records. Failed notice-only
+and snapshot writes retain confirmed data without fencing valid credentials. Failed in-memory
+preference commits must not leak notice fields into subsequent whole-map writes.
 
 Credential changes commit a generation barrier and discard the matching cache before awaiting
 secure-storage writes/deletes. Immutable key references keep abandoned older SDK operations
