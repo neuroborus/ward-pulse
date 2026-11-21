@@ -1,5 +1,6 @@
 import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 
+import '../providers/connection_lifecycle.dart';
 import '../providers/provider_connection.dart';
 import '../providers/provider_credential_store.dart';
 import '../sync/provider_reporting.dart';
@@ -30,17 +31,23 @@ final class CapturedDashboardLoad {
   final Object? _error;
   final StackTrace? _stackTrace;
 
-  Map<String, Map<String, String>> get connectionVersions {
+  DashboardSnapshot? get snapshot => _value;
+
+  DashboardLoadException? get loadException {
     final error = _error;
-    return _value?.connectionVersions ??
-        (error is DashboardLoadException ? error.connectionVersions : const {});
+    return error is DashboardLoadException ? error : null;
   }
 
-  List<ConnectionReportingOutcome> get reportingOutcomes {
-    final error = _error;
-    return _value?.reportingOutcomes ??
-        (error is DashboardLoadException ? error.reportingOutcomes : const []);
-  }
+  Map<String, Map<String, String>> get connectionVersions =>
+      _value?.connectionVersions ??
+      loadException?.connectionVersions ??
+      const {};
+
+  List<ConnectionReportingOutcome> get reportingOutcomes =>
+      _value?.reportingOutcomes ?? loadException?.reportingOutcomes ?? const [];
+
+  Map<String, SnapshotOrdering> get snapshotOrdering =>
+      _value?.snapshotOrdering ?? loadException?.snapshotOrdering ?? const {};
 
   DashboardSnapshot get value {
     final value = _value;
@@ -109,6 +116,8 @@ Future<String?> readConnectionSecret({
           connection: id,
           category: ReportingOutcomeCategory.localReadFailure,
           source: ReportingOutcomeSource.local,
+          provisionalReadFailure:
+              !ConnectionReadObservation.hasManagedReadFailure(id.storageKey),
         ),
       ],
     );

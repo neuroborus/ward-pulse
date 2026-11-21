@@ -18,6 +18,7 @@ import 'package:ward_pulse_phone/sync/provider_reporting_clients.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
+import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/headless_provider_sync.dart';
@@ -88,6 +89,1378 @@ void main() {
       FlutterSecureStorage.setMockInitialValues({});
       await bridge.reset();
     });
+    for (final boundary in [
+      'cache capture',
+      'paired cache read',
+      'rejected cache pair',
+      'cache pair during reconnect',
+      'credential read after a valid cache pair',
+      'cache probe before activation',
+      'fetch acquisition',
+      'credential read and rejected final lease',
+      'credential read and throwing final lease check',
+    ]) {
+      final reconnectDuringPair = boundary == 'cache pair during reconnect';
+      final reconnectAfterPair =
+          boundary == 'credential read after a valid cache pair';
+      final activatesAfterProbe = boundary == 'cache probe before activation';
+      final pendingReconnect = reconnectDuringPair || reconnectAfterPair;
+      final rejectedPair =
+          boundary == 'rejected cache pair' || reconnectDuringPair;
+      final acquisitionFails = boundary == 'fetch acquisition';
+      final finalLeaseRejects =
+          boundary == 'credential read and rejected final lease';
+      final finalLeaseThrows =
+          boundary == 'credential read and throwing final lease check';
+      final finalLeaseFails = finalLeaseRejects || finalLeaseThrows;
+      final pairedReadFails =
+          boundary == 'paired cache read' || acquisitionFails;
+      final readThrows = !pendingReconnect && !acquisitionFails;
+      test('unavailable initial $boundary preserves newer surfaces', () async {
+        const id = ProviderConnections.cursorPlan;
+        final secure = FakeSecureStorage();
+        final foreground = SecureProviderCredentialStore(
+          storage: secure,
+          platform: bridge.platform('ui'),
+        );
+        await foreground.writeSecret(id, 'synthetic-session');
+        final version = (await foreground.readVersion(id))!;
+        if (activatesAfterProbe) await foreground.deleteSecret(id);
+        await SecureWatchRingPreferenceStore().write(
+          const WatchRingPreferences(selectedIds: [cursorOwnPoolId]),
+        );
+        await SecurePhoneWidgetPreferenceStore().write(
+          const PhoneWidgetPreferences(selectedIds: [cursorOwnPoolId]),
+        );
+
+        final reading = Completer<void>();
+        final release = Completer<void>();
+        final older = ObservingCachePlatform(bridge.platform('older'));
+        var credentialReads = 0;
+        var failedSecureReads = 0;
+        var failedPairs = 0;
+        Object? pairReply;
+        Object? finalLeaseReply;
+        Object? credentialMode;
+        Object? initialMode;
+        CredentialVersion? reconnect;
+        if (finalLeaseFails) {
+          secure.onRead = (key, _) {
+            if (key == secure.failReadKey) failedSecureReads++;
+          };
+        }
+        older.onComplete = (method, arguments, result) async {
+          if (arguments['connection'] != id.storageKey) return;
+          if (method == 'readSnapshot' && arguments['forSelection'] != true) {
+            pairReply = result;
+            if (reconnectAfterPair)
+              reconnect = await foreground.beginReconnect(id);
+            if (finalLeaseFails) secure.failReadKey = secure.values.keys.single;
+          }
+          if (finalLeaseFails && method == 'validFetch') {
+            finalLeaseReply = result;
+            secure.failReadKey = null;
+            if (finalLeaseThrows) {
+              throw StateError('Synthetic final fetch validation failure.');
+            }
+          }
+          if (pendingReconnect &&
+              method == 'acquire' &&
+              arguments['action'] == 'read') {
+            credentialMode = (result as Map)['mode'];
+          }
+          if (activatesAfterProbe &&
+              credentialReads == 1 &&
+              method == 'finish' &&
+              arguments['operation'] == 'release') {
+            initialMode = (result as Map)['mode'];
+            await foreground.writeSecret(id, 'synthetic-reconnect');
+          }
+          if ((pendingReconnect || activatesAfterProbe || finalLeaseFails) &&
+              method == 'releaseFetch') {
+            reading.complete();
+            await release.future;
+          }
+        };
+        older.beforeInvoke = (method, arguments) async {
+          if (arguments['connection'] != id.storageKey) return;
+          if (finalLeaseRejects && method == 'validFetch') {
+            // Retire only this fetch; the final check sees the native rejection.
+            await bridge.invoke('older', 'releaseFetch', arguments);
+          }
+          if (rejectedPair && method == 'readSnapshot') {
+            await foreground.deleteSecret(id);
+            if (reconnectDuringPair)
+              reconnect = await foreground.beginReconnect(id);
+          }
+          if (pairedReadFails && method == 'readSnapshot') {
+            failedPairs++;
+            throw StateError('Synthetic paired cache read failure.');
+          }
+          if ((pairedReadFails || (rejectedPair && !pendingReconnect)) &&
+              method == 'acquireFetch') {
+            reading.complete();
+            await release.future;
+            if (acquisitionFails) {
+              throw StateError('Synthetic fetch acquisition failure.');
+            }
+          }
+          if (method != 'acquire' || arguments['action'] != 'read') return;
+          credentialReads++;
+          if (finalLeaseFails) return;
+          if (activatesAfterProbe) {
+            if (credentialReads == 2) {
+              throw StateError('Synthetic credential read failure.');
+            }
+            return;
+          }
+          if (rejectedPair || pendingReconnect) {
+            if (!pendingReconnect && credentialReads > 2) {
+              throw StateError('Synthetic credential read failure.');
+            }
+            return;
+          }
+          if (!pairedReadFails) {
+            reading.complete();
+            await release.future;
+          }
+          if (!pairedReadFails || credentialReads > 1) {
+            throw StateError('Synthetic credential read failure.');
+          }
+        };
+        final capture = _SurfaceCapture();
+        final calls = _bindSurfaces(capture: capture);
+        final failures = <(String, Object)>[];
+        PhoneLiveBindings createLive(
+          ConnectionCachePlatform platform,
+          _CursorPlanTransport transport,
+        ) => PhoneLiveBindings.create(
+          secureStorage: secure,
+          cachePlatform: platform,
+          cursorClient: CursorPlanClient(
+            http: ProviderReportingHttp(transport: transport),
+          ),
+        );
+        Future<void> run(PhoneLiveBindings live) => providerSyncOnce(
+          debugBuild: false,
+          load:
+              (owner) => loadProviderSyncWork(
+                owner,
+                createLive: () => live,
+                readWindows: (_) => const [],
+              ),
+          logFailure: (step, error, _) => failures.add((step, error)),
+        );
+
+        if (reconnectAfterPair) {
+          await createLive(
+            bridge.platform('seed'),
+            const _CursorPlanTransport(40),
+          ).repository.load();
+        }
+        var requests = 0;
+        final olderLive = createLive(
+          older,
+          _CursorPlanTransport(40, onRequest: () => requests++),
+        );
+        final pending = run(olderLive);
+        try {
+          await Future.any([
+            reading.future,
+            pending.then<void>((_) {
+              throw StateError('Headless load finished before the barrier.');
+            }),
+          ]);
+          if (reconnectAfterPair) {
+            expect(pairReply, containsPair('valid', true));
+            expect(pairReply, containsPair('rowId', isA<String>()));
+          }
+          if (finalLeaseFails) {
+            expect(pairReply, containsPair('valid', true));
+            expect(failedSecureReads, 1);
+            expect(finalLeaseReply, finalLeaseThrows);
+          }
+          if (rejectedPair) expect(pairReply, containsPair('valid', false));
+          if (activatesAfterProbe) {
+            expect(initialMode, 'deleted');
+            expect(pairReply, isNull);
+          }
+          if (rejectedPair || pendingReconnect) {
+            expect(await foreground.readVersion(id), isNull);
+            if (pendingReconnect) {
+              expect(credentialMode, 'pending');
+              expect(
+                await foreground.completeReconnect(
+                  id,
+                  'synthetic-reconnect',
+                  reconnect!,
+                ),
+                isTrue,
+              );
+            } else {
+              await foreground.writeSecret(id, 'synthetic-reconnect');
+            }
+          }
+          final publishedVersion = (await foreground.readVersion(id))!;
+          expect(
+            publishedVersion.sameCache(version),
+            !(rejectedPair || pendingReconnect || activatesAfterProbe),
+          );
+          final newerLive = createLive(
+            bridge.platform('newer'),
+            const _CursorPlanTransport(70),
+          );
+          await run(newerLive);
+          expect(failures, isEmpty);
+          expect(_watchUsage(capture.watchSummaries.single), {
+            cursorOwnPoolId: 70,
+          });
+          expect(capture.widgetData['row_0_percent'], '30% left');
+          expect(capture.widgetData['stale'], '0');
+          final foregroundSnapshot =
+              reconnectAfterPair || finalLeaseFails
+                  ? await newerLive.repository.load()
+                  : null;
+          final published = Map.of(capture.widgetData);
+          final dispatched = List.of(calls);
+          release.complete();
+          await pending;
+
+          expect(calls, dispatched);
+          expect(capture.widgetData, published);
+          expect(failedPairs, pairedReadFails ? 1 : 0);
+          expect(
+            credentialReads,
+            rejectedPair
+                ? 3
+                : (reconnectAfterPair ||
+                        activatesAfterProbe ||
+                        finalLeaseFails ||
+                        (pairedReadFails && !acquisitionFails)
+                    ? 2
+                    : 1),
+          );
+          expect(requests, 0);
+          expect(
+            (await foreground.readVersion(id))?.sameCache(publishedVersion),
+            isTrue,
+          );
+          final (step, error) = failures.single;
+          expect(step, 'setup');
+          final failure = error as DashboardLoadException;
+          if (readThrows) {
+            expect(failure.issue, DashboardSyncIssue.credentialUnavailable);
+            final outcome = failure.reportingOutcomes.single;
+            expect(outcome.connection, id);
+            expect(outcome.category, ReportingOutcomeCategory.localReadFailure);
+            expect(outcome.source, ReportingOutcomeSource.local);
+            expect(outcome.credentialVersion, isNull);
+          } else {
+            expect(failure.details, 'Connection changed during refresh.');
+            expect(failure.reportingOutcomes, isEmpty);
+          }
+          expect(
+            failure.snapshotOrdering[id.storageKey]?.selectionUnverified,
+            isTrue,
+          );
+          expect(await olderLive.repository.isFailureCurrent(failure), isFalse);
+          if (foregroundSnapshot != null) {
+            expect(
+              foregroundSnapshot.accounts.single.allowances
+                  .singleWhere(
+                    (allowance) => allowance.id == 'cursor-plan-models',
+                  )
+                  .usedPercent,
+              70,
+            );
+            expect(
+              await newerLive.repository.isSnapshotCurrent(foregroundSnapshot),
+              isTrue,
+            );
+          }
+        } finally {
+          if (!release.isCompleted) release.complete();
+          await pending;
+        }
+      });
+    }
+    test(
+      'a valid empty cache pair cannot qualify a later Codex storage failure',
+      () async {
+        final secure = FakeSecureStorage();
+        final platform = ObservingCachePlatform(bridge.platform('worker'));
+        final key = ProviderConnections.codexPlan.storageKey;
+        final now = DateTime.utc(2026, 11, 5);
+        await SecureCodexAccountStore(
+          storage: secure,
+          platform: platform,
+        ).write(
+          CodexAccountSession(
+            accessToken: 'synthetic-access',
+            refreshToken: 'synthetic-refresh',
+            accountId: 'synthetic-account',
+            refreshedAt: now,
+          ),
+        );
+        Object? cachePair;
+        platform.onComplete = (method, arguments, result) {
+          if (arguments['connection'] == key && method == 'readSnapshot') {
+            cachePair = result;
+          }
+        };
+        var codexReads = 0;
+        platform.beforeInvoke = (method, arguments) {
+          if (arguments['connection'] != key ||
+              method != 'acquire' ||
+              arguments['action'] != 'read') {
+            return;
+          }
+          if (++codexReads == 2) {
+            throw StateError('Synthetic Codex credential read failure.');
+          }
+        };
+        var requests = 0;
+        final live = PhoneLiveBindings.create(
+          secureStorage: secure,
+          cachePlatform: platform,
+          codexClient: CodexAccountClient(
+            transport: _RejectedCodexTransport(),
+            clock: () => now,
+          ),
+          cursorClient: CursorPlanClient(
+            http: ProviderReportingHttp(
+              transport: _CursorPlanTransport(70, onRequest: () => requests++),
+            ),
+          ),
+        );
+        await live.credentialStore.writeSecret(
+          ProviderConnections.cursorPlan,
+          'synthetic-session',
+        );
+        final calls = _bindSurfaces();
+        final failures = <(String, Object)>[];
+        await providerSyncOnce(
+          debugBuild: false,
+          load:
+              (owner) => loadProviderSyncWork(
+                owner,
+                createLive: () => live,
+                readWindows: (_) => const [],
+              ),
+          logFailure: (step, error, _) => failures.add((step, error)),
+        );
+
+        expect(cachePair, containsPair('valid', true));
+        expect(cachePair, containsPair('order', isA<String>()));
+        expect((cachePair as Map)['snapshot'], isNull);
+        expect(codexReads, 2);
+        expect(requests, 1);
+        expect(calls, isEmpty);
+        final (step, error) = failures.single;
+        expect(step, 'setup');
+        final failure = error as DashboardLoadException;
+        expect(failure.issue, DashboardSyncIssue.codexUnavailable);
+        expect(failure.snapshotOrdering[key]?.selectionUnverified, isTrue);
+        expect(await live.repository.isFailureCurrent(failure), isFalse);
+      },
+    );
+    for (final providerFails in [false, true]) {
+      final scenario =
+          providerFails ? 'current provider failure' : 'unverified selection';
+      test('headless widget stale handling after $scenario', () async {
+        const id = ProviderConnections.openAiPlatform;
+        final secure = FakeSecureStorage();
+        final foreground = SecureProviderCredentialStore(
+          storage: secure,
+          platform: bridge.platform('ui'),
+        );
+        await foreground.writeSecret(id, 'synthetic-reporting-key');
+        final version = (await foreground.readVersion(id))!;
+        final platform = ObservingCachePlatform(bridge.platform('headless'));
+        var selectionReads = 0;
+        var stored = false;
+        platform.beforeInvoke = (method, arguments) {
+          if (method != 'readSnapshot' ||
+              arguments['connection'] != id.storageKey ||
+              arguments['forSelection'] != true) {
+            return;
+          }
+          selectionReads++;
+          // The first read selects the fetched report. Fail the final paired
+          // reread after the aggregate's fallback has completed.
+          if (!providerFails && selectionReads == 2) {
+            throw StateError('Synthetic final paired read failure.');
+          }
+        };
+        platform.onComplete = (method, arguments, result) {
+          if (method == 'writeSnapshot' &&
+              arguments['connection'] == id.storageKey &&
+              result is Map) {
+            stored = result['status'] == 'stored';
+          }
+        };
+        final capture = _SurfaceCapture()..widgetData.addAll(_priorWidgetRows);
+        final calls = _bindSurfaces(capture: capture);
+        final failures = <(String, Object)>[];
+        final live = PhoneLiveBindings.create(
+          secureStorage: secure,
+          cachePlatform: platform,
+          openAiClient: OpenAiReportingClient(
+            http: ProviderReportingHttp(
+              transport: _OpenAiReportingTransport(
+                providerFails: providerFails,
+              ),
+            ),
+          ),
+        );
+        await providerSyncOnce(
+          debugBuild: false,
+          load: (owner) => loadProviderSyncWork(owner, createLive: () => live),
+          logFailure: (step, error, _) => failures.add((step, error)),
+        );
+
+        expect((await foreground.readVersion(id))?.sameCache(version), isTrue);
+        expect(selectionReads, providerFails ? 1 : 2);
+        expect(stored, !providerFails);
+        final (step, error) = failures.single;
+        expect(step, 'setup');
+        final failure = error as DashboardLoadException;
+        if (providerFails) {
+          expect(failure.issue, DashboardSyncIssue.providerUnavailable);
+          final stale = {..._priorWidgetRows, 'stale': '1'};
+          expect(calls, ['markStale', 'updateWidget']);
+          expect(capture.widgetData, stale);
+          expect(capture.redraws, [stale]);
+        } else {
+          expect(failure.details, 'Connection changed during refresh.');
+          expect(calls, isEmpty);
+          expect(capture.widgetData, _priorWidgetRows);
+          expect(capture.redraws, isEmpty);
+        }
+      });
+    }
+    for (final rejectStamp in [false, true]) {
+      final boundary = rejectStamp ? 'stamp' : 'reread';
+      test(
+        'retired Cursor plan $boundary preserves the newer widget and watch',
+        () async {
+          const id = ProviderConnections.cursorPlan;
+          const sibling = ProviderConnections.openAiPlatform;
+          final secure = FakeSecureStorage();
+          final foreground = SecureProviderCredentialStore(
+            storage: secure,
+            platform: bridge.platform('ui'),
+          );
+          await foreground.writeSecret(id, 'synthetic-old-session');
+          if (rejectStamp)
+            await foreground.writeSecret(sibling, 'synthetic-key');
+          final oldVersion = (await foreground.readVersion(id))!;
+          final reachedBoundary = Completer<void>();
+          final resumeBoundary = Completer<void>();
+          final released = Completer<void>();
+          final resumeOld = Completer<void>();
+          final siblingReleased = Completer<void>();
+          final platform = ObservingCachePlatform(bridge.platform('old'));
+          int? oldEra;
+          var admitted = false;
+          var emptyCache = false;
+          var siblingStored = false;
+          var validAfterRelease = false;
+          bool? selectionValid;
+          platform.onComplete = (method, arguments, result) async {
+            if (arguments['connection'] == sibling.storageKey) {
+              if (method == 'writeSnapshot') {
+                siblingStored = (result as Map)['status'] == 'stored';
+              }
+              if (method == 'releaseFetch') siblingReleased.complete();
+            }
+            if (arguments['connection'] != id.storageKey) return;
+            if (method == 'claimAutomatic')
+              admitted = (result as Map)['admitted'] == true;
+            if (method == 'stampFetch') oldEra = (result as Map)['era'] as int;
+            if (method == 'releaseFetch') {
+              released.complete();
+              if (rejectStamp) await resumeOld.future;
+            }
+            if (method == 'valid' && released.isCompleted) {
+              validAfterRelease = result == true;
+            }
+            if (method == 'readSnapshot' && arguments['forSelection'] == true) {
+              selectionValid = (result as Map)['valid'] as bool;
+            }
+            if (method == 'readSnapshot' && arguments['forSelection'] != true) {
+              final pair = result as Map;
+              emptyCache = pair['valid'] == true && pair['snapshot'] == null;
+            }
+          };
+          platform.beforeInvoke = (method, arguments) async {
+            if (arguments['connection'] != id.storageKey ||
+                reachedBoundary.isCompleted) {
+              return;
+            }
+            final atBoundary =
+                rejectStamp
+                    ? method == 'stampFetch'
+                    : method == 'readSnapshot' &&
+                        arguments['forSelection'] == true;
+            if (!atBoundary) return;
+            reachedBoundary.complete();
+            await resumeBoundary.future;
+          };
+          await SecurePhoneWidgetPreferenceStore().write(
+            const PhoneWidgetPreferences(selectedIds: [cursorOwnPoolId]),
+          );
+          await SecureWatchRingPreferenceStore().write(
+            const WatchRingPreferences(selectedIds: [cursorOwnPoolId]),
+          );
+          final capture = _SurfaceCapture();
+          final calls = _bindSurfaces(capture: capture);
+          final failures = <(String, Object)>[];
+          Future<void> run(ConnectionCachePlatform native, int usedPercent) =>
+              providerSyncOnce(
+                debugBuild: false,
+                load:
+                    (owner) => loadProviderSyncWork(
+                      owner,
+                      createLive:
+                          () => PhoneLiveBindings.create(
+                            secureStorage: secure,
+                            cachePlatform: native,
+                            openAiClient: OpenAiReportingClient(
+                              http: ProviderReportingHttp(
+                                transport: const _OpenAiReportingTransport(
+                                  providerFails: false,
+                                ),
+                              ),
+                            ),
+                            cursorClient: CursorPlanClient(
+                              http: ProviderReportingHttp(
+                                transport: _CursorPlanTransport(usedPercent),
+                              ),
+                            ),
+                          ),
+                      readWindows: (_) => const [],
+                    ),
+                logFailure: (step, error, _) => failures.add((step, error)),
+              );
+          final old = run(platform, 40);
+          final finishedEarly = old.then<void>((_) {
+            throw StateError(
+              'Old load finished before its held cache operation.',
+            );
+          });
+          try {
+            await Future.any([reachedBoundary.future, finishedEarly]);
+            expect(admitted, isTrue);
+            expect(emptyCache, isTrue);
+            expect(released.isCompleted, !rejectStamp);
+            if (rejectStamp) {
+              await Future.any([siblingReleased.future, finishedEarly]);
+              expect(siblingStored, isTrue);
+            } else {
+              expect(validAfterRelease, isTrue);
+              expect(oldEra, isNotNull);
+            }
+            expect(calls, isEmpty);
+
+            await foreground.writeSecret(id, 'synthetic-new-session');
+            if (rejectStamp) {
+              resumeBoundary.complete();
+              await Future.any([released.future, finishedEarly]);
+              expect(oldEra, isNull);
+            }
+            await run(bridge.platform('new'), 70);
+            expect(failures, isEmpty);
+            final acceptedWidget = Map.of(capture.widgetData);
+            expect(acceptedWidget['row_count'], 1);
+            expect(acceptedWidget['row_0_percent'], '30% left');
+            expect(acceptedWidget['stale'], '0');
+            expect(_watchUsage(capture.watchSummaries.single), {
+              cursorOwnPoolId: 70,
+            });
+
+            if (!resumeBoundary.isCompleted) resumeBoundary.complete();
+            resumeOld.complete();
+            await old;
+            expect(selectionValid, rejectStamp ? isNull : isFalse);
+            expect(calls, ['syncWatchSummary', 'publish', 'updateWidget']);
+            expect(capture.widgetData, acceptedWidget);
+            expect(capture.redraws, [acceptedWidget]);
+            final (step, error) = failures.single;
+            expect(step, 'setup');
+            final failure = error as DashboardLoadException;
+            expect(failure.details, 'Connection changed during refresh.');
+            expect(
+              failure.connectionVersions[id.storageKey],
+              oldVersion.values,
+            );
+            expect(failure.snapshotOrdering[id.storageKey]?.attemptEra, oldEra);
+            if (rejectStamp) {
+              expect(
+                failure.snapshotOrdering[sibling.storageKey]?.payload,
+                isNotNull,
+              );
+            }
+          } finally {
+            if (!resumeBoundary.isCompleted) resumeBoundary.complete();
+            if (!resumeOld.isCompleted) resumeOld.complete();
+            await old;
+          }
+        },
+      );
+    }
+    for (final (newerWins, failedCheck, throwsValidation, outcome) in [
+      (false, null, false, 'unchanged empty cache'),
+      (true, null, false, 'newer snapshot'),
+      (false, 1, true, 'unavailable selection validation'),
+      (false, 2, false, 'rejected outer validation'),
+      (false, 2, true, 'unavailable outer validation'),
+    ]) {
+      test('headless cadence failure settles with $outcome', () async {
+        final innerConnection = failedCheck == 2;
+        final id =
+            innerConnection
+                ? ProviderConnections.openAiPlatform
+                : ProviderConnections.cursorPlan;
+        final key = id.storageKey;
+        final secure = FakeSecureStorage();
+        final credentials = SecureProviderCredentialStore(
+          storage: secure,
+          platform: bridge.platform('ui'),
+        );
+        await credentials.writeSecret(id, 'synthetic-session');
+        final version = (await credentials.readVersion(id))!;
+        final released = Completer<void>();
+        final resume = Completer<void>();
+        final older = ObservingCachePlatform(bridge.platform('failed'));
+        String? emptyCacheOrder;
+        Object? admissionVersion;
+        Map<String, Object?>? failedValidation;
+        var selectionChecks = 0;
+        final validationResults = <Object?>[];
+        var stampAttempts = 0;
+        var requests = 0;
+        older.beforeInvoke = (method, arguments) async {
+          if (method == 'validAll' &&
+              (arguments['emptyCacheOrders'] as Map?)?[key] != null) {
+            if (++selectionChecks == failedCheck) {
+              failedValidation = Map.of(arguments);
+              if (throwsValidation) {
+                throw StateError('Synthetic order validation failure.');
+              }
+              // Let the inner repository confirm the failure. The next
+              // validation belongs to the link handling it as a fallback.
+              arguments['rejectValidation'] = true;
+            }
+          }
+          if (arguments['connection'] != key) return;
+          if (method == 'stampFetch') stampAttempts++;
+          if (method != 'claimAutomatic') return;
+          admissionVersion = arguments['expected'];
+          // Queue the fault and reset around just this native claim.
+          await Future.wait([
+            bridge.invoke('test', 'failCommit', {'value': true}),
+            bridge.invoke('failed', method, arguments),
+            bridge.invoke('test', 'failCommit', {'value': false}),
+          ]);
+        };
+        older.onComplete = (method, arguments, result) async {
+          if (method == 'validAll' &&
+              (arguments['emptyCacheOrders'] as Map?)?[key] != null) {
+            validationResults.add(result);
+          }
+          if (arguments['connection'] != key) return;
+          if (method == 'readSnapshot' && arguments['forSelection'] != true) {
+            final pair = result as Map;
+            if (pair['valid'] == true && pair['snapshot'] == null) {
+              emptyCacheOrder = pair['order'] as String?;
+            }
+          }
+          if (method != 'releaseFetch') return;
+          released.complete();
+          await resume.future;
+        };
+        PhoneLiveBindings bindings(
+          ConnectionCachePlatform platform,
+          _CursorPlanTransport transport,
+        ) => PhoneLiveBindings.create(
+          secureStorage: secure,
+          cachePlatform: platform,
+          cursorClient: CursorPlanClient(
+            http: ProviderReportingHttp(transport: transport),
+          ),
+          openAiClient: OpenAiReportingClient(
+            http: ProviderReportingHttp(
+              transport: _OpenAiReportingTransport(
+                providerFails: true,
+                onRequest: () => requests++,
+              ),
+            ),
+          ),
+        );
+
+        await SecurePhoneWidgetPreferenceStore().write(
+          const PhoneWidgetPreferences(selectedIds: [cursorOwnPoolId]),
+        );
+        await SecureWatchRingPreferenceStore().write(
+          const WatchRingPreferences(selectedIds: [cursorOwnPoolId]),
+        );
+        final capture = _SurfaceCapture()..widgetData.addAll(_priorWidgetRows);
+        final calls = _bindSurfaces(capture: capture);
+        final failures = <(String, Object)>[];
+        Future<void> run(PhoneLiveBindings live) => providerSyncOnce(
+          debugBuild: false,
+          load:
+              (owner) => loadProviderSyncWork(
+                owner,
+                createLive: () => live,
+                readWindows: (_) => const [],
+              ),
+          logFailure: (step, error, _) => failures.add((step, error)),
+        );
+        final observations = <ConnectionReportingUpdate>[];
+        final failed = bindings(
+          older,
+          _CursorPlanTransport(40, onRequest: () => requests++),
+        );
+        final old = run(
+          PhoneLiveBindings(
+            credentialStore: failed.credentialStore,
+            codexAccountService: failed.codexAccountService,
+            claudeAccountService: failed.claudeAccountService,
+            repository: _ObservedRepository(
+              failed.repository,
+              observations.add,
+            ),
+          ),
+        );
+
+        try {
+          await Future.any([
+            released.future,
+            old.then<void>((_) {
+              throw StateError('Cadence failure settled before release.');
+            }),
+          ]);
+          expect(admissionVersion, version.values);
+          expect(emptyCacheOrder, isNotNull);
+          expect(calls, isEmpty);
+
+          if (newerWins) {
+            final newer = ObservingCachePlatform(bridge.platform('newer'));
+            Object? write;
+            newer.onComplete = (method, arguments, result) {
+              if (method == 'writeSnapshot' && arguments['connection'] == key) {
+                write = result;
+              }
+            };
+            await run(bindings(newer, const _CursorPlanTransport(70)));
+            expect(write, containsPair('status', 'stored'));
+            expect(
+              (await credentials.readVersion(id))?.sameCache(version),
+              isTrue,
+            );
+            expect(failures, isEmpty);
+            expect(capture.widgetData['row_0_percent'], '30% left');
+            expect(capture.widgetData['stale'], '0');
+            expect(_watchUsage(capture.watchSummaries.single), {
+              cursorOwnPoolId: 70,
+            });
+          }
+
+          final published = Map.of(capture.widgetData);
+          resume.complete();
+          await old;
+          expect(stampAttempts, 0);
+          expect(requests, 0);
+          expect(observations, isEmpty);
+          final (step, error) = failures.single;
+          expect(step, 'setup');
+          final failure = error as DashboardLoadException;
+          expect(failure.connectionVersions[key], version.values);
+          expect(failure.snapshotOrdering[key]?.attemptEra, isNull);
+          expect(
+            failure.snapshotOrdering[key]?.emptyCacheOrder,
+            emptyCacheOrder,
+          );
+          expect(failure.issue, DashboardSyncIssue.credentialUnavailable);
+          final feedback = failure.reportingOutcomes.single;
+          expect(feedback.connection, id);
+          expect(feedback.category, ReportingOutcomeCategory.localReadFailure);
+          expect(feedback.source, ReportingOutcomeSource.local);
+          expect(feedback.credentialVersion?.values, version.values);
+          if (newerWins || failedCheck != null) {
+            expect(failure.snapshotOrdering[key]?.selectionUnverified, isTrue);
+            if (failedCheck != null) {
+              expect(selectionChecks, failedCheck);
+              expect(validationResults, [
+                if (innerConnection) true,
+                if (!throwsValidation) false,
+              ]);
+              expect(failedValidation, isNotNull);
+              expect(
+                await bridge.invoke('reader', 'validAll', failedValidation!),
+                isTrue,
+              );
+              expect(calls, isEmpty);
+            } else {
+              expect(calls, ['syncWatchSummary', 'publish', 'updateWidget']);
+            }
+            expect(await failed.repository.isFailureCurrent(failure), isFalse);
+            expect(capture.widgetData, published);
+            expect(capture.redraws, [if (newerWins) published]);
+          } else {
+            expect(calls, ['markStale', 'updateWidget']);
+            final stale = {..._priorWidgetRows, 'stale': '1'};
+            expect(capture.widgetData, stale);
+            expect(capture.redraws, [stale]);
+          }
+        } finally {
+          if (!resume.isCompleted) resume.complete();
+          await old;
+        }
+      });
+    }
+    test(
+      'an unverified reporting key read cannot mark newer rows STALE',
+      () async {
+        const id = ProviderConnections.openAiPlatform;
+        final key = id.storageKey;
+        final budgetId = 'budget.$key.today';
+        final secure = FakeSecureStorage();
+        final credentials = SecureProviderCredentialStore(
+          storage: secure,
+          platform: bridge.platform('newer'),
+        );
+        await credentials.writeSecret(id, 'synthetic-reporting-key');
+        await SecureAlertThresholdPreferenceStore().write(
+          AlertThresholdPreferences(
+            connections: {
+              key: const ConnectionAlertThresholds(
+                budget: ConnectionBudget(today: 1000),
+              ),
+            },
+          ),
+        );
+        await SecurePhoneWidgetPreferenceStore().write(
+          PhoneWidgetPreferences(selectedIds: [budgetId]),
+        );
+        await SecureWatchRingPreferenceStore().write(
+          WatchRingPreferences(selectedIds: [budgetId]),
+        );
+
+        final older = ObservingCachePlatform(bridge.platform('older'));
+        final released = Completer<void>();
+        final resume = Completer<void>();
+        var failedReads = 0;
+        older.beforeInvoke = (method, arguments) {
+          if (arguments['connection'] == key &&
+              method == 'acquire' &&
+              arguments['action'] == 'read') {
+            failedReads++;
+            throw StateError('Synthetic reporting credential read failure.');
+          }
+        };
+        older.onComplete = (method, arguments, _) async {
+          if (arguments['connection'] == key && method == 'releaseFetch') {
+            released.complete();
+            await resume.future;
+          }
+        };
+
+        final capture = _SurfaceCapture();
+        final calls = _bindSurfaces(capture: capture);
+        final failures = <(String, Object)>[];
+        PhoneLiveBindings bindings(
+          ConnectionCachePlatform platform, {
+          void Function()? onRequest,
+        }) => PhoneLiveBindings.create(
+          secureStorage: secure,
+          cachePlatform: platform,
+          openAiClient: OpenAiReportingClient(
+            http: ProviderReportingHttp(
+              transport: _OpenAiReportingTransport(
+                providerFails: false,
+                onRequest: onRequest,
+              ),
+            ),
+          ),
+        );
+        Future<void> run(PhoneLiveBindings live) => providerSyncOnce(
+          debugBuild: false,
+          load:
+              (owner) => loadProviderSyncWork(
+                owner,
+                createLive: () => live,
+                readWindows: (_) => const [],
+              ),
+          logFailure: (step, error, _) => failures.add((step, error)),
+        );
+
+        var oldRequests = 0;
+        final oldLive = bindings(older, onRequest: () => oldRequests++);
+        final old = run(oldLive);
+        try {
+          await Future.any([
+            released.future,
+            old.then<void>((_) {
+              throw StateError('Reporting load finished before release.');
+            }),
+          ]);
+          await run(bindings(bridge.platform('newer')));
+          expect(failures, isEmpty);
+          expect(_watchUsage(capture.watchSummaries.single), {budgetId: 0});
+          expect(capture.widgetData['row_count'], 1);
+          expect(capture.widgetData['stale'], '0');
+          final published = Map.of(capture.widgetData);
+
+          resume.complete();
+          await old;
+          final (step, error) = failures.single;
+          expect(step, 'setup');
+          final failure = error as DashboardLoadException;
+          expect(failure.issue, DashboardSyncIssue.credentialUnavailable);
+          final outcome = failure.reportingOutcomes.single;
+          expect(outcome.connection, id);
+          expect(outcome.category, ReportingOutcomeCategory.localReadFailure);
+          expect(outcome.source, ReportingOutcomeSource.local);
+          expect(outcome.credentialVersion, isNull);
+          expect(failure.snapshotOrdering[key]?.selectionUnverified, isTrue);
+          expect(await oldLive.repository.isFailureCurrent(failure), isFalse);
+          expect(failedReads, 1);
+          expect(oldRequests, 0);
+          expect(calls, ['syncWatchSummary', 'publish', 'updateWidget']);
+          expect(capture.widgetData, published);
+          expect(capture.redraws, [published]);
+        } finally {
+          if (!resume.isCompleted) resume.complete();
+          await old;
+        }
+      },
+    );
+    for (final (preFetch, replyThrows) in [
+      (false, false),
+      (false, true),
+      (true, true),
+    ]) {
+      final fault = replyThrows ? 'throws' : 'rejects the lease';
+      final stage = preFetch ? 'pre-fetch' : 'final';
+      final outcome = preFetch ? 'after a failed cache read' : 'after storing';
+      final scenario = '$stage reporting fetch validation $fault $outcome';
+      test(scenario, () async {
+        const id = ProviderConnections.openAiPlatform;
+        final key = id.storageKey;
+        final budgetId = 'budget.$key.today';
+        final secure = FakeSecureStorage();
+        final credentials = SecureProviderCredentialStore(
+          storage: secure,
+          platform: bridge.platform('ui'),
+        );
+        await credentials.writeSecret(id, 'synthetic-reporting-key');
+        final version = (await credentials.readVersion(id))!;
+        await SecureAlertThresholdPreferenceStore().write(
+          AlertThresholdPreferences(
+            connections: {
+              key: const ConnectionAlertThresholds(
+                budget: ConnectionBudget(today: 1000),
+              ),
+            },
+          ),
+        );
+        await SecurePhoneWidgetPreferenceStore().write(
+          PhoneWidgetPreferences(selectedIds: [budgetId]),
+        );
+        await SecureWatchRingPreferenceStore().write(
+          WatchRingPreferences(selectedIds: [budgetId]),
+        );
+
+        final older = ObservingCachePlatform(bridge.platform('old'));
+        Object? writeResult;
+        Object? writeStamp;
+        Object? validation;
+        var cacheReadFailed = false;
+        bool isFaultBoundary(String method, Map<String, Object?> arguments) =>
+            method == 'validFetch' &&
+            arguments['connection'] == key &&
+            (preFetch
+                ? cacheReadFailed && validation == null
+                : writeResult != null);
+        older.beforeInvoke = (method, arguments) async {
+          if (preFetch &&
+              method == 'readSnapshot' &&
+              arguments['connection'] == key) {
+            cacheReadFailed = true;
+            throw StateError('Synthetic paired cache read failure.');
+          }
+          if (isFaultBoundary(method, arguments) && !replyThrows) {
+            await bridge.invoke('old', 'detach', {});
+          }
+        };
+        older.onComplete = (method, arguments, result) {
+          if (method == 'writeSnapshot' && arguments['connection'] == key) {
+            writeStamp = arguments['stamp'];
+            writeResult = result;
+          }
+          if (isFaultBoundary(method, arguments)) {
+            validation = result;
+            if (replyThrows) throw StateError('Synthetic fetch reply failure.');
+          }
+        };
+
+        final capture = _SurfaceCapture();
+        final calls = _bindSurfaces(capture: capture);
+        final failures = <(String, Object)>[];
+        final reachedFailure = Completer<void>();
+        final resumeFailure = Completer<void>();
+        var requests = 0;
+        Future<void> run(
+          ConnectionCachePlatform platform, {
+          bool hold = false,
+        }) => providerSyncOnce(
+          debugBuild: false,
+          load: (owner) async {
+            try {
+              return await loadProviderSyncWork(
+                owner,
+                createLive:
+                    () => PhoneLiveBindings.create(
+                      secureStorage: secure,
+                      cachePlatform: platform,
+                      openAiClient: OpenAiReportingClient(
+                        http: ProviderReportingHttp(
+                          transport: _OpenAiReportingTransport(
+                            providerFails: false,
+                            onRequest: () => requests++,
+                          ),
+                        ),
+                      ),
+                    ),
+                readWindows: (_) => const [],
+              );
+            } catch (_) {
+              if (hold) {
+                reachedFailure.complete();
+                await resumeFailure.future;
+              }
+              rethrow;
+            }
+          },
+          logFailure: (step, error, _) => failures.add((step, error)),
+        );
+
+        final old = run(older, hold: true);
+        try {
+          await Future.any([
+            reachedFailure.future,
+            old.then<void>((_) {
+              throw StateError('Old load finished without a setup failure.');
+            }),
+          ]);
+          expect(cacheReadFailed, preFetch);
+          expect(writeStamp, preFetch ? isNull : isA<String>());
+          expect(
+            writeResult,
+            preFetch ? isNull : containsPair('status', 'stored'),
+          );
+          expect(validation, replyThrows);
+          expect(requests, preFetch ? 0 : greaterThan(0));
+
+          await bridge.invoke('test', 'setClock', {'value': 3600000});
+          final newer = ObservingCachePlatform(bridge.platform('new'));
+          Object? newWrite;
+          newer.onComplete = (method, arguments, result) {
+            if (method == 'writeSnapshot' && arguments['connection'] == key) {
+              newWrite = result;
+            }
+          };
+          await run(newer);
+          expect(failures, isEmpty);
+          expect(newWrite, containsPair('status', 'stored'));
+          final publishedWidget = Map.of(capture.widgetData);
+          final publishedWatch = capture.watchSummaries.single;
+          expect(publishedWidget['row_count'], 1);
+          expect(publishedWidget['stale'], '0');
+          expect(_watchUsage(publishedWatch), {budgetId: 0});
+
+          resumeFailure.complete();
+          await old;
+          expect(calls, ['syncWatchSummary', 'publish', 'updateWidget']);
+          expect(capture.widgetData, publishedWidget);
+          expect(capture.redraws, [publishedWidget]);
+          expect(capture.watchSummaries, [publishedWatch]);
+          final (step, error) = failures.single;
+          expect(step, 'setup');
+          final failure = error as DashboardLoadException;
+          expect(failure.connectionVersions[key], version.values);
+          expect(failure.snapshotOrdering[key]?.selectionUnverified, isTrue);
+          expect(failure.reportingOutcomes, isEmpty);
+          expect(
+            await bridge.invoke('reader', 'validAll', {
+              'versions': failure.connectionVersions,
+            }),
+            isTrue,
+          );
+        } finally {
+          if (!resumeFailure.isCompleted) resumeFailure.complete();
+          await old;
+        }
+      });
+    }
+    for (final duringFeedback in [true, false]) {
+      final stage = duringFeedback ? 'early feedback' : 'final selection';
+      test(
+        'a Cursor validation exception during $stage settles once',
+        () async {
+          const id = ProviderConnections.cursorPlan;
+          final key = id.storageKey;
+          final secure = FakeSecureStorage();
+          final credentials = SecureProviderCredentialStore(
+            storage: secure,
+            platform: bridge.platform('ui'),
+          );
+          await credentials.writeSecret(id, 'synthetic-session');
+          final version = (await credentials.readVersion(id))!;
+          await SecurePhoneWidgetPreferenceStore().write(
+            const PhoneWidgetPreferences(selectedIds: [cursorOwnPoolId]),
+          );
+          await SecureWatchRingPreferenceStore().write(
+            const WatchRingPreferences(selectedIds: [cursorOwnPoolId]),
+          );
+
+          final capture = _SurfaceCapture();
+          final calls = _bindSurfaces(capture: capture);
+          final failures = <(String, Object)>[];
+          Future<void> run(ConnectionCachePlatform platform, int usage) =>
+              providerSyncOnce(
+                debugBuild: false,
+                load:
+                    (owner) => loadProviderSyncWork(
+                      owner,
+                      createLive:
+                          () => PhoneLiveBindings.create(
+                            secureStorage: secure,
+                            cachePlatform: platform,
+                            cursorClient: CursorPlanClient(
+                              http: ProviderReportingHttp(
+                                transport: _CursorPlanTransport(usage),
+                              ),
+                            ),
+                          ),
+                      readWindows: (_) => const [],
+                    ),
+                logFailure: (step, error, _) => failures.add((step, error)),
+              );
+
+          await run(bridge.platform('seed'), 40);
+          expect(failures, isEmpty);
+          expect(calls, ['syncWatchSummary', 'publish', 'updateWidget']);
+          final priorWidget = Map.of(capture.widgetData);
+          final priorWatch = capture.watchSummaries.single;
+          expect(priorWidget['row_0_percent'], '60% left');
+          expect(priorWidget['stale'], '0');
+          expect(_watchUsage(priorWatch), {cursorOwnPoolId: 40});
+          calls.clear();
+          await bridge.invoke('test', 'setClock', {'value': 3600000});
+
+          final native = ObservingCachePlatform(bridge.platform('headless'));
+          var checks = 0;
+          Object? stamped;
+          Object? write;
+          Map<String, Object?>? interruptedProof;
+          Object? interruptedResult;
+          native.onComplete = (method, arguments, result) {
+            if (arguments['connection'] == key) {
+              if (method == 'stampFetch') stamped = result;
+              if (method == 'writeSnapshot') write = result;
+            }
+            if (method != 'validAll' ||
+                (arguments['payloadOrders'] as Map?)?[key] == null ||
+                ++checks != (duringFeedback ? 1 : 2)) {
+              return;
+            }
+            interruptedProof = Map.of(arguments);
+            interruptedResult = result;
+            throw StateError('Synthetic native validation reply failure.');
+          };
+          await run(native, 70);
+
+          expect(stamped, containsPair('stamp', isA<String>()));
+          expect(write, containsPair('status', 'stored'));
+          expect(interruptedResult, isTrue);
+          final proof = interruptedProof!;
+          expect((proof['versions'] as Map)[key], version.values);
+          expect(await bridge.invoke('reader', 'validAll', proof), isTrue);
+          if (duringFeedback) {
+            expect(checks, greaterThan(1));
+            expect(failures, isEmpty);
+            expect(calls, ['syncWatchSummary', 'publish', 'updateWidget']);
+            expect(capture.widgetData['row_0_percent'], '30% left');
+            expect(capture.widgetData['stale'], '0');
+            expect(capture.redraws, [priorWidget, capture.widgetData]);
+            expect(capture.watchSummaries, hasLength(2));
+            expect(_watchUsage(capture.watchSummaries.last), {
+              cursorOwnPoolId: 70,
+            });
+          } else {
+            expect(checks, 2);
+            final (step, error) = failures.single;
+            expect(step, 'setup');
+            final failure = error as DashboardLoadException;
+            expect(failure.details, 'Connection changed during refresh.');
+            expect(failure.connectionVersions[key], version.values);
+            expect(failure.snapshotOrdering[key]?.selectionUnverified, isTrue);
+            expect(calls, isEmpty);
+            expect(capture.widgetData, priorWidget);
+            expect(capture.redraws, [priorWidget]);
+            expect(capture.watchSummaries, [priorWatch]);
+          }
+        },
+      );
+    }
+    test(
+      'a validation error on a retired load preserves the corrected surfaces',
+      () async {
+        const id = ProviderConnections.cursorPlan;
+        final key = id.storageKey;
+        final secure = FakeSecureStorage();
+        final foreground = SecureProviderCredentialStore(
+          storage: secure,
+          platform: bridge.platform('ui'),
+        );
+        await foreground.writeSecret(id, 'synthetic-session');
+        final version = (await foreground.readVersion(id))!;
+        final initial = DateTime.utc(2026, 1, 1);
+        Future<void> setClock(DateTime at) async {
+          await bridge.invoke('test', 'setClock', {
+            'value': at.millisecondsSinceEpoch,
+          });
+        }
+
+        await setClock(initial);
+        final reachedReread = Completer<void>();
+        final resumeReread = Completer<void>();
+        final older = ObservingCachePlatform(bridge.platform('old'));
+        var selectionReads = 0;
+        Map<String, Object?>? failedValidation;
+        older.beforeInvoke = (method, arguments) async {
+          if (method == 'validAll' &&
+              selectionReads == 2 &&
+              failedValidation == null) {
+            failedValidation = arguments;
+            throw StateError('Synthetic order validation failure.');
+          }
+          if (arguments['connection'] != key) return;
+          if (method == 'stampFetch') {
+            // Keep the cadence anchor early enough to admit the corrected run.
+            await setClock(initial.add(const Duration(days: 1)));
+          }
+          if (method == 'readSnapshot' && arguments['forSelection'] == true) {
+            if (++selectionReads != 2) return;
+            reachedReread.complete();
+            await resumeReread.future;
+          }
+        };
+        final corrected = ObservingCachePlatform(bridge.platform('corrected'));
+        Object? correctedWrite;
+        corrected.beforeInvoke = (method, arguments) async {
+          if (method == 'writeSnapshot' && arguments['connection'] == key)
+            await bridge.invoke('test', 'failCommit', {'value': true});
+        };
+        corrected.onComplete = (method, arguments, result) async {
+          if (method != 'writeSnapshot' || arguments['connection'] != key) {
+            return;
+          }
+          correctedWrite = result;
+          await bridge.invoke('test', 'failCommit', {'value': false});
+        };
+        await SecurePhoneWidgetPreferenceStore().write(
+          const PhoneWidgetPreferences(selectedIds: [cursorOwnPoolId]),
+        );
+        await SecureWatchRingPreferenceStore().write(
+          const WatchRingPreferences(selectedIds: [cursorOwnPoolId]),
+        );
+        final capture = _SurfaceCapture();
+        final calls = _bindSurfaces(capture: capture);
+        final failures = <(String, Object)>[];
+        Future<void> run(ConnectionCachePlatform platform, int usedPercent) =>
+            providerSyncOnce(
+              debugBuild: false,
+              load:
+                  (owner) => loadProviderSyncWork(
+                    owner,
+                    createLive:
+                        () => PhoneLiveBindings.create(
+                          secureStorage: secure,
+                          cachePlatform: platform,
+                          cursorClient: CursorPlanClient(
+                            http: ProviderReportingHttp(
+                              transport: _CursorPlanTransport(usedPercent),
+                            ),
+                          ),
+                        ),
+                    readWindows: (_) => const [],
+                  ),
+              logFailure: (step, error, _) => failures.add((step, error)),
+            );
+        final old = run(older, 40);
+        try {
+          await Future.any([
+            reachedReread.future,
+            old.then<void>((_) {
+              throw StateError(
+                'Old load finished before its selection reread.',
+              );
+            }),
+          ]);
+          await setClock(initial.add(const Duration(hours: 1)));
+          await run(corrected, 70);
+          expect(correctedWrite, containsPair('status', 'storageFailure'));
+          expect(correctedWrite, containsPair('minimumEra', 1));
+          expect(
+            (await foreground.readVersion(id))?.sameCache(version),
+            isTrue,
+          );
+          expect(failures, isEmpty);
+          final published = Map.of(capture.widgetData);
+          expect(published['row_0_percent'], '30% left');
+          expect(published['stale'], '0');
+          expect(_watchUsage(capture.watchSummaries.single), {
+            cursorOwnPoolId: 70,
+          });
+
+          resumeReread.complete();
+          await old;
+          expect(calls, ['syncWatchSummary', 'publish', 'updateWidget']);
+          expect(capture.widgetData, published);
+          expect(capture.redraws, [published]);
+          final (step, error) = failures.single;
+          expect(step, 'setup');
+          final failure = error as DashboardLoadException;
+          expect(failure.details, 'Connection changed during refresh.');
+          expect(failure.connectionVersions[key], version.values);
+          final order = failure.snapshotOrdering[key]!;
+          expect(order.attemptEra, 0);
+          expect(order.payload?.era, 0);
+          expect(order.selectionUnverified, isTrue);
+          final validation = failedValidation!;
+          expect(validation['attemptClockEras'], {key: 0});
+          expect(
+            await bridge.invoke('reader', 'validAll', {
+              'versions': validation['versions'],
+            }),
+            isTrue,
+          );
+          expect(
+            await bridge.invoke('reader', 'validAll', validation),
+            isFalse,
+          );
+        } finally {
+          if (!resumeReread.isCompleted) resumeReread.complete();
+          await old;
+          await bridge.invoke('test', 'failCommit', {'value': false});
+        }
+      },
+    );
     for (final activate in [false, true]) {
       test('connection absence ownership guards late headless failure '
           '(activate: $activate)', () async {
@@ -767,6 +2140,59 @@ void main() {
       },
     );
 
+    for (final validationThrows in [false, true]) {
+      final fault = validationThrows ? 'throw' : 'rejection';
+      test(
+        'a transient watch provenance $fault retires the invocation',
+        () async {
+          await SecureWatchRingPreferenceStore().write(
+            const WatchRingPreferences(selectedIds: [claudePlanRingId]),
+          );
+          await SecurePhoneWidgetPreferenceStore().write(_bothWidgetChoices);
+          final capture =
+              _SurfaceCapture()..widgetData.addAll(_priorWidgetRows);
+          final calls = _bindSurfaces(capture: capture);
+          final headless = _HeadlessRun();
+          var watchRead = false;
+          var checksAfterWatchRead = 0;
+          var widgetReads = 0;
+          final live =
+              _LiveFixture(snapshot: _surfaceSnapshot())
+                ..validate = (_) {
+                  if (!watchRead || ++checksAfterWatchRead > 1) return true;
+                  if (validationThrows) {
+                    throw StateError('Synthetic watch provenance failure.');
+                  }
+                  return false;
+                }
+                ..release.complete();
+          await headless.sync(
+            live.create,
+            watchRingStore: _WatchRead(() async {
+              watchRead = true;
+              return SecureWatchRingPreferenceStore().read();
+            }),
+            widgetStore: _WidgetRead(() async {
+              widgetReads++;
+              return SecurePhoneWidgetPreferenceStore().read();
+            }),
+          );
+          expect(watchRead, isTrue);
+          expect(checksAfterWatchRead, 1);
+          expect(widgetReads, 0);
+          expect(headless.failures, validationThrows ? ['watch'] : isEmpty);
+          expect(headless.staleWrites, 0);
+          expect(calls, isEmpty);
+          expect(capture.widgetData, _priorWidgetRows);
+
+          await headless.sync(live.create);
+          expect(live.loads, 2);
+          expect(capture.watchSummaries, hasLength(1));
+          _expectWidgetRows(capture);
+        },
+      );
+    }
+
     test(
       'replaced provenance during the widget selection read preserves dispatched watch',
       () async {
@@ -1027,17 +2453,51 @@ void main() {
       });
     }
 
-    test('a rejected Live snapshot cannot mark rows STALE', () async {
-      final surfaces = _bindSurfaces();
-      final headless = _HeadlessRun();
-      final live = _LiveFixture()..release.complete();
-      live.current = false;
-      await headless.sync(live.create, debugData: _DebugData(false));
-      expect(live.loads, 1);
-      expect(surfaces, isEmpty);
-      expect(headless.failures, ['setup']);
-      expect(headless.staleWrites, 0);
-    });
+    for (final validationThrows in [false, true]) {
+      final outcome = validationThrows ? 'unavailable' : 'rejected';
+      test('recovery with $outcome proof cannot mark rows STALE', () async {
+        final snapshot = _surfaceSnapshot().withStaleStatus(
+          syncIssue: DashboardSyncIssue.credentialUnavailable,
+        );
+        final validationError = StateError('Synthetic validation failure.');
+        var checks = 0;
+        final live =
+            _LiveFixture(snapshot: snapshot)
+              ..validate = (_) {
+                if (++checks > 1) return true;
+                if (validationThrows) throw validationError;
+                return false;
+              }
+              ..release.complete();
+        final capture = _SurfaceCapture()..widgetData.addAll(_priorWidgetRows);
+        final calls = _bindSurfaces(capture: capture);
+        final failures = <(String, Object)>[];
+        await providerSyncOnce(
+          load: (owner) => loadProviderSyncWork(owner, createLive: live.create),
+          logFailure: (step, error, _) => failures.add((step, error)),
+          debugData: _DebugData(false),
+        );
+        expect(live.loads, 1);
+        expect(checks, 1);
+        final (step, error) = failures.single;
+        expect(step, 'setup');
+        if (validationThrows) {
+          expect(error, same(validationError));
+        } else {
+          expect(
+            error,
+            isA<StateError>().having(
+              (error) => error.message,
+              'message',
+              'Connection changed during refresh.',
+            ),
+          );
+        }
+        expect(calls, isEmpty);
+        expect(capture.widgetData, _priorWidgetRows);
+        expect(capture.redraws, isEmpty);
+      });
+    }
 
     test('Mock saved between surfaces stops the remaining effects', () async {
       final debugData = _DebugData(false);
@@ -1101,6 +2561,74 @@ void main() {
 
 typedef _RecordedFailure = ({String step, Object error, StackTrace stackTrace});
 
+final class _OpenAiReportingTransport implements ProviderHttpTransport {
+  const _OpenAiReportingTransport({
+    required this.providerFails,
+    this.onRequest,
+  });
+
+  final bool providerFails;
+  final void Function()? onRequest;
+
+  @override
+  Future<ProviderHttpResponse> get(
+    Uri uri, {
+    required Map<String, String> headers,
+  }) async {
+    onRequest?.call();
+    return providerFails
+        ? const ProviderHttpResponse(statusCode: 500, headers: {}, body: '{}')
+        : const ProviderHttpResponse(
+          statusCode: 200,
+          headers: {},
+          body: '{"object":"page","data":[],"has_more":false}',
+        );
+  }
+
+  @override
+  Future<ProviderHttpResponse> post(
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+  }) => get(uri, headers: headers);
+}
+
+final class _CursorPlanTransport implements ProviderHttpTransport {
+  const _CursorPlanTransport(this.usedPercent, {this.onRequest});
+
+  final int usedPercent;
+  final void Function()? onRequest;
+
+  @override
+  Future<ProviderHttpResponse> get(
+    Uri uri, {
+    required Map<String, String> headers,
+  }) async {
+    onRequest?.call();
+    return ProviderHttpResponse(
+      statusCode: 200,
+      headers: const {},
+      body: jsonEncode({
+        'membershipType': 'pro_plus',
+        'individualUsage': {
+          'plan': {
+            'enabled': true,
+            'autoPercentUsed': usedPercent,
+            'apiPercentUsed': 20,
+          },
+        },
+      }),
+    );
+  }
+
+  @override
+  Future<ProviderHttpResponse> post(
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+  }) async => throw StateError('Unexpected synthetic Cursor request.');
+}
+
 final class _RejectedReportingTransport implements ProviderHttpTransport {
   int calls = 0;
   @override
@@ -1162,6 +2690,20 @@ final class _RejectedClaudeTransport implements ClaudeHttpTransport {
     String? body,
     Duration? timeout,
   }) async => const ClaudeHttpResponse(statusCode: 401, body: '{}');
+}
+
+final class _ObservedRepository extends DashboardRepository {
+  const _ObservedRepository(this._delegate, this._observer);
+
+  final DashboardRepository _delegate;
+  final ReportingObserver _observer;
+
+  @override
+  Future<DashboardSnapshot> load() => _delegate.loadObserved(_observer);
+
+  @override
+  Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) =>
+      _delegate.isSnapshotCurrent(snapshot);
 }
 
 /// One headless run through the production loader, recording its effects.
@@ -1232,6 +2774,7 @@ final class _LiveFixture {
 
   /// Repository provenance; `false` models replaced credentials.
   var current = true;
+  bool Function(DashboardSnapshot)? validate;
 
   PhoneLiveBindings create() {
     created++;
@@ -1261,7 +2804,7 @@ final class _HeldRepository extends DashboardRepository {
 
   @override
   Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) async =>
-      _fixture.current;
+      _fixture.validate?.call(snapshot) ?? _fixture.current;
 }
 
 /// Records watch and widget plugin calls; both succeed.

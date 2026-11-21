@@ -39,6 +39,7 @@ DashboardSnapshot applyUserAlertSettings(
       syncDetails: snapshot.syncDetails,
       syncRejection: snapshot.syncRejection,
       connectionVersions: snapshot.connectionVersions,
+      snapshotOrdering: snapshot.snapshotOrdering,
       reportingOutcomes: snapshot.reportingOutcomes,
     );
   }
@@ -61,6 +62,7 @@ DashboardSnapshot applyUserAlertSettings(
     syncDetails: snapshot.syncDetails,
     syncRejection: snapshot.syncRejection,
     connectionVersions: snapshot.connectionVersions,
+    snapshotOrdering: snapshot.snapshotOrdering,
     reportingOutcomes: snapshot.reportingOutcomes,
   );
 }

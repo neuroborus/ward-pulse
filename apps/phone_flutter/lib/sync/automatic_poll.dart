@@ -60,10 +60,18 @@ final class AutomaticPollContext {
 
 /// A denied automatic start is neither a provider response nor a failure.
 final class AutomaticPollSkipped implements Exception {
-  const AutomaticPollSkipped(this.connection, this.version, this.nextEligible);
+  const AutomaticPollSkipped(
+    this.connection,
+    this.version,
+    this.nextEligible, {
+    this.cacheOrder,
+  });
   final String connection;
   final CredentialVersion version;
   final DateTime nextEligible;
+
+  /// The native cache ordering observed when this request was denied.
+  final String? cacheOrder;
 }
 
 final class AutomaticPollUnavailable implements Exception {

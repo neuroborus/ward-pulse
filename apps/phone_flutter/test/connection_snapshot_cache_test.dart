@@ -81,8 +81,9 @@ void main() {
     String id,
     Future<String?> Function() load, {
     DashboardRepository fallback = const NoProvidersDashboardRepository(),
+    ConnectionCachePlatform? cachePlatform,
   }) => MergingConnectionRepository(
-    cache: cache(owner, id),
+    cache: cache(owner, id, platform: cachePlatform),
     fallback: fallback,
     loadReport: load,
     normalizeReport: (report) => report,
@@ -118,6 +119,1684 @@ void main() {
   AutomaticPollContext automatic() => AutomaticPollContext(
     readInterval: () async => const Duration(minutes: 5),
   );
+
+  group('snapshot clock ordering', () {
+    const cursorId = ProviderConnections.cursorPlan;
+    final fastAt = firstAt.add(const Duration(days: 1));
+    final correctedAt = firstAt.add(const Duration(minutes: 1));
+    late DateTime now;
+    Future<void> setClock(DateTime at) async {
+      now = at;
+      await bridge.invoke('test', 'setClock', {
+        'value': at.millisecondsSinceEpoch,
+      });
+    }
+
+    SecureProviderCredentialStore store(ConnectionCachePlatform platform) =>
+        SecureProviderCredentialStore(storage: secure, platform: platform);
+
+    DashboardRepository cursor(
+      String owner,
+      Future<int> Function() usage, {
+      ConnectionCachePlatform? observed,
+      DashboardRepository fallback = const NoProvidersDashboardRepository(),
+    }) {
+      final platform = observed ?? bridge.platform(owner);
+      return buildLiveProviderStack(
+        credentialStore: store(platform),
+        claudeAccountService: const EmptyClaudeAccountService(),
+        openAiAndCodex: fallback,
+        caches: {
+          cursorId.storageKey: cache(
+            owner,
+            cursorId.storageKey,
+            platform: platform,
+          ),
+        },
+        cursorSessionClient: CursorPlanClient(
+          http: ProviderReportingHttp(transport: _CursorUsageTransport(usage)),
+        ),
+        clock: () => now,
+        logger: const _SilentLogger(),
+      );
+    }
+
+    double? cursorUsage(DashboardSnapshot snapshot) =>
+        snapshot.accounts
+            .singleWhere((account) => account.connection == cursorId.storageKey)
+            .allowances
+            .singleWhere((allowance) => allowance.id == 'cursor-plan-models')
+            .usedPercent;
+
+    Future<DashboardSnapshot> coldCursor() async {
+      await bridge.invoke('test', 'restart', {});
+      return (await cache('cold', cursorId.storageKey).capture()).snapshot!;
+    }
+
+    Future<void> waitForHold(
+      Completer<void> reached,
+      Future<CapturedDashboardLoad> load,
+    ) => Future.any([
+      reached.future,
+      load.then<void>((result) {
+        result.value;
+        throw StateError('Dashboard refresh finished before its barrier.');
+      }),
+    ]);
+
+    final superseded = isA<DashboardLoadException>().having(
+      (error) => error.details,
+      'details',
+      'Connection changed during refresh.',
+    );
+
+    test('an equal-time write retires a confirmed aggregate', () async {
+      await store(
+        bridge.platform('seed'),
+      ).writeSecret(cursorId, 'synthetic-session');
+      await setClock(firstAt);
+      final older = cursor('older', () async => 40);
+      final original = await older.load();
+      expect(cursorUsage(original), 40);
+      expect(await older.isSnapshotCurrent(original), isTrue);
+
+      final newer = cursor('newer', () async => 70);
+      final replacement = await newer.load();
+      expect(cursorUsage(replacement), 70);
+      expect(replacement.generatedAt, original.generatedAt);
+      final key = cursorId.storageKey;
+      expect(
+        replacement.connectionVersions[key],
+        original.connectionVersions[key],
+      );
+      expect(
+        replacement.snapshotOrdering[key]?.payload,
+        original.snapshotOrdering[key]?.payload,
+      );
+      expect(await older.isSnapshotCurrent(original), isFalse);
+      expect(await newer.isSnapshotCurrent(replacement), isTrue);
+    });
+
+    for (final (scenario, replacementAfterRead) in [
+      ('keeps provisional RAM when the equal-time row is unchanged', null),
+      ('selects an equal-time replacement after the first pair', 1),
+      ('selects an equal-time replacement after the final pair', 2),
+    ]) {
+      test('a failed write $scenario', () async {
+        final key = cursorId.storageKey;
+        await store(
+          bridge.platform('seed'),
+        ).writeSecret(cursorId, 'synthetic-session');
+        final equalAt = nextAt.add(const Duration(microseconds: 1));
+        await setClock(equalAt);
+        expect(cursorUsage(await cursor('seed', () async => 40).load()), 40);
+
+        final paired = Completer<void>();
+        final resume = Completer<void>();
+        final platform = ObservingCachePlatform(bridge.platform('older'));
+        var selectionReads = 0;
+        Object? write;
+        platform.onComplete = (method, arguments, result) async {
+          if (arguments['connection'] != key) return;
+          if (method == 'writeSnapshot') write = result;
+          if (method == 'readSnapshot' &&
+              arguments['forSelection'] == true &&
+              ++selectionReads == (replacementAfterRead ?? 1)) {
+            paired.complete();
+            await resume.future;
+          }
+        };
+        var usage = 70;
+        final older = cursor('older', () async => usage, observed: platform);
+        await bridge.invoke('test', 'failCommit', {'value': true});
+        final pending = CapturedDashboardLoad.capture(older.load);
+        try {
+          await waitForHold(paired, pending);
+          expect(write, containsPair('status', 'storageFailure'));
+          await bridge.invoke('test', 'failCommit', {'value': false});
+          if (replacementAfterRead != null) {
+            final replacement = await cursor('newer', () async => 90).load();
+            expect(cursorUsage(replacement), 90);
+            expect(replacement.generatedAt, equalAt);
+          }
+          resume.complete();
+
+          final selected = (await pending).value;
+          expect(cursorUsage(selected), replacementAfterRead == null ? 70 : 90);
+          expect(selected.generatedAt, equalAt);
+          expect(await older.isSnapshotCurrent(selected), isTrue);
+          expect(selectionReads, replacementAfterRead == 2 ? 3 : 2);
+          if (replacementAfterRead == null) {
+            // An older report must leave approved RAM paired to the same row.
+            usage = 50;
+            write = null;
+            await setClock(nextAt);
+            final retained = await older.load();
+            expect(write, isNull);
+            expect(cursorUsage(retained), 70);
+            expect(retained.generatedAt, equalAt);
+            expect(retained.snapshotOrdering[key]?.attemptEra, 0);
+            expect(await older.isSnapshotCurrent(retained), isTrue);
+
+            Future<DashboardSnapshot> failBeforeAdmission() =>
+                AutomaticPollContext(
+                  readInterval:
+                      () async =>
+                          throw StateError('Synthetic cadence failure.'),
+                ).run(older.load);
+            final paired = await cache('reader', key).capture();
+            expect(cursorUsage(paired.snapshot!), 40);
+            expect(
+              retained.snapshotOrdering[key]?.cacheObservation,
+              paired.observation,
+            );
+            final ramFallback = await failBeforeAdmission();
+            expect(
+              ramFallback.syncIssue,
+              DashboardSyncIssue.credentialUnavailable,
+            );
+            expect(ramFallback.accounts.single.status, ProviderStatus.stale);
+            expect(cursorUsage(ramFallback), 70);
+            expect(ramFallback.snapshotOrdering[key]?.confirmedRowId, isNull);
+            expect(
+              ramFallback.snapshotOrdering[key]?.emptyCacheOrder,
+              paired.order,
+            );
+            expect(await older.isSnapshotCurrent(ramFallback), isTrue);
+
+            await setClock(equalAt);
+            final replacement = await cursor('newer', () async => 90).load();
+            final replacementRow =
+                replacement.snapshotOrdering[key]?.confirmedRowId;
+            expect(replacementRow, isA<String>());
+            expect(replacementRow, isNot(paired.record?.rowId));
+            expect(
+              replacement.snapshotOrdering[key]?.payload,
+              ramFallback.snapshotOrdering[key]?.payload,
+            );
+            final confirmedFallback = await failBeforeAdmission();
+            expect(cursorUsage(confirmedFallback), 90);
+            expect(
+              confirmedFallback.snapshotOrdering[key]?.confirmedRowId,
+              replacementRow,
+            );
+            expect(await older.isSnapshotCurrent(confirmedFallback), isTrue);
+          }
+        } finally {
+          if (!resume.isCompleted) resume.complete();
+          await pending;
+          await bridge.invoke('test', 'failCommit', {'value': false});
+        }
+      });
+    }
+
+    for (final initialPair in [
+      'unavailable',
+      'from a previous credential',
+      'from a previous epoch',
+    ]) {
+      test(
+        'a failed write retains equal-order RAM when the pair is $initialPair',
+        () async {
+          final key = cursorId.storageKey;
+          final reader = cache('reader', key);
+          final credentials = store(bridge.platform('seed'));
+          await credentials.writeSecret(cursorId, 'synthetic-session');
+          await setClock(firstAt);
+          expect(cursorUsage(await cursor('seed', () async => 40).load()), 40);
+          final original = await reader.capture();
+          final platform = ObservingCachePlatform(bridge.platform('older'));
+          var paired = original;
+          var initialReads = 0;
+          Object? initialReply;
+          Object? write;
+          platform.beforeInvoke = (method, arguments) async {
+            if (arguments['connection'] != key) return;
+            if (method == 'readSnapshot' && arguments['forSelection'] != true) {
+              initialReads++;
+              if (initialPair == 'unavailable') {
+                throw StateError('Synthetic initial paired read failure.');
+              }
+            }
+            if (method == 'writeSnapshot') {
+              await bridge.invoke('test', 'failCommit', {'value': true});
+            }
+          };
+          platform.onComplete = (method, arguments, result) async {
+            if (arguments['connection'] != key) return;
+            if (method == 'writeSnapshot') {
+              write = result;
+              await bridge.invoke('test', 'failCommit', {'value': false});
+            }
+            if (method != 'readSnapshot' || arguments['forSelection'] == true) {
+              return;
+            }
+            initialReply = result;
+            if (initialPair == 'from a previous credential') {
+              await credentials.writeSecret(cursorId, 'synthetic-replacement');
+            } else {
+              await reader.clear(original.version);
+            }
+            await cursor('seed', () async => 50).load();
+            paired = await reader.capture();
+          };
+
+          final older = cursor('older', () async => 70, observed: platform);
+          try {
+            final selected = await older.load();
+            expect(initialReads, 1);
+            if (initialPair != 'unavailable') {
+              expect(
+                initialReply,
+                containsPair('rowId', original.record!.rowId),
+              );
+              expect(paired.version!.sameCache(original.version!), isFalse);
+              expect(paired.record!.rowId, isNot(original.record!.rowId));
+              expect(cursorUsage(paired.snapshot!), 50);
+            }
+            if (initialPair == 'from a previous epoch') {
+              expect(paired.version!.generation, original.version!.generation);
+              expect(paired.version!.epoch, isNot(original.version!.epoch));
+            }
+            expect(write, containsPair('status', 'storageFailure'));
+            expect(selected.connectionVersions[key], paired.version!.values);
+            final ordering = selected.snapshotOrdering[key]!;
+            expect(ordering.payload, (
+              era: paired.record!.selectionEra,
+              generatedAtMicros:
+                  paired.snapshot!.generatedAt.microsecondsSinceEpoch,
+            ));
+            expect(ordering.confirmedRowId, isNull);
+            expect(ordering.cacheObservation, paired.observation);
+            expect(cursorUsage(selected), 70);
+            expect(selected.syncIssue, isNull);
+            expect(await older.isSnapshotCurrent(selected), isTrue);
+            expect((await reader.capture()).observation, paired.observation);
+          } finally {
+            await bridge.invoke('test', 'failCommit', {'value': false});
+          }
+        },
+      );
+    }
+
+    for (final scenario in [
+      'unchanged payload',
+      'replaced payload',
+      'replaced payload at the same instant',
+      'advanced floor',
+      'unavailable paired read',
+    ]) {
+      test('a pre-admission outage retains the proof of $scenario', () async {
+        final key = cursorId.storageKey;
+        final reader = cache('reader', key);
+        final credentialStore = store(bridge.platform('seed'));
+        await credentialStore.writeSecret(cursorId, 'synthetic-session');
+        final version = (await credentialStore.readVersion(cursorId))!;
+        await setClock(firstAt);
+        final sameInstant = scenario == 'replaced payload at the same instant';
+        if (sameInstant) {
+          expect(cursorUsage(await cursor('seed', () async => 40).load()), 40);
+        } else {
+          // A legacy confirmed row remains eligible when the first stamped
+          // write advances the floor to zero without replacing the payload.
+          expect(
+            await reader.store(_snapshot('cursor', key, firstAt, 40), version),
+            isTrue,
+          );
+        }
+        final original = await reader.capture(expected: version);
+        expect(original.order, isNotNull);
+        expect(original.minimumEra, sameInstant ? 0 : isNull);
+
+        final released = Completer<void>();
+        final resume = Completer<void>();
+        final platform = ObservingCachePlatform(bridge.platform('old'));
+        final missingPair = scenario == 'unavailable paired read';
+        var admissionFailed = false;
+        var prepareOutage = false;
+        var requests = 0;
+        var selectionReads = 0;
+        platform.beforeInvoke = (method, arguments) async {
+          if (arguments['connection'] != key || !prepareOutage) return;
+          if (method == 'readSnapshot') {
+            if (arguments['forSelection'] == true) {
+              selectionReads++;
+            } else if (missingPair) {
+              throw StateError('Synthetic initial paired read failure.');
+            }
+          }
+          if (method != 'claimAutomatic') return;
+          await bridge.invoke('test', 'failCommit', {'value': true});
+          try {
+            await bridge.invoke('old', method, arguments);
+          } catch (_) {
+            admissionFailed = true;
+            rethrow;
+          } finally {
+            await bridge.invoke('test', 'failCommit', {'value': false});
+          }
+        };
+        platform.onComplete = (method, arguments, _) async {
+          if (method != 'releaseFetch' ||
+              arguments['connection'] != key ||
+              !prepareOutage) {
+            return;
+          }
+          released.complete();
+          await resume.future;
+        };
+        final older = cursor('old', () async {
+          requests++;
+          throw StateError('Synthetic provider failure.');
+        }, observed: platform);
+        if (missingPair) {
+          // Prime RAM with the confirmed row without writing a new snapshot.
+          expect(
+            (await older.load()).accounts.single.status,
+            ProviderStatus.stale,
+          );
+        }
+        prepareOutage = true;
+        final pending = CapturedDashboardLoad.capture(
+          () => automatic().run(older.load),
+        );
+        try {
+          await waitForHold(released, pending);
+          expect(admissionFailed, isTrue);
+          expect(requests, missingPair ? 1 : 0);
+          final advanceFloor = scenario == 'advanced floor';
+          if (advanceFloor || sameInstant || scenario == 'replaced payload') {
+            if (!sameInstant) await setClock(nextAt);
+            final newer = cursor('newer', () async => 70);
+            if (advanceFloor) {
+              await bridge.invoke('test', 'failCommit', {'value': true});
+            }
+            try {
+              expect(cursorUsage(await newer.load()), 70);
+            } finally {
+              await bridge.invoke('test', 'failCommit', {'value': false});
+            }
+            final changed = await reader.capture(expected: version);
+            expect(changed.order, isNot(original.order));
+            expect(changed.minimumEra, 0);
+            expect(
+              changed.snapshot?.generatedAt,
+              advanceFloor || sameInstant ? firstAt : nextAt,
+            );
+            if (sameInstant) {
+              expect(changed.record?.era, original.record?.era);
+              expect(cursorUsage(changed.snapshot!), 70);
+            }
+            if (advanceFloor) {
+              final retained = original.record!;
+              expect(
+                await reader.validSnapshot(
+                  retained.snapshot.withConnectionVersions(
+                    {key: version.values},
+                    snapshotOrdering: {
+                      key: SnapshotOrdering(
+                        payload: (
+                          era: retained.selectionEra,
+                          generatedAtMicros: firstAt.microsecondsSinceEpoch,
+                        ),
+                      ),
+                    },
+                  ),
+                ),
+                isTrue,
+              );
+            }
+          }
+          resume.complete();
+          final result = await pending;
+          expect(selectionReads, 0);
+          expect(result.connectionVersions[key], version.values);
+          final order = result.snapshotOrdering[key]!;
+          if (scenario == 'unchanged payload') {
+            final retained = result.value;
+            expect(
+              retained.syncIssue,
+              DashboardSyncIssue.credentialUnavailable,
+            );
+            expect(retained.accounts.single.status, ProviderStatus.stale);
+            expect(retained.accounts.single.today.spent?.minorUnits, 40);
+            expect(await older.isSnapshotCurrent(retained), isTrue);
+          } else {
+            final failure = result.loadException!;
+            expect(failure.issue, DashboardSyncIssue.credentialUnavailable);
+            expect(
+              failure.reportingOutcomes.single.category,
+              ReportingOutcomeCategory.localReadFailure,
+            );
+            expect(order.selectionUnverified, isTrue);
+            expect(await older.isFailureCurrent(failure), isFalse);
+            expect(
+              order.emptyCacheOrder,
+              missingPair ? isNull : original.order,
+            );
+          }
+          expect(
+            order.payload?.generatedAtMicros,
+            firstAt.microsecondsSinceEpoch,
+          );
+        } finally {
+          if (!resume.isCompleted) resume.complete();
+          await pending;
+        }
+      });
+    }
+
+    test(
+      'a pre-admission outage keeps the paired row over equal RAM',
+      () async {
+        final key = cursorId.storageKey;
+        final reader = cache('reader', key);
+        final credentialStore = store(bridge.platform('seed'));
+        await credentialStore.writeSecret(cursorId, 'synthetic-session');
+        final version = (await credentialStore.readVersion(cursorId))!;
+        await setClock(firstAt);
+        var requests = 0;
+        final older = cursor('old', () async {
+          requests++;
+          return 40;
+        });
+        expect(cursorUsage(await older.load()), 40);
+        final newer = await cursor('newer', () async => 70).load();
+        expect(cursorUsage(newer), 70);
+        final paired = await reader.capture(expected: version);
+        expect(paired.record?.era, 0);
+        expect(paired.snapshot?.generatedAt, firstAt);
+
+        final poll = AutomaticPollContext(
+          readInterval:
+              () async => throw StateError('Synthetic cadence failure.'),
+        );
+        final retained = await poll.run(older.load);
+        expect(requests, 1);
+        expect(retained.syncIssue, DashboardSyncIssue.credentialUnavailable);
+        expect(retained.accounts.single.status, ProviderStatus.stale);
+        expect(cursorUsage(retained), 70);
+        expect(retained.connectionVersions[key], version.values);
+        expect(retained.snapshotOrdering[key]?.emptyCacheOrder, paired.order);
+        expect(await older.isSnapshotCurrent(retained), isTrue);
+      },
+    );
+
+    for (final restart in [false, true]) {
+      test(
+        'Cursor manual rollback accepts fresh Dashboard usage (${restart ? 'recreated' : 'warm'} cache)',
+        () async {
+          await store(
+            bridge.platform('ui'),
+          ).writeSecret(cursorId, 'synthetic-session');
+          var used = 40;
+          var repository = cursor('ui', () async => used);
+          await setClock(fastAt);
+          expect(cursorUsage(await repository.load()), 40);
+          expect(
+            cursorUsage(
+              (await cache('reader', cursorId.storageKey).capture()).snapshot!,
+            ),
+            40,
+          );
+          if (restart) {
+            await bridge.invoke('test', 'restart', {});
+            repository = cursor('recreated', () async => used);
+          }
+          await setClock(correctedAt);
+          used = 70;
+          final dashboard = await repository.load();
+          // Keep this first corrected assertion replayable with the parent's
+          // original production code and bridge.
+          expect(
+            cursorUsage(dashboard),
+            70,
+            reason: 'Dashboard must show corrected Cursor usage',
+          );
+          expect(dashboard.generatedAt, correctedAt);
+          final watch = jsonDecode(
+            WatchDashboardSummaryPayload.fromSnapshot(
+              dashboard,
+              const WatchRingPreferences(selectedIds: [cursorOwnPoolId]),
+              clock: correctedAt,
+            ).encode(),
+          );
+          final ring = (watch['rings'] as List).single as Map;
+          expect(ring['id'], cursorOwnPoolId);
+          expect(ring['usedPercent'], 70);
+          final widget = buildPhoneWidgetPayload(
+            dashboard,
+            const PhoneWidgetPreferences(selectedIds: [cursorOwnPoolId]),
+          );
+          expect(widget.rows.single.remainingPercent, 30);
+          final corrected = await coldCursor();
+          expect(cursorUsage(corrected), 70);
+          expect(corrected.generatedAt, correctedAt);
+          await setClock(nextAt);
+          final refreshed = await cursor('recreated', () async => 80).load();
+          expect(cursorUsage(refreshed), 80);
+          expect(refreshed.generatedAt, nextAt);
+          expect(cursorUsage(await coldCursor()), 80);
+        },
+      );
+    }
+
+    for (final failCommit in [false, true]) {
+      test(
+        'a late fast-clock write follows the corrected era (commit failure: $failCommit)',
+        () async {
+          await store(
+            bridge.platform('seed'),
+          ).writeSecret(cursorId, 'synthetic-session');
+          final seedAt = firstAt.subtract(const Duration(minutes: 1));
+          await setClock(seedAt);
+          expect(cursorUsage(await cursor('seed', () async => 40).load()), 40);
+          await setClock(firstAt);
+
+          final httpEntered = Completer<void>();
+          final httpReply = Completer<int>();
+          final writeEntered = Completer<void>();
+          final releaseWrite = Completer<void>();
+          final platform = ObservingCachePlatform(bridge.platform('late'));
+          var released = false;
+          platform.onComplete = (method, arguments, _) {
+            if (method == 'releaseFetch' &&
+                arguments['connection'] == cursorId.storageKey) {
+              released = true;
+            }
+          };
+          platform.beforeInvoke = (method, _) async {
+            if (method == 'writeSnapshot') {
+              writeEntered.complete();
+              await releaseWrite.future;
+            }
+          };
+          final late = cursor('late', () {
+            httpEntered.complete();
+            return httpReply.future;
+          }, observed: platform);
+          final pending = CapturedDashboardLoad.capture(late.load);
+          try {
+            await waitForHold(httpEntered, pending);
+            await setClock(fastAt);
+            httpReply.complete(60);
+            await waitForHold(writeEntered, pending);
+            expect(released, isTrue);
+            await setClock(correctedAt);
+            final accepting = cursor('corrected', () async => 70);
+            if (failCommit) {
+              await bridge.invoke('test', 'failCommit', {'value': true});
+            }
+            expect(cursorUsage(await accepting.load()), 70);
+            await bridge.invoke('test', 'failCommit', {'value': false});
+            releaseWrite.complete();
+            final result = await pending;
+            if (failCommit) {
+              expect(() => result.value, throwsA(superseded));
+            } else {
+              expect(cursorUsage(result.value), 70);
+              expect(result.value.generatedAt, correctedAt);
+            }
+            final durable = await coldCursor();
+            expect(cursorUsage(durable), failCommit ? 40 : 70);
+            expect(durable.generatedAt, failCommit ? seedAt : correctedAt);
+          } finally {
+            if (!httpReply.isCompleted) httpReply.complete(60);
+            if (!releaseWrite.isCompleted) releaseWrite.complete();
+            await pending;
+            await bridge.invoke('test', 'failCommit', {'value': false});
+          }
+        },
+      );
+    }
+
+    for (final (failFetch, failCommit) in [
+      (false, false),
+      (false, true),
+      (true, false),
+      (true, true),
+    ]) {
+      test('a refresh rechecks its era after waiting for a sibling '
+          '(fetch failure: $failFetch, commit failure: $failCommit)', () async {
+        await store(
+          bridge.platform('initial'),
+        ).writeSecret(cursorId, 'synthetic-session');
+        await setClock(fastAt);
+        if (failFetch) {
+          final seed = await cursor('seed', () async => 40).load();
+          expect(cursorUsage(seed), 40);
+        }
+        final selected = Completer<void>();
+        final sibling = Completer<DashboardSnapshot>();
+        final siblingSnapshot = _snapshot(
+          'openai',
+          ProviderConnections.openAiPlatform.storageKey,
+          firstAt,
+          100,
+        );
+        final platform = ObservingCachePlatform(bridge.platform('initial'));
+        platform.onComplete = (method, _, _) {
+          if (method == 'validAll' && !selected.isCompleted) {
+            selected.complete();
+          }
+        };
+        final initial = cursor(
+          'initial',
+          () async {
+            if (failFetch) throw StateError('Synthetic fetch failure.');
+            return 40;
+          },
+          observed: platform,
+          fallback: _HeldDashboardRepository(sibling.future),
+        );
+        final pending = CapturedDashboardLoad.capture(initial.load);
+        try {
+          await waitForHold(selected, pending);
+          await setClock(correctedAt);
+          if (failCommit) {
+            await bridge.invoke('test', 'failCommit', {'value': true});
+          }
+          final correcting = cursor('corrected', () async => 70);
+          final corrected = await correcting.load();
+          expect(cursorUsage(corrected), 70);
+          expect(await correcting.isSnapshotCurrent(corrected), isTrue);
+          await bridge.invoke('test', 'failCommit', {'value': false});
+          sibling.complete(siblingSnapshot);
+          final result = await pending;
+          if (failCommit) {
+            DashboardLoadException? failure;
+            try {
+              result.value;
+            } on DashboardLoadException catch (error) {
+              failure = error;
+            }
+            expect(failure, superseded);
+            expect(await initial.isFailureCurrent(failure!), isFalse);
+          } else {
+            expect(cursorUsage(result.value), 70);
+            expect(result.value.accounts, hasLength(2));
+            expect(result.value.syncIssue, isNull);
+            expect(await initial.isSnapshotCurrent(result.value), isTrue);
+          }
+          expect(cursorUsage(await coldCursor()), failCommit ? 40 : 70);
+        } finally {
+          if (!sibling.isCompleted) sibling.complete(siblingSnapshot);
+          await pending;
+          await bridge.invoke('test', 'failCommit', {'value': false});
+        }
+      });
+    }
+
+    for (final (replaceCredential, failFetch) in [
+      (false, true),
+      (true, true),
+      (true, false),
+    ]) {
+      final scenario = replaceCredential ? ' after credential replacement' : '';
+      test(
+        failFetch
+            ? 'a failed queued refresh recovers the corrected usage$scenario'
+            : 'a successful queued refresh uses the replacement credential',
+        () async {
+          await store(
+            bridge.platform('seed'),
+          ).writeSecret(cursorId, 'synthetic-session');
+          await setClock(fastAt);
+          expect(cursorUsage(await cursor('seed', () async => 40).load()), 40);
+
+          final queued = Completer<void>();
+          final resume = Completer<void>();
+          final platform = ObservingCachePlatform(bridge.platform('queued'));
+          platform.beforeInvoke = (method, arguments) async {
+            if (method == 'acquireFetch' &&
+                arguments['connection'] == cursorId.storageKey) {
+              // Cursor has captured 40%, and its fetch has yet to be admitted.
+              queued.complete();
+              await resume.future;
+            }
+          };
+          final refreshing = cursor('queued', () async {
+            if (failFetch) {
+              throw const ProviderReportingException(
+                ProviderReportingFailure.rateLimited,
+              );
+            }
+            return 80;
+          }, observed: platform);
+          final pending = CapturedDashboardLoad.capture(refreshing.load);
+          try {
+            await waitForHold(queued, pending);
+            if (replaceCredential) {
+              await store(
+                bridge.platform('corrected'),
+              ).writeSecret(cursorId, 'synthetic-replacement');
+            }
+            await setClock(correctedAt);
+            final corrected = await cursor('corrected', () async => 70).load();
+            expect(cursorUsage(corrected), 70);
+            resume.complete();
+            final snapshot = (await pending).value;
+            expect(cursorUsage(snapshot), failFetch ? 70 : 80);
+            expect(snapshot.generatedAt, correctedAt);
+            expect(await refreshing.isSnapshotCurrent(snapshot), isTrue);
+            if (failFetch) {
+              expect(snapshot.accounts.single.status, ProviderStatus.stale);
+              expect(snapshot.syncIssue, DashboardSyncIssue.rateLimited);
+            } else {
+              expect(snapshot.syncIssue, isNull);
+              final durable =
+                  await cache('corrected', cursorId.storageKey).capture();
+              expect(cursorUsage(durable.snapshot!), 80);
+            }
+          } finally {
+            if (!resume.isCompleted) resume.complete();
+            await pending;
+          }
+        },
+      );
+    }
+
+    for (final correctedCommitFails in [false, true]) {
+      test('a failed payload reread uses the stale data era '
+          '(failed corrected commit: $correctedCommitFails)', () async {
+        const id = 'openai.platform';
+        await credentials('seed', id).write('synthetic-openai-key');
+        await setClock(fastAt);
+        await owned('seed', id, (_) async {
+          return _snapshot('openai', id, fastAt, 400).toJsonString();
+        }).load();
+        await setClock(correctedAt);
+        Future<DashboardSnapshot> refreshCorrected() =>
+            owned('corrected', id, (_) async {
+              return _snapshot('openai', id, correctedAt, 700).toJsonString();
+            }).load();
+
+        if (correctedCommitFails) {
+          await bridge.invoke('test', 'failCommit', {'value': true});
+          try {
+            final corrected = await refreshCorrected();
+            expect(corrected.accounts.single.today.spent?.minorUnits, 700);
+          } finally {
+            await bridge.invoke('test', 'failCommit', {'value': false});
+          }
+        }
+
+        var readsUntilFailure = 1;
+        var rereadFailed = false;
+        final platform = ObservingCachePlatform(bridge.platform('failing'));
+        platform.beforeInvoke = (method, arguments) {
+          if (method != 'readSnapshot' || arguments['forSelection'] != true) {
+            return;
+          }
+          readsUntilFailure--;
+          if (readsUntilFailure == 0) {
+            rereadFailed = true;
+            throw StateError('Synthetic payload reread failure.');
+          }
+        };
+        final failing = owned(
+          'failing',
+          id,
+          (_) async => throw StateError('Synthetic provider failure.'),
+          cachePlatform: platform,
+          fallback: ValueDashboardRepository(
+            _snapshot('claude', 'anthropic.platform', firstAt, 100),
+          ),
+        );
+        final result = await CapturedDashboardLoad.capture(
+          () => automatic().run(failing.load),
+        );
+        expect(rereadFailed, isTrue);
+        if (correctedCommitFails) {
+          expect(() => result.value, throwsA(superseded));
+          final skipped = automatic();
+          await expectLater(skipped.run(failing.load), throwsA(superseded));
+          expect(skipped.whollySkipped, isTrue);
+        } else {
+          final stale = result.value;
+          final retained = stale.accounts.singleWhere(
+            (account) => account.connection == id,
+          );
+          expect(stale.accounts, hasLength(2));
+          expect(retained.today.spent?.minorUnits, 400);
+          expect(retained.status, ProviderStatus.stale);
+          expect(
+            stale.reportingOutcomes.single.category,
+            ReportingOutcomeCategory.rateLimited,
+          );
+          expect(await failing.isSnapshotCurrent(stale), isTrue);
+          readsUntilFailure = 2;
+          rereadFailed = false;
+          final poll = automatic();
+          final skipped = await poll.run(failing.load);
+          expect(rereadFailed, isTrue);
+          expect(poll.whollySkipped, isTrue);
+          expect(
+            skipped.accounts
+                .singleWhere((account) => account.connection == id)
+                .today
+                .spent
+                ?.minorUnits,
+            400,
+          );
+          expect(
+            skipped.reportingOutcomes.single.freshness,
+            ReportingOutcomeFreshness.stale,
+          );
+          await refreshCorrected();
+          expect(await failing.isSnapshotCurrent(stale), isFalse);
+        }
+      });
+    }
+
+    test('a rejected final era check reselects the confirmed winner', () async {
+      await store(
+        bridge.platform('initial'),
+      ).writeSecret(cursorId, 'synthetic-session');
+      await setClock(fastAt);
+      final beforeValidation = Completer<void>();
+      final resume = Completer<void>();
+      final platform = ObservingCachePlatform(bridge.platform('initial'));
+      var selectionReads = 0;
+      platform.onComplete = (method, arguments, _) async {
+        if (method != 'readSnapshot' || arguments['forSelection'] != true) {
+          return;
+        }
+        selectionReads++;
+        if (selectionReads == 2) {
+          // Native has returned the old floor. Hold its reply to Dart until
+          // the corrected write has committed, before final validation.
+          beforeValidation.complete();
+          await resume.future;
+        }
+      };
+      var requests = 0;
+      final initial = cursor('initial', () async {
+        requests++;
+        return 40;
+      }, observed: platform);
+      final pending = CapturedDashboardLoad.capture(initial.load);
+      try {
+        await waitForHold(beforeValidation, pending);
+        await setClock(correctedAt);
+        final corrected = await cursor('corrected', () async => 70).load();
+        expect(cursorUsage(corrected), 70);
+        resume.complete();
+        final accepted = (await pending).value;
+        expect(cursorUsage(accepted), 70);
+        expect(accepted.generatedAt, correctedAt);
+        expect(await initial.isSnapshotCurrent(accepted), isTrue);
+        expect(requests, 1);
+        expect(cursorUsage(await coldCursor()), 70);
+      } finally {
+        if (!resume.isCompleted) resume.complete();
+        await pending;
+      }
+    });
+
+    for (final (hasCachedPayload, failRead, failInitialRead) in [
+      (false, false, false),
+      (false, true, false),
+      (false, true, true),
+      (true, false, false),
+    ]) {
+      test('failed fallback checks a newer record in the same era '
+          '(cached payload: $hasCachedPayload, read failure: $failRead, '
+          'initial read failure: $failInitialRead)', () async {
+        const id = 'openai.platform';
+        final newerAt = firstAt.add(const Duration(microseconds: 1));
+        await credentials('initial', id).write('synthetic-openai-key');
+        await setClock(firstAt);
+        if (hasCachedPayload) {
+          await owned('initial', id, (_) async {
+            return _snapshot('openai', id, firstAt, 400).toJsonString();
+          }).load();
+        }
+
+        final beforeValidation = Completer<void>();
+        final resume = Completer<void>();
+        final platform = ObservingCachePlatform(bridge.platform('failing'));
+        platform.beforeInvoke = (method, arguments) {
+          if (failInitialRead &&
+              method == 'readSnapshot' &&
+              arguments['forSelection'] != true) {
+            throw StateError('Synthetic initial payload read failure.');
+          }
+        };
+        platform.onComplete = (method, arguments, _) async {
+          if (method == 'readSnapshot' &&
+              arguments['forSelection'] == true &&
+              !beforeValidation.isCompleted) {
+            beforeValidation.complete();
+            await resume.future;
+            if (failRead) throw StateError('Synthetic payload reread failure.');
+          }
+        };
+        final failing = owned(
+          'failing',
+          id,
+          (_) async => throw StateError('Synthetic provider failure.'),
+          cachePlatform: platform,
+          fallback: ValueDashboardRepository(
+            _snapshot('claude', 'anthropic.platform', nextAt, 100),
+          ),
+        );
+        final pending = CapturedDashboardLoad.capture(failing.load);
+        try {
+          await waitForHold(beforeValidation, pending);
+          final newer =
+              await owned('newer', id, (_) async {
+                return _snapshot('openai', id, newerAt, 700).toJsonString();
+              }).load();
+          expect(newer.accounts.single.today.spent?.minorUnits, 700);
+          resume.complete();
+          final captured = await pending;
+          if (failInitialRead) {
+            expect(() => captured.value, throwsA(superseded));
+            final proof = DashboardSnapshot.empty().withConnectionVersions(
+              captured.connectionVersions,
+              snapshotOrdering: captured.snapshotOrdering,
+            );
+            expect(await failing.isSnapshotCurrent(proof), isFalse);
+            return;
+          }
+          final merged = captured.value;
+          final retained = merged.accounts.singleWhere(
+            (account) => account.connection == id,
+          );
+          expect(merged.generatedAt, nextAt);
+          expect(retained.today.spent?.minorUnits, 700);
+          expect(retained.lastSuccessfulSyncAt, newerAt);
+          expect(retained.status, ProviderStatus.stale);
+          expect(
+            merged.reportingOutcomes.single.category,
+            ReportingOutcomeCategory.rateLimited,
+          );
+          expect(await failing.isSnapshotCurrent(merged), isTrue);
+        } finally {
+          if (!resume.isCompleted) resume.complete();
+          await pending;
+        }
+      });
+    }
+
+    test('a nested supersession fences a partial aggregate', () async {
+      const innerId = 'openai.platform';
+      const outerId = 'anthropic.platform';
+      await credentials('initial', innerId).write('synthetic-openai-key');
+      await credentials('initial', outerId).write('synthetic-anthropic-key');
+      await setClock(fastAt);
+      final selected = Completer<void>();
+      final sibling = Completer<DashboardSnapshot>();
+      final platform = ObservingCachePlatform(bridge.platform('initial'));
+      platform.onComplete = (method, _, _) {
+        if (method == 'validAll' && !selected.isCompleted) selected.complete();
+      };
+      final inner = owned(
+        'initial',
+        innerId,
+        (_) async => _snapshot('openai', innerId, fastAt, 400).toJsonString(),
+        fallback: _HeldDashboardRepository(sibling.future),
+        cachePlatform: platform,
+      );
+      final outer = owned(
+        'initial',
+        outerId,
+        (_) async => _snapshot('claude', outerId, fastAt, 100).toJsonString(),
+        fallback: inner,
+      );
+      final pending = CapturedDashboardLoad.capture(outer.load);
+      try {
+        await waitForHold(selected, pending);
+        await setClock(correctedAt);
+        await bridge.invoke('test', 'failCommit', {'value': true});
+        final corrected =
+            await owned('corrected', innerId, (_) async {
+              return _snapshot(
+                'openai',
+                innerId,
+                correctedAt,
+                700,
+              ).toJsonString();
+            }).load();
+        expect(corrected.accounts.single.today.spent?.minorUnits, 700);
+        await bridge.invoke('test', 'failCommit', {'value': false});
+        sibling.complete(DashboardSnapshot.empty());
+        final result = await pending;
+        expect(() => result.value, throwsA(superseded));
+      } finally {
+        if (!sibling.isCompleted) sibling.complete(DashboardSnapshot.empty());
+        await pending;
+        await bridge.invoke('test', 'failCommit', {'value': false});
+      }
+    });
+
+    test('a cadence skip retains the corrected snapshot era', () async {
+      const id = 'openai.platform';
+      await credentials('seed', id).write('synthetic-openai-key');
+      await setClock(fastAt);
+      final seed = owned('seed', id, (_) async {
+        return _snapshot('openai', id, fastAt, 400).toJsonString();
+      });
+      await automatic().run(seed.load);
+
+      final selected = Completer<void>();
+      final sibling = Completer<DashboardSnapshot>();
+      final platform = ObservingCachePlatform(bridge.platform('skipped'));
+      platform.onComplete = (method, _, _) {
+        if (method == 'validAll' && !selected.isCompleted) selected.complete();
+      };
+      var requests = 0;
+      final skipping = owned(
+        'skipped',
+        id,
+        (_) async {
+          requests++;
+          return _snapshot('openai', id, fastAt, 400).toJsonString();
+        },
+        fallback: _HeldDashboardRepository(sibling.future),
+        cachePlatform: platform,
+      );
+      final poll = automatic();
+      final pending = CapturedDashboardLoad.capture(
+        () => poll.run(skipping.load),
+      );
+      try {
+        await waitForHold(selected, pending);
+        await setClock(correctedAt);
+        final correcting = owned('corrected', id, (_) async {
+          return _snapshot('openai', id, correctedAt, 700).toJsonString();
+        });
+        expect(
+          (await correcting.load()).accounts.single.today.spent?.minorUnits,
+          700,
+        );
+        sibling.complete(DashboardSnapshot.empty());
+        final retained = (await pending).value;
+        expect(retained.accounts.single.today.spent?.minorUnits, 700);
+        expect(retained.reportingOutcomes, isEmpty);
+        expect(poll.whollySkipped, isTrue);
+        expect(requests, 0);
+      } finally {
+        if (!sibling.isCompleted) sibling.complete(DashboardSnapshot.empty());
+        await pending;
+      }
+    });
+
+    for (final failCorrectedCommit in [false, true]) {
+      test(
+        'a cacheless cadence skip qualifies retained reporting feedback '
+        '(failed corrected commit and reread: $failCorrectedCommit)',
+        () async {
+          const id = 'openai.platform';
+          await credentials('failing', id).write('synthetic-openai-key');
+          await setClock(fastAt);
+          final passingSibling = ValueDashboardRepository(
+            _snapshot('claude', 'anthropic.platform', firstAt, 100),
+          );
+          var requests = 0;
+          var failSelectionReads = false;
+          var failedSelectionReads = 0;
+          var failNextFeedbackCheck = false;
+          final platform = ObservingCachePlatform(bridge.platform('failing'));
+          platform.beforeInvoke = (method, arguments) {
+            if (failSelectionReads &&
+                method == 'readSnapshot' &&
+                arguments['forSelection'] == true) {
+              failedSelectionReads++;
+              throw StateError('Synthetic payload reread failure.');
+            }
+            if (failNextFeedbackCheck &&
+                method == 'validAll' &&
+                (arguments['attemptClockEras'] as Map?)?[id] != null &&
+                arguments['payloadOrders'] == null &&
+                arguments['emptyCacheOrders'] == null) {
+              failNextFeedbackCheck = false;
+              throw StateError('Synthetic feedback metadata check failure.');
+            }
+          };
+          final failing = owned(
+            'failing',
+            id,
+            (_) async {
+              requests++;
+              throw StateError('Synthetic provider failure.');
+            },
+            fallback: passingSibling,
+            cachePlatform: platform,
+          );
+          await automatic().run(failing.load);
+
+          failSelectionReads = failCorrectedCommit;
+          if (failSelectionReads) {
+            failNextFeedbackCheck = true;
+            final poll = automatic();
+            final skipped = await poll.run(failing.load);
+            expect(failNextFeedbackCheck, isFalse);
+            expect(failedSelectionReads, greaterThanOrEqualTo(2));
+            expect(poll.whollySkipped, isTrue);
+            expect(skipped.accounts.single.connection, 'anthropic.platform');
+            expect(skipped.reportingOutcomes, isEmpty);
+            final cacheOrder = poll.skipped[id]?.cacheOrder;
+            expect(cacheOrder, isNotNull);
+            expect(skipped.snapshotOrdering[id]?.emptyCacheOrder, cacheOrder);
+            expect(skipped.snapshotOrdering[id]?.attemptEra, isNull);
+            failedSelectionReads = 0;
+          }
+          final ordinarySkip = await automatic().run(failing.load);
+          expect(ordinarySkip.accounts.single.connection, 'anthropic.platform');
+          final retained = ordinarySkip.reportingOutcomes.single;
+          expect(retained.category, ReportingOutcomeCategory.rateLimited);
+          expect(retained.freshness, ReportingOutcomeFreshness.current);
+          expect(
+            failedSelectionReads,
+            failCorrectedCommit ? greaterThanOrEqualTo(2) : 0,
+          );
+
+          await setClock(correctedAt);
+          if (failCorrectedCommit) {
+            await bridge.invoke('test', 'failCommit', {'value': true});
+          }
+          try {
+            final corrected =
+                await owned('corrected', id, (_) async {
+                  return _snapshot(
+                    'openai',
+                    id,
+                    correctedAt,
+                    700,
+                  ).toJsonString();
+                }).load();
+            expect(corrected.accounts.single.today.spent?.minorUnits, 700);
+          } finally {
+            if (failCorrectedCommit) {
+              await bridge.invoke('test', 'failCommit', {'value': false});
+            }
+          }
+          failedSelectionReads = 0;
+          final poll = automatic();
+          final correctedSkip = await poll.run(failing.load);
+          expect(
+            failedSelectionReads,
+            failCorrectedCommit ? greaterThanOrEqualTo(2) : 0,
+          );
+          expect(poll.whollySkipped, isTrue);
+          if (failCorrectedCommit) {
+            expect(
+              correctedSkip.accounts.single.connection,
+              'anthropic.platform',
+            );
+          } else {
+            expect(
+              correctedSkip.accounts
+                  .singleWhere((account) => account.connection == id)
+                  .today
+                  .spent
+                  ?.minorUnits,
+              700,
+            );
+          }
+          expect(correctedSkip.reportingOutcomes, isEmpty);
+          expect(requests, 1);
+        },
+      );
+    }
+
+    for (final (correct, duringPublication) in [
+      (false, false),
+      (true, false),
+      (true, true),
+    ]) {
+      test(
+        'a cacheless cadence skip checks its ordering '
+        '(correction: $correct, during publication: $duringPublication)',
+        () async {
+          const id = 'openai.platform';
+          await credentials('seed', id).write('synthetic-openai-key');
+          await setClock(fastAt);
+          final seed = owned('seed', id, (_) async {
+            throw StateError('Synthetic provider failure.');
+          });
+          await expectLater(
+            automatic().run(seed.load),
+            throwsA(isA<DashboardLoadException>()),
+          );
+
+          final checked = Completer<void>();
+          final selectionRead = Completer<void>();
+          final resume = Completer<void>();
+          final sibling = Completer<DashboardSnapshot>();
+          final siblingSnapshot = _snapshot(
+            'claude',
+            'anthropic.platform',
+            firstAt,
+            100,
+          );
+          final platform = ObservingCachePlatform(bridge.platform('skipping'));
+          var reads = 0;
+          platform.onComplete = (method, _, _) async {
+            if (method != 'readSnapshot') return;
+            reads++;
+            if (reads == 2) checked.complete();
+            if (reads == 3 && duringPublication) {
+              // Hold the paired reply after native has confirmed the old order.
+              selectionRead.complete();
+              await resume.future;
+            }
+          };
+          var requests = 0;
+          final skipping = owned(
+            'skipping',
+            id,
+            (_) async {
+              requests++;
+              throw StateError('Cadence should deny this request.');
+            },
+            fallback: _HeldDashboardRepository(sibling.future),
+            cachePlatform: platform,
+          );
+          final poll = automatic();
+          final pending = CapturedDashboardLoad.capture(
+            () => poll.run(skipping.load),
+          );
+          Future<void> correctClockAndRefresh() async {
+            await setClock(correctedAt);
+            await owned('corrected', id, (_) async {
+              return _snapshot('openai', id, correctedAt, 700).toJsonString();
+            }).load();
+          }
+
+          try {
+            await waitForHold(checked, pending);
+            if (correct && !duringPublication) await correctClockAndRefresh();
+            sibling.complete(siblingSnapshot);
+            if (duringPublication) {
+              await waitForHold(selectionRead, pending);
+              await correctClockAndRefresh();
+              resume.complete();
+            }
+            final snapshot = (await pending).value;
+            expect(snapshot.accounts, hasLength(correct ? 2 : 1));
+            if (correct) {
+              final recovered = snapshot.accounts.singleWhere(
+                (account) => account.connection == id,
+              );
+              expect(recovered.today.spent?.minorUnits, 700);
+            }
+            expect(await skipping.isSnapshotCurrent(snapshot), isTrue);
+            expect(snapshot.reportingOutcomes, isEmpty);
+            expect(poll.whollySkipped, isTrue);
+            expect(requests, 0);
+          } finally {
+            if (!sibling.isCompleted) sibling.complete(siblingSnapshot);
+            if (!resume.isCompleted) resume.complete();
+            await pending;
+          }
+        },
+      );
+    }
+
+    test(
+      'a cacheless plan skip retains its order across fetch release',
+      () async {
+        await store(
+          bridge.platform('seed'),
+        ).writeSecret(cursorId, 'synthetic-session');
+        await setClock(fastAt);
+        final seed = cursor(
+          'seed',
+          () async => throw StateError('Synthetic fetch failure.'),
+        );
+        await expectLater(
+          automatic().run(seed.load),
+          throwsA(isA<DashboardLoadException>()),
+        );
+
+        final released = Completer<void>();
+        final resume = Completer<void>();
+        final sibling = Completer<DashboardSnapshot>();
+        final siblingSnapshot = _snapshot(
+          'openai',
+          ProviderConnections.openAiPlatform.storageKey,
+          firstAt,
+          100,
+        );
+        final platform = ObservingCachePlatform(bridge.platform('skipping'));
+        platform.onComplete = (method, arguments, _) async {
+          if (method == 'releaseFetch' &&
+              arguments['connection'] == cursorId.storageKey) {
+            released.complete();
+            await resume.future;
+          }
+        };
+        var requests = 0;
+        final skipping = cursor(
+          'skipping',
+          () async {
+            requests++;
+            return 40;
+          },
+          observed: platform,
+          fallback: _HeldDashboardRepository(sibling.future),
+        );
+        final poll = automatic();
+        final pending = CapturedDashboardLoad.capture(
+          () => poll.run(skipping.load),
+        );
+        try {
+          await waitForHold(released, pending);
+          await setClock(correctedAt);
+          await bridge.invoke('test', 'failCommit', {'value': true});
+          final corrected = await cursor('corrected', () async => 70).load();
+          expect(cursorUsage(corrected), 70);
+          await bridge.invoke('test', 'failCommit', {'value': false});
+          resume.complete();
+          sibling.complete(siblingSnapshot);
+
+          final result = await pending;
+          expect(() => result.value, throwsA(superseded));
+          expect(poll.whollySkipped, isTrue);
+          expect(requests, 0);
+        } finally {
+          if (!resume.isCompleted) resume.complete();
+          if (!sibling.isCompleted) sibling.complete(siblingSnapshot);
+          await pending;
+          await bridge.invoke('test', 'failCommit', {'value': false});
+        }
+      },
+    );
+
+    test('a lower report sample preserves the fast-clock reference', () async {
+      await store(
+        bridge.platform('seed'),
+      ).writeSecret(cursorId, 'synthetic-session');
+      await setClock(fastAt);
+      expect(cursorUsage(await cursor('seed', () async => 40).load()), 40);
+      final entered = Completer<void>();
+      final response = Completer<int>();
+      final delayed = cursor('lower-sample', () {
+        entered.complete();
+        return response.future;
+      });
+      final pending = CapturedDashboardLoad.capture(delayed.load);
+      try {
+        await waitForHold(entered, pending);
+        await setClock(correctedAt);
+        response.complete(60);
+        expect(cursorUsage((await pending).value), 40);
+        expect(
+          cursorUsage(await cursor('corrected', () async => 70).load()),
+          70,
+        );
+        final durable = await coldCursor();
+        expect(cursorUsage(durable), 70);
+        expect(durable.generatedAt, correctedAt);
+      } finally {
+        if (!response.isCompleted) response.complete(60);
+        await pending;
+      }
+    });
+
+    test('an unstamped RAM result cannot displace era zero', () async {
+      const id = 'openai.platform';
+      await credentials('legacy', id).write('synthetic-admin-key');
+      var failFetch = false;
+      final legacy = repository('legacy', id, () async {
+        if (failFetch) throw StateError('Synthetic fetch failure.');
+        return _snapshot('openai', id, fastAt, 400).toJsonString();
+      });
+      await setClock(fastAt);
+      await bridge.invoke('test', 'failCommit', {'value': true});
+      final DashboardSnapshot unconfirmed;
+      try {
+        unconfirmed = await legacy.load();
+      } finally {
+        await bridge.invoke('test', 'failCommit', {'value': false});
+      }
+      expect(unconfirmed.accounts.single.today.spent?.minorUnits, 400);
+
+      await setClock(correctedAt);
+      final corrected =
+          await owned('corrected', id, (_) async {
+            return _snapshot('openai', id, correctedAt, 700).toJsonString();
+          }).load();
+      expect(corrected.accounts.single.today.spent?.minorUnits, 700);
+      failFetch = true;
+      final stale = await legacy.load();
+      expect(stale.accounts.single.today.spent?.minorUnits, 700);
+      expect(stale.accounts.single.status, ProviderStatus.stale);
+      failFetch = false;
+      final refreshed = await legacy.load();
+      expect(refreshed.accounts.single.today.spent?.minorUnits, 700);
+      expect(await legacy.isSnapshotCurrent(unconfirmed), isFalse);
+    });
+
+    test(
+      'failed final validation cannot seed later in-memory recovery',
+      () async {
+        final key = cursorId.storageKey;
+        await store(
+          bridge.platform('seed'),
+        ).writeSecret(cursorId, 'synthetic-session');
+        await setClock(firstAt);
+        expect(cursorUsage(await cursor('seed', () async => 40).load()), 40);
+
+        final platform = ObservingCachePlatform(bridge.platform('refresh'));
+        var providerFails = false;
+        final refreshing = cursor('refresh', () async {
+          if (providerFails) throw StateError('Synthetic provider failure.');
+          return 70;
+        }, observed: platform);
+        Object? write;
+        Object? validation;
+        Map<String, Object?>? interruptedProof;
+        var checks = 0;
+        platform.onComplete = (method, arguments, result) {
+          if (method == 'writeSnapshot' && arguments['connection'] == key) {
+            write = result;
+          }
+          final payload = (arguments['payloadOrders'] as Map?)?[key] as Map?;
+          if (method == 'validAll' &&
+              payload?['generatedAt'] == nextAt.microsecondsSinceEpoch &&
+              ++checks == 2) {
+            validation = result;
+            interruptedProof = Map.of(arguments);
+            throw StateError('Synthetic native validation reply failure.');
+          }
+        };
+
+        await setClock(nextAt);
+        await bridge.invoke('test', 'failCommit', {'value': true});
+        try {
+          await expectLater(refreshing.load(), throwsA(superseded));
+        } finally {
+          await bridge.invoke('test', 'failCommit', {'value': false});
+        }
+        expect(write, containsPair('status', 'storageFailure'));
+        expect(validation, isTrue);
+        expect(
+          await bridge.invoke('reader', 'validAll', interruptedProof!),
+          isTrue,
+        );
+
+        providerFails = true;
+        final fallback = await refreshing.load();
+        expect(cursorUsage(fallback), 40);
+        expect(fallback.accounts.single.status, ProviderStatus.stale);
+        expect(await refreshing.isSnapshotCurrent(fallback), isTrue);
+      },
+    );
+
+    for (final failRead in [false, true]) {
+      test(
+        'a skipped older write cannot publish after a failed corrected commit (read failure: $failRead)',
+        () async {
+          await store(
+            bridge.platform('seed'),
+          ).writeSecret(cursorId, 'synthetic-session');
+          final confirmedAt = fastAt.add(const Duration(microseconds: 500));
+          await setClock(confirmedAt);
+          expect(cursorUsage(await cursor('seed', () async => 40).load()), 40);
+          await setClock(fastAt.add(const Duration(microseconds: 200)));
+          final released = Completer<void>();
+          final resumeSelection = Completer<void>();
+          final platform = ObservingCachePlatform(bridge.platform('older'));
+          var writes = 0;
+          platform.beforeInvoke = (method, _) {
+            if (method == 'writeSnapshot') writes++;
+            if (method == 'readSnapshot' && failRead && released.isCompleted) {
+              throw StateError('Synthetic snapshot read failure.');
+            }
+          };
+          platform.onComplete = (method, arguments, _) async {
+            if (method == 'releaseFetch' &&
+                arguments['connection'] == cursorId.storageKey) {
+              released.complete();
+              await resumeSelection.future;
+            }
+          };
+          final older = cursor('older', () async => 60, observed: platform);
+          final pending = CapturedDashboardLoad.capture(older.load);
+          try {
+            await waitForHold(released, pending);
+            await setClock(correctedAt);
+            await bridge.invoke('test', 'failCommit', {'value': true});
+            final accepting = await cursor('corrected', () async => 70).load();
+            expect(cursorUsage(accepting), 70);
+            await bridge.invoke('test', 'failCommit', {'value': false});
+            resumeSelection.complete();
+            final result = await pending;
+            expect(() => result.value, throwsA(superseded));
+            expect(
+              writes,
+              0,
+              reason: 'The older candidate bypasses native write CAS',
+            );
+            final durable = await coldCursor();
+            expect(cursorUsage(durable), 40);
+            expect(durable.generatedAt, confirmedAt);
+          } finally {
+            if (!resumeSelection.isCompleted) resumeSelection.complete();
+            await pending;
+            await bridge.invoke('test', 'failCommit', {'value': false});
+          }
+        },
+      );
+    }
+
+    test(
+      'reporting release keeps its clock sample when selection fails',
+      () async {
+        const id = ProviderConnections.openAiPlatform;
+        await store(
+          bridge.platform('seed'),
+        ).writeSecret(id, 'synthetic-admin-key');
+        await setClock(firstAt);
+        final platform = ObservingCachePlatform(bridge.platform('interrupted'));
+        platform.beforeInvoke = (method, arguments) {
+          if (method == 'writeSnapshot' ||
+              (method == 'readSnapshot' && arguments['forSelection'] == true)) {
+            throw StateError('Synthetic snapshot I/O failure.');
+          }
+        };
+        final interrupted = owned('interrupted', id.storageKey, (_) async {
+          await setClock(fastAt);
+          return _snapshot('openai', id.storageKey, fastAt, 900).toJsonString();
+        }, cachePlatform: platform);
+        await expectLater(interrupted.load(), throwsA(superseded));
+
+        await setClock(correctedAt);
+        final corrected =
+            await owned(
+              'corrected',
+              id.storageKey,
+              (_) async =>
+                  _snapshot(
+                    'openai',
+                    id.storageKey,
+                    correctedAt,
+                    400,
+                  ).toJsonString(),
+            ).load();
+        expect(corrected.accounts.single.today.spent?.minorUnits, 400);
+        final version =
+            (await store(bridge.platform('reader')).readVersion(id))!;
+        expect(
+          await bridge.invoke('reader', 'readSnapshot', {
+            'connection': id.storageKey,
+            'expected': version.values,
+            'ordered': true,
+          }),
+          containsPair('minimumEra', 1),
+        );
+      },
+    );
+
+    test(
+      'OpenAI reporting commits the clock reference before fetch release',
+      () async {
+        const id = ProviderConnections.openAiPlatform;
+        final platform = ObservingCachePlatform(bridge.platform('reporting'));
+        await store(platform).writeSecret(id, 'synthetic-admin-key');
+        final releaseEntered = Completer<void>();
+        final releaseFetch = Completer<void>();
+        platform.onComplete = (method, _, _) async {
+          if (method == 'stampFetch') await setClock(fastAt);
+        };
+        platform.beforeInvoke = (method, _) async {
+          if (method == 'releaseFetch') {
+            releaseEntered.complete();
+            await releaseFetch.future;
+          }
+        };
+        DashboardRepository reporting(
+          String owner,
+          ConnectionCachePlatform platform,
+          String cost,
+        ) => openAiDashboardRepository(
+          credentialStore: store(platform),
+          cache: cache(owner, id.storageKey, platform: platform),
+          client: OpenAiReportingClient(
+            http: ProviderReportingHttp(
+              transport: _HistoryReportingTransport(now, cost: cost),
+            ),
+          ),
+          clock: () => now,
+          logger: const _SilentLogger(),
+        );
+
+        await setClock(firstAt);
+        final pending = CapturedDashboardLoad.capture(
+          reporting('reporting', platform, '9.00').load,
+        );
+        try {
+          await waitForHold(releaseEntered, pending);
+          final confirmed =
+              (await cache('reader', id.storageKey).capture()).snapshot!;
+          expect(confirmed.generatedAt, fastAt);
+          expect(confirmed.accounts.single.month.spent?.minorUnits, 900);
+          // This instant is after admission and before the committed report sample.
+          await setClock(correctedAt);
+          await bridge.invoke('test', 'restart', {});
+          final corrected =
+              await reporting(
+                'recreated',
+                bridge.platform('recreated'),
+                '4.00',
+              ).load();
+          expect(corrected.generatedAt, correctedAt);
+          expect(corrected.accounts.single.month.spent?.minorUnits, 400);
+          final durable =
+              (await cache('reader', id.storageKey).capture()).snapshot!;
+          expect(durable.generatedAt, correctedAt);
+          expect(durable.accounts.single.month.spent?.minorUnits, 400);
+        } finally {
+          if (!releaseFetch.isCompleted) releaseFetch.complete();
+          await pending;
+        }
+      },
+    );
+  });
 
   test(
     'six real Rust normalizers retain phone and cache source ownership',
@@ -336,6 +2015,84 @@ void main() {
         logger: const _SilentLogger(),
       );
     }
+
+    test('cacheless plan absence rechecks a replaced sibling row', () async {
+      const plan = ProviderConnections.codexPlan;
+      final planCredentials = credentials('cacheless', plan.storageKey);
+      await bridge.invoke('test', 'setClock', {
+        'value': at.millisecondsSinceEpoch,
+      });
+      await planCredentials.delete();
+      await keys('setup').writeSecret(b, 'synthetic-b');
+      final platform = ObservingCachePlatform(bridge.platform('sibling'));
+      final sibling = owned(
+        'sibling',
+        b.storageKey,
+        (_) async => _snapshot('openai', b.storageKey, at, 20).toJsonString(),
+        cachePlatform: platform,
+      );
+      final repository = codexDashboardRepository(
+        accountService: const EmptyCodexAccountService(),
+        fallback: sibling,
+        loadReport: () async {
+          await planCredentials.read();
+          return null;
+        },
+        logger: const _SilentLogger(),
+      );
+      final original = await repository.load();
+      expect(
+        original.connectionVersions[plan.storageKey]?['absentRead'],
+        'true',
+      );
+      final originalOrder = original.snapshotOrdering[b.storageKey]!;
+      expect(originalOrder.confirmedRowId, isNotNull);
+      expect(await repository.isSnapshotCurrent(original), isTrue);
+
+      final successor = owned('successor', b.storageKey, (_) async {
+        return _snapshot('openai', b.storageKey, at, 30).toJsonString();
+      });
+      String? replacementRow;
+      platform.onComplete = (method, _, result) async {
+        if (method != 'validAll') return;
+        expect(result, isTrue);
+        final replacement = await successor.load();
+        final order = replacement.snapshotOrdering[b.storageKey]!;
+        expect(order.payload, originalOrder.payload);
+        replacementRow = order.confirmedRowId;
+      };
+      expect(await repository.isSnapshotCurrent(original), isFalse);
+      expect(replacementRow, isNotNull);
+      expect(replacementRow, isNot(originalOrder.confirmedRowId));
+    });
+
+    test(
+      'a legacy null remains valid after an unavailable cache pair',
+      () async {
+        await keys('ui').writeSecret(a, 'synthetic-session');
+        final native = ObservingCachePlatform(bridge.platform('legacy'));
+        var pairedReads = 0;
+        native.beforeInvoke = (method, arguments) {
+          if (method == 'readSnapshot' &&
+              arguments['connection'] == a.storageKey) {
+            pairedReads++;
+            throw StateError('Synthetic paired cache read failure.');
+          }
+        };
+        final sibling = _snapshot('openai', b.storageKey, at, 20);
+        final result =
+            await repository(
+              'legacy',
+              a.storageKey,
+              () async => null,
+              cachePlatform: native,
+              fallback: ValueDashboardRepository(sibling),
+            ).load();
+        expect(pairedReads, 1);
+        expect(result.toJson(), sibling.toJson());
+        expect(result.snapshotOrdering, isEmpty);
+      },
+    );
 
     test('retains accepted A+B after late work', () async {
       TestWidgetsFlutterBinding.ensureInitialized();
@@ -2154,19 +3911,22 @@ void main() {
       ProviderConnections.anthropicPlatform,
       ProviderConnections.cursorPlatform,
     ];
-    SecureProviderCredentialStore store(String owner) =>
-        SecureProviderCredentialStore(
-          storage: secure,
-          platform: bridge.platform(owner),
-        );
+    SecureProviderCredentialStore store(
+      String owner, {
+      ConnectionCachePlatform? platform,
+    }) => SecureProviderCredentialStore(
+      storage: secure,
+      platform: platform ?? bridge.platform(owner),
+    );
     MergingConnectionRepository reporting(
       ProviderConnectionId id,
       Future<String> Function(String) fetch, {
       DashboardRepository fallback = const NoProvidersDashboardRepository(),
+      ConnectionCachePlatform? platform,
     }) => MergingConnectionRepository(
       connection: id,
-      credentialStore: store('ui'),
-      cache: cache('ui', id.storageKey),
+      credentialStore: store('ui', platform: platform),
+      cache: cache('ui', id.storageKey, platform: platform),
       fallback: fallback,
       loadCredentialReport: fetch,
       normalizeReport: (value) => value,
@@ -2563,6 +4323,17 @@ void main() {
             ),
             hasLength(1),
           );
+          final completed = observations.singleWhere(
+            (update) =>
+                update.connection == outcome.connection && !update.checking,
+          );
+          expect(
+            completed.attemptEra,
+            snapshot
+                .snapshotOrdering[outcome.connection.storageKey]!
+                .attemptEra,
+          );
+          expect(completed.attemptEra, isNotNull);
         }
         expect(
           transport.requests,
@@ -2618,7 +4389,16 @@ void main() {
           ReportingOutcomeCategory.accessDenied,
           ReportingOutcomeCategory.transientFailure,
         ]);
-        expect(() => failed.value, throwsA(isA<DashboardLoadException>()));
+        expect(
+          () => failed.value,
+          throwsA(
+            isA<DashboardLoadException>().having(
+              (error) => error.issue,
+              'issue',
+              DashboardSyncIssue.providerUnavailable,
+            ),
+          ),
+        );
         final plan = _snapshot('codex', 'openai.plan', firstAt, 0);
         final mixed = await stack(ValueDashboardRepository(plan)).load();
         expect(mixed.accounts.single.connection, 'openai.plan');
@@ -2626,18 +4406,25 @@ void main() {
           mixed.reportingOutcomes.map((outcome) => outcome.connection),
           ids,
         );
-        expect(
-          await cache('ui', ids.first.storageKey).validSnapshot(mixed),
-          isTrue,
+        final snapshots = cache('ui', ids.first.storageKey);
+        expect(await snapshots.validSnapshot(mixed), isTrue);
+        expect(mixed.connectionVersions, {
+          for (final outcome in mixed.reportingOutcomes)
+            outcome.connection.storageKey: outcome.credentialVersion!.values,
+        });
+        for (final id in ids) {
+          expect(mixed.snapshotOrdering[id.storageKey]!.payload, isNull);
+          expect(mixed.snapshotOrdering[id.storageKey]!.attemptEra, isNotNull);
+        }
+        // The outcomes also carry credential proof independently of the cache.
+        final outcomeProof = mixed.withConnectionVersions(
+          const {},
+          snapshotOrdering: const {},
         );
+        expect(await snapshots.validSnapshot(outcomeProof), isTrue);
         await store('worker').writeSecret(ids[1], 'replacement');
-        // There is no failed account in connectionVersions: only the failure
-        // provenance can make this existing atomic gate reject the whole result.
-        expect(mixed.connectionVersions, isEmpty);
-        expect(
-          await cache('ui', ids.first.storageKey).validSnapshot(mixed),
-          isFalse,
-        );
+        expect(await snapshots.validSnapshot(mixed), isFalse);
+        expect(await snapshots.validSnapshot(outcomeProof), isFalse);
       },
     );
 
@@ -2680,11 +4467,11 @@ void main() {
     test(
       'replacing another key preserves the newest RAM-only fallback',
       () async {
-        final credentials = store('ui');
+        final credentialStore = store('ui');
         final unchanged = ids.first;
         final replaced = ids[1];
-        await credentials.writeSecret(unchanged, 'synthetic-A');
-        await credentials.writeSecret(replaced, 'synthetic-B');
+        await credentialStore.writeSecret(unchanged, 'synthetic-A');
+        await credentialStore.writeSecret(replaced, 'synthetic-B');
         var at = firstAt;
         var spend = 10;
         var fail = false;
@@ -2725,7 +4512,7 @@ void main() {
         expect(disk.generatedAt, firstAt);
 
         // The app invalidates the full stack after saving a reporting key.
-        await credentials.writeSecret(replaced, 'synthetic-replacement');
+        await credentialStore.writeSecret(replaced, 'synthetic-replacement');
         repository.invalidate();
         fail = true;
         final retained = await repository.load();
@@ -2734,9 +4521,23 @@ void main() {
         expect(retained.accounts.single.today.spent?.minorUnits, 20);
         expect(retained.accounts.single.lastSuccessfulSyncAt, nextAt);
         expect(retained.generatedAt, nextAt);
+        final replacementVersion =
+            (await credentials('worker', replaced.storageKey).read())!.version;
         expect(retained.connectionVersions, {
           unchanged.storageKey: newest.connectionVersions[unchanged.storageKey],
+          replaced.storageKey: replacementVersion.values,
         });
+        final replacementOrder =
+            retained.snapshotOrdering[replaced.storageKey]!;
+        expect(replacementOrder.payload, isNull);
+        expect(replacementOrder.attemptEra, 0);
+        expect(
+          retained.reportingOutcomes
+              .singleWhere((outcome) => outcome.connection == replaced)
+              .credentialVersion!
+              .values,
+          replacementVersion.values,
+        );
         expect(retained.reportingOutcomes.map((outcome) => outcome.category), [
           ReportingOutcomeCategory.transientFailure,
           ReportingOutcomeCategory.authenticationRejected,
@@ -2848,6 +4649,11 @@ void main() {
           }
           final retired = await result;
           expect(retired.reportingOutcomes, isEmpty);
+          if (boundary == 'detach') {
+            final failure = retired.loadException;
+            expect(failure?.details, 'Connection changed during refresh.');
+            expect(await repository.isFailureCurrent(failure!), isFalse);
+          }
           expect(observations.where((update) => !update.checking), isEmpty);
           expect(
             (await cache('worker', id.storageKey).capture()).snapshot,
@@ -2857,85 +4663,680 @@ void main() {
       );
     }
 
+    for (final retirePrimary in [true, false]) {
+      test(
+        retirePrimary
+            ? 'a retired fetch keeps the sibling storage diagnostic'
+            : 'an owned provider failure keeps its issue when a sibling retires',
+        () async {
+          const primaryId = ProviderConnections.openAiPlatform;
+          const siblingId = ProviderConnections.anthropicPlatform;
+          final primaryKey = primaryId.storageKey;
+          final siblingKey = siblingId.storageKey;
+          final writer = store('writer');
+          await writer.writeSecret(siblingId, 'synthetic-sibling');
+          final siblingSlot = secure.values.keys.single;
+          await writer.writeSecret(primaryId, 'synthetic-primary');
+          final primaryVersion = (await writer.readVersion(primaryId))!;
+          final siblingCache = cache('reader', siblingKey);
+          var siblingRequests = 0;
+          final sibling = reporting(siblingId, (_) async {
+            siblingRequests++;
+            return _snapshot('claude', siblingKey, firstAt, 10).toJsonString();
+          });
+          await sibling.load();
+          final before = await siblingCache.capture();
+          expect(before.record?.rowId, isA<String>());
+          secure.failReadKey = siblingSlot;
+
+          const owner = 'retiring-primary';
+          final repository = owned(owner, primaryKey, (_) async {
+            if (retirePrimary) await bridge.invoke(owner, 'detach', {});
+            throw const ProviderReportingException(
+              ProviderReportingFailure.rateLimited,
+            );
+          }, fallback: sibling);
+          final captured = await CapturedDashboardLoad.capture(repository.load);
+          final failure = captured.loadException;
+          expect(
+            failure?.issue,
+            retirePrimary
+                ? DashboardSyncIssue.credentialUnavailable
+                : DashboardSyncIssue.rateLimited,
+          );
+          expect(failure!.syncRejection, isNull);
+          expect(
+            failure.reportingOutcomes.map((outcome) => outcome.connection),
+            [siblingId, if (!retirePrimary) primaryId],
+          );
+          final outcome = failure.reportingOutcomes.first;
+          expect(outcome.category, ReportingOutcomeCategory.localReadFailure);
+          expect(outcome.source, ReportingOutcomeSource.local);
+          expect(outcome.credentialVersion, isNull);
+          if (!retirePrimary) {
+            final primaryOutcome = failure.reportingOutcomes.last;
+            expect(
+              primaryOutcome.category,
+              ReportingOutcomeCategory.rateLimited,
+            );
+            expect(primaryOutcome.source, ReportingOutcomeSource.live);
+            expect(
+              primaryOutcome.credentialVersion?.values,
+              primaryVersion.values,
+            );
+            expect(failure.snapshotOrdering[primaryKey]?.attemptEra, isNotNull);
+          }
+          expect(failure.connectionVersions, {
+            primaryKey: primaryVersion.values,
+          });
+          expect(
+            failure.snapshotOrdering.keys,
+            unorderedEquals([primaryKey, siblingKey]),
+          );
+          expect(
+            failure.snapshotOrdering[primaryKey]?.selectionUnverified,
+            retirePrimary,
+          );
+          expect(
+            failure.snapshotOrdering[siblingKey]?.selectionUnverified,
+            isTrue,
+          );
+          expect(await repository.isFailureCurrent(failure), isFalse);
+
+          secure.failReadKey = null;
+          final after = await siblingCache.capture();
+          expect(after.version?.values, before.version?.values);
+          expect(after.record?.rowId, before.record?.rowId);
+          expect(after.snapshot?.toJson(), before.snapshot?.toJson());
+          expect(siblingRequests, 1);
+        },
+      );
+    }
+
+    for (final (failReread, newerLoadDuringReread) in [
+      (false, true),
+      (true, true),
+      (true, false),
+    ]) {
+      final scenario =
+          newerLoadDuringReread
+              ? 'a newer load during the cache reread retires the primary failure '
+                  '(read failure without a cache order: $failReread)'
+              : 'a failed cache reread without an order retires the primary '
+                  'failure without a newer load';
+      test(scenario, () async {
+        await bridge.invoke('test', 'setClock', {
+          'value': firstAt.millisecondsSinceEpoch,
+        });
+        const primaryId = ProviderConnections.openAiPlatform;
+        const siblingId = ProviderConnections.anthropicPlatform;
+        final primaryKey = primaryId.storageKey;
+        final siblingKey = siblingId.storageKey;
+        final writer = store('writer');
+        await writer.writeSecret(primaryId, 'synthetic-primary');
+        await writer.writeSecret(siblingId, 'synthetic-sibling');
+        if (!failReread) {
+          await reporting(primaryId, (_) async {
+            return _snapshot('openai', primaryKey, firstAt, 10).toJsonString();
+          }).load();
+        }
+        final siblingPair = await cache('reader', siblingKey).capture();
+        final siblingVersion = siblingPair.version!;
+        final siblingOrder = SnapshotOrdering(
+          emptyCacheOrder: siblingPair.order!,
+        );
+        final storageOutcome = ConnectionReportingOutcome(
+          connection: siblingId,
+          category: ReportingOutcomeCategory.localReadFailure,
+          source: ReportingOutcomeSource.local,
+          credentialVersion: siblingVersion,
+        );
+        final sibling = ValueDashboardRepository(
+          DashboardSnapshot.empty()
+              .withSyncIssue(DashboardSyncIssue.credentialUnavailable)
+              .withReportingOutcomes([storageOutcome])
+              .withConnectionVersions(
+                {siblingKey: siblingVersion.values},
+                snapshotOrdering: {siblingKey: siblingOrder},
+              ),
+        );
+        final platform = ObservingCachePlatform(bridge.platform('primary'));
+        var requests = 0;
+        final primary = reporting(
+          primaryId,
+          (_) async {
+            requests++;
+            throw ProviderReportingException(
+              ProviderReportingFailure.rateLimited,
+              details: 'Synthetic rate limit for request $requests.',
+            );
+          },
+          fallback: sibling,
+          platform: platform,
+        );
+        CapturedDashboardLoad? newer;
+        if (failReread) {
+          platform.beforeInvoke = (method, arguments) {
+            if (method == 'readSnapshot' && arguments['forSelection'] != true) {
+              throw StateError('Synthetic initial payload read failure.');
+            }
+          };
+        }
+        platform.onComplete = (method, arguments, _) async {
+          if (method != 'readSnapshot' || arguments['forSelection'] != true) {
+            return;
+          }
+          platform.beforeInvoke = null;
+          platform.onComplete = null;
+          if (newerLoadDuringReread) {
+            newer = await CapturedDashboardLoad.capture(primary.load);
+          }
+          if (failReread) throw StateError('Synthetic payload reread failure.');
+        };
+
+        final retired = await CapturedDashboardLoad.capture(primary.load);
+        final failure = retired.loadException!;
+        if (!newerLoadDuringReread) {
+          expect(requests, 1);
+          expect(
+            await bridge.invoke('reader', 'validAll', {
+              'versions': failure.connectionVersions,
+              'attemptClockEras': {
+                primaryKey: failure.snapshotOrdering[primaryKey]?.attemptEra,
+              },
+              'emptyCacheOrders': {siblingKey: siblingPair.order!},
+            }),
+            isTrue,
+          );
+        }
+        expect(await primary.isFailureCurrent(failure), isFalse);
+        final current =
+            newer ?? await CapturedDashboardLoad.capture(primary.load);
+        expect(requests, 2);
+        expect(failure.issue, DashboardSyncIssue.rateLimited);
+        expect(failure.details, 'Synthetic rate limit for request 1.');
+        expect(failure.reportingOutcomes.first, same(storageOutcome));
+        final primaryOutcome = failure.reportingOutcomes.last;
+        expect(failure.reportingOutcomes, hasLength(2));
+        expect(primaryOutcome.connection, primaryId);
+        expect(primaryOutcome.category, ReportingOutcomeCategory.rateLimited);
+        expect(primaryOutcome.source, ReportingOutcomeSource.live);
+        expect(
+          primaryOutcome.credentialVersion?.values,
+          current.connectionVersions[primaryKey],
+        );
+        expect(failure.connectionVersions, current.connectionVersions);
+        expect(
+          failure.snapshotOrdering.keys,
+          unorderedEquals(current.snapshotOrdering.keys),
+        );
+        expect(failure.snapshotOrdering[siblingKey], same(siblingOrder));
+        final retiredOrder = failure.snapshotOrdering[primaryKey]!;
+        final currentOrder = current.snapshotOrdering[primaryKey]!;
+        expect(retiredOrder.confirmedRowId, currentOrder.confirmedRowId);
+        expect(retiredOrder.payload, currentOrder.payload);
+        expect(retiredOrder.attemptEra, isNotNull);
+        expect(retiredOrder.attemptEra, currentOrder.attemptEra);
+        expect(retiredOrder.emptyCacheOrder, isNull);
+        expect(retiredOrder.selectionUnverified, isTrue);
+        if (failReread) {
+          expect(currentOrder.emptyCacheOrder, isNotNull);
+          expect(
+            await primary.isFailureCurrent(current.loadException!),
+            isTrue,
+          );
+        } else {
+          expect(await primary.isSnapshotCurrent(current.value), isTrue);
+        }
+      });
+    }
+
+    for (final (failOuterReread, newerLoadDuringReread) in [
+      (false, false),
+      (true, false),
+      (false, true),
+    ]) {
+      test(
+        failOuterReread
+            ? 'a failed outer selection reread preserves an inner provider failure'
+            : newerLoadDuringReread
+            ? 'a newer outer load during reread keeps the inner provider failure'
+            : 'a successful outer load preserves an inner unverified provider failure',
+        () async {
+          await bridge.invoke('test', 'setClock', {
+            'value': firstAt.millisecondsSinceEpoch,
+          });
+          const innerId = ProviderConnections.openAiPlatform;
+          const outerId = ProviderConnections.anthropicPlatform;
+          final innerKey = innerId.storageKey;
+          final outerKey = outerId.storageKey;
+          final writer = store('writer');
+          await writer.writeSecret(innerId, 'synthetic-inner');
+          await writer.writeSecret(outerId, 'synthetic-outer');
+          final innerVersion = (await writer.readVersion(innerId))!;
+          final outerVersion = (await writer.readVersion(outerId))!;
+          final platform = ObservingCachePlatform(bridge.platform('inner'));
+          platform.beforeInvoke = (method, _) {
+            if (method == 'readSnapshot') {
+              throw StateError('Synthetic paired cache read failure.');
+            }
+          };
+          const details = 'Synthetic rate limit.';
+          final inner = reporting(innerId, (_) async {
+            throw const ProviderReportingException(
+              ProviderReportingFailure.rateLimited,
+              details: details,
+            );
+          }, platform: platform);
+          final outerPlatform = ObservingCachePlatform(
+            bridge.platform('outer'),
+          );
+          var outerSelectionReads = 0;
+          outerPlatform.beforeInvoke = (method, arguments) {
+            if (method == 'readSnapshot' && arguments['forSelection'] == true) {
+              outerSelectionReads++;
+              if (failOuterReread && outerSelectionReads == 2) {
+                throw StateError('Synthetic outer selection reread failure.');
+              }
+            }
+          };
+          var outerRequests = 0;
+          final outer = reporting(
+            outerId,
+            (_) async {
+              if (++outerRequests == 2) {
+                // Keep the original cache row available to validate its proof.
+                throw const ProviderReportingException(
+                  ProviderReportingFailure.rateLimited,
+                  details: 'Synthetic newer outer rate limit.',
+                );
+              }
+              return _snapshot('claude', outerKey, firstAt, 10).toJsonString();
+            },
+            fallback: inner,
+            platform: outerPlatform,
+          );
+          if (newerLoadDuringReread) {
+            outerPlatform.onComplete = (method, arguments, _) async {
+              if (method != 'readSnapshot' ||
+                  arguments['forSelection'] != true ||
+                  outerSelectionReads != 2) {
+                return;
+              }
+              outerPlatform.beforeInvoke = null;
+              outerPlatform.onComplete = null;
+              await CapturedDashboardLoad.capture(outer.load);
+            };
+          }
+
+          final result = await CapturedDashboardLoad.capture(outer.load);
+          expect(outerSelectionReads, 2);
+          expect(outerRequests, newerLoadDuringReread ? 2 : 1);
+          final failure = result.loadException!;
+          expect(failure.issue, DashboardSyncIssue.rateLimited);
+          expect(failure.details, details);
+          final outcome = failure.reportingOutcomes.single;
+          expect(outcome.connection, innerId);
+          expect(outcome.category, ReportingOutcomeCategory.rateLimited);
+          expect(outcome.source, ReportingOutcomeSource.live);
+          expect(outcome.credentialVersion?.values, innerVersion.values);
+          expect(failure.connectionVersions, {
+            innerKey: innerVersion.values,
+            outerKey: outerVersion.values,
+          });
+          final innerOrder = failure.snapshotOrdering[innerKey]!;
+          expect(innerOrder.attemptEra, isNotNull);
+          expect(innerOrder.payload, isNull);
+          expect(innerOrder.emptyCacheOrder, isNull);
+          expect(innerOrder.selectionUnverified, isTrue);
+          final outerRecord =
+              (await cache('reader', outerKey).capture()).record!;
+          final outerOrder = failure.snapshotOrdering[outerKey]!;
+          expect(outerOrder.confirmedRowId, isNotNull);
+          expect(outerOrder.confirmedRowId, outerRecord.rowId);
+          final outerRetired = failOuterReread || newerLoadDuringReread;
+          expect(outerOrder.selectionUnverified, outerRetired);
+          expect(await outer.isFailureCurrent(failure), isFalse);
+          final proofWithoutRetirement = failure.withConnectionVersions(
+            failure.connectionVersions,
+            snapshotOrdering: {
+              ...failure.snapshotOrdering,
+              innerKey: SnapshotOrdering(attemptEra: innerOrder.attemptEra),
+              if (outerRetired)
+                outerKey: SnapshotOrdering(
+                  payload: outerOrder.payload,
+                  confirmedRowId: outerOrder.confirmedRowId,
+                  attemptEra: outerOrder.attemptEra,
+                ),
+            },
+          );
+          expect(await outer.isFailureCurrent(proofWithoutRetirement), isTrue);
+        },
+      );
+    }
+
     test(
-      'an unreadable old key cannot publish a local failure for a readable replacement',
+      'a retired fetch keeps a sibling admission failure with empty order',
+      () async {
+        const primaryId = ProviderConnections.openAiPlatform;
+        const siblingId = ProviderConnections.anthropicPlatform;
+        final primaryKey = primaryId.storageKey;
+        final siblingKey = siblingId.storageKey;
+        final writer = store('writer');
+        await writer.writeSecret(primaryId, 'synthetic-primary');
+        await writer.writeSecret(siblingId, 'synthetic-sibling');
+        final primaryVersion = (await writer.readVersion(primaryId))!;
+        final siblingCache = cache('reader', siblingKey);
+        final empty = await siblingCache.capture();
+        expect(empty.record, isNull);
+        expect(empty.order, isNotNull);
+
+        final platform = ObservingCachePlatform(bridge.platform('ui'));
+        platform.beforeInvoke = (method, _) {
+          if (method == 'claimAutomatic') {
+            throw StateError('Synthetic automatic admission storage failure.');
+          }
+        };
+        var siblingRequests = 0;
+        final sibling = reporting(siblingId, (_) async {
+          siblingRequests++;
+          return _snapshot('claude', siblingKey, firstAt, 10).toJsonString();
+        }, platform: platform);
+        const owner = 'retiring-primary';
+        final repository = owned(owner, primaryKey, (_) async {
+          await bridge.invoke(owner, 'detach', {});
+          throw const ProviderReportingException(
+            ProviderReportingFailure.rateLimited,
+          );
+        }, fallback: sibling);
+        final poll = automatic();
+        final captured = await poll.run(
+          () => CapturedDashboardLoad.capture(repository.load),
+        );
+        final failure = captured.loadException;
+        expect(failure?.issue, DashboardSyncIssue.credentialUnavailable);
+        final outcome = failure!.reportingOutcomes.single;
+        expect(outcome.connection, siblingId);
+        expect(outcome.category, ReportingOutcomeCategory.localReadFailure);
+        expect(outcome.source, ReportingOutcomeSource.local);
+        expect(outcome.credentialVersion?.values, empty.version!.values);
+        expect(failure.connectionVersions, {
+          primaryKey: primaryVersion.values,
+          siblingKey: empty.version!.values,
+        });
+        expect(
+          failure.snapshotOrdering[primaryKey]?.selectionUnverified,
+          isTrue,
+        );
+        expect(
+          failure.snapshotOrdering[siblingKey]?.selectionUnverified,
+          isFalse,
+        );
+        expect(
+          failure.snapshotOrdering[siblingKey]?.emptyCacheOrder,
+          empty.order,
+        );
+        expect(await repository.isFailureCurrent(failure), isFalse);
+        expect((await siblingCache.capture()).observation, empty.observation);
+        expect(poll.attempted, {primaryKey});
+        expect(siblingRequests, 0);
+      },
+    );
+
+    for (final (throwsValidation, staleSibling) in [
+      (false, false),
+      (true, true),
+    ]) {
+      test(
+        'retired admission failures keep both storage outcomes '
+        '(validation throws: $throwsValidation, stale sibling: $staleSibling)',
+        () async {
+          const primaryId = ProviderConnections.openAiPlatform;
+          const siblingId = ProviderConnections.anthropicPlatform;
+          final primaryKey = primaryId.storageKey;
+          final siblingKey = siblingId.storageKey;
+          final writer = store('writer');
+          await writer.writeSecret(primaryId, 'synthetic-primary');
+          await writer.writeSecret(siblingId, 'synthetic-sibling');
+          var requests = 0;
+          final sibling = reporting(siblingId, (_) async {
+            requests++;
+            return _snapshot('claude', siblingKey, firstAt, 10).toJsonString();
+          });
+          if (staleSibling) await sibling.load();
+          final primaryPair = await cache('reader', primaryKey).capture();
+          final siblingPair = await cache('reader', siblingKey).capture();
+          final versions = {
+            primaryKey: primaryPair.version!.values,
+            siblingKey: siblingPair.version!.values,
+          };
+
+          final platform = ObservingCachePlatform(bridge.platform('primary'));
+          Map<String, Object?>? rejectedProof;
+          platform.beforeInvoke = (method, arguments) {
+            if (method != 'validAll') return;
+            rejectedProof = Map.of(arguments);
+            if (throwsValidation) {
+              throw StateError('Synthetic order validation failure.');
+            }
+            arguments['rejectValidation'] = true;
+          };
+          final primary = reporting(
+            primaryId,
+            (_) async {
+              throw StateError('Admission failure must prevent this request.');
+            },
+            fallback: sibling,
+            platform: platform,
+          );
+          final poll = AutomaticPollContext(
+            readInterval:
+                () async => throw StateError('Synthetic cadence failure.'),
+          );
+          final result = await poll.run(
+            () => CapturedDashboardLoad.capture(primary.load),
+          );
+          final failure = result.loadException!;
+          expect(failure.issue, DashboardSyncIssue.credentialUnavailable);
+          expect(
+            failure.reportingOutcomes.map((outcome) => outcome.connection),
+            [siblingId, primaryId],
+          );
+          for (final outcome in failure.reportingOutcomes) {
+            expect(outcome.category, ReportingOutcomeCategory.localReadFailure);
+            expect(outcome.source, ReportingOutcomeSource.local);
+            expect(
+              outcome.credentialVersion?.values,
+              versions[outcome.connection.storageKey],
+            );
+          }
+          expect(requests, staleSibling ? 1 : 0);
+          expect(failure.connectionVersions, versions);
+          expect(
+            failure.snapshotOrdering[primaryKey]?.selectionUnverified,
+            isTrue,
+          );
+          expect(
+            failure.snapshotOrdering[primaryKey]?.emptyCacheOrder,
+            primaryPair.order,
+          );
+          expect(
+            failure.snapshotOrdering[siblingKey]?.confirmedRowId,
+            siblingPair.record?.rowId,
+          );
+          expect(
+            failure.snapshotOrdering[siblingKey]?.emptyCacheOrder,
+            siblingPair.order,
+          );
+          final proof = rejectedProof!;
+          expect(proof['versions'], versions);
+          expect(await bridge.invoke('reader', 'validAll', proof), isTrue);
+          expect(await primary.isFailureCurrent(failure), isFalse);
+          expect(rejectedProof, same(proof));
+        },
+      );
+    }
+
+    test(
+      'a readable replacement cannot qualify an earlier reporting key read failure',
       () async {
         final id = ids.first;
         await store('ui').writeSecret(id, 'synthetic-A');
         secure.failRead = true;
         final held = Completer<DashboardSnapshot>();
-        final observed = Completer<void>();
+        final read = Completer<void>();
+        secure.onRead = (_, _) {
+          if (!read.isCompleted) read.complete();
+        };
         final repository = reporting(
           id,
           (_) async => throw StateError('No network work is allowed'),
           fallback: _HeldDashboardRepository(held.future),
         );
-        final loading = repository.loadObserved((update) {
-          if (update.outcome?.category ==
-              ReportingOutcomeCategory.localReadFailure)
-            observed.complete();
-        });
-        final result = CapturedDashboardLoad.capture(() => loading);
-        await observed.future;
-        secure.failRead = false;
-        await store('worker').writeSecret(id, 'synthetic-B');
-        held.complete(DashboardSnapshot.empty());
-        expect((await result).reportingOutcomes, isEmpty);
+        final observations = <ConnectionReportingUpdate>[];
+        final pending = CapturedDashboardLoad.capture(
+          () => repository.loadObserved(observations.add),
+        );
+        try {
+          await Future.any([
+            read.future,
+            pending.then<void>((_) {
+              throw StateError('Reporting load skipped the credential read.');
+            }),
+          ]);
+          secure.failRead = false;
+          await store('worker').writeSecret(id, 'synthetic-B');
+          held.complete(DashboardSnapshot.empty());
+          final result = await pending;
+          expect(observations, isEmpty);
+          expect(
+            result.reportingOutcomes.single.category,
+            ReportingOutcomeCategory.localReadFailure,
+          );
+          expect(
+            result.snapshotOrdering[id.storageKey]?.selectionUnverified,
+            isTrue,
+          );
+          expect(() => result.value, throwsA(isA<DashboardLoadException>()));
+        } finally {
+          secure.onRead = null;
+          secure.failRead = false;
+          if (!held.isCompleted) held.complete(DashboardSnapshot.empty());
+          await pending;
+        }
       },
     );
 
-    test(
-      'Cursor report-time read failure is retired by cross-engine session removal',
-      () async {
-        const id = ProviderConnections.cursorPlan;
-        final credentials = store('ui');
-        await credentials.writeSecret(id, 'synthetic-session');
-        final access = credentials.credentialAccess(id)!;
-        final version = (await access.read())!.version;
-        final unreadable = _ReadFailureStore(
-          _CurrentReadFailure(access, version),
-          connection: id,
-          delegate: credentials,
-        );
-        var cacheReads = 0;
-        final held = Completer<DashboardSnapshot>();
-        final observed = Completer<ConnectionReportingOutcome>();
-        final transport = _EmptyReportingTransport();
-        final http = ProviderReportingHttp(transport: transport);
-        final repository = buildLiveProviderStack(
-          credentialStore: unreadable,
-          claudeAccountService: const EmptyClaudeAccountService(),
-          openAiAndCodex: _HeldDashboardRepository(held.future),
-          caches: {
-            id.storageKey: ConnectionSnapshotCache(
-              connection: id.storageKey,
-              platform: bridge.platform('ui'),
-              readCredentialVersion: () async {
-                cacheReads++;
-                return credentials.readVersion(id);
-              },
-            ),
-          },
-          cursorReportingClient: CursorPlatformClient(http: http),
-          mergeSnapshots: _merge,
-          logger: const _SilentLogger(),
-        );
-        final result = CapturedDashboardLoad.capture(
-          () => repository.loadObserved((update) {
-            if (update.connection == id && update.outcome != null)
-              observed.complete(update.outcome!);
-          }),
-        );
-        final failure = await observed.future;
-        expect(cacheReads, 1);
-        expect(failure.category, ReportingOutcomeCategory.localReadFailure);
-        expect(failure.credentialVersion, isNull);
-        await store('worker').deleteSecret(id);
-        held.complete(DashboardSnapshot.empty());
-        expect((await result).reportingOutcomes, isEmpty);
-        expect(transport.requests, isEmpty);
-      },
-    );
+    for (final nested in [false, true]) {
+      test(
+        nested
+            ? 'a nested Cursor report-time read failure is retired by cross-engine session removal'
+            : 'Cursor report-time read failure is retired by cross-engine session removal',
+        () async {
+          const id = ProviderConnections.cursorPlan;
+          final credentials = store('ui');
+          await credentials.writeSecret(id, 'synthetic-session');
+          final access = credentials.credentialAccess(id)!;
+          final version = (await access.read())!.version;
+          final unreadable = _ReadFailureStore(
+            _CurrentReadFailure(access, version),
+            connection: id,
+            delegate: credentials,
+          );
+          var cacheReads = 0;
+          final held = Completer<DashboardSnapshot>();
+          final observed = Completer<ConnectionReportingOutcome>();
+          final transport = _EmptyReportingTransport();
+          final http = ProviderReportingHttp(transport: transport);
+          final repository = buildLiveProviderStack(
+            credentialStore: unreadable,
+            claudeAccountService: const EmptyClaudeAccountService(),
+            openAiAndCodex:
+                nested
+                    ? const NoProvidersDashboardRepository()
+                    : _HeldDashboardRepository(held.future),
+            caches: {
+              id.storageKey: ConnectionSnapshotCache(
+                connection: id.storageKey,
+                platform: bridge.platform('ui'),
+                readCredentialVersion: () async {
+                  cacheReads++;
+                  return credentials.readVersion(id);
+                },
+              ),
+            },
+            cursorReportingClient: CursorPlatformClient(http: http),
+            cursorSessionClient: CursorPlanClient(http: http),
+            mergeSnapshots: _merge,
+            logger: const _SilentLogger(),
+          );
+          final innerCompleted = Completer<CapturedDashboardLoad>();
+          final aggregate =
+              nested
+                  ? MergingConnectionRepository(
+                    fallback: _ObservedDashboardRepository(
+                      repository,
+                      innerCompleted.complete,
+                    ),
+                    loadReport: () async => (await held.future).toJsonString(),
+                    normalizeReport: (value) => value,
+                    mapError:
+                        (error) =>
+                            mapReportingError(error, const _SilentLogger()),
+                  )
+                  : repository;
+          final result = CapturedDashboardLoad.capture(
+            () => aggregate.loadObserved((update) {
+              if (update.connection == id && update.outcome != null)
+                observed.complete(update.outcome!);
+            }),
+          );
+          try {
+            final failure = await Future.any([
+              observed.future,
+              if (nested)
+                innerCompleted.future.then<ConnectionReportingOutcome>((_) {
+                  throw StateError('The Cursor read failure was not observed.');
+                }),
+            ]);
+            expect(cacheReads, 1);
+            expect(failure.category, ReportingOutcomeCategory.localReadFailure);
+            expect(failure.credentialVersion, isNull);
+            DashboardLoadException? innerFailure;
+            if (nested) {
+              innerFailure = (await innerCompleted.future).loadException!;
+              expect(innerFailure.reportingOutcomes.single, same(failure));
+              expect(await repository.isFailureCurrent(innerFailure), isTrue);
+            }
+            await store('worker').deleteSecret(id);
+            if (innerFailure != null) {
+              expect(await repository.isFailureCurrent(innerFailure), isFalse);
+            }
+            held.complete(DashboardSnapshot.empty());
+            final captured = await result;
+            expect(captured.reportingOutcomes, isEmpty);
+            expect(transport.requests, isEmpty);
+            if (nested) {
+              expect(
+                captured.loadException?.issue,
+                DashboardSyncIssue.dashboardUnavailable,
+              );
+              expect(
+                captured.loadException?.details,
+                'Connection changed during refresh.',
+              );
+              expect(
+                await aggregate.isFailureCurrent(captured.loadException!),
+                isFalse,
+              );
+            }
+          } finally {
+            if (!held.isCompleted) held.complete(DashboardSnapshot.empty());
+            await result;
+          }
+        },
+      );
+    }
 
     test(
       'a held local-read probe cannot validate another retired connection',
@@ -3313,29 +5714,88 @@ void main() {
   test(
     'fresh success retains stamped memory when payload persistence is unavailable',
     () async {
-      await credentials('ui', 'openai.platform').write('fake-A');
-      await bridge.invoke('test', 'failCommit', {'value': true});
+      const id = 'openai.platform';
+      await credentials('ui', id).write('fake-A');
       var fail = false;
       final ui = repository(
         'ui',
-        'openai.platform',
+        id,
         () async =>
             fail
                 ? throw StateError('Sanitized failure.')
-                : _snapshot(
-                  'openai',
-                  'openai.platform',
-                  firstAt,
-                  10,
-                ).toJsonString(),
+                : _snapshot('openai', id, firstAt, 10).toJsonString(),
       );
-      final fresh = await ui.load();
-      expect(fresh.connectionVersions, isNotEmpty);
-      fail = true;
-      final retained = await ui.load();
-      expect(retained.accounts.single.status, ProviderStatus.stale);
-      expect(retained.accounts.single.today.spent?.minorUnits, 10);
-      expect(retained.generatedAt, firstAt);
+      await bridge.invoke('test', 'failCommit', {'value': true});
+      try {
+        final fresh = await ui.load();
+        expect(fresh.connectionVersions, isNotEmpty);
+        expect((await cache('reader', id).capture()).snapshot, isNull);
+
+        fail = true;
+        final retained = await ui.load();
+        expect(retained.connectionVersions, fresh.connectionVersions);
+        expect(retained.accounts.single.status, ProviderStatus.stale);
+        expect(retained.accounts.single.today.spent?.minorUnits, 10);
+        expect(retained.generatedAt, firstAt);
+      } finally {
+        await bridge.invoke('test', 'failCommit', {'value': false});
+      }
+    },
+  );
+  test(
+    'legacy fallback keeps newer memory until a newer disk row is confirmed',
+    () async {
+      const id = 'openai.platform';
+      final access = credentials('ui', id);
+      await access.write('fake-A');
+      final version = (await access.read())!.version;
+      final worker = cache('worker', id);
+      expect(
+        await worker.store(_snapshot('openai', id, firstAt, 10), version),
+        isTrue,
+      );
+      final platform = ObservingCachePlatform(bridge.platform('ui'));
+      var fail = false;
+      final ui = repository(
+        'ui',
+        id,
+        () async =>
+            fail
+                ? throw StateError('Sanitized failure.')
+                : _snapshot('openai', id, nextAt, 20).toJsonString(),
+        cachePlatform: platform,
+      );
+      await bridge.invoke('test', 'failCommit', {'value': true});
+      try {
+        final fresh = await ui.load();
+        expect(fresh.connectionVersions, isNotEmpty);
+        expect(fresh.accounts.single.today.spent?.minorUnits, 20);
+        fail = true;
+        final retained = await ui.load();
+        expect(retained.accounts.single.status, ProviderStatus.stale);
+        expect(retained.accounts.single.today.spent?.minorUnits, 20);
+        expect(retained.generatedAt, nextAt);
+      } finally {
+        await bridge.invoke('test', 'failCommit', {'value': false});
+      }
+
+      final newerAt = nextAt.add(const Duration(microseconds: 1));
+      bool? stored;
+      platform.onComplete = (method, arguments, _) async {
+        if (method == 'readSnapshot' && arguments['forSelection'] == true) {
+          // Commit after the final paired read has sampled the earlier row.
+          platform.onComplete = null;
+          stored = await worker.store(
+            _snapshot('openai', id, newerAt, 30),
+            version,
+          );
+        }
+      };
+      final recovered = await ui.load();
+      expect(stored, isTrue);
+      expect(recovered.accounts.single.status, ProviderStatus.stale);
+      expect(recovered.accounts.single.today.spent?.minorUnits, 30);
+      expect(recovered.generatedAt, newerAt);
     },
   );
   test(
@@ -3559,6 +6019,29 @@ final class _HeldDashboardRepository extends DashboardRepository {
   Future<DashboardSnapshot> load() => result;
 }
 
+final class _ObservedDashboardRepository extends DashboardRepository {
+  const _ObservedDashboardRepository(this.delegate, this.onCompleted);
+
+  final DashboardRepository delegate;
+  final void Function(CapturedDashboardLoad) onCompleted;
+
+  @override
+  Future<DashboardSnapshot> load() => loadObserved((_) {});
+
+  @override
+  Future<DashboardSnapshot> loadObserved(ReportingObserver observer) async {
+    final result = await CapturedDashboardLoad.capture(
+      () => delegate.loadObserved(observer),
+    );
+    onCompleted(result);
+    return result.value;
+  }
+
+  @override
+  Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) =>
+      delegate.isSnapshotCurrent(snapshot);
+}
+
 final class _EmptyReportingTransport implements ProviderHttpTransport {
   _EmptyReportingTransport({this.denyCursor = false});
   final bool denyCursor;
@@ -3615,6 +6098,41 @@ final class _EmptyReportingTransport implements ProviderHttpTransport {
     required Map<String, String> headers,
     String? body,
   }) async => reply(uri, body);
+}
+
+final class _CursorUsageTransport implements ProviderHttpTransport {
+  const _CursorUsageTransport(this.usage);
+  final Future<int> Function() usage;
+
+  @override
+  Future<ProviderHttpResponse> get(
+    Uri uri, {
+    required Map<String, String> headers,
+  }) async {
+    if (uri.path != '/api/usage-summary')
+      throw StateError('Unexpected synthetic Cursor request.');
+    return ProviderHttpResponse(
+      statusCode: 200,
+      headers: const {},
+      body: jsonEncode({
+        'membershipType': 'pro_plus',
+        'individualUsage': {
+          'plan': {
+            'enabled': true,
+            'autoPercentUsed': await usage(),
+            'apiPercentUsed': 20,
+          },
+        },
+      }),
+    );
+  }
+
+  @override
+  Future<ProviderHttpResponse> post(
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+  }) async => throw StateError('Unexpected synthetic Cursor request.');
 }
 
 final class _HeldReadFailure implements ConnectionCredentialAccess {
@@ -3793,8 +6311,9 @@ final class _HistoryCodexTransport implements CodexHttpTransport {
 }
 
 final class _HistoryReportingTransport implements ProviderHttpTransport {
-  _HistoryReportingTransport(this.at);
+  _HistoryReportingTransport(this.at, {this.cost = '9.00'});
   final DateTime at;
+  final String cost;
   int used = 20;
   @override
   Future<ProviderHttpResponse> get(
@@ -3834,7 +6353,7 @@ final class _HistoryReportingTransport implements ProviderHttpTransport {
             'results': [
               {
                 'object': 'organization.costs.result',
-                'amount': {'value': '9.00', 'currency': 'usd'},
+                'amount': {'value': cost, 'currency': 'usd'},
               },
             ],
           },

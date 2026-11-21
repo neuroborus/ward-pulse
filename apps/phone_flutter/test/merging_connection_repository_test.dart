@@ -36,17 +36,23 @@ void main() {
     test(
       'Cursor versioned read failure keeps local feedback without auth evidence',
       () async {
-        final storage = FakeSecureStorage()..failRead = true;
-        final platform = bridge.platform('read-failure');
+        final storage = FakeSecureStorage();
+        final platform = ObservingCachePlatform(
+          bridge.platform('read-failure'),
+        );
+        const id = ProviderConnections.cursorPlan;
+        final credentials = SecureProviderCredentialStore(
+          storage: storage,
+          platform: platform,
+        );
+        await credentials.writeSecret(id, 'synthetic-session');
+        storage.failReadKey = storage.values.keys.single;
         final transport = _UnexpectedReportingTransport();
         final http = ProviderReportingHttp(transport: transport);
         final siblingJson = snapshot.toJson();
         (siblingJson['accounts'] as List).first['provider'] = 'openai';
         final repository = buildLiveProviderStack(
-          credentialStore: SecureProviderCredentialStore(
-            storage: storage,
-            platform: platform,
-          ),
+          credentialStore: credentials,
           claudeAccountService: const EmptyClaudeAccountService(),
           openAiAndCodex: ValueDashboardRepository(
             DashboardSnapshot.fromJson(siblingJson),
@@ -58,12 +64,34 @@ void main() {
         );
         final loaded = await repository.load();
         final outcome = loaded.reportingOutcomes.singleWhere(
-          (outcome) => outcome.connection == ProviderConnections.cursorPlan,
+          (outcome) => outcome.connection == id,
         );
         expect(outcome.category, ReportingOutcomeCategory.localReadFailure);
         expect(outcome.source, ReportingOutcomeSource.local);
         expect(outcome.canEditKey, isFalse);
         expect(loaded.syncIssue, DashboardSyncIssue.credentialUnavailable);
+
+        platform.beforeInvoke = (method, arguments) async {
+          if (method == 'validFetch' &&
+              arguments['connection'] == id.storageKey) {
+            await bridge.invoke('read-failure', 'releaseFetch', arguments);
+          }
+        };
+        await expectLater(
+          repository.load(),
+          throwsA(
+            isA<DashboardLoadException>()
+                .having((error) => error.issue, 'issue', loaded.syncIssue)
+                .having(
+                  (error) =>
+                      error
+                          .snapshotOrdering[id.storageKey]
+                          ?.selectionUnverified,
+                  'selectionUnverified',
+                  isTrue,
+                ),
+          ),
+        );
         expect(
           await NativeConnectionRejectionNoticeStore(platform: platform).read(),
           isEmpty,

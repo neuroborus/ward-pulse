@@ -85,24 +85,49 @@ Map<String, Map<String, String>> mergeConnectionVersions(
 
 /// Scoped to an actual connection read, never a cache probe or fallback load.
 final class ConnectionReadObservation {
-  ConnectionReadObservation(this.connection);
-  final String? connection;
-  final _versions = <String, Map<String, String>>{};
+  ConnectionReadObservation(
+    this.connection, {
+    void Function(ConnectionCachePlatform)? onConfirmedAbsence,
+  }) : _onConfirmedAbsence = onConfirmedAbsence;
   static final _zoneKey = Object();
+  final String? connection;
+  final void Function(ConnectionCachePlatform)? _onConfirmedAbsence;
+  final _versions = <String, Map<String, String>>{};
+  var _readFailed = false;
+  var _failedReadLeaseRetired = false;
+  var _unprovenAbsence = false;
+
   Map<String, Map<String, String>> get versions => Map.unmodifiable(_versions);
+  bool get readFailed => _readFailed;
+  bool get failedReadLeaseRetired => _failedReadLeaseRetired;
+  bool get unprovenAbsence => _unprovenAbsence;
 
   Future<T> run<T>(Future<T> Function() read) =>
       runZoned(read, zoneValues: {_zoneKey: this});
 
-  static void _completed(String connection, Map<String, Object?> state) {
+  static bool hasManagedReadFailure(String connection) =>
+      _forConnection(connection)?.readFailed ?? false;
+
+  static ConnectionReadObservation? _forConnection(String connection) {
     final observer = Zone.current[_zoneKey] as ConnectionReadObservation?;
-    if (observer == null ||
-        observer.connection != connection ||
+    return observer?.connection == connection ? observer : null;
+  }
+
+  static void _missing(
+    ConnectionCredentialStorage storage, [
+    Map<String, Object?>? state,
+  ]) {
+    final connection = storage.connection;
+    final observer = _forConnection(connection);
+    if (observer == null) return;
+    if (state == null ||
         state['mode'] != 'deleted' ||
         !['generation', 'revision', 'epoch'].every(
           (key) => state[key] is String && (state[key]! as String).isNotEmpty,
-        ))
+        )) {
+      observer._unprovenAbsence = true;
       return;
+    }
     observer._versions.addAll(
       mergeConnectionVersions([
         observer._versions,
@@ -115,6 +140,62 @@ final class ConnectionReadObservation {
         },
       ]),
     );
+    observer._onConfirmedAbsence?.call(storage.platform);
+  }
+}
+
+typedef ConnectionFetchStamp =
+    ({CredentialVersion version, String token, int era});
+
+/// A connection load lacks the native evidence required for publication.
+final class ConnectionFetchRetired extends StateError {
+  ConnectionFetchRetired(this.connection) : super('Account fetch superseded.');
+
+  final String connection;
+}
+
+/// Private ordering evidence for one connection load, including after release.
+final class ConnectionFetchObservation {
+  ConnectionFetchObservation(this.connection);
+  final String? connection;
+  static final _zoneKey = Object();
+  CredentialVersion? _attemptedVersion;
+  ConnectionFetchStamp? _stamp;
+  ConnectionFetchStamp? get stamp => _stamp;
+  int? _reportedAt;
+
+  /// A rejected stamp still identifies the credential the load depended on.
+  Map<String, Map<String, String>> get unstampedVersions {
+    final key = connection;
+    final version = _attemptedVersion;
+    if (key == null || version == null || _stamp != null) return const {};
+    return {key: version.values};
+  }
+
+  Future<T> run<T>(Future<T> Function() load) =>
+      runZoned(load, zoneValues: {_zoneKey: this});
+
+  static ConnectionFetchObservation? _forConnection(String connection) {
+    final observer = Zone.current[_zoneKey] as ConnectionFetchObservation?;
+    return observer?.connection == connection ? observer : null;
+  }
+
+  void recordReport(String report) {
+    if (stamp != null) _reportedAt = _reportTime(report);
+  }
+
+  static int? _reportTime(String report) {
+    try {
+      final envelope = jsonDecode(report);
+      if (envelope is Map && envelope['generatedAt'] is String) {
+        return DateTime.tryParse(
+          envelope['generatedAt'] as String,
+        )?.millisecondsSinceEpoch;
+      }
+    } on FormatException {
+      // Normalization owns report validation.
+    }
+    return null;
   }
 }
 
@@ -157,6 +238,13 @@ abstract interface class VersionedAccountStore<T> {
   Future<void> cancelReconnect(CredentialVersion ticket);
 }
 
+final class _ConnectionFetchLease {
+  _ConnectionFetchLease(this.ticket);
+
+  final String ticket;
+  ConnectionReadObservation? failedRead;
+}
+
 /// Secret values stay in FlutterSecureStorage; native storage receives only a digest.
 final class ConnectionCredentialStorage
     implements ConnectionCredentialAccess, ConnectionRejectionRecorder {
@@ -175,7 +263,9 @@ final class ConnectionCredentialStorage
   final ConnectionCachePlatform platform;
   final String Function(String) _principal;
   final _fetchZoneKey = Object();
-  String? get _fetchTicket => Zone.current[_fetchZoneKey] as String?;
+  _ConnectionFetchLease? get _fetchLease =>
+      Zone.current[_fetchZoneKey] as _ConnectionFetchLease?;
+  String? get _fetchTicket => _fetchLease?.ticket;
   Future<bool> isFetchCurrent() async =>
       _fetchTicket == null ||
       await platform.invoke('validFetch', {
@@ -186,7 +276,33 @@ final class ConnectionCredentialStorage
   @override
   Future<void> admitAutomatic(CredentialVersion expected) async {
     final context = AutomaticPollContext.current;
-    if (context == null) return;
+    if (context != null) await _claimAutomatic(context, expected);
+    final ticket = _fetchTicket;
+    final observation = ConnectionFetchObservation._forConnection(connection);
+    if (ticket == null || observation == null) return;
+    observation._attemptedVersion = expected;
+    try {
+      final result =
+          await platform.invoke('stampFetch', {
+                'connection': connection,
+                'fetchTicket': ticket,
+                'expected': expected.values,
+              })
+              as Map;
+      observation._stamp = (
+        version: expected,
+        token: result['stamp'] as String,
+        era: result['era'] as int,
+      );
+    } catch (_, stackTrace) {
+      Error.throwWithStackTrace(ConnectionFetchRetired(connection), stackTrace);
+    }
+  }
+
+  Future<void> _claimAutomatic(
+    AutomaticPollContext context,
+    CredentialVersion expected,
+  ) async {
     final Map<String, Object?> result;
     try {
       final interval = await context.interval(connection);
@@ -218,6 +334,7 @@ final class ConnectionCredentialStorage
           (result['nextEligible']! as num).toInt(),
           isUtc: true,
         ),
+        cacheOrder: result['order'] as String?,
       );
       context.skipped[connection] = skipped;
       throw skipped;
@@ -228,35 +345,66 @@ final class ConnectionCredentialStorage
 
   @override
   Future<R> serializeFetch<R>(Future<R> Function() operation) async {
-    final lease = Map<String, Object?>.from(
-      (await platform.invoke('acquireFetch', {'connection': connection}))!
-          as Map,
-    );
-    final ticket = lease['fetchTicket']! as String;
+    final String ticket;
+    try {
+      final lease = await platform.invoke('acquireFetch', {
+        'connection': connection,
+      });
+      ticket = (lease as Map)['fetchTicket'] as String;
+    } catch (_, stackTrace) {
+      Error.throwWithStackTrace(ConnectionFetchRetired(connection), stackTrace);
+    }
+    final lease = _ConnectionFetchLease(ticket);
+    final observation = ConnectionFetchObservation._forConnection(connection);
+    int? reportAt;
     try {
       late R value;
       Object? failure;
       StackTrace? failureStack;
       try {
-        value = await runZoned(operation, zoneValues: {_fetchZoneKey: ticket});
+        value = await runZoned(operation, zoneValues: {_fetchZoneKey: lease});
+        if (value is String) {
+          reportAt = ConnectionFetchObservation._reportTime(value);
+        }
       } catch (error, stackTrace) {
         failure = error;
         failureStack = stackTrace;
       }
-      if (await platform.invoke('validFetch', {
-            'connection': connection,
-            'fetchTicket': ticket,
-          }) !=
-          true) {
-        throw StateError('Account fetch superseded.');
+      var current = false;
+      StackTrace? validationStack;
+      try {
+        current =
+            await platform.invoke('validFetch', {
+              'connection': connection,
+              'fetchTicket': ticket,
+            }) ==
+            true;
+      } catch (_, stackTrace) {
+        validationStack = stackTrace;
       }
-      if (failure != null) Error.throwWithStackTrace(failure, failureStack!);
+      if (failure != null) {
+        // Record retirement on the owning read while preserving its error.
+        final failedRead = lease.failedRead;
+        if (!current) failedRead?._failedReadLeaseRetired = true;
+        if (current || failedRead != null) {
+          Error.throwWithStackTrace(failure, failureStack!);
+        }
+      }
+      if (validationStack != null) {
+        Error.throwWithStackTrace(
+          ConnectionFetchRetired(connection),
+          validationStack,
+        );
+      }
+      if (!current) throw ConnectionFetchRetired(connection);
       return value;
     } finally {
+      final generatedAt = reportAt ?? observation?._reportedAt;
       try {
         await platform.invoke('releaseFetch', {
           'connection': connection,
           'fetchTicket': ticket,
+          if (generatedAt != null) 'reportAtMillis': generatedAt,
         });
       } catch (_) {
         /* Detached engines cannot publish or retain a network reservation. */
@@ -378,12 +526,33 @@ final class ConnectionCredentialStorage
 
   @override
   Future<VersionedCredential<String>?> read() async {
+    try {
+      return await _read();
+    } catch (_) {
+      final observation = ConnectionReadObservation._forConnection(connection);
+      if (observation != null) {
+        observation._readFailed = true;
+        _fetchLease?.failedRead = observation;
+      }
+      rethrow;
+    }
+  }
+
+  Future<VersionedCredential<String>?> _read() async {
     final lease = await _begin('read');
     var finished = false;
     try {
       await _cleanup(lease);
       final mode = lease['mode'];
-      if (mode == 'deleted' || mode == 'pending') return null;
+      if (mode == 'deleted' || mode == 'pending') {
+        finished = true;
+        final state = await _release(lease);
+        ConnectionReadObservation._missing(
+          this,
+          mode == 'deleted' ? state : null,
+        );
+        return null;
+      }
       final legacy = mode == 'legacy' || mode == 'migration';
       var value = await _storage.read(
         key: legacy ? legacyKey : lease['slot']! as String,
@@ -396,7 +565,7 @@ final class ConnectionCredentialStorage
       if (value == null || value.trim().isEmpty) {
         finished = true;
         final state = await _finish(lease, 'missing');
-        ConnectionReadObservation._completed(connection, state);
+        ConnectionReadObservation._missing(this, state);
         return null;
       }
       final String identity;
@@ -405,15 +574,18 @@ final class ConnectionCredentialStorage
       } on FormatException {
         finished = true;
         await _finish(lease, 'missing');
+        ConnectionReadObservation._missing(this);
         return null;
       } on TypeError {
         finished = true;
         await _finish(lease, 'missing');
+        ConnectionReadObservation._missing(this);
         return null;
       }
       if (restoring && identity != lease['identity']) {
         finished = true;
         await _finish(lease, 'confirm', identity);
+        ConnectionReadObservation._missing(this);
         return null;
       }
       Map<String, Object?> state;
@@ -435,15 +607,14 @@ final class ConnectionCredentialStorage
       } else {
         finished = true;
         state = await _finish(lease, 'confirm', identity);
-        if (state['mode'] != 'active') return null;
+        if (state['mode'] != 'active') {
+          ConnectionReadObservation._missing(this);
+          return null;
+        }
       }
       return VersionedCredential(value, CredentialVersion.fromMap(state));
     } finally {
-      if (!finished) {
-        final state = await _release(lease);
-        if (lease['mode'] == 'deleted')
-          ConnectionReadObservation._completed(connection, state);
-      }
+      if (!finished) await _release(lease);
     }
   }
 

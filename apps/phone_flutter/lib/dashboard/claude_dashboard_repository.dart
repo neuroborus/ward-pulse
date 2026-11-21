@@ -22,6 +22,7 @@ DashboardRepository claudeDashboardRepository({
 }) {
   return MergingConnectionRepository(
     cache: cache,
+    connection: ProviderConnections.claudePlan,
     fallback: fallback,
     logger: logger,
     loadReport: loadReport ?? accountService.fetchReport,

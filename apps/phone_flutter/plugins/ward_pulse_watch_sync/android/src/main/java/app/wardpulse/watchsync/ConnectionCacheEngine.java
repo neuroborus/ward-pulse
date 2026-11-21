@@ -1,5 +1,8 @@
 package app.wardpulse.watchsync;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Collections;
@@ -13,6 +16,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 /** Process-wide credential leases and durable snapshot CAS; no credential values enter Java. */
 public final class ConnectionCacheEngine {
@@ -23,7 +28,9 @@ public final class ConnectionCacheEngine {
     private static final Set<String> CONNECTIONS = new HashSet<>(Arrays.asList(
         "openai.plan", "openai.platform", "anthropic.plan", "anthropic.platform", "cursor.plan", "cursor.platform"));
     private static final List<String> NOTICE_KEYS = Arrays.asList("committedConnection", "rejectionEvent", "rejectionDismissed");
-    private static final List<String> CONFIRMED_KEYS = Arrays.asList("committedConnection", "rejectionEvent", "rejectionDismissed", "automaticGeneration", "automaticIdentity", "automaticAt");
+    private static final List<String> SNAPSHOT_KEYS = Arrays.asList(
+        "snapshot", "snapshotAt", "snapshotVersion", "snapshotTimeUnit", "snapshotEra", "snapshotClockAt",
+        "snapshotWriteId");
     private final Backend backend;
     private final LongSupplier clock;
     private final Map<String, Lease> leases = new HashMap<>();
@@ -33,35 +40,26 @@ public final class ConnectionCacheEngine {
     private final Set<String> abandonedSlots = new HashSet<>();
     private final Map<String, FetchLease> fetches = new HashMap<>();
     private final Map<String, ArrayDeque<FetchPending>> fetchQueues = new HashMap<>();
-    // SharedPreferences can expose failed commits in memory. All later whole-map
-    // writes must use confirmed notice/admission fields, including other connections.
-    private final Map<String, Map<String, String>> unconfirmedMetadata = new HashMap<>();
+    private final Map<String, ClockOrder> clockOrders = new HashMap<>();
+    private final Mac stampMac = newStampMac();
+    // SharedPreferences can expose failed commits in memory. Keep the whole
+    // confirmed map so a sibling commit cannot persist any part of a failed write.
+    private Map<String, String> confirmedAfterFailure;
 
     public ConnectionCacheEngine(Backend backend) { this(backend, System::currentTimeMillis); }
     public ConnectionCacheEngine(Backend backend, LongSupplier clock) { this.backend = backend; this.clock = clock; }
     private Map<String, String> readAll() {
-        Map<String, String> all = new LinkedHashMap<>(backend.read());
+        Map<String, String> all = new LinkedHashMap<>(
+            confirmedAfterFailure == null ? backend.read() : confirmedAfterFailure);
         retainConfirmedCredentials(all);
-        unconfirmedMetadata.forEach((connection, confirmed) -> {
-            for (String key : CONFIRMED_KEYS) all.remove(connection + "." + key);
-            confirmed.forEach((key, value) -> all.put(connection + "." + key, value));
-        });
         return all;
     }
     private boolean commit(Map<String, String> values) {
         Map<String, String> prior = readAll();
         boolean committed;
         try { committed = backend.commit(values); } catch (RuntimeException error) { committed = false; }
-        if (committed) { unconfirmedMetadata.clear(); return true; }
-        for (String connection : CONNECTIONS) {
-            Map<String, String> confirmed = new LinkedHashMap<>();
-            for (String key : CONFIRMED_KEYS) {
-                String value = prior.get(connection + "." + key);
-                if (value != null) confirmed.put(key, value);
-            }
-            unconfirmedMetadata.put(connection, confirmed);
-        }
-        return false;
+        confirmedAfterFailure = committed ? null : prior;
+        return committed;
     }
     private void persistNotice(String connection, Map<String, String> state) {
         Map<String, String> all = readAll();
@@ -72,8 +70,8 @@ public final class ConnectionCacheEngine {
         if (!commit(all)) throw new IllegalStateException("Connection notice storage failed.");
     }
     private void retainConfirmedCredentials(Map<String, String> all) {
-        // Every read restores fenced credentials before metadata overlays and caller
-        // mutations, so sibling writes cannot make an uncertain candidate durable.
+        // Restore fenced credentials before caller mutations so sibling writes
+        // cannot make an uncertain candidate durable.
         failedCommitPriorState.forEach((fencedConnection, prior) -> {
             if (!fenced.contains(fencedConnection)) return;
             String prefix = fencedConnection + ".";
@@ -147,6 +145,8 @@ public final class ConnectionCacheEngine {
             }
             throw new IllegalStateException("Credential lifecycle storage failed.");
         }
+        ClockOrder order = clockOrders.get(connection);
+        if (order != null && !same(state, order.version, false)) clockOrders.remove(connection);
     }
     private static String legacyKey(String connection) {
         if ("openai.plan".equals(connection)) return "wardpulse.codex.account-session";
@@ -174,7 +174,7 @@ public final class ConnectionCacheEngine {
         state.put("revision", unique());
         state.put("epoch", unique());
         state.put("mode", mode);
-        state.remove("snapshot"); state.remove("snapshotAt"); state.remove("snapshotVersion"); state.remove("snapshotTimeUnit");
+        SNAPSHOT_KEYS.forEach(state::remove);
     }
     private static void retire(Map<String, String> state, String slot) {
         if (slot == null || slot.isEmpty()) return;
@@ -238,6 +238,8 @@ public final class ConnectionCacheEngine {
                 // Persist the first corrected sample so later calls keep the same anchor.
                 if (anchor != previousAnchor) persistAutomaticAnchor(connection, state, anchor);
                 result.put("admitted", false); result.put("nextEligible", due); result.put("automaticAt", anchor);
+                Long confirmed = confirmedEra(state);
+                result.put("order", cacheOrder(state, minimumEra(connection, state, confirmed)));
                 return result;
             }
         }
@@ -253,10 +255,64 @@ public final class ConnectionCacheEngine {
         if (!commit(all)) throw new IllegalStateException("Automatic polling storage failed.");
     }
     public synchronized void releaseFetch(String owner, String connection, String ticket) {
+        releaseFetch(owner, connection, ticket, null);
+    }
+    public synchronized void releaseFetch(String owner, String connection, String ticket, Long generatedAtMillis) {
         if (!validFetch(owner, connection, ticket)) return;
-        fetches.remove(connection);
-        ArrayDeque<FetchPending> queue = fetchQueues.get(connection);
-        if (queue != null && !queue.isEmpty()) startFetch(queue.removeFirst()); else fetchQueues.remove(connection);
+        FetchLease lease = fetches.remove(connection);
+        try {
+            if (generatedAtMillis != null && lease.order != null && valid(connection, lease.order.version))
+                lease.order.observe(lease.era, generatedAtMillis);
+        } finally {
+            ArrayDeque<FetchPending> queue = fetchQueues.get(connection);
+            if (queue != null && !queue.isEmpty()) startFetch(queue.removeFirst()); else fetchQueues.remove(connection);
+        }
+    }
+
+    /** Capture the wall clock while this credential still owns the fetch. */
+    public synchronized Map<String, Object> stampFetch(String owner, String connection, String ticket,
+            Map<String, String> expected) {
+        if (!validFetch(owner, connection, ticket) || !valid(connection, expected))
+            throw new IllegalStateException("Account fetch superseded.");
+        ClockOrder order = clockOrder(connection, state(connection));
+        FetchLease lease = fetches.get(connection);
+        if (lease.order == null) {
+            lease.era = order.admit(clock.getAsLong());
+            lease.order = order;
+        } else if (lease.order != order) {
+            throw new IllegalStateException("Account fetch superseded.");
+        }
+        Map<String, Object> stamp = new LinkedHashMap<>();
+        stamp.put("era", lease.era);
+        stamp.put("stamp", fetchStamp(owner, connection, ticket, order.version, lease.era));
+        return stamp;
+    }
+
+    // A released fetch can still write. Authenticate its stamp without keeping
+    // a ticket for every completed request or accepting stamps after recreation.
+    private static Mac newStampMac() {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(unique().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            return mac;
+        } catch (GeneralSecurityException error) {
+            throw new IllegalStateException("Snapshot ordering unavailable.", error);
+        }
+    }
+    private String fetchStamp(String owner, String connection, String ticket, Map<String, String> version, long era) {
+        String body = era + ":" + ticket;
+        String binding = connection + "\n" + owner + "\n" + version.get("generation")
+            + "\n" + version.get("epoch") + "\n" + version.get("identity") + "\n" + body;
+        ByteBuffer digest = ByteBuffer.wrap(stampMac.doFinal(binding.getBytes(StandardCharsets.UTF_8)));
+        return body + ":" + new UUID(digest.getLong(), digest.getLong());
+    }
+    private Long stampedEra(String owner, String connection, Map<String, String> version, String stamp) {
+        String[] fields = stamp.split(":", -1);
+        if (fields.length != 3) return null;
+        try {
+            long era = Long.parseLong(fields[0]);
+            return stamp.equals(fetchStamp(owner, connection, fields[1], version, era)) ? era : null;
+        } catch (NumberFormatException invalid) { return null; }
     }
 
     /** Serialize storage and rejection commits; never hold a storage lease during network work. */
@@ -455,17 +511,49 @@ public final class ConnectionCacheEngine {
         return !fenced.contains(connection) && same(state(connection), expected, false);
     }
     public synchronized boolean validAll(Map<String, Map<String, String>> versions) {
+        return validAll(versions, Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+    }
+    public synchronized boolean validAll(Map<String, Map<String, String>> versions,
+            Map<String, Long> attemptClockEras, Map<String, ? extends Map<String, ?>> payloadOrders,
+            Map<String, String> emptyCacheOrders) {
+        if (!versions.keySet().containsAll(attemptClockEras.keySet())
+                || !versions.keySet().containsAll(payloadOrders.keySet())
+                || !versions.keySet().containsAll(emptyCacheOrders.keySet())) return false;
         for (Map.Entry<String, Map<String, String>> entry : versions.entrySet()) {
+            String connection = entry.getKey();
             Map<String, String> expected = entry.getValue();
-            if (expected == null || expected.containsKey("conflict")) return false;
+            if (expected == null || expected.containsKey("conflict") || fenced.contains(connection)) return false;
             try {
+                Map<String, String> state = state(connection);
+                Long attemptEra = attemptClockEras.get(connection);
+                Map<String, ?> payload = payloadOrders.get(connection);
+                String emptyOrder = emptyCacheOrders.get(connection);
                 if (!expected.containsKey("absentRead")) {
-                    if (!valid(entry.getKey(), expected)) return false;
+                    if (!same(state, expected, false)) return false;
+                    if (attemptEra != null || payload != null || emptyOrder != null) {
+                        Long confirmed = confirmedEra(state);
+                        Long floor = minimumEra(connection, state, confirmed);
+                        if (attemptEra != null && floor != null && attemptEra < floor) return false;
+                        if (payload != null) {
+                            Object eraValue = payload.get("era"), timeValue = payload.get("generatedAt");
+                            if (!(eraValue instanceof Number) || !(timeValue instanceof Number)) return false;
+                            Number era = (Number) eraValue, generatedAt = (Number) timeValue;
+                            long payloadEra = era.longValue();
+                            if (floor != null && payloadEra < floor) return false;
+                            if (payload.containsKey("rowId") && (!hasSnapshot(state)
+                                    || !snapshotRowId(state).equals(payload.get("rowId")))) return false;
+                            // Legacy rows compare by timestamp with unstamped live data.
+                            long confirmedOrder = confirmed == null ? 0L : confirmed;
+                            boolean comparable = confirmedOrder == payloadEra || (confirmed == null && payloadEra == -1L);
+                            if (hasSnapshot(state) && comparable
+                                    && snapshotMicros(state) > generatedAt.longValue()) return false;
+                        }
+                        if (emptyOrder != null && !emptyOrder.equals(cacheOrder(state, floor))) return false;
+                    }
                     continue;
                 }
-                if (fenced.contains(entry.getKey()) || !"true".equals(expected.get("absentRead"))
+                if (attemptEra != null || payload != null || emptyOrder != null || !"true".equals(expected.get("absentRead"))
                         || expected.size() != 4) return false;
-                Map<String, String> state = state(entry.getKey());
                 if (!"deleted".equals(state.get("mode")) || state.containsKey("slot")
                         || state.containsKey("identity")) return false;
                 for (String key : Arrays.asList("generation", "revision", "epoch")) {
@@ -477,29 +565,136 @@ public final class ConnectionCacheEngine {
         return true;
     }
     public synchronized String readSnapshot(String connection, Map<String, String> expected) {
-        if (!valid(connection, expected)) return null;
+        return (String) readSnapshotPair(connection, expected).get("snapshot");
+    }
+    public synchronized Map<String, Object> readSnapshotPair(String connection, Map<String, String> expected) {
+        return readSnapshotPair(connection, expected, false);
+    }
+    public synchronized Map<String, Object> readSnapshotPair(String connection, Map<String, String> expected,
+            boolean forSelection) {
+        if (!valid(connection, expected)) return Collections.singletonMap("valid", false);
         Map<String, String> state = state(connection);
-        if (state.containsKey("snapshot") && !"1".equals(state.get("snapshotVersion"))) {
-            clearSnapshot(connection, expected); return null;
+        // Selection must see the floor without attempting another storage write.
+        if (!forSelection && state.containsKey("snapshot") && !"1".equals(state.get("snapshotVersion"))) {
+            clearSnapshot(connection, expected);
+            return Collections.singletonMap("valid", false);
         }
-        if (!"1".equals(state.get("snapshotVersion"))) return null;
-        return state.get("snapshot");
+        Long confirmedEra = confirmedEra(state);
+        Long floor = minimumEra(connection, state, confirmedEra);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("valid", true);
+        result.put("minimumEra", floor);
+        result.put("order", cacheOrder(state, floor));
+        if (hasSnapshot(state)) {
+            result.put("snapshot", state.get("snapshot"));
+            result.put("rowId", snapshotRowId(state));
+            if (confirmedEra != null) result.put("era", confirmedEra);
+            result.put("legacyTimestamp", !"microseconds".equals(state.get("snapshotTimeUnit")));
+        }
+        return result;
+    }
+    private static boolean hasSnapshot(Map<String, String> state) {
+        return "1".equals(state.get("snapshotVersion")) && state.containsKey("snapshot");
+    }
+    private static String cacheOrder(Map<String, String> state, Long floor) {
+        // A write replaces the payload identity even at an equal timestamp.
+        // Upgrading timestamp precision leaves the confirmed payload in place.
+        return floor + ":" + (hasSnapshot(state) ? snapshotRowId(state) : "none");
+    }
+    private static String snapshotRowId(Map<String, String> state) {
+        return state.getOrDefault("snapshotWriteId", "legacy");
     }
     public synchronized boolean writeSnapshot(String connection, Map<String, String> expected, String snapshot, long generatedAt) {
-        if (!valid(connection, expected)) return false;
+        return "stored".equals(writeSnapshotOrdered(null, connection, expected, snapshot, generatedAt, null).get("status"));
+    }
+    public synchronized Map<String, Object> writeSnapshotOrdered(String owner, String connection, Map<String, String> expected,
+            String snapshot, long generatedAt, String stamp) {
+        if (!valid(connection, expected)) return writeResult("superseded", null);
         Map<String, String> state = state(connection);
-        long oldAt = Long.MIN_VALUE;
-        try {
-            if (state.containsKey("snapshotAt")) {
-                oldAt = Long.parseLong(state.get("snapshotAt"));
-                if (!"microseconds".equals(state.get("snapshotTimeUnit"))) oldAt = Math.multiplyExact(oldAt, 1000L);
-            }
-        } catch (NumberFormatException | ArithmeticException ignored) { oldAt = Long.MIN_VALUE; }
-        if (generatedAt < oldAt) return false;
-        state.put("snapshot", snapshot); state.put("snapshotAt", Long.toString(generatedAt)); state.put("snapshotVersion", "1"); state.put("snapshotTimeUnit", "microseconds");
+        Long confirmedEra = confirmedEra(state);
+        Long minimumEra = minimumEra(connection, state, confirmedEra);
+        if (snapshot == null) return writeResult("superseded", minimumEra);
+        Long era = null;
+        ClockOrder order = null;
+        if (stamp != null) {
+            era = stampedEra(owner, connection, state, stamp);
+            if (era == null || (minimumEra != null && era < minimumEra))
+                return writeResult("superseded", minimumEra);
+            order = clockOrder(connection, state);
+            if (!order.references.containsKey(era)) return writeResult("superseded", minimumEra);
+            // Advance before attempting storage. A failed commit cannot let
+            // an earlier era publish a successful result later.
+            order.fence(era);
+            minimumEra = era;
+            order.observe(era, generatedAt / 1000L);
+        } else if (minimumEra != null) {
+            return writeResult("superseded", minimumEra);
+        }
+        long oldEra = confirmedEra == null ? 0L : confirmedEra;
+        if ((era == null ? 0L : era) == oldEra && generatedAt < snapshotMicros(state))
+            return writeResult("older", minimumEra);
+        state.put("snapshot", snapshot);
+        state.put("snapshotWriteId", unique());
+        state.put("snapshotAt", Long.toString(generatedAt));
+        state.put("snapshotVersion", "1");
+        state.put("snapshotTimeUnit", "microseconds");
+        if (order != null) {
+            state.put("snapshotEra", Long.toString(era));
+            state.put("snapshotClockAt", Long.toString(order.references.get(era)));
+        }
         // Payload persistence is best effort and must not fence valid credentials.
-        Map<String, String> all = new LinkedHashMap<>(readAll()); String prefix = connection + ".";
-        state.forEach((key, value) -> all.put(prefix + key, value)); return commit(all);
+        if (!commitSnapshot(connection, state)) return writeResult("storageFailure", minimumEra);
+        if (era == null) observeLegacyTimestamp(connection, state, generatedAt);
+        return writeResult("stored", minimumEra);
+    }
+    private static Map<String, Object> writeResult(String status, Long minimumEra) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("status", status);
+        result.put("minimumEra", minimumEra);
+        return result;
+    }
+    private static Long confirmedEra(Map<String, String> state) {
+        Long era = snapshotNumber(state.get("snapshotEra"));
+        return era != null && era >= 0 ? era : null;
+    }
+    private static Long snapshotNumber(String value) {
+        if (value == null) return null;
+        try { return Long.valueOf(value); }
+        catch (NumberFormatException invalid) { return null; }
+    }
+    private Long minimumEra(String connection, Map<String, String> state, Long confirmedEra) {
+        ClockOrder order = clockOrders.get(connection);
+        return order != null && same(state, order.version, false) ? order.minimumEra : confirmedEra;
+    }
+    private ClockOrder clockOrder(String connection, Map<String, String> state) {
+        ClockOrder order = clockOrders.get(connection);
+        if (order == null || !same(state, order.version, false)) {
+            order = new ClockOrder(state);
+            clockOrders.put(connection, order);
+        }
+        return order;
+    }
+    private static long snapshotMicros(Map<String, String> state) {
+        try {
+            String timestamp = state.get("snapshotAt");
+            if (timestamp == null) return Long.MIN_VALUE;
+            long value = Long.parseLong(timestamp);
+            return "microseconds".equals(state.get("snapshotTimeUnit")) ? value : Math.multiplyExact(value, 1000L);
+        } catch (NumberFormatException | ArithmeticException invalid) { return Long.MIN_VALUE; }
+    }
+    private void observeLegacyTimestamp(String connection, Map<String, String> state, long generatedAt) {
+        ClockOrder order = clockOrders.get(connection);
+        if (order != null && same(state, order.version, false)) order.observe(0L, generatedAt / 1000L);
+    }
+    private boolean commitSnapshot(String connection, Map<String, String> state) {
+        Map<String, String> all = readAll();
+        String prefix = connection + ".";
+        for (String key : SNAPSHOT_KEYS) {
+            if (state.containsKey(key)) all.put(prefix + key, state.get(key));
+            else all.remove(prefix + key);
+        }
+        all.put(prefix + "epoch", state.get("epoch"));
+        return commit(all);
     }
     /** Upgrade legacy millisecond ordering without rewriting or racing a newer payload. */
     public synchronized boolean upgradeSnapshotTimestamp(String connection, Map<String, String> expected, String snapshot, long generatedAt) {
@@ -508,22 +703,58 @@ public final class ConnectionCacheEngine {
         if (!snapshot.equals(state.get("snapshot"))) return false;
         if ("microseconds".equals(state.get("snapshotTimeUnit"))) return true;
         state.put("snapshotAt", Long.toString(generatedAt)); state.put("snapshotTimeUnit", "microseconds");
-        Map<String, String> all = new LinkedHashMap<>(readAll()); String prefix = connection + ".";
-        state.forEach((key, value) -> all.put(prefix + key, value)); return commit(all);
+        if (!commitSnapshot(connection, state)) return false;
+        if (confirmedEra(state) == null) observeLegacyTimestamp(connection, state, generatedAt);
+        return true;
     }
     public synchronized void clearSnapshot(String connection, Map<String, String> expected) {
         Map<String, String> state = state(connection);
         if (expected != null && !same(state, expected, false)) return;
         if ("legacy".equals(state.get("mode"))) return;
-        state.put("epoch", unique()); state.remove("snapshot"); state.remove("snapshotAt"); state.remove("snapshotVersion"); state.remove("snapshotTimeUnit");
-        Map<String, String> all = new LinkedHashMap<>(readAll());
-        String prefix = connection + ".";
-        all.keySet().removeIf(key -> key.startsWith(prefix));
-        state.forEach((key, value) -> all.put(prefix + key, value));
-        if (!commit(all)) throw new IllegalStateException("Snapshot storage failed.");
+        state.put("epoch", unique());
+        SNAPSHOT_KEYS.forEach(state::remove);
+        if (!commitSnapshot(connection, state)) throw new IllegalStateException("Snapshot storage failed.");
+        Map<String, String> prior = failedCommitPriorState.get(connection);
+        if (prior != null) {
+            // Keep a successful cache clear when the credential remains fenced.
+            prior.put("epoch", state.get("epoch"));
+            SNAPSHOT_KEYS.forEach(prior::remove);
+        }
+        clockOrders.remove(connection);
+    }
+    private static final class ClockOrder {
+        final Map<String, String> version = new HashMap<>();
+        // A released fetch can still finish in an earlier era until a newer
+        // candidate advances the write floor.
+        final Map<Long, Long> references = new HashMap<>();
+        long era;
+        Long minimumEra;
+        ClockOrder(Map<String, String> state) {
+            for (String key : Arrays.asList("generation", "identity", "epoch")) version.put(key, state.get(key));
+            minimumEra = confirmedEra(state);
+            era = minimumEra == null ? 0L : minimumEra;
+            long micros = snapshotMicros(state);
+            long millis = micros == Long.MIN_VALUE ? Long.MIN_VALUE : micros / 1000L;
+            Long reference = minimumEra == null ? null : snapshotNumber(state.get("snapshotClockAt"));
+            references.put(era, reference == null ? millis : Math.max(reference, millis));
+        }
+        long admit(long now) {
+            if (now < references.get(era)) era = Math.incrementExact(era);
+            references.put(era, now);
+            return era;
+        }
+        void observe(long observedEra, long sample) {
+            references.computeIfPresent(observedEra, (ignored, previous) -> Math.max(previous, sample));
+        }
+        void fence(long candidateEra) {
+            minimumEra = candidateEra;
+            references.keySet().removeIf(prior -> prior < candidateEra);
+        }
     }
     private static final class FetchLease {
         final String owner, ticket;
+        ClockOrder order;
+        long era;
         FetchLease(String owner, String ticket) { this.owner = owner; this.ticket = ticket; }
     }
     private static final class FetchPending {

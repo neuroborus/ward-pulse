@@ -18,7 +18,10 @@ abstract class DashboardRepository {
   Future<bool> isFailureCurrent(DashboardLoadException failure) =>
       isSnapshotCurrent(
         DashboardSnapshot.empty()
-            .withConnectionVersions(failure.connectionVersions)
+            .withConnectionVersions(
+              failure.connectionVersions,
+              snapshotOrdering: failure.snapshotOrdering,
+            )
             .withReportingOutcomes(failure.reportingOutcomes),
       );
 
@@ -36,6 +39,7 @@ final class DashboardLoadException implements Exception {
     this.details,
     this.syncRejection,
     this.connectionVersions = const {},
+    this.snapshotOrdering = const {},
   }) : reportingOutcomes = const [];
 
   DashboardLoadException.withOutcomes({
@@ -44,26 +48,31 @@ final class DashboardLoadException implements Exception {
     this.syncRejection,
     required Iterable<ConnectionReportingOutcome> reportingOutcomes,
     Map<String, Map<String, String>> connectionVersions = const {},
+    Map<String, SnapshotOrdering> snapshotOrdering = const {},
   }) : reportingOutcomes = List.unmodifiable(reportingOutcomes),
        connectionVersions = Map.unmodifiable({
          for (final entry in connectionVersions.entries)
            entry.key: Map<String, String>.unmodifiable(entry.value),
-       });
+       }),
+       snapshotOrdering = Map.unmodifiable(snapshotOrdering);
 
   final DashboardSyncIssue issue;
   final String? details;
   final ConnectionRejection? syncRejection;
   final List<ConnectionReportingOutcome> reportingOutcomes;
   final Map<String, Map<String, String>> connectionVersions;
+  final Map<String, SnapshotOrdering> snapshotOrdering;
 
   DashboardLoadException withConnectionVersions(
-    Map<String, Map<String, String>> versions,
-  ) => DashboardLoadException.withOutcomes(
+    Map<String, Map<String, String>> versions, {
+    Map<String, SnapshotOrdering>? snapshotOrdering,
+  }) => DashboardLoadException.withOutcomes(
     issue: issue,
     details: details,
     syncRejection: syncRejection,
     reportingOutcomes: reportingOutcomes,
     connectionVersions: versions,
+    snapshotOrdering: snapshotOrdering ?? this.snapshotOrdering,
   );
 
   @override

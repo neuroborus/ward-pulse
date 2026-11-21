@@ -5935,6 +5935,622 @@ void main() {
     expect(requests, 3);
   });
 
+  testWidgets('a checked cadence skip preserves verified reporting access', (
+    tester,
+  ) async {
+    const id = ProviderConnections.openAiPlatform;
+    final key = id.storageKey;
+    final store = _MemoryCredentialStore('synthetic-key');
+    final version = store.version(id);
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    final initial = _surfaceSelectionSnapshot();
+    final payload = (
+      era: 0,
+      generatedAtMicros: initial.generatedAt.microsecondsSinceEpoch,
+    );
+    final success = ConnectionReportingOutcome(
+      connection: id,
+      category: ReportingOutcomeCategory.success,
+      source: ReportingOutcomeSource.live,
+      freshness: ReportingOutcomeFreshness.current,
+      credentialVersion: version,
+    );
+    DashboardSnapshot skipSelection(int era) => initial.withConnectionVersions(
+      {key: version.values},
+      snapshotOrdering: {
+        key: SnapshotOrdering(
+          payload: (era: era, generatedAtMicros: payload.generatedAtMicros),
+        ),
+      },
+    );
+    var currentEra = 0;
+    var skipped = skipSelection(currentEra);
+    final validatingSkip = Completer<void>();
+    final resume = Completer<void>();
+    final skippedEras = <int>[];
+    final feedbackChecks = <int, ({int? attemptEra, bool current})>{};
+    var skip = false;
+    var requests = 0;
+    final repository = _CountingDashboardRepository(
+      () {
+        if (skip) {
+          skippedEras.add(currentEra);
+          AutomaticPollContext.current!.skipped[key] = AutomaticPollSkipped(
+            key,
+            version,
+            initial.generatedAt.add(const Duration(minutes: 5)),
+          );
+          return skipped;
+        }
+        requests++;
+        return initial
+            .withConnectionVersions(
+              {key: version.values},
+              snapshotOrdering: {
+                key: SnapshotOrdering(payload: payload, attemptEra: 0),
+              },
+            )
+            .withReportingOutcomes([success]);
+      },
+      validateSnapshot: (snapshot) async {
+        if (identical(snapshot, skipped) && !validatingSkip.isCompleted) {
+          validatingSkip.complete();
+          await resume.future;
+        }
+        final ordering = snapshot.snapshotOrdering[key];
+        if (snapshot.accounts.isEmpty &&
+            snapshot.reportingOutcomes.isNotEmpty) {
+          final era = ordering?.attemptEra;
+          final current =
+              snapshot.reportingOutcomes.single == success && era == currentEra;
+          if (AutomaticPollContext.current != null) {
+            feedbackChecks[currentEra] = (attemptEra: era, current: current);
+          }
+          return current;
+        }
+        if (ordering?.payload case final selected?)
+          return selected.era == currentEra;
+        return true;
+      },
+    );
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: repository,
+        credentialStore: store,
+        syncScheduler: scheduler,
+        // Each tick must finish any pending Wear publication in fake async.
+        watchSyncService: _FakeWatchSyncService(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    final row = find.widgetWithText(
+      ProviderConnectionRow,
+      'Platform reporting',
+    );
+    Finder status(String label) =>
+        find.descendant(of: row, matching: find.text(label));
+    SnapshotOrdering? displayedOrder() =>
+        tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .snapshot
+            ?.snapshotOrdering[key];
+    final connected = status('Connected');
+    expect(connected, findsOneWidget);
+
+    try {
+      skip = true;
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(skippedEras, [0]);
+      expect(validatingSkip.isCompleted, isTrue);
+      expect(feedbackChecks[0], (attemptEra: 0, current: true));
+      expect(displayedOrder()?.attemptEra, 0);
+      expect(connected, findsOneWidget);
+
+      resume.complete();
+      await tester.pumpAndSettle();
+      expect(displayedOrder()?.payload, payload);
+      expect(displayedOrder()?.attemptEra, isNull);
+      expect(connected, findsOneWidget);
+
+      currentEra = 1;
+      skipped = skipSelection(currentEra);
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(skippedEras, [0, 1]);
+      expect(feedbackChecks[1], (attemptEra: 0, current: false));
+      expect(displayedOrder()?.payload?.era, 1);
+      expect(status('Not verified'), findsOneWidget);
+      expect(store.openAiSecret, 'synthetic-key');
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<DashboardScreen>(find.byType(DashboardScreen))
+            .snapshot
+            .reportingOutcomes,
+        isEmpty,
+      );
+      expect(requests, 1);
+    } finally {
+      if (!resume.isCompleted) {
+        resume.complete();
+        await tester.pumpAndSettle();
+      }
+    }
+  });
+
+  testWidgets('a checked cadence skip retires fenced reporting feedback', (
+    tester,
+  ) async {
+    const id = ProviderConnections.openAiPlatform;
+    final key = id.storageKey;
+    final store = _MemoryCredentialStore('synthetic-key');
+    final version = store.version(id);
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    final initial = _surfaceSelectionSnapshot();
+    final failure = ConnectionReportingOutcome(
+      connection: id,
+      category: ReportingOutcomeCategory.rateLimited,
+      source: ReportingOutcomeSource.live,
+      freshness: ReportingOutcomeFreshness.current,
+      credentialVersion: version,
+    );
+    final initialOrder = SnapshotOrdering(
+      payload: (
+        era: 0,
+        generatedAtMicros: initial.generatedAt.microsecondsSinceEpoch,
+      ),
+      attemptEra: 0,
+    );
+    var source = initial
+        .withConnectionVersions(
+          {key: version.values},
+          snapshotOrdering: {key: initialOrder},
+        )
+        .withReportingOutcomes([failure]);
+    var skip = false;
+    final repository = _CountingDashboardRepository(() {
+      if (skip) {
+        AutomaticPollContext.current!.skipped[key] = AutomaticPollSkipped(
+          key,
+          version,
+          initial.generatedAt.add(const Duration(minutes: 5)),
+        );
+      }
+      return source;
+    });
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: repository,
+        credentialStore: store,
+        syncScheduler: scheduler,
+      ),
+    );
+    await tester.pumpAndSettle();
+    DashboardSnapshot dashboard() =>
+        tester.widget<DashboardScreen>(find.byType(DashboardScreen)).snapshot;
+    expect(dashboard().reportingOutcomes.single.category, failure.category);
+
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    expect(find.text(failure.label), findsOneWidget);
+
+    final corrected = _surfaceSelectionSnapshot(spent: 700);
+    source = corrected.withConnectionVersions(
+      {key: version.values},
+      snapshotOrdering: {
+        key: SnapshotOrdering(
+          payload: (
+            era: 1,
+            generatedAtMicros: corrected.generatedAt.microsecondsSinceEpoch,
+          ),
+        ),
+      },
+    );
+    skip = true;
+    scheduler.tick();
+    await tester.pumpAndSettle();
+    expect(find.text(failure.label), findsNothing);
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+    expect(dashboard().reportingOutcomes, isEmpty);
+    expect(dashboard().accounts.single.today.spent?.minorUnits, 700);
+  });
+
+  testWidgets('Providers rechecks the cache selection of a cadence failure', (
+    tester,
+  ) async {
+    const id = ProviderConnections.openAiPlatform;
+    final key = id.storageKey;
+    final store = _MemoryCredentialStore('synthetic-key');
+    final version = store.version(id);
+    const emptyOrder = 'null:none';
+    var currentOrder = emptyOrder;
+    final feedback = ConnectionReportingOutcome(
+      connection: id,
+      category: ReportingOutcomeCategory.localReadFailure,
+      source: ReportingOutcomeSource.local,
+      freshness: ReportingOutcomeFreshness.current,
+      credentialVersion: version,
+    );
+    final repository = _CountingDashboardRepository(
+      () =>
+          throw DashboardLoadException.withOutcomes(
+            issue: DashboardSyncIssue.credentialUnavailable,
+            connectionVersions: {key: version.values},
+            snapshotOrdering: {
+              key: const SnapshotOrdering(emptyCacheOrder: emptyOrder),
+            },
+            reportingOutcomes: [feedback],
+          ),
+      validateSnapshot: (snapshot) async {
+        final order = snapshot.snapshotOrdering[key]?.emptyCacheOrder;
+        return order == null || order == currentOrder;
+      },
+    );
+    await tester.pumpWidget(
+      WardPulseApp(repository: repository, credentialStore: store),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    final supporting = find.text(
+      '${feedback.connectionLabel}\n${feedback.supportingCopy}',
+    );
+    expect(supporting, findsOneWidget);
+
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+    currentOrder = '0:0:1000';
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    expect(supporting, findsNothing);
+    final row = find.widgetWithText(
+      ProviderConnectionRow,
+      'Platform reporting',
+    );
+    expect(
+      find.descendant(of: row, matching: find.text('Not verified')),
+      findsOneWidget,
+    );
+  });
+
+  for (final duringAcceptance in [false, true]) {
+    final stage = duringAcceptance ? 'acceptance' : 'failure validation';
+    testWidgets('a scheduled load retired at $stage keeps the Dashboard', (
+      tester,
+    ) async {
+      const id = ProviderConnections.openAiPlatform;
+      final key = id.storageKey;
+      final store = _MemoryCredentialStore();
+      await store.writeSecret(id, 'synthetic-key');
+      final versions = {key: store.version(id).values};
+      final initial = _surfaceSelectionSnapshot(spent: 400);
+      final ordering = {
+        key: SnapshotOrdering(
+          payload: (
+            era: 0,
+            generatedAtMicros: initial.generatedAt.microsecondsSinceEpoch,
+          ),
+        ),
+      };
+      final displayed = initial.withConnectionVersions(
+        versions,
+        snapshotOrdering: ordering,
+      );
+      final failed = displayed.withSyncIssue(
+        DashboardSyncIssue.credentialUnavailable,
+      );
+      final entered = Completer<void>();
+      final release = Completer<void>();
+      var loads = 0;
+      var failureChecks = 0;
+      var currentEra = 0;
+      final repository = _CountingDashboardRepository(
+        () {
+          if (++loads == 1) return displayed;
+          if (duringAcceptance) return failed;
+          throw DashboardLoadException(
+            issue: DashboardSyncIssue.credentialUnavailable,
+            connectionVersions: versions,
+            snapshotOrdering: ordering,
+          );
+        },
+        validateSnapshot: (snapshot) async {
+          final era = snapshot.snapshotOrdering[key]?.payload?.era;
+          if (era == null) return true;
+          if ((identical(snapshot, failed) || snapshot.accounts.isEmpty) &&
+              ++failureChecks == (duringAcceptance ? 2 : 1)) {
+            entered.complete();
+            await release.future;
+          }
+          return era == currentEra;
+        },
+      );
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final watch = _FakeWatchSyncService();
+      final launcher = _FakePhoneWidgetSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          credentialStore: store,
+          syncScheduler: scheduler,
+          watchSyncService: watch,
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final dashboard = find.byType(DashboardScreen);
+      expect(dashboard, findsOneWidget);
+      try {
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(entered.isCompleted, isTrue);
+        currentEra = 1;
+      } finally {
+        release.complete();
+        await tester.pumpAndSettle();
+      }
+
+      expect(loads, 2);
+      expect(failureChecks, duringAcceptance ? 2 : 1);
+      expect(dashboard, findsOneWidget);
+      final snapshot = tester.widget<DashboardScreen>(dashboard).snapshot;
+      expect(snapshot.accounts.single.today.spent?.minorUnits, 400);
+      expect(snapshot.syncIssue, isNull);
+      expect(watch.syncedSnapshots, [displayed]);
+      expect(launcher.syncedSnapshots, [displayed]);
+    });
+  }
+
+  testWidgets('a rejected aggregate preserves verified reporting feedback', (
+    tester,
+  ) async {
+    const id = ProviderConnections.openAiPlatform;
+    const sibling = ProviderConnections.anthropicPlatform;
+    const failed = ProviderConnections.cursorPlatform;
+    final store = _MemoryCredentialStore('synthetic-key');
+    await store.writeSecret(sibling, 'synthetic-sibling');
+    await store.writeSecret(failed, 'synthetic-failed');
+    final version = store.version(id);
+    final siblingOutcome = ConnectionReportingOutcome(
+      connection: sibling,
+      category: ReportingOutcomeCategory.success,
+      source: ReportingOutcomeSource.live,
+      freshness: ReportingOutcomeFreshness.current,
+      credentialVersion: store.version(sibling),
+    );
+    final failedOutcome = ConnectionReportingOutcome(
+      connection: failed,
+      category: ReportingOutcomeCategory.localReadFailure,
+      source: ReportingOutcomeSource.local,
+      freshness: ReportingOutcomeFreshness.current,
+      credentialVersion: store.version(failed),
+    );
+    const siblingOrder = SnapshotOrdering(attemptEra: 1);
+    const failedOrder = SnapshotOrdering(emptyCacheOrder: 'null:none');
+    var cacheOrder = failedOrder.emptyCacheOrder;
+    final siblingUpdate = ConnectionReportingUpdate.completed(
+      siblingOutcome,
+      siblingOrder,
+    );
+    final obsoleteUpdate = ConnectionReportingUpdate.completed(
+      failedOutcome,
+      failedOrder,
+    );
+    final verified = DashboardSnapshot.empty()
+        .withConnectionVersions({id.storageKey: version.values})
+        .withReportingOutcomes([
+          ConnectionReportingOutcome(
+            connection: id,
+            category: ReportingOutcomeCategory.success,
+            source: ReportingOutcomeSource.live,
+            freshness: ReportingOutcomeFreshness.current,
+            credentialVersion: version,
+          ),
+        ]);
+    var source = verified;
+    final release = Completer<void>();
+    final repository = _CountingDashboardRepository(
+      () => source,
+      beforeObservedLoad: (observe) async {
+        if (identical(source, verified)) return;
+        observe(
+          ConnectionReportingUpdate(connection: id, credentialVersion: version),
+        );
+        observe(siblingUpdate);
+        observe(obsoleteUpdate);
+        await release.future;
+      },
+      validateSnapshot: (snapshot) async {
+        final order = snapshot.snapshotOrdering[failed.storageKey];
+        if (order != null && order.emptyCacheOrder != cacheOrder) return false;
+        return !snapshot.reportingOutcomes.contains(siblingOutcome) ||
+            snapshot.snapshotOrdering[sibling.storageKey]?.attemptEra == 1;
+      },
+    );
+    await tester.pumpWidget(
+      WardPulseApp(repository: repository, credentialStore: store),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    final providers = find.byType(ProvidersScreen);
+    final scrollable = find.descendant(
+      of: providers,
+      matching: find.byType(Scrollable),
+    );
+    final openAiReporting = find.descendant(
+      of: find.widgetWithText(Card, 'OpenAI'),
+      matching: find.widgetWithText(
+        ProviderConnectionRow,
+        'Platform reporting',
+      ),
+    );
+    final connected = find.descendant(
+      of: openAiReporting,
+      matching: find.text('Connected'),
+    );
+    await tester.scrollUntilVisible(
+      openAiReporting,
+      300,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    expect(connected, findsOneWidget);
+    Map<ProviderConnectionId, ConnectionReportingUpdate> updates() =>
+        tester.widget<ProvidersScreen>(providers).reportingUpdates;
+    final verifiedUpdate = updates()[id];
+    expect(verifiedUpdate?.outcome, same(verified.reportingOutcomes.single));
+
+    source = verified
+        .withConnectionVersions(
+          {
+            ...verified.connectionVersions,
+            sibling.storageKey: store.version(sibling).values,
+            failed.storageKey: store.version(failed).values,
+          },
+          snapshotOrdering: {
+            sibling.storageKey: siblingOrder,
+            failed.storageKey: failedOrder,
+          },
+        )
+        .withReportingOutcomes([siblingOutcome, failedOutcome]);
+    try {
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pump();
+      await tester.pump();
+      expect(updates()[id]?.checking, isTrue);
+      expect(updates()[sibling], same(siblingUpdate));
+      expect(updates()[failed], same(obsoleteUpdate));
+      cacheOrder = '0:0:1000';
+    } finally {
+      release.complete();
+      await tester.pumpAndSettle();
+    }
+    expect(updates(), {id: verifiedUpdate, sibling: siblingUpdate});
+    expect(updates()[id], same(verifiedUpdate));
+    expect(connected, findsOneWidget);
+    final anthropicReporting = find.descendant(
+      of: find.widgetWithText(Card, 'Anthropic'),
+      matching: find.widgetWithText(
+        ProviderConnectionRow,
+        'Organization reporting',
+      ),
+    );
+    await tester.scrollUntilVisible(
+      anthropicReporting,
+      -300,
+      scrollable: scrollable,
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: anthropicReporting, matching: find.text('Connected')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Details'));
+    await tester.pumpAndSettle();
+    expect(find.text('Connection changed during refresh.'), findsOneWidget);
+  });
+
+  testWidgets('a rejected aggregate rechecks retained feedback together', (
+    tester,
+  ) async {
+    const id = ProviderConnections.openAiPlatform;
+    const sibling = ProviderConnections.anthropicPlatform;
+    const unobserved = ProviderConnections.cursorPlatform;
+    final store = _MemoryCredentialStore('synthetic-key');
+    await store.writeSecret(sibling, 'synthetic-sibling');
+    await store.writeSecret(unobserved, 'synthetic-unobserved');
+    ConnectionReportingOutcome success(ProviderConnectionId connection) =>
+        ConnectionReportingOutcome(
+          connection: connection,
+          category: ReportingOutcomeCategory.success,
+          source: ReportingOutcomeSource.live,
+          freshness: ReportingOutcomeFreshness.current,
+          credentialVersion: store.version(connection),
+        );
+    final prior = success(id);
+    final siblingOutcome = success(sibling);
+    final unobservedOutcome = success(unobserved);
+    final initial = reportingUpdatesProof([
+      ConnectionReportingUpdate.completed(prior, null),
+      ConnectionReportingUpdate.completed(unobservedOutcome, null),
+    ]);
+    final checkingSibling = Completer<void>();
+    final release = Completer<void>();
+    var reject = false;
+    var checkedPrior = false;
+    final repository = _CountingDashboardRepository(
+      () {
+        if (reject) throw const DashboardLoadException();
+        return initial;
+      },
+      beforeObservedLoad: (observe) async {
+        if (!reject) return;
+        observe(
+          ConnectionReportingUpdate(
+            connection: id,
+            credentialVersion: prior.credentialVersion,
+          ),
+        );
+        observe(ConnectionReportingUpdate.completed(siblingOutcome, null));
+      },
+      validateSnapshot: (snapshot) async {
+        final versions = snapshot.connectionVersions;
+        if (reject && versions.isEmpty) return false;
+        if (reject && versions.length == 1) {
+          if (versions.containsKey(id.storageKey)) checkedPrior = true;
+          if (versions.containsKey(sibling.storageKey) &&
+              !checkingSibling.isCompleted) {
+            checkingSibling.complete();
+            await release.future;
+          }
+        }
+        return versions.entries.every(
+          (entry) => store
+              .version(ProviderConnectionId.fromStorageKey(entry.key)!)
+              .sameCache(CredentialVersion(entry.value)),
+        );
+      },
+    );
+    await tester.pumpWidget(
+      WardPulseApp(repository: repository, credentialStore: store),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Watchface'));
+    await tester.pumpAndSettle();
+    Iterable<ConnectionReportingOutcome> feedback() =>
+        tester
+            .widget<WatchfaceScreen>(find.byType(WatchfaceScreen))
+            .reportingOutcomes;
+    expect(feedback(), [prior, unobservedOutcome]);
+
+    try {
+      reject = true;
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pump();
+      await tester.pump();
+      expect(checkingSibling.isCompleted, isTrue);
+      expect(checkedPrior, isTrue);
+      await store.writeSecret(id, 'synthetic-replacement');
+      await store.writeSecret(unobserved, 'synthetic-unobserved-replacement');
+    } finally {
+      release.complete();
+      await tester.pumpAndSettle();
+    }
+    expect(feedback(), [siblingOutcome]);
+  });
+
   testWidgets(
     'refresh retires externally removed outcomes and keeps current sibling feedback',
     (tester) async {
@@ -7942,13 +8558,26 @@ final class _FailingDashboardRepository extends DashboardRepository {
 }
 
 final class _CountingDashboardRepository extends DashboardRepository {
-  _CountingDashboardRepository(this._load, {this.validateSnapshot});
+  _CountingDashboardRepository(
+    this._load, {
+    this.beforeObservedLoad,
+    this.validateSnapshot,
+  });
 
   final DashboardSnapshot Function() _load;
+  final Future<void> Function(ReportingObserver)? beforeObservedLoad;
   final Future<bool> Function(DashboardSnapshot)? validateSnapshot;
 
   @override
   Future<DashboardSnapshot> load() async => _load();
+
+  @override
+  Future<DashboardSnapshot> loadObserved(ReportingObserver observer) {
+    final beforeLoad = beforeObservedLoad;
+    return beforeLoad == null
+        ? load()
+        : beforeLoad(observer).then((_) => load());
+  }
 
   @override
   Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) =>

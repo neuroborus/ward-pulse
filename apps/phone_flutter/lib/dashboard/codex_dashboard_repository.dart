@@ -22,6 +22,7 @@ DashboardRepository codexDashboardRepository({
 }) {
   return MergingConnectionRepository(
     cache: cache,
+    connection: ProviderConnections.codexPlan,
     fallback: fallback,
     logger: logger,
     loadReport: loadReport ?? accountService.fetchReport,

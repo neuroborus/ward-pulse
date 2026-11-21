@@ -332,37 +332,10 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
         labels[id.storageKey] = _labels[id.storageKey];
       }
     }
-    Future<bool> current(Iterable<ConnectionReportingUpdate> candidates) async {
-      final proof = DashboardSnapshot.empty()
-          .withConnectionVersions({
-            for (final update in candidates)
-              update.connection.storageKey: update.credentialVersion!.values,
-          })
-          .withReportingOutcomes([
-            for (final update in candidates)
-              if (update.outcome != null) update.outcome!,
-          ]);
-      try {
-        return await widget.isSnapshotCurrent?.call(proof) == true;
-      } catch (_) {
-        return false;
-      }
-    }
-
-    while (updates.isNotEmpty && !await current(updates.values)) {
-      final obsolete = <ProviderConnectionId>[];
-      for (final entry in updates.entries) {
-        if (!await current([entry.value])) obsolete.add(entry.key);
-      }
-      if (obsolete.isEmpty) {
-        // Individual checks cannot replace the complete publication gate.
-        if (!await current(updates.values)) updates.clear();
-        break;
-      }
-      for (final id in obsolete) updates.remove(id);
-      // Removing a retired connection must preserve current sibling feedback,
-      // including progress. Revalidate the retained set after every probe.
-    }
+    await pruneUnverifiedReportingUpdates(
+      updates,
+      (proof) async => await widget.isSnapshotCurrent?.call(proof) == true,
+    );
     if (!mounted || revision != _readRevision) return;
     setState(() {
       _credentialsReady = true;

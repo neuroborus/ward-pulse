@@ -22,7 +22,13 @@ internal class ConnectionCacheChannel(context: Context, messenger: BinaryMesseng
         executor.execute {
             try {
                 if (call.method == "validAll") {
-                    deliver(result, engine.validAll(call.argument<Map<String, Map<String, String>>>("versions") ?: error("Versions required.")))
+                    val versions = call.argument<Map<String, Map<String, String>>>("versions")
+                        ?: error("Versions required.")
+                    val attemptEras = call.argument<Map<String, Number>>("attemptClockEras")
+                        ?.mapValues { it.value.toLong() }.orEmpty()
+                    val payloadOrders = call.argument<Map<String, Map<String, Any>>>("payloadOrders").orEmpty()
+                    val emptyOrders = call.argument<Map<String, String>>("emptyCacheOrders").orEmpty()
+                    deliver(result, engine.validAll(versions, attemptEras, payloadOrders, emptyOrders))
                     return@execute
                 }
                 val connection = call.argument<String>("connection") ?: error("Connection required.")
@@ -35,7 +41,13 @@ internal class ConnectionCacheChannel(context: Context, messenger: BinaryMesseng
                     "claimAutomatic" -> deliver(result, engine.claimAutomatic(owner, connection,
                         call.argument<String>("fetchTicket") ?: error("Fetch ticket required."), expected ?: error("Version required."),
                         call.argument<Number>("intervalMillis")?.toLong() ?: error("Interval required.")))
-                    "releaseFetch" -> { engine.releaseFetch(owner, connection, call.argument<String>("fetchTicket") ?: error("Fetch ticket required.")); deliver(result, null) }
+                    "stampFetch" -> deliver(result, engine.stampFetch(owner, connection,
+                        call.argument<String>("fetchTicket") ?: error("Fetch ticket required."), expected ?: error("Version required.")))
+                    "releaseFetch" -> {
+                        engine.releaseFetch(owner, connection, call.argument<String>("fetchTicket") ?: error("Fetch ticket required."),
+                            call.argument<Number>("reportAtMillis")?.toLong())
+                        deliver(result, null)
+                    }
                     "prepareMigration" -> deliver(result, engine.prepareMigration(owner, connection, call.argument<String>("lease") ?: error("Lease required.")))
                     "finish" -> deliver(result, engine.finish(owner, connection, call.argument<String>("lease") ?: error("Lease required."),
                         call.argument<String>("operation") ?: error("Operation required."), call.argument<String>("identity")))
@@ -44,9 +56,20 @@ internal class ConnectionCacheChannel(context: Context, messenger: BinaryMesseng
                     "readNotice" -> deliver(result, engine.readNotice(connection))
                     "dismissNotice" -> deliver(result, engine.dismissNotice(connection, call.argument<String>("eventId") ?: error("Event required.")))
                     "valid" -> deliver(result, engine.valid(connection, expected ?: error("Version required.")))
-                    "readSnapshot" -> deliver(result, engine.readSnapshot(connection, expected ?: error("Version required.")))
-                    "writeSnapshot" -> deliver(result, engine.writeSnapshot(connection, expected ?: error("Version required."),
-                        call.argument<String>("snapshot") ?: error("Snapshot required."), call.argument<Number>("generatedAt")?.toLong() ?: error("Timestamp required.")))
+                    "readSnapshot" -> {
+                        val version = expected ?: error("Version required.")
+                        deliver(result, if (call.argument<Boolean>("ordered") == true) engine.readSnapshotPair(connection, version,
+                            call.argument<Boolean>("forSelection") == true)
+                            else engine.readSnapshot(connection, version))
+                    }
+                    "writeSnapshot" -> {
+                        val version = expected ?: error("Version required.")
+                        val snapshot = call.argument<String>("snapshot") ?: error("Snapshot required.")
+                        val generatedAt = call.argument<Number>("generatedAt")?.toLong() ?: error("Timestamp required.")
+                        deliver(result, if (call.argument<Boolean>("ordered") == true)
+                            engine.writeSnapshotOrdered(owner, connection, version, snapshot, generatedAt, call.argument<String>("stamp"))
+                            else engine.writeSnapshot(connection, version, snapshot, generatedAt))
+                    }
                     "upgradeSnapshotTimestamp" -> deliver(result, engine.upgradeSnapshotTimestamp(connection, expected ?: error("Version required."),
                         call.argument<String>("snapshot") ?: error("Snapshot required."), call.argument<Number>("generatedAt")?.toLong() ?: error("Timestamp required.")))
                     "clearSnapshot" -> { engine.clearSnapshot(connection, expected); deliver(result, null) }

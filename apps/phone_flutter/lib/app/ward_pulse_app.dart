@@ -234,6 +234,10 @@ final class _SnapshotAcceptance {
   final AutomaticPollContext? poll;
 }
 
+final class _RetiredDashboardLoad implements Exception {
+  const _RetiredDashboardLoad();
+}
+
 class _DashboardHostState extends State<DashboardHost>
     with WidgetsBindingObserver {
   static const _dashboardIndex = 0;
@@ -932,20 +936,22 @@ class _DashboardHostState extends State<DashboardHost>
     DashboardSnapshot repositorySnapshot,
     int revision,
     AutomaticPollContext? poll,
+    Set<ProviderConnectionId> retiredUpdates,
   ) => _serializeSnapshotSettings(() async {
     if (!mounted || revision != _loadRevision) {
-      throw const DashboardLoadException(details: 'Refresh superseded.');
+      throw const _RetiredDashboardLoad();
     }
     final rules = _alertThresholds;
     final snapshot =
         rules == null
             ? repositorySnapshot
             : widget.applyAlertSettings(repositorySnapshot, rules);
-    final current = await widget.repository.isSnapshotCurrent(snapshot);
-    if (!mounted || revision != _loadRevision || !current) {
-      throw const DashboardLoadException(
-        details: 'Connection changed during refresh.',
-      );
+    final current = await _ownsLoad(
+      revision,
+      () => widget.repository.isSnapshotCurrent(snapshot),
+    );
+    if (!current || !mounted || revision != _loadRevision) {
+      throw const _RetiredDashboardLoad();
     }
     final acceptance = _SnapshotAcceptance(
       observationRevision: revision,
@@ -958,6 +964,15 @@ class _DashboardHostState extends State<DashboardHost>
     );
     setState(() {
       _acceptance = acceptance;
+      _reportingUpdates.removeWhere((id, _) => retiredUpdates.contains(id));
+      for (final outcome in repositorySnapshot.reportingOutcomes) {
+        final key = outcome.connection.storageKey;
+        _reportingUpdates[outcome
+            .connection] = ConnectionReportingUpdate.completed(
+          outcome,
+          repositorySnapshot.snapshotOrdering[key],
+        );
+      }
       // Either surface may have to wait while a newer load takes over.
       if (poll?.whollySkipped != true) {
         _watchPublicationPending = true;
@@ -998,15 +1013,10 @@ class _DashboardHostState extends State<DashboardHost>
       // Keep both schedulers registered; native admission enforces spacing
       // across their starts. Headless WorkManager uses ≥15 minutes.
       unawaited(_scheduleAutoSync(_refreshInterval.interval));
-      final repositorySnapshot =
+      final acceptance =
           await (poll == null
               ? _observedLoad(revision)
               : poll.run(() => _observedLoad(revision)));
-      final acceptance = await _acceptSnapshot(
-        repositorySnapshot,
-        revision,
-        poll,
-      );
       unawaited(_syncRecoveries(acceptance));
       if (_watchPublicationPending) {
         unawaited(_syncWatch(acceptance));
@@ -1016,11 +1026,16 @@ class _DashboardHostState extends State<DashboardHost>
       }
       if (poll?.whollySkipped != true) unawaited(_syncAlerts(acceptance));
       return acceptance.snapshot;
-    } catch (_) {
+    } catch (error) {
       // A failed foreground load leaves an error-only Dashboard. Successful
       // fallback loads return normally and retain their usable data.
       if (mounted && revision == _loadRevision) {
         _acceptance = null;
+      }
+      if (error is _RetiredDashboardLoad) {
+        throw const DashboardLoadException(
+          details: 'Connection changed during refresh.',
+        );
       }
       rethrow;
     } finally {
@@ -1028,80 +1043,136 @@ class _DashboardHostState extends State<DashboardHost>
     }
   }
 
-  Future<DashboardSnapshot> _observedLoad(int revision) async {
+  Future<bool> _ownsLoad(int revision, Future<bool> Function() validate) async {
+    if (!mounted || revision != _loadRevision) return false;
+    try {
+      return await validate() && mounted && revision == _loadRevision;
+    } catch (_) {
+      // Unavailable proof cannot authorize publication.
+      return false;
+    }
+  }
+
+  Future<_SnapshotAcceptance> _observedLoad(int revision) async {
     final poll = AutomaticPollContext.current;
     if (!mounted || revision != _loadRevision) {
-      throw const DashboardLoadException(details: 'Refresh superseded.');
+      throw const _RetiredDashboardLoad();
     }
     // A superseded request cannot leave a row spinning without active work.
     _reportingUpdates.removeWhere((_, update) => update.checking);
-    final observed = <ProviderConnectionId>{};
-    void forgetObserved() {
+    final observed = <ProviderConnectionId, ConnectionReportingUpdate?>{};
+    Future<void> reconcileObserved() async {
+      Future<bool> current(DashboardSnapshot proof) =>
+          _ownsLoad(revision, () => widget.repository.isSnapshotCurrent(proof));
+
+      // A connection can retire even if the rejected load never observed it.
+      final retained = {
+        for (final entry in _reportingUpdates.entries)
+          if (!observed.containsKey(entry.key) &&
+              !entry.value.checking &&
+              entry.value.credentialVersion != null)
+            entry.key: entry.value,
+      };
+      for (final MapEntry(key: id, value: previous) in observed.entries) {
+        // A completed row can still be current when a sibling retires the
+        // aggregate. Unfinished work can only fall back to verified feedback.
+        for (final update in [_reportingUpdates[id], previous]) {
+          if (update == null ||
+              update.checking ||
+              update.credentialVersion == null) {
+            continue;
+          }
+          if (await current(reportingUpdatesProof([update]))) {
+            retained[id] = update;
+            break;
+          }
+        }
+      }
+      await pruneUnverifiedReportingUpdates(retained, current);
       if (mounted && revision == _loadRevision) {
         setState(() {
-          for (final id in observed) {
-            _reportingUpdates.remove(id);
-          }
+          _reportingUpdates.removeWhere(
+            (id, update) =>
+                observed.containsKey(id) || update.credentialVersion != null,
+          );
+          _reportingUpdates.addAll(retained);
         });
       }
     }
 
     try {
-      final snapshot = await widget.repository.loadObserved((update) {
-        if (!mounted || revision != _loadRevision) return;
-        observed.add(update.connection);
-        setState(() => _reportingUpdates[update.connection] = update);
-      });
-      if (!await widget.repository.isSnapshotCurrent(snapshot) ||
-          !mounted ||
-          revision != _loadRevision) {
-        forgetObserved();
-        throw const DashboardLoadException(
-          details: 'Connection changed during refresh.',
-        );
-      }
-      setState(() {
-        // A completed, current load is authoritative, including omissions for
-        // removed connections. Its outcomes retain the current sibling facts.
-        _reportingUpdates.removeWhere((id, update) {
-          final stamp = snapshot.connectionVersions[id.storageKey];
-          return poll?.observes(id.storageKey) != false ||
-              stamp == null ||
-              update.credentialVersion?.sameCache(CredentialVersion(stamp)) !=
-                  true;
+      final DashboardSnapshot snapshot;
+      try {
+        snapshot = await widget.repository.loadObserved((update) {
+          if (!mounted || revision != _loadRevision) return;
+          final id = update.connection;
+          observed.putIfAbsent(id, () => _reportingUpdates[id]);
+          setState(() => _reportingUpdates[id] = update);
         });
-        for (final outcome in snapshot.reportingOutcomes) {
-          _reportingUpdates[outcome.connection] = ConnectionReportingUpdate(
-            connection: outcome.connection,
-            credentialVersion: outcome.credentialVersion,
-            outcome: outcome,
-          );
-        }
-      });
-      return snapshot;
-    } on DashboardLoadException catch (failure) {
-      if (!await widget.repository.isFailureCurrent(failure) ||
-          !mounted ||
-          revision != _loadRevision) {
-        forgetObserved();
-        throw const DashboardLoadException(
-          details: 'Connection changed during refresh.',
+      } on DashboardLoadException catch (failure) {
+        final current = await _ownsLoad(
+          revision,
+          () => widget.repository.isFailureCurrent(failure),
         );
-      }
-      setState(() {
-        _reportingUpdates.clear();
-        for (final outcome in failure.reportingOutcomes) {
-          _reportingUpdates[outcome.connection] = ConnectionReportingUpdate(
-            connection: outcome.connection,
-            credentialVersion: outcome.credentialVersion,
-            outcome: outcome,
-          );
+        if (!current || !mounted || revision != _loadRevision) {
+          throw const _RetiredDashboardLoad();
         }
-      });
+        setState(() {
+          _reportingUpdates.clear();
+          for (final outcome in failure.reportingOutcomes) {
+            _reportingUpdates[outcome
+                .connection] = ConnectionReportingUpdate.completed(
+              outcome,
+              failure.snapshotOrdering[outcome.connection.storageKey],
+            );
+          }
+        });
+        rethrow;
+      } catch (_) {
+        await reconcileObserved();
+        throw const DashboardLoadException();
+      }
+      final retired = <ProviderConnectionId>{};
+      for (final entry in _reportingUpdates.entries.toList()) {
+        final id = entry.key;
+        final update = entry.value;
+        final key = id.storageKey;
+        final stamp = snapshot.connectionVersions[key];
+        if (poll?.observes(key) != false ||
+            stamp == null ||
+            update.credentialVersion?.sameCache(CredentialVersion(stamp)) !=
+                true) {
+          retired.add(id);
+          continue;
+        }
+        if (!snapshot.snapshotOrdering.containsKey(key)) continue;
+        // The repository supplies any failure feedback that survives a checked
+        // skip. A prior live success keeps its original verification proof.
+        final outcome = update.outcome;
+        if (!observed.containsKey(id) &&
+            outcome?.category == ReportingOutcomeCategory.success &&
+            outcome?.source == ReportingOutcomeSource.live &&
+            outcome?.freshness == ReportingOutcomeFreshness.current &&
+            await _ownsLoad(
+              revision,
+              () => widget.repository.isSnapshotCurrent(
+                reportingUpdatesProof([update]),
+              ),
+            )) {
+          continue;
+        }
+        retired.add(id);
+      }
+      if (!await _ownsLoad(
+        revision,
+        () => widget.repository.isSnapshotCurrent(snapshot),
+      )) {
+        throw const _RetiredDashboardLoad();
+      }
+      return await _acceptSnapshot(snapshot, revision, poll, retired);
+    } on _RetiredDashboardLoad {
+      await reconcileObserved();
       rethrow;
-    } catch (_) {
-      forgetObserved();
-      throw const DashboardLoadException();
     } finally {
       if (mounted && revision == _loadRevision) {
         setState(
@@ -1202,12 +1273,7 @@ class _DashboardHostState extends State<DashboardHost>
       }
       // Do not invalidate: load() already refetches, and clearing caches would
       // drop stale-with-issue recovery on a failed automatic tick.
-      final repositorySnapshot = await poll.run(() => _observedLoad(revision));
-      final acceptance = await _acceptSnapshot(
-        repositorySnapshot,
-        revision,
-        poll,
-      );
+      final acceptance = await poll.run(() => _observedLoad(revision));
       if (mounted && revision == _loadRevision) {
         setState(() {
           _snapshot = Future.value(acceptance.snapshot);
@@ -1221,6 +1287,8 @@ class _DashboardHostState extends State<DashboardHost>
       }
       await _syncRecoveries(acceptance);
       if (!poll.whollySkipped) await _syncAlerts(acceptance);
+    } on _RetiredDashboardLoad {
+      // A rejected selection cannot replace the last accepted Dashboard.
     } on DashboardLoadException catch (failure) {
       // Keep successful data, but an error-only dashboard must follow the most
       // recent guarded result rather than the exception from its first load.

@@ -713,10 +713,12 @@ void main() {
     ConnectionReportingUpdate proof(
       _MemoryCredentialStore store,
       ProviderConnectionId id,
-      ReportingOutcomeCategory category,
-    ) => ConnectionReportingUpdate(
+      ReportingOutcomeCategory category, {
+      int? attemptEra,
+    }) => ConnectionReportingUpdate(
       connection: id,
       credentialVersion: store.version(id),
+      attemptEra: attemptEra,
       outcome: ConnectionReportingOutcome(
         connection: id,
         credentialVersion: store.version(id),
@@ -919,11 +921,13 @@ void main() {
       },
     );
 
-    for (final category in <ReportingOutcomeCategory?>[
-      ReportingOutcomeCategory.accessDenied,
-      null,
+    for (final (category, correctClock) in [
+      (ReportingOutcomeCategory.accessDenied, false),
+      (null, false),
+      (ReportingOutcomeCategory.accessDenied, true),
     ]) {
-      testWidgets('later label reads preserve the current sibling: $category', (
+      testWidgets('later label reads preserve the current sibling '
+          '(outcome: $category, clock correction: $correctClock)', (
         tester,
       ) async {
         _setTestSurface(tester, const Size(800, 2000));
@@ -934,6 +938,9 @@ void main() {
         await store.writeSecret(later, 'synthetic-later');
         final held = Completer<void>();
         final started = Completer<void>();
+        addTearDown(() {
+          if (!held.isCompleted) held.complete();
+        });
         store.beforeReadLabel = (id) async {
           if (id == later) {
             started.complete();
@@ -941,6 +948,7 @@ void main() {
           }
         };
         final validated = <DashboardSnapshot>[];
+        var minimumEra = 0;
         await tester.pumpWidget(
           MaterialApp(
             home: Scaffold(
@@ -950,7 +958,12 @@ void main() {
                 claudeAccountService: const EmptyClaudeAccountService(),
                 onCredentialsChanged: () {},
                 reportingUpdates: {
-                  first: proof(store, first, ReportingOutcomeCategory.success),
+                  first: proof(
+                    store,
+                    first,
+                    ReportingOutcomeCategory.success,
+                    attemptEra: correctClock ? 0 : null,
+                  ),
                   later:
                       category == null
                           ? ConnectionReportingUpdate(
@@ -961,6 +974,11 @@ void main() {
                 },
                 isSnapshotCurrent: (snapshot) async {
                   validated.add(snapshot);
+                  final attemptEra =
+                      snapshot.snapshotOrdering[first.storageKey]?.attemptEra;
+                  if (attemptEra != null && attemptEra < minimumEra) {
+                    return false;
+                  }
                   return snapshot.connectionVersions.entries.every(
                     (entry) => CredentialVersion(entry.value).sameCache(
                       store.version(
@@ -979,7 +997,11 @@ void main() {
         );
         await tester.pump();
         expect(started.isCompleted, isTrue);
-        await store.writeSecret(first, 'synthetic-replacement');
+        if (correctClock) {
+          minimumEra = 1;
+        } else {
+          await store.writeSecret(first, 'synthetic-replacement');
+        }
         held.complete();
         await tester.pump();
         expect(

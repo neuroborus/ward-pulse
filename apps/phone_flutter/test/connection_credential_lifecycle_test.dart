@@ -172,6 +172,7 @@ void main() {
         if (kind == 'failed completion') {
           await bridge.invoke('test', 'failCommit', {'value': true});
         }
+        VersionedCredential<String>? actualRead;
         final repository = MergingConnectionRepository(
           cache: ConnectionSnapshotCache(
             connection: 'cursor.plan',
@@ -180,7 +181,7 @@ void main() {
           ),
           fallback: const NoProvidersDashboardRepository(),
           loadReport: () async {
-            await credentials.read();
+            actualRead = await credentials.read();
             return null;
           },
           normalizeReport: (value) => value,
@@ -188,11 +189,21 @@ void main() {
           logger: const NullProviderSyncLogger(),
         );
         final captured = await CapturedDashboardLoad.capture(repository.load);
-        try {
+        expect(captured.connectionVersions, isEmpty);
+        if (kind == 'accountless active') {
           final snapshot = captured.value;
-          expect(snapshot.connectionVersions, isEmpty);
-        } on DashboardLoadException catch (failure) {
-          expect(await repository.isFailureCurrent(failure), isTrue);
+          expect(actualRead?.value, 'synthetic-active');
+          expect(snapshot.accounts, isEmpty);
+          expect(snapshot.snapshotOrdering, isEmpty);
+          expect(await repository.isSnapshotCurrent(snapshot), isTrue);
+        } else {
+          final failure = captured.loadException;
+          expect(failure, isNotNull);
+          expect(
+            failure!.snapshotOrdering['cursor.plan']?.selectionUnverified,
+            isTrue,
+          );
+          expect(await repository.isFailureCurrent(failure), isFalse);
         }
         expect(completedMissing, kind == 'parse' || kind == 'identity');
       });
@@ -1601,9 +1612,165 @@ void main() {
     },
   );
 
+  test('typed plan retirement keeps the sibling storage outcome', () async {
+    const planId = ProviderConnections.claudePlan;
+    const siblingId = ProviderConnections.anthropicPlatform;
+    final siblingStore = reportingStore('reporting');
+    await siblingStore.writeSecret(siblingId, 'synthetic-key');
+    final siblingVersion = (await siblingStore.readVersion(siblingId))!;
+    final siblingCache = ConnectionSnapshotCache(
+      connection: siblingId.storageKey,
+      platform: bridge.platform('reporting'),
+      readCredentialVersion: () => siblingStore.readVersion(siblingId),
+    );
+    expect(
+      await siblingCache.store(
+        _connectionSnapshot(siblingId.storageKey, 'claude', now),
+        siblingVersion,
+      ),
+      isTrue,
+    );
+    final before = await siblingCache.capture();
+    expect(before.record?.rowId, isA<String>());
+    final sibling = MergingConnectionRepository(
+      cache: siblingCache,
+      connection: siblingId,
+      credentialStore: siblingStore,
+      fallback: const NoProvidersDashboardRepository(),
+      loadCredentialReport:
+          (_) async => fail('The reporting key is unreadable.'),
+      normalizeReport: (report) => report,
+      mapError: (_) => const DashboardLoadException(),
+      logger: const NullProviderSyncLogger(),
+    );
+    const owner = 'retiring-plan';
+    final platform = ObservingCachePlatform(bridge.platform(owner));
+    final plan = _runtime('claude', secure, platform, now, (_, _, _) async {
+      fail('The plan credential is unreadable.');
+    }, fallback: sibling);
+    await plan.write('synthetic-account', 'synthetic-token');
+    final repository = plan.cachelessRepository();
+    platform.beforeInvoke = (method, _) async {
+      if (method == 'validFetch') await bridge.invoke(owner, 'detach', {});
+    };
+    final ownershipChecks = <Object?>[];
+    platform.onComplete = (method, _, result) {
+      if (method == 'validFetch') ownershipChecks.add(result);
+    };
+
+    secure.failRead = true;
+    final captured = await CapturedDashboardLoad.capture(repository.load);
+    secure.failRead = false;
+
+    expect(ownershipChecks, [false]);
+    final failure = captured.loadException!;
+    expect(failure.issue, DashboardSyncIssue.claudeUnavailable);
+    expect(failure.details, 'Claude plan · Secure storage unavailable');
+    expect(failure.syncRejection, isNull);
+    expect(failure.reportingOutcomes.map((outcome) => outcome.connection), [
+      siblingId,
+      planId,
+    ]);
+    for (final outcome in failure.reportingOutcomes) {
+      expect(outcome.category, ReportingOutcomeCategory.localReadFailure);
+      expect(outcome.source, ReportingOutcomeSource.local);
+      expect(outcome.credentialVersion, isNull);
+    }
+    expect(failure.connectionVersions, isEmpty);
+    expect(
+      failure.snapshotOrdering.keys,
+      unorderedEquals([planId.storageKey, siblingId.storageKey]),
+    );
+    expect(
+      failure.snapshotOrdering.values.map((order) => order.selectionUnverified),
+      everyElement(isTrue),
+    );
+    expect(await repository.isFailureCurrent(failure), isFalse);
+    final after = await siblingCache.capture();
+    expect(after.version?.values, before.version?.values);
+    expect(after.observation, before.observation);
+    expect(after.snapshot?.toJson(), before.snapshot?.toJson());
+  });
+
   for (final family in ['claude', 'codex']) {
     _Runtime runtime(String owner, _ResponseHandler handler) =>
         _runtime(family, secure, bridge.platform(owner), now, handler);
+    test('$family cacheless plan observes actual managed absence', () async {
+      final id =
+          family == 'codex'
+              ? ProviderConnections.codexPlan.storageKey
+              : ProviderConnections.claudePlan.storageKey;
+      final observed = ObservingCachePlatform(bridge.platform('cacheless'));
+      final session = _runtime(family, secure, observed, now, (_, _, _) async {
+        fail(
+          'An absent or unreadable session must never make a provider request.',
+        );
+      });
+      final repository = session.cachelessRepository();
+
+      await session.disconnect();
+      final missing = await repository.load();
+      expect(missing.accounts, isEmpty);
+      expect(missing.connectionVersions.keys, [id]);
+      expect(
+        CredentialVersion(missing.connectionVersions[id]!).isAbsent,
+        isTrue,
+      );
+      expect(await repository.isSnapshotCurrent(missing), isTrue);
+
+      observed.beforeInvoke = (method, _) {
+        if (method == 'validAll') {
+          throw StateError('Synthetic lifecycle validation failure.');
+        }
+      };
+      final rejected = await CapturedDashboardLoad.capture(repository.load);
+      observed.beforeInvoke = null;
+      final rejectedAbsence = rejected.loadException!;
+      expect(rejectedAbsence.connectionVersions, missing.connectionVersions);
+      expect(rejectedAbsence.snapshotOrdering[id]?.selectionUnverified, isTrue);
+      expect(await repository.isFailureCurrent(rejectedAbsence), isFalse);
+      expect(await repository.isSnapshotCurrent(missing), isTrue);
+
+      await session.write('synthetic-account', 'synthetic-token');
+      expect(await repository.isSnapshotCurrent(missing), isFalse);
+      final ownershipChecks = <Object?>[];
+      observed.onComplete = (method, _, result) {
+        if (method == 'validFetch') ownershipChecks.add(result);
+      };
+      secure.failRead = true;
+      final unreadable = await CapturedDashboardLoad.capture(repository.load);
+      secure.failRead = false;
+      expect(ownershipChecks, [true]);
+      final storageFailure = unreadable.loadException;
+      expect(
+        storageFailure?.issue,
+        family == 'codex'
+            ? DashboardSyncIssue.codexUnavailable
+            : DashboardSyncIssue.claudeUnavailable,
+      );
+      expect(storageFailure!.connectionVersions, isEmpty);
+      expect(storageFailure.snapshotOrdering[id]?.selectionUnverified, isTrue);
+      expect(await repository.isFailureCurrent(storageFailure), isFalse);
+
+      final platform = bridge.platform('reconnect');
+      if (family == 'codex') {
+        await SecureCodexAccountStore(
+          storage: secure,
+          platform: platform,
+        ).beginReconnect();
+      } else {
+        await SecureClaudeAccountStore(
+          storage: secure,
+          platform: platform,
+        ).beginReconnect();
+      }
+      final pending = await CapturedDashboardLoad.capture(repository.load);
+      final failure = pending.loadException;
+      expect(failure, isNotNull);
+      expect(failure!.connectionVersions, isEmpty);
+      expect(failure.snapshotOrdering[id]?.selectionUnverified, isTrue);
+      expect(await repository.isFailureCurrent(failure), isFalse);
+    });
     test(
       '$family manual first failure survives later cache adoption and automatic denial',
       () async {
@@ -1970,12 +2137,14 @@ final class _Runtime {
     required this.read,
     required this.fetch,
     required this.disconnect,
+    required this.cachelessRepository,
   });
   final Future<void> Function(String account, String token, {bool expired})
   write;
   final Future<VersionedCredential<String>?> Function() read;
   final Future<String?> Function() fetch;
   final Future<void> Function() disconnect;
+  final DashboardRepository Function() cachelessRepository;
 }
 
 _Runtime _runtime(
@@ -1983,8 +2152,9 @@ _Runtime _runtime(
   FakeSecureStorage secure,
   ConnectionCachePlatform platform,
   DateTime now,
-  _ResponseHandler handler,
-) {
+  _ResponseHandler handler, {
+  DashboardRepository fallback = const NoProvidersDashboardRepository(),
+}) {
   if (family == 'claude') {
     final store = SecureClaudeAccountStore(storage: secure, platform: platform);
     final service = MobileClaudeAccountService(
@@ -2014,6 +2184,12 @@ _Runtime _runtime(
       },
       fetch: service.fetchReport,
       disconnect: service.disconnect,
+      cachelessRepository:
+          () => claudeDashboardRepository(
+            accountService: service,
+            fallback: fallback,
+            logger: const NullProviderSyncLogger(),
+          ),
     );
   }
   final store = SecureCodexAccountStore(storage: secure, platform: platform);
@@ -2047,6 +2223,12 @@ _Runtime _runtime(
     },
     fetch: service.fetchReport,
     disconnect: service.disconnect,
+    cachelessRepository:
+        () => codexDashboardRepository(
+          accountService: service,
+          fallback: fallback,
+          logger: const NullProviderSyncLogger(),
+        ),
   );
 }
 

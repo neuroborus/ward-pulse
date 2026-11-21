@@ -45,6 +45,8 @@ public final class ConnectionCacheEngineTest {
     public static void main(String[] ignored) {
         automaticAdmission(); automaticMetadataFailure(); automaticWriteCannotActivateCandidate(); absenceOwnership();
         restartPartialAndMonotonic(); deletionAndOAuthRevision(); leaseQueueAndDetach(); cancellationAndMigration(); corruptionAndFailures(); identityAndAggregate(); fetchExclusion(); cleanupAcknowledgement(); supersededCancellation(); failedCommitMemoryCannotActivate(); siblingWritesCannotActivateCandidate(); emptyPriorStateSurvivesSiblingWrite(); activeBackupCleanupProtection(); timestampPrecisionAndLegacyUpgrade(); rejectionLifecycle(); rejectionOwnership(); noticeFailures(); noticeMetadataValidation();
+        failedSnapshotTransactionsRetainConfirmedPair();
+        failedFirstLegacyCleanupRetainsEmptyState();
         System.out.println("Connection cache engine: " + assertions + " assertions passed.");
     }
     static void restartPartialAndMonotonic() {
@@ -133,6 +135,10 @@ public final class ConnectionCacheEngineTest {
         Disk disk = new Disk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
         Map<String, Object> active = login(engine); Map<String, String> v = version(active);
         engine.writeSnapshot(C, v, "payload", 10); disk.data.put(C + ".snapshotVersion", "future");
+        Map<String, Object> selection = engine.readSnapshotPair(C, v, true);
+        check(Boolean.TRUE.equals(selection.get("valid")) && selection.get("snapshot") == null
+                && "future".equals(disk.data.get(C + ".snapshotVersion")),
+            "Selection reads treat unsupported payloads as a miss without clearing the epoch.");
         check(engine.readSnapshot(C, v) == null, "Unsupported payload version refused.");
         check(active.get("slot").equals(disk.data.get(C + ".slot")), "Bad payload retains credential slot.");
         Map<String, Object> read = acquire(engine, "ui", "read", null); finish(engine, "ui", read, "release");
@@ -148,6 +154,121 @@ public final class ConnectionCacheEngineTest {
         Map<String, Object> missing = engine.finish("ui", C, (String)lease.get("lease"), "confirm", "b".repeat(64));
         check("deleted".equals(missing.get("mode")) && !disk.data.containsKey(C + ".snapshot"), "Identity mismatch purges cache and pointer.");
     }
+
+    static void failedSnapshotTransactionsRetainConfirmedPair() {
+        MemoryUpdatingDisk disk = new MemoryUpdatingDisk();
+        long[] now = {86401000};
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(disk, () -> now[0]);
+        Map<String, String> v = version(login(engine));
+        String sibling = "cursor.plan";
+        AtomicReference<Map<String, Object>> reply = new AtomicReference<>();
+        engine.acquire("ui", sibling, "reconnect", null, reply::set, error -> { throw new RuntimeException(error); });
+        Map<String, Object> pending = reply.get();
+        engine.finish("ui", sibling, (String) pending.get("lease"), "release", null);
+        engine.acquire("ui", sibling, "complete", version(pending), reply::set, error -> { throw new RuntimeException(error); });
+        Map<String, String> other = version(engine.finish("ui", sibling, (String) reply.get().get("lease"), "activate", ID));
+
+        String ticket = fetch(engine, "ui");
+        String fast = (String) engine.stampFetch("ui", C, ticket, v).get("stamp");
+        engine.releaseFetch("ui", C, ticket, now[0] + 1);
+        check("stored".equals(engine.writeSnapshotOrdered("ui", C, v, "confirmed", now[0] * 1000L, fast).get("status")),
+            "Released fetch can persist the confirmed pair.");
+        Map<String, String> confirmed = snapshotFields(disk);
+        check(Long.toString(now[0] + 1).equals(confirmed.get(C + ".snapshotClockAt")),
+            "The confirmed reference includes a later sample from release.");
+        check("older".equals(engine.writeSnapshotOrdered("ui", C, v, "older", now[0] * 1000L - 1, fast).get("status")),
+            "An ordered write still compares microseconds within one era.");
+        check(!engine.writeSnapshot(C, v, "unstamped", (now[0] + 2) * 1000L),
+            "An unstamped write cannot displace an ordered payload.");
+
+        now[0] = 2000;
+        ticket = fetch(engine, "worker");
+        String corrected = (String) engine.stampFetch("worker", C, ticket, v).get("stamp");
+        engine.releaseFetch("worker", C, ticket);
+        check("superseded".equals(engine.writeSnapshotOrdered("ui", C, v, "wrong-owner", 2000000, corrected).get("status")),
+            "A stamp cannot be borrowed by another owner.");
+        disk.fail = true;
+        Map<String, Object> failedWrite = engine.writeSnapshotOrdered("worker", C, v, "unconfirmed", 2000000, corrected);
+        check("storageFailure".equals(failedWrite.get("status")) && Long.valueOf(1).equals(failedWrite.get("minimumEra")),
+            "Failed commit still advances the in-memory write floor.");
+        check("unconfirmed".equals(disk.data.get(C + ".snapshot")) && !confirmed.equals(snapshotFields(disk)),
+            "Backend exposes failed payload and ordering metadata in memory.");
+        Map<String, Object> read = engine.readSnapshotPair(C, v);
+        check("confirmed".equals(read.get("snapshot")) && Long.valueOf(0).equals(read.get("era"))
+                && Long.valueOf(1).equals(read.get("minimumEra")),
+            "Paired read separates the confirmed era from the write floor.");
+        disk.fail = false;
+        check(engine.writeSnapshot(sibling, other, "sibling-1", 1000) && confirmed.equals(snapshotFields(disk)),
+            "A sibling commit cannot make a failed snapshot pair durable.");
+
+        disk.fail = true;
+        boolean failed = false;
+        try { engine.clearSnapshot(C, v); } catch (IllegalStateException expected) { failed = true; }
+        Map<String, String> proposed = new HashMap<>(v);
+        proposed.put("epoch", disk.data.get(C + ".epoch"));
+        check(failed && !v.get("epoch").equals(proposed.get("epoch")) && !disk.data.containsKey(C + ".snapshot"),
+            "Failed clear surfaces the error after exposing the proposed epoch.");
+        check(Boolean.FALSE.equals(engine.readSnapshotPair(C, proposed).get("valid"))
+                && !engine.writeSnapshot(C, proposed, "wrong-epoch", 90000000),
+            "The proposed epoch cannot read or write.");
+        check("confirmed".equals(engine.readSnapshot(C, v))
+                && Long.valueOf(1).equals(engine.readSnapshotPair(C, v).get("minimumEra")),
+            "Failed clear retains the confirmed pair and the live write floor.");
+        disk.fail = false;
+        check(engine.writeSnapshot(sibling, other, "sibling-2", 2000) && confirmed.equals(snapshotFields(disk)),
+            "A sibling commit preserves the original epoch, payload and metadata.");
+        ConnectionCacheEngine cold = new ConnectionCacheEngine(disk, () -> now[0]);
+        check(cold.valid(C, v) && "confirmed".equals(cold.readSnapshot(C, v))
+                && Long.valueOf(0).equals(cold.readSnapshotPair(C, v).get("minimumEra")),
+            "A recreated engine loads only the confirmed epoch and pair.");
+        cold.clearSnapshot(C, v);
+        check(!cold.valid(C, v) && !cold.valid(C, proposed) && snapshotFields(disk).size() == 1,
+            "Successful clear retry retires the old epoch and all of its snapshot metadata.");
+        Map<String, Object> lease = acquire(cold, "ui", "read", null);
+        Map<String, String> cleared = version(finish(cold, "ui", lease, "release"));
+        check(cold.valid(C, cleared) && cold.readSnapshot(C, cleared) == null
+                && cold.readSnapshotPair(C, cleared).get("minimumEra") == null,
+            "The new cache epoch starts with no snapshot or ordering floor.");
+        ticket = fetch(cold, "ui");
+        String first = (String) cold.stampFetch("ui", C, ticket, cleared).get("stamp");
+        cold.releaseFetch("ui", C, ticket);
+        disk.fail = true;
+        check("storageFailure".equals(cold.writeSnapshotOrdered("ui", C, cleared, "unconfirmed-first", 2000000, first).get("status")),
+            "The first ordered commit in the new epoch can fail.");
+        read = cold.readSnapshotPair(C, cleared);
+        check(read.get("snapshot") == null && Long.valueOf(0).equals(read.get("minimumEra")),
+            "The paired read reports the write floor even without a confirmed snapshot.");
+    }
+
+    static Map<String, String> snapshotFields(Disk disk) {
+        Map<String, String> fields = new HashMap<>();
+        disk.data.forEach((key, value) -> {
+            if (key.equals(C + ".epoch") || key.startsWith(C + ".snapshot")) fields.put(key, value);
+        });
+        return fields;
+    }
+
+    static void failedFirstLegacyCleanupRetainsEmptyState() {
+        MemoryUpdatingDisk disk = new MemoryUpdatingDisk();
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+        Map<String, String> version = version(login(engine));
+        String legacy = "anthropic.plan";
+        AtomicReference<Map<String, Object>> response = new AtomicReference<>();
+        engine.acquire("ui", legacy, "read", null, response::set, error -> { throw new RuntimeException(error); });
+        String ticket = (String) response.get().get("lease");
+        disk.fail = true;
+        boolean failed = false;
+        try { engine.queueLegacyCleanup("ui", legacy, ticket); } catch (IllegalStateException expected) { failed = true; }
+        check(failed && disk.data.containsKey(legacy + ".epoch"), "Failed cleanup exposes a proposed legacy lifecycle.");
+        Map<String, Object> released = engine.finish("ui", legacy, ticket, "release", null);
+        check("legacy".equals(released.get("mode")) && !released.containsKey("generation"),
+            "Cache epoch rollback keeps the whole prior legacy lifecycle readable.");
+        disk.fail = false;
+        check(engine.writeSnapshot(C, version, "sibling", 1000)
+                && disk.data.keySet().stream().noneMatch(key -> key.startsWith(legacy + ".")),
+            "A sibling cache commit cannot persist a partial legacy lifecycle.");
+    }
+
     static void identityAndAggregate() {
         Disk disk = new Disk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
         Map<String, String> v = version(login(engine)); engine.writeSnapshot(C, v, "cached", 10);
@@ -362,17 +483,47 @@ public final class ConnectionCacheEngineTest {
     }
 
     static void timestampPrecisionAndLegacyUpgrade() {
-        Disk disk = new Disk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+        Disk disk = new MemoryUpdatingDisk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
         Map<String, String> version = version(login(engine));
         check(engine.writeSnapshot(C, version, "newer", 1001), "New microsecond snapshot persists.");
         check(!engine.writeSnapshot(C, version, "older", 1000), "One-microsecond older write is refused.");
         disk.data.remove(C + ".snapshotTimeUnit"); disk.data.put(C + ".snapshotAt", "1");
+        disk.data.remove(C + ".snapshotWriteId");
+        Map<String, Object> legacy = engine.readSnapshotPair(C, version);
+        Map<String, Map<String, Object>> legacyPayload = Map.of(C,
+            Map.of("era", 0L, "generatedAt", 1001L, "rowId", legacy.get("rowId")));
+        Map<String, Map<String, String>> versions = Map.of(C, version);
         check("newer".equals(new ConnectionCacheEngine(disk).readSnapshot(C, version)), "Legacy millisecond records remain readable after restart.");
         check(engine.upgradeSnapshotTimestamp(C, version, "newer", 1001), "Legacy ordering upgrades from parsed original timestamp.");
-        check(!engine.writeSnapshot(C, version, "older", 1000), "Legacy upgrade retains submillisecond ordering.");
+        check(legacy.get("order").equals(engine.readSnapshotPair(C, version).get("order"))
+                && engine.validAll(versions, Map.of(), legacyPayload, Map.of()),
+            "Timestamp precision upgrades retain the same paired payload identity.");
+        check(!engine.writeSnapshot(C, version, "older", 1000)
+                && engine.validAll(versions, Map.of(), legacyPayload, Map.of()),
+            "Legacy upgrade retains submillisecond ordering and the confirmed row proof.");
+        disk.fail = true;
+        check(!engine.writeSnapshot(C, version, "unconfirmed", 1001)
+                && engine.validAll(versions, Map.of(), legacyPayload, Map.of()),
+            "A failed equal-time write leaves the confirmed legacy row current.");
+        disk.fail = false;
+        check(engine.writeSnapshot(C, version, "equal-time replacement", 1001)
+                && !engine.validAll(versions, Map.of(), legacyPayload, Map.of()),
+            "A committed equal-time write retires the earlier row proof.");
+        Map<String, Map<String, Object>> replacement = Map.of(C,
+            Map.of("era", 0L, "generatedAt", 1001L, "rowId", engine.readSnapshotPair(C, version).get("rowId")));
+        ConnectionCacheEngine cold = new ConnectionCacheEngine(disk);
+        check(cold.validAll(versions, Map.of(), replacement, Map.of())
+                && !cold.validAll(versions, Map.of(), legacyPayload, Map.of()),
+            "The new row proof survives recreation within the same cache epoch.");
         engine.writeSnapshot(C, version, "latest", 1002);
         check(!engine.upgradeSnapshotTimestamp(C, version, "newer", 1001), "Delayed metadata upgrade cannot replace newer payload.");
         check("latest".equals(engine.readSnapshot(C, version)), "Metadata upgrade race leaves newer payload intact.");
+        Map<String, Map<String, Object>> latest = Map.of(C,
+            Map.of("era", 0L, "generatedAt", 1002L, "rowId", engine.readSnapshotPair(C, version).get("rowId")));
+        check(engine.validAll(versions, Map.of(), latest, Map.of()), "The latest row validates before clearing.");
+        engine.clearSnapshot(C, version);
+        check(!engine.validAll(versions, Map.of(), latest, Map.of()),
+            "A successful clear retires row proofs from the previous epoch.");
     }
 
     static boolean rejection(ConnectionCacheEngine engine, String owner, String connection, Map<String, String> expected, boolean remove) {

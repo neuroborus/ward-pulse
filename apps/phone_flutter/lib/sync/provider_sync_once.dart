@@ -37,9 +37,9 @@ typedef ProviderSyncStaleMarker =
 /// Whether one headless invocation still owns Live publications.
 ///
 /// Debug Mock data belongs to the foreground app. A saved Mock choice, or one
-/// that cannot be read, retires the invocation for good; the next invocation
-/// asks again. Release builds never read the debug preference. Once a
-/// repository result is bound, it also owns credential/snapshot provenance.
+/// that cannot be read, retires the invocation for good. Release builds never
+/// read the debug preference. Failed validation of bound credential/snapshot
+/// provenance also retires the invocation. The next invocation checks again.
 final class HeadlessLiveOwner {
   HeadlessLiveOwner({
     bool debugBuild = kDebugMode,
@@ -57,10 +57,21 @@ final class HeadlessLiveOwner {
   }
 
   /// Mode first: the bound provenance stays the final validation.
-  Future<bool> isCurrent() async {
-    if (!await isLive()) return false;
+  Future<bool> isCurrent() async =>
+      await isLive() && await _isProvenanceCurrent();
+
+  Future<bool> _isProvenanceCurrent() async {
+    if (_retired) return false;
     final provenance = _provenance;
-    return provenance == null || await provenance();
+    if (provenance == null) return true;
+    try {
+      if (await provenance()) return !_retired;
+    } catch (_) {
+      _retired = true;
+      rethrow;
+    }
+    _retired = true;
+    return false;
   }
 
   Future<bool> isLive() async {
@@ -98,7 +109,7 @@ final class ProviderSyncWork {
 ///
 /// Setup and delivery failures are recorded but swallowed so one surface never
 /// prevents another from receiving the newest snapshot. A retired invocation
-/// is not a failure: it leaves every surface, including STALE, untouched.
+/// leaves every surface, including STALE, untouched.
 Future<void> providerSyncOnce({
   ProviderSyncWorkLoader load = loadProviderSyncWork,
   ProviderSyncFailureLogger logFailure = _logProviderSyncFailure,
@@ -175,6 +186,8 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
                 key: value.values,
             },
           ]),
+          snapshotOrdering:
+              error is DashboardLoadException ? error.snapshotOrdering : null,
         );
     owner.bindProvenance(() => live.repository.isSnapshotCurrent(failure));
     // A load that ends after Mock took over is retired, not a Live failure.
@@ -186,8 +199,9 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
   final isCurrent = owner.isCurrent;
 
   if (!await owner.isLive()) return null;
-  if (!await live.repository.isSnapshotCurrent(snapshot))
+  if (!await owner._isProvenanceCurrent()) {
     throw StateError('Connection changed during refresh.');
+  }
   return ProviderSyncWork(
     isCurrent: isCurrent,
     syncWatch: () async {

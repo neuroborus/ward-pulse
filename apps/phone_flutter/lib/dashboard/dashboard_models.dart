@@ -23,14 +23,81 @@ final class ConnectionReportingUpdate {
     required this.connection,
     this.credentialVersion,
     this.outcome,
-  });
+    this.attemptEra,
+  }) : _failureSelection = null;
+
+  ConnectionReportingUpdate.completed(
+    ConnectionReportingOutcome result,
+    SnapshotOrdering? ordering,
+  ) : connection = result.connection,
+      credentialVersion = result.credentialVersion,
+      outcome = result,
+      attemptEra = ordering?.attemptEra,
+      _failureSelection = result.failed ? ordering : null;
 
   final ProviderConnectionId connection;
   final CredentialVersion? credentialVersion;
 
   /// Null while the versioned request is actively running.
   final ConnectionReportingOutcome? outcome;
+
+  /// Native ordering evidence for the completed outcome.
+  final int? attemptEra;
+
+  // Before a fetch is stamped, failure feedback depends on the cache selection.
+  final SnapshotOrdering? _failureSelection;
+
   bool get checking => outcome == null;
+}
+
+/// The display proof for reporting updates with confirmed credential versions.
+DashboardSnapshot reportingUpdatesProof(
+  Iterable<ConnectionReportingUpdate> updates,
+) => DashboardSnapshot.empty()
+    .withConnectionVersions(
+      {
+        for (final update in updates)
+          update.connection.storageKey: update.credentialVersion!.values,
+      },
+      snapshotOrdering: {
+        for (final update in updates)
+          if (update.attemptEra case final era?)
+            update.connection.storageKey: SnapshotOrdering(attemptEra: era)
+          else if (update._failureSelection case final selection?)
+            update.connection.storageKey: selection,
+      },
+    )
+    .withReportingOutcomes([
+      for (final update in updates)
+        if (update.outcome case final outcome?) outcome,
+    ]);
+
+/// Keeps versioned feedback that can be published together.
+Future<void> pruneUnverifiedReportingUpdates(
+  Map<ProviderConnectionId, ConnectionReportingUpdate> updates,
+  Future<bool> Function(DashboardSnapshot proof) validate,
+) async {
+  Future<bool> current(Iterable<ConnectionReportingUpdate> candidates) async {
+    try {
+      return await validate(reportingUpdatesProof(candidates));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Recheck the survivors together after any individual probes.
+  while (updates.isNotEmpty && !await current(updates.values)) {
+    final obsolete = <ProviderConnectionId>[];
+    for (final entry in updates.entries) {
+      if (!await current([entry.value])) obsolete.add(entry.key);
+    }
+    if (obsolete.isEmpty) {
+      // Individual checks cannot replace the complete publication gate.
+      if (!await current(updates.values)) updates.clear();
+      break;
+    }
+    for (final id in obsolete) updates.remove(id);
+  }
 }
 
 /// Phone-only result for an exact connection, independent of account data.
@@ -44,6 +111,7 @@ final class ConnectionReportingOutcome {
     required this.source,
     this.freshness = ReportingOutcomeFreshness.unknown,
     this.credentialVersion,
+    this.provisionalReadFailure = false,
   });
 
   final ProviderConnectionId connection;
@@ -51,6 +119,9 @@ final class ConnectionReportingOutcome {
   final ReportingOutcomeSource source;
   final ReportingOutcomeFreshness freshness;
   final CredentialVersion? credentialVersion;
+
+  /// An unversioned reader error without a managed storage observation.
+  final bool provisionalReadFailure;
 
   bool get failed => category != ReportingOutcomeCategory.success;
   bool get canEditKey =>
@@ -189,6 +260,37 @@ extension DashboardSyncIssueMessage on DashboardSyncIssue {
   }
 }
 
+typedef SnapshotPayloadOrder = ({int era, int generatedAtMicros});
+typedef SnapshotCacheObservation = ({String order, String? rowId});
+
+/// Phone-only evidence tied to one connection's cache epoch.
+final class SnapshotOrdering {
+  const SnapshotOrdering({
+    this.payload,
+    this.confirmedRowId,
+    this.cacheObservation,
+    this.attemptEra,
+    this.emptyCacheOrder,
+    this.selectionUnverified = false,
+  });
+
+  final SnapshotPayloadOrder? payload;
+
+  /// Write identity from the paired native read, when the payload is durable.
+  final String? confirmedRowId;
+
+  /// Paired native observation against which a RAM payload was selected.
+  final SnapshotCacheObservation? cacheObservation;
+  final int? attemptEra;
+
+  /// Native order of the observed payload (or its absence) and clock floor.
+  /// This also qualifies a retained payload when failure precedes admission.
+  final String? emptyCacheOrder;
+
+  /// A failed selection without enough evidence to qualify publication.
+  final bool selectionUnverified;
+}
+
 class DashboardSnapshot {
   DashboardSnapshot({
     required this.generatedAt,
@@ -204,11 +306,13 @@ class DashboardSnapshot {
     this.syncDetails,
     this.syncRejection,
     Map<String, Map<String, String>> connectionVersions = const {},
+    Map<String, SnapshotOrdering> snapshotOrdering = const {},
     Iterable<ConnectionReportingOutcome> reportingOutcomes = const [],
   }) : connectionVersions = Map.unmodifiable({
          for (final entry in connectionVersions.entries)
            entry.key: Map<String, String>.unmodifiable(entry.value),
        }),
+       snapshotOrdering = Map.unmodifiable(snapshotOrdering),
        reportingOutcomes = List.unmodifiable(reportingOutcomes);
 
   final DateTime generatedAt;
@@ -224,8 +328,11 @@ class DashboardSnapshot {
   final String? syncDetails;
   final ConnectionRejection? syncRejection;
 
-  /// Phone-only lifecycle provenance; never serialized into shared contracts.
+  /// Phone-only lifecycle evidence for reads, selected data and attempts.
   final Map<String, Map<String, String>> connectionVersions;
+
+  /// Phone-only ordering evidence for connection selections and attempts.
+  final Map<String, SnapshotOrdering> snapshotOrdering;
 
   /// Phone-only reporting results, including failures with no account data.
   final List<ConnectionReportingOutcome> reportingOutcomes;
@@ -323,6 +430,7 @@ class DashboardSnapshot {
       syncDetails: syncDetails,
       syncRejection: syncRejection,
       connectionVersions: connectionVersions,
+      snapshotOrdering: snapshotOrdering,
       reportingOutcomes: reportingOutcomes,
     );
   }
@@ -346,13 +454,15 @@ class DashboardSnapshot {
       syncDetails: details,
       syncRejection: rejection,
       connectionVersions: connectionVersions,
+      snapshotOrdering: snapshotOrdering,
       reportingOutcomes: reportingOutcomes,
     );
   }
 
   DashboardSnapshot withConnectionVersions(
-    Map<String, Map<String, String>> versions,
-  ) => DashboardSnapshot(
+    Map<String, Map<String, String>> versions, {
+    Map<String, SnapshotOrdering>? snapshotOrdering,
+  }) => DashboardSnapshot(
     generatedAt: generatedAt,
     overallStatus: overallStatus,
     accounts: accounts,
@@ -366,6 +476,7 @@ class DashboardSnapshot {
     syncDetails: syncDetails,
     syncRejection: syncRejection,
     connectionVersions: versions,
+    snapshotOrdering: snapshotOrdering ?? this.snapshotOrdering,
     reportingOutcomes: reportingOutcomes,
   );
 
@@ -384,6 +495,7 @@ class DashboardSnapshot {
         syncDetails: syncDetails,
         syncRejection: syncRejection,
         connectionVersions: connectionVersions,
+        snapshotOrdering: snapshotOrdering,
         reportingOutcomes: reportingOutcomes,
       );
 
@@ -403,6 +515,7 @@ class DashboardSnapshot {
     syncDetails: syncDetails,
     syncRejection: syncRejection,
     connectionVersions: connectionVersions,
+    snapshotOrdering: snapshotOrdering,
     reportingOutcomes: outcomes,
   );
 }
