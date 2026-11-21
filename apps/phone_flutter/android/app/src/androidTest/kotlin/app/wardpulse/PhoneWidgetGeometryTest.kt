@@ -53,14 +53,16 @@ class PhoneWidgetGeometryTest : InstrumentationTestCase() {
                 aggregateBudget(context)
                 fallbacks(night)
             }
+            if (Build.VERSION.SDK_INT >= 31) intermediateResize()
         }
     }
 
-    private fun configured(night: Int, orientation: Int): Context {
+    private fun configured(night: Int, orientation: Int, densityDpi: Int? = null): Context {
         val target = instrumentation.targetContext
         val configuration = Configuration(target.resources.configuration).apply {
             uiMode = (uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or night
             this.orientation = orientation
+            if (densityDpi != null) this.densityDpi = densityDpi
         }
         return target.createConfigurationContext(configuration)
     }
@@ -251,6 +253,78 @@ class PhoneWidgetGeometryTest : InstrumentationTestCase() {
         assertEquals(listOf(wide, narrow), provider.hostSizes(sanitized).values)
         val guarded = options((0..16).map { SizeF(200f + it, 600f) })
         assertEquals("Input/map limit stays sixteen", 16, provider.hostSizes(guarded).values.size)
+    }
+
+    private fun intermediateResize() {
+        val context = configured(Configuration.UI_MODE_NIGHT_NO,
+            Configuration.ORIENTATION_PORTRAIT, densityDpi = 390)
+        val density = context.resources.displayMetrics.density
+        assertEquals("Intermediate resize fixture density", 390, context.resources.displayMetrics.densityDpi)
+        val rows = listOf(
+            Triple("Codex", "5-hour session", "100%"),
+            Triple("Codex", "Weekly plan", "100%"),
+            Triple("Claude", "5-hour session", "50%"),
+            Triple("Claude", "Weekly plan", "75%"),
+            Triple("Cursor", "Models", "80%"),
+        )
+        val purchasedRow = 1
+        val balance = "4.2K"
+        val data = buildMap {
+            put("row_count", rows.size)
+            for ((index, row) in rows.withIndex()) {
+                val (family, pool, percent) = row
+                put("row_${index}_label", "$family · $pool")
+                put("row_${index}_family", family)
+                put("row_${index}_pool", pool)
+                put("row_${index}_percent", percent)
+                if (index == purchasedRow) put("row_${index}_credits", balance)
+            }
+        }
+        val height = 790
+        val widths = listOf(500, 535, 574, 779)
+        // Choose a dp value inside each pixel's ceil interval, away from rounding boundaries.
+        val sizes = widths.map { SizeF((it - 0.5f) / density, (height - 0.5f) / density) }
+        val publication = publish(context, options(sizes), data)
+        assertTrue(publication.sizes.responsive)
+        assertEquals(widths.size, publication.plans.size)
+        val host = host(context, publication)
+        for ((step, index) in listOf(0, 1, 2, 3, 2, 1, 0).withIndex()) {
+            val width = widths[index]
+            val plan = publication.plans[index]
+            val case = "intermediate resize/step=$step/width=$width"
+            val labels = width >= 535
+            val showBalance = width == 779
+            assertEquals(case, width, plan.width)
+            assertEquals(case, height, plan.height)
+            assertEquals("All five complete rows: $case", rows.size, plan.rows.size)
+            val expectedText = buildList {
+                for ((rowIndex, row) in rows.withIndex()) {
+                    val (family, pool, percent) = row
+                    add(percent)
+                    if (labels) {
+                        add(family)
+                        add(pool)
+                    }
+                    if (showBalance && rowIndex == purchasedRow) add(balance)
+                }
+            }
+            assertEquals("Exact text in the fitting columns: $case", expectedText, plan.text.map { it.text })
+
+            measure(host, width, height)
+            assertNative(host, plan, case)
+            val expectedDescription = buildList {
+                add(context.getString(R.string.ward_pulse_widget_title))
+                for ((rowIndex, row) in rows.withIndex()) {
+                    val (family, pool, percent) = row
+                    val identity = "$family · $pool, $percent remaining"
+                    add(if (showBalance && rowIndex == purchasedRow) "$identity, $balance purchased credits"
+                        else identity)
+                }
+            }.joinToString(". ")
+            val root = host.findViewById<View>(R.id.widget_root)
+            assertEquals("Full identities and only visible values: $case",
+                expectedDescription, root.contentDescription.toString())
+        }
     }
 
     private fun fallbacks(night: Int) {

@@ -33,7 +33,7 @@ The mark stays anchored to the card with nominal 36×15 ink, top 2 and end margi
 | Budget spent / cap | 26 Bold 700 / 11 Regular 400 |
 | Extra used/cap Quantity line / optional reset | 18 Bold 700 / 11 Regular 400 |
 | STALE / complete empty or no-fit copy | 11 Bold / 12 Regular |
-| Row / row gap / side and bottom padding | 44 / 8 / 16 |
+| Row / row gap / nominal side and bottom padding | 44 / 8 / 16 |
 
 **Budget detail typography — 2026-11-04 revision.** Native budget spent details and current
 default review/picker exports share the purchased-balance 26 Bold 700 style. Budget
@@ -58,6 +58,22 @@ refuse at 84. Omit a genuinely crowded allowance reset before its balance, then 
 right details and label columns. Drop trailing rows only for actual height or bitmap-budget
 pressure; never hide a width-unfit Money row that way. No 18 primary, ellipsis, clipping,
 inferred currency, width-dependent rounding or system-font substitution is allowed.
+
+### Intermediate launcher widths — 2026-11-22 sizing correction
+
+The two-column fit keeps the full primary and family/pool labels. It uses the nominal
+16dp side inset whenever that fits and reduces each side only as needed, down to 4dp.
+The one- and three-column fits keep their nominal side inset. Bottom padding, header,
+mark, accent reserve and column spacing retain their existing dimensions.
+
+The reported Pixel (1080 × 2364 at 390dpi) showed five rows in both frames, at roughly
+574px with percentages only and roughly 779px with details. A before-fix API36 AVD probe
+with bundled Noto and a 790px usable height found two columns first fit at 589px and
+three at 738px. The 535px case is a conservative estimate of content width after launcher
+padding. The physical launcher options are unknown. The candidate regression keeps the
+790px usable height and expects all five rows at each width, with percentages alone at
+500px, labels at 535px and 574px, and details at 779px. Candidate native and launcher
+resize acceptance remain **Pending**.
 
 ## Metric rules and optional reset
 

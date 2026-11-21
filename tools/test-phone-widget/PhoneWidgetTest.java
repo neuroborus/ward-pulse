@@ -1,10 +1,12 @@
 package app.wardpulse;
 
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.stream.Collectors;
 
 /** Exercises production presentation, fit and navigation without an Android dependency. */
 public final class PhoneWidgetTest {
@@ -112,8 +114,10 @@ public final class PhoneWidgetTest {
                 "Omitted resets are not announced.");
         check(fit(306, 184, false).rows.get(0).credits, "Exact balance width fits.");
         check(!fit(305, 184, false).rows.get(0).credits, "Drop the entire detail column.");
-        check(fit(230, 184, false).rows.get(0).labels, "Exact label width fits.");
-        check(!fit(229, 184, false).rows.get(0).labels, "Drop the entire label column.");
+        check(labels.card.width() == 230 && fit(230, 184, false).rows.get(0).labels,
+                "Keep the nominal inset when it fits.");
+        check(fit(206, 184, false).rows.get(0).labels, "Exact minimum inset fits the labels.");
+        check(!fit(205, 184, false).rows.get(0).labels, "Drop labels below the minimum inset.");
         check(fit(114, 184, false).rows.size() == 3, "Exact primary width fits.");
         check(fit(113, 184, false).state == PhoneWidgetLayout.EmptyState.RESIZE,
                 "Do not clip a primary token below its measured width.");
@@ -180,6 +184,52 @@ public final class PhoneWidgetTest {
         check(dense.rows.size() == 6 && dense.bitmapBytes() * 2 <= PhoneWidgetLayout.MAX_BITMAP_BYTES,
                 "Two bounded density-specific variants retain the reference rows.");
         checkBounds(dense);
+    }
+
+    private static void intermediateResize() {
+        float density = 390 / 160f;
+        List<PhoneWidgetLayout.Row> rows = Arrays.asList(
+                row("Codex", "5-hour session", "100%", "", ""),
+                row("Codex", "Weekly plan", "100%", "4.2K", ""),
+                row("Claude", "5-hour session", "50%", "", ""),
+                row("Claude", "Weekly plan", "75%", "", ""),
+                row("Cursor", "Models", "80%", "", ""));
+        PhoneWidgetLayout.Measurer base = metrics(density);
+        PhoneWidgetLayout.Measurer incidentMetrics = (text, style) -> {
+            PhoneWidgetLayout.Glyphs glyphs = base.measure(text, style);
+            // Use the recorded widest native tokens as synthetic widths for this fit case.
+            if (text.equals("100%")) return withWidth(glyphs, 194);
+            if (text.equals("5-hour session")) return withWidth(glyphs, 272);
+            if (text.equals("4.2K")) return withWidth(glyphs, 134);
+            return glyphs;
+        };
+        for (int width : new int[] {500, 535, 574, 779, 574, 535, 500}) {
+            PhoneWidgetLayout.Plan plan = PhoneWidgetLayout.fit(width, 790, density, rows,
+                    false, false, incidentMetrics, PhoneWidgetLayout.MAX_BITMAP_BYTES, 0);
+            boolean labels = width >= 535, details = width == 779;
+            List<String> expectedText = new ArrayList<>();
+            for (PhoneWidgetLayout.Row row : rows) {
+                expectedText.add(row.percent);
+                if (labels) {
+                    expectedText.add(row.family);
+                    expectedText.add(row.pool);
+                }
+                if (details && !row.credits.isEmpty()) expectedText.add(row.credits);
+            }
+            check(plan.rows.size() == rows.size(), "Keep all five complete rows at " + width);
+            check(plan.text.stream().map(run -> run.text).collect(Collectors.toList())
+                            .equals(expectedText), "Keep exact text in the fitting columns at " + width);
+            int inset = width == 535 ? 12 : width == 574 ? 31 : 39;
+            check(plan.bars.get(0).x - plan.card.left == inset
+                            && plan.card.bottom - (plan.rows.get(4).top + plan.rows.get(4).height) == 39,
+                    "Release only the necessary side inset and keep bottom padding at " + width);
+            checkBounds(plan);
+        }
+    }
+
+    private static PhoneWidgetLayout.Glyphs withWidth(PhoneWidgetLayout.Glyphs base, int width) {
+        return new PhoneWidgetLayout.Glyphs(base.left, base.top, base.left + width, base.bottom,
+                base.lineTop, base.lineBottom, base.supported);
     }
 
     private static PhoneWidgetLayout.Row budget(String percent, String spent, String cap,
@@ -345,8 +395,7 @@ public final class PhoneWidgetTest {
             if (!text.equals(capped.spent)) return base;
             int width = style == PhoneWidgetLayout.Style.PERCENT ? 180
                     : style == PhoneWidgetLayout.Style.CREDIT ? 150 : 110;
-            return new PhoneWidgetLayout.Glyphs(0, base.top, width, base.bottom,
-                    base.lineTop, base.lineBottom, base.supported);
+            return withWidth(base, width);
         };
         for (int width : new int[] {260, 224, 223, 194, 193}) {
             PhoneWidgetLayout.Plan plan = PhoneWidgetLayout.fit(width, 184, 1,
@@ -375,6 +424,33 @@ public final class PhoneWidgetTest {
                 Arrays.asList(row("Claude", "5h", "50%", "", ""), capped), false, false,
                 moneyMetrics, PhoneWidgetLayout.MAX_BITMAP_BYTES, 0);
         check(unfitTail.rows.isEmpty(), "Trailing-row fallback cannot hide a width-unfit Money row.");
+    }
+
+    private static void adaptiveMoneyInsets() {
+        PhoneWidgetLayout.Row capped = budget("50%", "1234", "10000", "USD");
+        PhoneWidgetLayout.Measurer base = metrics(1);
+        PhoneWidgetLayout.Measurer moneyMetrics = (text, style) -> {
+            PhoneWidgetLayout.Glyphs glyphs = base.measure(text, style);
+            if (style == PhoneWidgetLayout.Style.FAMILY || style == PhoneWidgetLayout.Style.POOL)
+                return withWidth(glyphs, 8);
+            if (text.equals(capped.spent))
+                return withWidth(glyphs, style == PhoneWidgetLayout.Style.PERCENT ? 180 : 177);
+            return glyphs;
+        };
+        // Only the two-column fit can show the full Money amount at these widths.
+        for (int width : new int[] {214, 211}) {
+            PhoneWidgetLayout.Plan plan = PhoneWidgetLayout.fit(width, 184, 1,
+                    Collections.singletonList(capped), false, false, moneyMetrics,
+                    PhoneWidgetLayout.MAX_BITMAP_BYTES, 0);
+            check(plan.rows.size() == 1 && plan.rows.get(0).labels && !plan.rows.get(0).lower
+                            && !plan.rows.get(0).credits,
+                    "Full-selection qualification admits the same two-column Money fit at " + width);
+            check(plan.text.get(0).text.equals(capped.spent)
+                            && plan.text.get(0).style == (width == 214
+                                    ? PhoneWidgetLayout.Style.PERCENT : PhoneWidgetLayout.Style.CREDIT),
+                    "Keep the complete Money amount at the largest fitting primary size at " + width);
+            checkBounds(plan);
+        }
     }
 
     private static void cacheAndCalendarCases() {
@@ -449,8 +525,10 @@ public final class PhoneWidgetTest {
                 "Empty values do not acquire spoken units or invented numbers.");
 
         layoutCases();
+        intermediateResize();
         cacheAndCalendarCases();
         dataAndMoneyCases();
+        adaptiveMoneyInsets();
         check(PhoneWidgetLayout.emptyState(0, false, 0) == PhoneWidgetLayout.EmptyState.NO_METRICS,
                 "Truly empty payload.");
         check(PhoneWidgetLayout.emptyState(3, true, 0) == PhoneWidgetLayout.EmptyState.NO_METRICS,
