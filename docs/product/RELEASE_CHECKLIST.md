@@ -13,8 +13,10 @@ Root's removal of the old unpublished GitHub draft belongs to that dated prepara
 On 2026-11-04, replacement stock generation consumed all eight reconstructed product inputs
 into one complete initial `0.1.0` entry, with no pending normal fragment or native version
 transition. The [release owner](../../tools/release/README.md#initial-candidate) records the
-semantic range, generation and current publication limits. The Owner explicitly selected
-this unpublished initial version; no deletion of the currently observed draft is delegated.
+semantic range, stock generation and 2026-11-04 observation of draft `422333810`. The Owner
+explicitly selected `0.1.0` while it was unpublished.
+[Stage B](#verified-transfer-and-draft-publication-stage-b) records the verified publication
+of `v0.1.0` as GitHub release `453987839`. Draft deletion remains outside delegated authority.
 Local preparation, generated notes, tags alone and drafts do not prove publication or
 authorize a new release operation. Verify actual publication records before correcting
 unpublished notes, stop on conflicting evidence and preserve published history and delivered
@@ -84,7 +86,7 @@ reallocate versions or invent a Play state.
 - Flutter app starts on an Android emulator.
 - Release builds never select mock data.
 - Debug mock data requires explicit opt-in in Settings.
-- Provider detail pages are reachable.
+- The Dashboard shows per-source details, including usage history and model usage where available.
 - Credentials are masked after save.
 - Sync logs are redacted.
 
@@ -103,7 +105,9 @@ reallocate versions or invent a Play state.
 - Face installs on emulator or physical watch.
 - Ambient mode remains readable.
 - Tap target opens the Wear OS app where supported.
-- Today, week, and provider status come from WardPulse complication data sources.
+- WardPulse complications show the selected ring metrics. The optional **WardPulse status**
+  complication shows sync status when assigned to a cell. Verify [retained bindings and slot
+  meanings](WATCH_RING_DESIGN.md#upper-cells-revision-2026-10-09) during updates.
 
 ### Watch Face Push acceptance
 
@@ -495,9 +499,11 @@ self-managed signing identity.
 
 [release-github.yml](../../.github/workflows/release-github.yml) implements Stage A in job
 `build` and Stage B in dependent job `publish`: independent transfer verification followed
-by draft staging and the selected GitHub release state. Hosted acceptance of the new notes
-and state options remains pending, alongside permissions, secrets, failure/cancellation
-cleanup, transfer and rerun/partial-state behavior.
+by draft staging and the selected GitHub release state. The signed build and producer
+verification passed on `main` at `6ded5b0b0190ac294153934fc28d9447320074c9` in
+[workflow run 44948886996](https://github.com/neuroborus/ward-pulse/actions/runs/44948886996).
+Other release selections remain pending, along with hosted coverage of permission and signing
+secret failures, transfer failures, failure and cancellation cleanup, reruns and partial states.
 Local source checks do not establish hosted behavior, Play delivery or runtime acceptance.
 Normal PR test CI stays separate.
 
@@ -532,8 +538,7 @@ properties and the Push keystore on success. The upload keystore remains for AAB
 until verification exits. Failure/signal traps clean immediately; an unconditional cleanup
 step also removes workflow-created signing files and private temporary state on success,
 failure or cancellation before upload. No release configuration is cached or uploaded.
-Hosted behavior still needs the acceptance above; private signing material must never enter
-logs or receipts.
+Private signing material must never enter logs or receipts.
 
 For a future authorized invocation, open **Actions → GitHub Release → Run
 workflow**, select branch `main`, and enter an already prepared stable tag (default `v0.1.0`).
@@ -544,8 +549,8 @@ prereleases stay nonlatest. Draft/prerelease are independent markers and still u
 The [release owner](../../tools/release/README.md#publication-boundary) describes readiness:
 the ledger/tag/native versions must agree, the exact generated notes must be nonempty and
 pending Changesets input must be consumed by an explicitly prepared cut before dispatch.
-The complete unpublished initial `0.1.0` entry includes the tooling notes without requiring
-a first `0.1.1` cut or a native version transition. This source readiness is separate from
+The initial `0.1.0` entry included the tooling notes without requiring a separate `0.1.1` cut
+or a native version transition. This source readiness is separate from
 publication and hosted acceptance. Notes are literal Markdown from the original immutable
 checkout; no npm setup or PR-list fallback is used.
 The workflow rejects other refs and checks out the original full dispatch SHA without persisted Git
@@ -598,6 +603,15 @@ Stage B. No build tree, logs, signing configuration or raw tokens are uploaded.
 
 ### Verified transfer and draft publication (Stage B)
 
+In the same run, Stage B independently verified the nine-file payload, checking all seven
+binary hashes and both verification files (`SHA256SUMS` and `provenance.json`). It staged the
+verified assets on a draft and published it as a normal stable release. The original `v0.1.0`
+tag peeled to the same source commit. See
+[GitHub release 453987839](https://github.com/neuroborus/ward-pulse/releases/tag/v0.1.0).
+Separate device verification confirmed in-place installation of the production-signed phone,
+Wear app and legacy watch face APKs. Google Play publishing and physical-device functional
+acceptance remain pending.
+
 Job `publish` runs only after successful `build`. It binds all seven outputs to the original
 `main` workflow dispatch, full source SHA, tag/version, run ID and expected artifact name.
 A publication-only rerun retains `build_run_attempt` from the successful build rather than
@@ -621,8 +635,6 @@ version/codes equal a newer source's declarations. Unknown, malformed, duplicate
 evidence fails closed; no asset-name inference, mixed convention, historical execution,
 retroactive rename or receipt rewrite is permitted. See
 [Play preparation](../../tools/release-google-play/README.md#preparation-interface).
-Source consistency review and synthetic tests do not establish an actual production signed
-staging run or delivery; those acceptance gates remain pending.
 
 Before any release mutation, authenticated paginated List releases includes drafts and rejects
 every existing release for the exact tag. GET-by-tag absence is not used. An existing tag is
@@ -816,6 +828,19 @@ pending until actually executed against the exact candidate source commit.
   hardware and unobserved recovery gates; other emulator results do not close them or
   runtime 16 KB acceptance. Preserve existing devices and signing identities during host
   acceptance; do not reset them or reinstall canonical apps under a different certificate.
+
+### Phone and Wear recovery
+
+The release owner still needs to review error, empty, and offline states across the phone
+and Wear OS. Cover a failed sync with no saved data, retention of cached connection data
+and the last successful watch summary during a later failure, stale indicators, and recovery
+after a successful sync. Physical-device smoke tests remain pending.
+
+On **2026-10-13**, the final Android x64 APK restored three cached plan connections as
+stale after an offline process restart. Wear showed stale Glance after a failed refresh.
+Phone polling and Wear summary delivery resumed after the normal APK and connectivity were
+restored. A separate emulator UI audit used synthetic data to exercise credential entry and
+budget validation. These observations cover part of the recovery review.
 
 ## Privacy And Legal
 

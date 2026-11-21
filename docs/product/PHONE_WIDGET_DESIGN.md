@@ -367,7 +367,8 @@ are unchanged. Previously saved descriptive strings render correctly without a n
 This revision does not change Dashboard, Wear or watch-face formatting, and does not
 promise to resolve central metric-label truncation.
 
-Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 14). Asset ownership: `docs/DESIGN_ASSETS.md`.
+See [Phone surface order](PHONE_DASHBOARD_DESIGN.md#phone-surface-order) for the configuration
+picker and [Design Assets](../DESIGN_ASSETS.md) for asset ownership.
 Do **not** copy [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md) layouts onto the phone launcher.
 
 ### Goal

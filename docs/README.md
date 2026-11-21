@@ -25,7 +25,6 @@ becoming public Vocs pages.
 
 ## Start Here
 
-- [DEVELOPMENT_PLAN.md](DEVELOPMENT_PLAN.md) is the full product and implementation plan.
 - [ANDROID_TOOLCHAIN.md](ANDROID_TOOLCHAIN.md) records the verified Android/Flutter development baseline, SDK package names, AVDs, and setup commands.
 - [Canonical WFF resources](../apps/watchface_wff/README.md#packaging-paths) feed both the
   legacy face and the [bundled Push APK](../apps/wear_android/watchface_push/README.md);
@@ -41,7 +40,7 @@ becoming public Vocs pages.
 - [product/WEAR_GLANCE_DESIGN.md](product/WEAR_GLANCE_DESIGN.md) — **baseline locked 2026-07-26**: Wear app Glance text legend (OK/!OK refresh, cadence vs rate-limit, Alerts pill); not a face clone.
 - [product/PHONE_DASHBOARD_DESIGN.md](product/PHONE_DASHBOARD_DESIGN.md) — **status rules locked
   2026-08-13**: when a status mark appears on the phone Dashboard and how a rollup differs from a
-  leaf. Rules, not a composition — no review board.
+  leaf. Also owns [phone surface order](product/PHONE_DASHBOARD_DESIGN.md#phone-surface-order).
 - [DOCUMENTATION.md](DOCUMENTATION.md) defines documentation ownership, Vocs tooling, and contributor workflow.
 - [product/ANDROID_GOALS.md](product/ANDROID_GOALS.md) defines the MVP goal, surfaces, and non-goals.
 - [product/PROVIDER_NOTES.md](product/PROVIDER_NOTES.md) tracks provider integration assumptions and open questions.
@@ -76,8 +75,12 @@ Use this index before adding new work:
 - Keep root README short and product-first, with an early screenshot gallery and user-guide
   entry; place the contributor link at the end and keep developer commands with their owners.
 - Keep long requirements and decisions in this folder.
-- Update `DEVELOPMENT_PLAN.md` when current scope, status, open work or verified acceptance changes.
-- Add focused documents instead of growing one catch-all file.
+- Record changes to scope, decisions and verified acceptance in their owning documents.
+  Track pending provider integration checks in [Provider Notes](product/PROVIDER_NOTES.md)
+  and pending release checks in the [Release Checklist](product/RELEASE_CHECKLIST.md).
+  Keep planned user-facing milestones in the [Roadmap](product/user-guide/ROADMAP.md).
+- Use [documentation structure](../.agents/skills/documentation-structure/SKILL.md)
+  for Markdown ownership, semantic splits, physical line limits and reading routes.
 - Link new documents from this index before relying on them in implementation.
 - Add a thin page under `site/src/pages/` and update `site/vocs.config.ts` only for public user
   guidance, the product roadmap and relevant privacy/help; apply

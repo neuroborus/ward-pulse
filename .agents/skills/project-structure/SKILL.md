@@ -12,7 +12,8 @@ Use this skill before adding or moving project files.
 - Read `docs/README.md` for the documentation gate.
 - Read `docs/DOCUMENTATION.md` when the change affects the Vocs site or documentation workflow.
 - Read `docs/DESIGN_ASSETS.md` when the change affects editable or exported visual assets.
-- Read `docs/DEVELOPMENT_PLAN.md` when the change affects architecture, product scope, or phase sequencing.
+- For changes to architecture or product scope, use the repository map in `AGENTS.md` and
+  the owning documents in `docs/README.md`.
 - Read root `AGENTS.md` for repository-wide working agreements.
 - Keep the root clean: `README.md`, `justfile`, repository config, and short operational files only.
 
@@ -45,11 +46,12 @@ Use this skill before adding or moving project files.
 - Keep app-specific OpenPencil sources under their owning app; keep shared identity sources in `brand/icons/`.
 - Do not treat files in `brand/` as Apache-2.0 licensed unless a file explicitly says so.
 - Do not add cross-platform abstractions until they remove real duplication or encode a stable boundary.
-- Prefer lightweight shells until a phase explicitly requires generated Flutter or Gradle projects.
+- Generate Flutter or Gradle projects only when the approved task requires them.
 
 ## Checks
 
 - New files live under the narrowest owning directory. Before freezing new owner paths, inspect effective ignore rules with `git check-ignore -v` (use `--no-index` when index state could mask a match); include any necessary minimal ignore exception among the declared owners instead of force-adding or relocating conventional source merely to evade ignores.
 - Empty directories have `.gitkeep` only when the directory is part of the planned structure.
 - Generated outputs are either ignored or placed under the documented generated folder.
-- Naming follows the plan: Rust crates `ward-pulse-*`, Dart package prefix `ward_pulse`, Kotlin package `app.wardpulse` or `io.wardpulse`.
+- Keep existing naming conventions: Rust crates `ward-pulse-*`, Dart package prefix
+  `ward_pulse`, Kotlin package `app.wardpulse` or `io.wardpulse`.

@@ -101,7 +101,9 @@ Partial endpoints follow the [short-positive revision](#revision-2026-11-01--sho
 its construction supersedes the historical straight-end/ROUND drawing switch, retaining its admission gates.
 The earlier bottom-only/uniform-centre candidate below is superseded, not accepted intent.
 
-Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 13). Asset ownership: `docs/DESIGN_ASSETS.md`.
+See [Design Assets](../DESIGN_ASSETS.md) for asset ownership and
+[adaptive integration qualification](RELEASE_CHECKLIST.md#adaptive-integration-qualification-2026-10-28)
+for update and rendering acceptance.
 
 Canonical review generator: `tools/render-watch-ring-designs.mjs`  
 Canonical face generator: `tools/render-watchface.mjs` — it writes the shipped `watchface.xml`
@@ -1128,8 +1130,8 @@ Spark is outside/right in `#186020`. Geometry and typography are unchanged. Both
 pairs and far markers, Glance clipping and visual fit were initially **deferred until live-data
 verification**; that revision recorded no new device measurements. Injected-load checks on
 **2026-10-01** verified Glance paired-row fit and clipping on round and notround screens
-(`WEAR_GLANCE_DESIGN.md`), and Phase 18 acceptance on **2026-10-04** covered fixed half order,
-lone-pool recovery and the one-row pair (`DEVELOPMENT_PLAN.md`). The far marker's remaining
+(`WEAR_GLANCE_DESIGN.md`), and acceptance on **2026-10-04** covered fixed half order,
+lone-pool recovery and the one-row pair. The far marker's remaining
 equivalence check was completed on **2026-10-12** — see *Marker equivalence confirmed* under
 Split band. These checks do not establish a live Codex/Spark payload; that live-data condition
 remains unverified.
@@ -1720,9 +1722,12 @@ called this band the "upper aperture"; it is the same band.
    moving them to the unused ids 201 / 202 / 203 drew nothing either, with the runtime logging
    `id[201] : EMPTY`; only uninstalling and reinstalling the package made the slots take their
    declared providers, after which the same ids logged `SHORT_TEXT`. So the binding is held
-   against the installed face rather than against the slot id, and a fresh id is not an escape
-   from it. This is a fact about updating a face in place, and it is the same hazard the
-   migration note in `docs/DEVELOPMENT_PLAN.md` Phase 20 records for the Wear services.
+   against the installed face. Keep slot meanings and complication service names stable for
+   installed faces. When the 2026-10-09 strip folding changed those meanings, an old face
+   paired with the new Wear app could show incorrect data until both were updated. Keeping the
+   service names stable alone could not preserve the old meanings. Verify retained bindings
+   and mixed versions through the release checklist's
+   [adaptive integration qualification](RELEASE_CHECKLIST.md#adaptive-integration-qualification-2026-10-28).
 
    The cells are nonetheless given ids of their own rather than the freed 104 / 107 / 108. That
    is a choice, not a remedy: an id that once named a WardPulse strip and later names a cell the
@@ -2555,10 +2560,11 @@ called this band the "upper aperture"; it is the same band.
     reset; those are things a cell *may* hold, offered to the wearer like any other provider.
     This revision commits the face to none of them.
 
-14. **The recovery marker is not part of this design.** It remains the open question recorded in
-    `docs/DEVELOPMENT_PLAN.md` Phase 15, and the face keeps saying it in its own language: an
-    exhausted selected ring stays at zero, so recovery restores its coloured arc. Giving the cells to the wearer does
-    not reserve one for it.
+14. **Recovery restores the selected ring's coloured arc on the next sync.** An exhausted
+    selected ring keeps its grey track and `0%` label until it recovers. The upper cells belong
+    to the wearer. A dedicated recovery marker remains an open design question. It requires an
+    approved revision, a complication data contract, an expiry rule and treatment of
+    simultaneous recoveries.
 
 ## Ring geometry (revised 2026-08-02)
 
@@ -3292,10 +3298,11 @@ when an unrelated comment three hundred lines above it grew. The `sceneElement.x
 elsewhere here is the exception that holds: that file ships inside the pinned validator jar, so
 no commit in this repository can move it.
 
-What the gate cannot do, it does not claim: `just check-designs` compares the boards against
-their own generator and nothing else (the `check-designs` recipe in the `justfile`), so a
-preview generated from a board is proved to match that board, never to match the face. The
-face is what a device capture proves, by hand, as the acceptance for this phase already asks.
+`just check-designs` compares the review boards against their generator (the `check-designs`
+recipe in the `justfile`). After visual changes, compare the boards by hand against a fresh
+interactive capture from the canonical round Wear AVD. The capture verifies the native face
+and the generator produces the preview asset. See the
+[Watch Face Format toolchain guidance](../ANDROID_TOOLCHAIN.md#watch-face-format).
 
 **That comparison was made on 2026-10-11, for the first time.** A 384-pixel capture of the face
 on `emulator-5554` and `round-3-plan-credits.svg` rendered to the same 384, both reduced to grey
@@ -3326,9 +3333,8 @@ not rest on it.** The finding above opens *the picker renders
 and then describes what that file draws. Read again, that is a **chain of inference** and not a
 sighting: picker, to metadata, to declared file, to the file's own content. The subject of
 *draws two hollow rings* is `preview.png`, and the detail around it — the `WARDPULSE` heading,
-the `OPENAI · OK` line — describes the image. Nothing in that paragraph, in the Phase 20 entry
-of `docs/DEVELOPMENT_PLAN.md`, or in the commits of that day records anyone looking at the
-picker and seeing `RING 1`.
+the `OPENAI · OK` line — describes the image. The record documents the asset rather than a
+picker observation.
 
 The one direct measurement of the picker is **2026-10-11**, on `emulator-5554`, and it shows a
 live render of the face rather than the asset:

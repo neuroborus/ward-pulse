@@ -126,8 +126,9 @@ rules are locked in `docs/product/WATCH_RING_DESIGN.md` — read it before chang
 
 - Locked baselines in `docs/product/`: `WATCH_RING_DESIGN.md` (face), `WEAR_GLANCE_DESIGN.md`
   (Glance), `PHONE_WIDGET_DESIGN.md` (widget), `PHONE_DASHBOARD_DESIGN.md` (Dashboard status
-  marks and balances — rules, no review board); asset ownership in `docs/DESIGN_ASSETS.md`;
-  phases in `docs/DEVELOPMENT_PLAN.md`; provider API notes in `docs/product/PROVIDER_NOTES.md`.
+  marks, balances and phone surface order); asset ownership in `docs/DESIGN_ASSETS.md`.
+  Use `docs/README.md` to find the owners of product scope, provider behavior and release
+  acceptance.
 - Review art is generated, never hand-edited: `tools/render-watch-ring-designs.mjs` (face),
   `tools/render-wear-glance-designs.mjs` (Glance), `tools/render-phone-widget-designs.mjs`
   (widget), `tools/render-brand-icons.mjs` + `just export-icons` (brand marks). Redraw all four

@@ -1,16 +1,16 @@
 # Android Toolchain
 
 This document is the operational source of truth for the WardPulse Android development
-environment. It records the baseline through the Phase 7 implementation, canonical SDK
-package names, local paths, verification commands, and tooling that is intentionally not
-installed yet.
+environment. It records the baseline through the OpenAI Platform reporting implementation,
+canonical SDK package names, local paths, verification commands, and tooling that is
+intentionally not installed yet.
 
 Last verified: **2026-07-19** on TUXEDO OS 24.04.4 LTS, x86_64.
 
 ## Current Readiness
 
-The command-line toolchain required through the local **Phase 7 — first real provider**
-build and test gates is ready:
+The command-line toolchain supports the local builds and tests through the first live
+provider integration, OpenAI Platform reporting.
 
 - Flutter detects the Android SDK and reports the Android toolchain as healthy.
 - All Android SDK licenses are accepted.
@@ -46,20 +46,19 @@ build and test gates is ready:
   ambient mode pass emulator acceptance (ambient is entered with `KEYCODE_SLEEP` — see Wear
   emulator navigation).
 
-The Phase 2 phone-dashboard, Phase 3 Rust-bridge, and Phase 4 Wear-app acceptance gates
-passed on **2026-07-18**. Phase 5 paired-device and Phase 6 WFF acceptance passed on
-**2026-07-19**. The face was checked on the square AVD, and ambient on both shapes, on
-**2026-08-12**.
+The phone dashboard, Rust bridge, and Wear app acceptance gates passed on **2026-07-18**.
+Paired-device and WFF acceptance passed on **2026-07-19**. The face was checked on the
+square AVD, and ambient on both shapes, on **2026-08-12**.
 
 Chrome and Linux desktop warnings from `flutter doctor` are out of scope. WardPulse targets
-Android phone, Wear OS, and Watch Face Format in the current product plan.
+Android phone, Wear OS, and Watch Face Format.
 
 ## Verified Versions
 
 | Component | Verified version | Current role |
 | --- | --- | --- |
-| Flutter | 3.44.6, stable channel | Phase 2 phone UI |
-| Dart | 3.12.2, bundled with Flutter | Phase 2 phone UI |
+| Flutter | 3.44.6, stable channel | Phone UI |
+| Dart | 3.12.2, bundled with Flutter | Phone UI |
 | Flutter DevTools | 2.57.0 | Flutter diagnostics |
 | OpenJDK / `javac` | 21.0.11 | Android builds and SDK tools |
 | Android Studio | Quail 2, 2026.1.2 | Wear emulator pairing and Android project tooling |
@@ -172,7 +171,7 @@ For AMD hosts, load `kvm_amd` instead of `kvm_intel`.
 
 ### Flutter
 
-The pinned Phase 2 archive and checksum are:
+Download the pinned Flutter archive and verify its checksum.
 
 ```sh
 mkdir -p "$HOME/develop"
@@ -846,9 +845,9 @@ than proceeding without it or repeatedly creating unverified snapshots.
 
 ## Watch Face Format
 
-The legacy watch face is a separate resource-only package in `apps/watchface_wff/` (Phase 13
-concentric baseline — `docs/product/WATCH_RING_DESIGN.md`). Its resources are also canonical
-inputs to the [bundled Push APK](#watch-face-push-builds); the table describes legacy packaging:
+The legacy watch face is a separate resource-only package in `apps/watchface_wff/`. Its resources
+are also canonical inputs to the [bundled Push APK](#watch-face-push-builds). See the
+[watch ring design](product/WATCH_RING_DESIGN.md) for the concentric baseline.
 
 | Setting | Value | Purpose |
 | --- | --- | --- |
@@ -2379,14 +2378,14 @@ prerequisites, privacy limits and required evidence.
 Do not hardcode `emulator-5554` in project automation; resolve the active device through
 `flutter devices` or `adb devices` because the emulator port can change.
 
-## Later-Phase Gaps
+## Provider Reporting Toolchain
 
-The Android toolchain is complete through the Phase 7 implementation. Android Studio **Quail 2 | 2026.1.2**,
-the Play Store phone image, and the canonical `wardpulse_phone_play_api36` AVD completed the
-emulator-to-emulator pairing check. The canonical Wear AVD also passed WFF install, render,
-tap-to-open, and ambient acceptance on the shared AGP 9.3 baseline. Phase 7 needs no
-additional Android host package. Codex acceptance uses the phone's browser and secure storage;
-Node.js 24 remains a documentation and design-tooling dependency only.
+Android Studio **Quail 2 | 2026.1.2**, the Play Store phone image, and the canonical
+`wardpulse_phone_play_api36` AVD completed the emulator-to-emulator pairing check. The canonical
+Wear AVD also passed WFF install, render, tap-to-open, and ambient acceptance on the shared
+AGP 9.3 baseline. OpenAI Platform reporting needs no additional Android host package. Codex
+acceptance uses the phone's browser and secure storage. Node.js 24 remains a documentation and
+design-tooling dependency only.
 
 ## Updating The Baseline
 

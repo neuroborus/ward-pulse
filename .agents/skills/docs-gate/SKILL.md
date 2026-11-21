@@ -17,7 +17,6 @@ Use this skill before changing durable project knowledge.
 - `docs/DOCUMENTATION.md`: documentation ownership, Vocs tooling, and contributor workflow.
 - `docs/DESIGN_ASSETS.md`: OpenPencil ownership and runtime export workflow.
 - `docs/site/`: public user-documentation Vocs configuration, navigation and thin presentation pages.
-- `docs/DEVELOPMENT_PLAN.md`: full product and implementation plan.
 - `docs/product/user-guide/`: authoritative guidance for people using the installed applications.
 - `docs/assets/`: public UI PNGs; `docs/assets/README.md` indexes screenshots and their freshness.
 - `docs/product/ANDROID_GOALS.md`: Android MVP goals and non-goals.
@@ -55,8 +54,9 @@ same change set; do not finish finalization with known stale documentation in sc
 - Update `docs/product/user-guide/` when user instructions change, and its thin Vocs imports
   and navigation when needed. Apply [user-docs](../user-docs/SKILL.md) to public guidance,
   the landing/README and screenshots; engineering references remain in the repository.
-- Keep `docs/DEVELOPMENT_PLAN.md` current on scope, status, open work and actually verified
-  acceptance; leave unverified checks pending.
+- Keep scope, decisions and verified acceptance with their documented owners. Follow the
+  [documentation index](../../../docs/README.md#documentation-rules) for pending acceptance
+  and user-facing plans.
 - Update affected contributor/component READMEs, `AGENTS.md` and local skills when their
   instructions or ownership are affected, rather than changing unrelated documentation.
 - If no documentation is affected, give a short reason in the handoff instead of making
@@ -72,5 +72,5 @@ making the owner's checks a new precondition of the step's commit.
 - Is it duplicated somewhere else?
 - Will another agent know where to find it from `docs/README.md`?
 - Is the Vocs page and navigation current when this document is exposed on the site?
-- Does this change alter phase scope in `docs/DEVELOPMENT_PLAN.md`?
+- Does this change alter product scope or an owning acceptance gate?
 - Does this create a public contract that should be represented in `schemas/`?

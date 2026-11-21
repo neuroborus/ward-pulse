@@ -245,7 +245,7 @@ Do not reintroduce a face clone (large concentric stacks, sunk strips, watermark
 time-as-hero), stacked icon-above-label refresh, or conflating cadence cooldown with
 `!OK` / `Rate limited`.
 
-Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 13). Asset ownership: `docs/DESIGN_ASSETS.md`.
+See [Design Assets](../DESIGN_ASSETS.md) for asset ownership.
 
 Canonical review generator: `tools/render-wear-glance-designs.mjs`  
 Primary preview: `apps/wear_android/design/preview-glance-legend-3.png`.

@@ -8,14 +8,35 @@ at which level it says it.
 This document locks **rules, not a composition.** The face, Glance and widget baselines each own
 a generated review board because their layout is fixed; the Dashboard is a list whose length is
 the user's, so a reference picture would rot faster than it could be drawn. What is locked here
-is when a mark appears, what each level of the screen may say, and where the numbers come from.
+is when a mark appears, what each level of the screen may say, where the numbers come from and
+how the phone's metric and provider lists are ordered.
 
 Implementation must follow this document, and for the status marks it does — checked rule by
 rule against the code and read on a device on 2026-10-11, recorded under *Implemented* after
 the rules.
 
-Phase context: `docs/DEVELOPMENT_PLAN.md` (Phase 16 owns the *order* of the same rows; this
-document owns their status marks). Palette and family colors: `docs/DESIGN_ASSETS.md`.
+Palette and family colors are defined in [Design Assets](../DESIGN_ASSETS.md).
+
+## Phone surface order
+
+| Tab | Order |
+| --- | --- |
+| Dashboard | Families with the worst account or allowance status first, then descending same-currency month spend, then stable family key. |
+| Providers | Families with a snapshot account or a saved credential first, then worst account status, then stable family key. Each family keeps Plan above Platform. |
+| Watchface and Widget | Within each Plan, Platform or Other group, connections with any catalog entry that satisfies `WatchRingMetric.isAvailable` come first, then stable connection key. Metrics retain catalog order, including budget periods. |
+
+Dashboard and Providers use the shared severity scale through `compareByStatus`. Dashboard
+combines same-currency spend only for ranking. `FrozenOrder` retains the Dashboard family order
+through numeric updates and label edits, and reranks when family membership or status changes.
+Within each family, stable connection and account identifiers determine source placement.
+
+Both pickers use `groupMetricCatalog`. Changes to the remaining percentage of a metric that
+stays available keep its position stable. The Widget picker also lets users add a reported
+expense without a local cap. Each picker keeps unavailable choices visible and lets users
+deselect previously saved choices even when they are unavailable.
+
+The owner declined manual card rearrangement on 2026-10-08. The installed home widget and
+watch surfaces retain their own display order.
 
 ## The three levels
 
@@ -164,13 +185,8 @@ load saved Labels. Budget and Alerts dialogs also use canonical source titles in
 of Labels, preserving exact editor targets and Save/Cancel behavior, including Alerts · Cursor
 plan. Native fit and public capture acceptance for this revision remain pending.
 
-Family identity and source placement depend on stable keys, independently of
-display copy. `_providerDashboardSections` orders families by the existing
-severity scale, then admissible same-currency month spend, then family key.
-Month spend is aggregated only for ordering; mixed currencies are never added.
-`FrozenOrder` holds the result through number-only refreshes and label edits,
-reranking on the existing family identity/status changes. No common Plan/API remainder
-is displayed; unrelated Dashboard summaries remain.
+Family identity and source placement follow [Phone surface order](#phone-surface-order).
+Plan capacity and API spend remain separate.
 
 **Source expense revision 2026-11-03.** Reporting connections `openai.platform`,
 `anthropic.platform` and `cursor.platform` each render one compact `_SourceExpenseBlock`
@@ -345,8 +361,6 @@ which is no help when the tail is not zeros.
 
 - **Settings diagnostics rows** keep their pill: a row that states one thing's state is not a
   level of this hierarchy.
-- **Row order** — `DEVELOPMENT_PLAN.md` Phase 16. Order answers "what comes first", this
-  document answers "what speaks at all".
 - **Alerts.** User-configured threshold alerts render as their own list; a status mark is
   chrome about a provider, not an entry in that list.
 - **Review art.** See the header: rules, not a composition.

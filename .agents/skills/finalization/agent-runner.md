@@ -18,7 +18,8 @@ to the operator's judgement, by way of the task.
 
 ## 1. Scope Review
 
-- [ ] Changes match the plan step and the current phase in `docs/DEVELOPMENT_PLAN.md`.
+- [ ] Changes match the approved plan step and applicable product requirements indexed in
+      `docs/README.md`.
 - [ ] Root files stay short and operational; durable requirements stay under `docs/`.
 - [ ] No generated platform project noise was added unless the task asked for it.
 - [ ] No unrelated local or owner changes were reverted.
