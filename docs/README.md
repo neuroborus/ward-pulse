@@ -79,7 +79,8 @@ Use this index before adding new work:
   Track pending provider integration checks in [Provider Notes](product/PROVIDER_NOTES.md)
   and pending release checks in the [Release Checklist](product/RELEASE_CHECKLIST.md).
   Keep planned user-facing milestones in the [Roadmap](product/user-guide/ROADMAP.md).
-- Add focused documents instead of growing one catch-all file.
+- Use [documentation structure](../.agents/skills/documentation-structure/SKILL.md)
+  for Markdown ownership, semantic splits, physical line limits and reading routes.
 - Link new documents from this index before relying on them in implementation.
 - Add a thin page under `site/src/pages/` and update `site/vocs.config.ts` only for public user
   guidance, the product roadmap and relevant privacy/help; apply
