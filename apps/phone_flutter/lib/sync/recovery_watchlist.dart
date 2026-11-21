@@ -509,10 +509,9 @@ Future<void> syncPlanRecoveries(
     // with nothing to wake for: nothing spent, nothing saying when it rolls,
     // and a reset already behind because the provider has not caught up.
     //
-    // Never sooner than the reset floor of the window's own connection, counted
-    // from that connection's native start: a denied load, or one that started
-    // another connection, must not push the wake back. A load with no such
-    // start, such as a manual one, counts the floor from itself.
+    // Count the reset floor from the window's own native cadence anchor so
+    // another connection's start cannot push the wake back. A load with no
+    // anchor, such as a manual one, counts the floor from itself.
     final instant = now();
     DateTime? soonest;
     var protectedWakePending = false;
@@ -533,12 +532,9 @@ Future<void> syncPlanRecoveries(
               .where((entry) => entry.value.contains(key.accountId))
               .firstOrNull
               ?.key;
-      // A reset already behind still counts for a connection this load did not
-      // observe if neither its native start nor its last success is as late:
-      // the booked wake has not served it, so it stays due instead of being
-      // cancelled or replaced by another connection's later reset. A later
-      // start, even a failed one, or a later success, such as a manual one,
-      // served it.
+      // An overdue reset can still need a wake if this load did not observe
+      // the connection and both its native anchor and last success precede the
+      // reset. The anchor can record a start or a clock correction.
       final anchor = connection == null ? null : poll?.automaticAt[connection];
       final seen = account?.lastSuccessfulSyncAt;
       if (key.historyOwner != null &&
@@ -596,8 +592,7 @@ Future<void> syncPlanRecoveries(
     }
     if (isCurrent != null && !await isCurrent()) return;
     if (soonest == null) {
-      // Unresolved or unserved owned history still protects its earlier wake.
-      // Serving a known reset removes wake protection, not recovery history.
+      // Cancelling an obsolete wake leaves recovery history intact.
       if (poll?.whollySkipped != true &&
           unresolved.isEmpty &&
           !protectedWakePending)

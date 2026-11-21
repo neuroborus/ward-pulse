@@ -509,10 +509,11 @@ own raw window has room. Omission or explicit null does not retire a remembered 
 
 Each partition also retains the last known reset for its spent windows, so an incomplete
 or skipped report cannot postpone an earlier wake when a sibling supplies a later reset.
-When that window's own captured native start or matching owner/account success is at or after
-a known reset that is now due, its history no longer prevents cancellation of the obsolete
-wake if no other work is due. Serving the reset does not clear recovery history or stored
-reset evidence; unknown or unserved resets remain protected.
+For an unobserved window with a known overdue reset, the saved reset stops protecting the
+wake once the connection's confirmed cadence anchor or the matching owner/account's last
+successful sync reaches the reset time. A denied claim can record a corrected anchor at or
+after the reset without supplying a fresh provider observation. Recovery history and stored
+reset evidence are retained. Unknown resets remain protected.
 Legacy ownerless recovery keys and consumed markers are never adopted by a qualified owner:
 each unbound window can lose its pending recovery edge, and each unbound condition can become
 eligible on its first qualified crossed observation. Delivery remains best effort, including
@@ -528,14 +529,16 @@ retire, with a separate fresh idle observation (and owning foreground CLI exit i
 
 Automatic attempt admission is durable and separate from ephemeral fetch exclusion.
 Startup, foreground timer and headless periodic loads share a per-generation/principal
-start anchor; token revisions, cache invalidation, failed work and engine detach retain it.
+cadence anchor. Token revisions, cache invalidation, failed work and engine detach retain it.
+If the wall clock moves behind the anchor, the next automatic claim saves the corrected
+time and defers provider work until the effective interval has elapsed from that sample.
 Periodic starts use the current preference and provider floor; reset wakes use the shared
 anchor with a five-minute/provider floor and rebook denied pending resets at eligibility.
-Native admission reports that anchor for admitted and denied starts. Each spent window's
-wake is floored from its own connection's anchor, so denied or unrelated loads cannot
-postpone it; loads without that timing, including manual ones, floor from their own time.
-A skipped connection's reset already behind stays due, rather than cancelled or replaced by
-another connection's wake, until its own later start or successful load serves it.
+Native admission reports the confirmed anchor for either decision. Each spent window's
+wake uses its own connection's anchor as the basis for its floor. Loads without that
+anchor, including manual refreshes, count the floor from their own time.
+An overdue reset can stay scheduled for a skipped connection while its cadence anchor
+and last successful load precede the reset.
 Manual refresh/check/reconnect loads bypass admission without moving the anchor.
 Denied work rereads current cache and supplies no fresh success or recovery evidence,
 including skipped connections in partially fresh aggregates. Wholly skipped loads do not

@@ -1746,6 +1746,63 @@ void main() {
     }
   }
   test(
+    'Cursor polling keeps the corrected deadline across callers and restart',
+    () async {
+      const id = 'cursor.plan';
+      const interval = Duration(minutes: 15);
+      final deadline = firstAt.add(interval);
+      await credentials('ui', id).write('synthetic-session');
+      final payload = _snapshot('cursor', id, firstAt, 10).toJsonString();
+      var calls = 0;
+      MergingConnectionRepository cursor(String owner) =>
+          owned(owner, id, (_) async {
+            calls++;
+            return payload;
+          });
+      AutomaticPollContext periodic() =>
+          AutomaticPollContext(readInterval: () async => interval);
+      Future<void> setClock(DateTime at) async {
+        await bridge.invoke('test', 'setClock', {
+          'value': at.millisecondsSinceEpoch,
+        });
+      }
+
+      final foreground = cursor('foreground');
+      final headless = cursor('headless');
+      await setClock(firstAt.add(const Duration(days: 1)));
+      await periodic().run(foreground.load);
+      expect(calls, 1);
+
+      await setClock(firstAt);
+      final rebased = periodic();
+      await rebased.run(headless.load);
+      expect(rebased.skipped[id]?.nextEligible, deadline);
+      expect(rebased.resetEligibleAt(id), nextAt);
+      expect(calls, 1);
+
+      await setClock(nextAt);
+      await foreground.load();
+      expect(calls, 2);
+      final later = periodic();
+      await later.run(foreground.load);
+      expect(later.skipped[id]?.nextEligible, deadline);
+      expect(later.resetEligibleAt(id), nextAt);
+      expect(calls, 2);
+
+      await bridge.invoke('test', 'restart', {});
+      final restarted = cursor('restarted');
+      await setClock(deadline.subtract(const Duration(milliseconds: 1)));
+      final beforeDeadline = periodic();
+      await beforeDeadline.run(restarted.load);
+      expect(beforeDeadline.skipped[id]?.nextEligible, deadline);
+      expect(calls, 2);
+
+      await setClock(deadline);
+      await periodic().run(restarted.load);
+      expect(calls, 3);
+    },
+  );
+  test(
     'Cursor plan failed attempt suppresses recreated clients without inventing data',
     () async {
       const id = ProviderConnections.cursorPlan;
@@ -1958,6 +2015,14 @@ void main() {
       await bridge.invoke('test', 'failCommit', {'value': false});
       expect(await access.read(), isNotNull);
       await automatic().run(repository.load);
+      expect(calls, 2);
+
+      await bridge.invoke('test', 'setClock', {'value': 0});
+      await bridge.invoke('test', 'failCommit', {'value': true});
+      final failedRebase = automatic();
+      final retained = await failedRebase.run(repository.load);
+      expect(retained.syncIssue, DashboardSyncIssue.credentialUnavailable);
+      expect(failedRebase.resetEligibleAt(id), isNull);
       expect(calls, 2);
     },
   );

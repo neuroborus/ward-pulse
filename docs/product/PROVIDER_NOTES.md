@@ -203,7 +203,9 @@ comments, and are the single source of truth for cadence:
 - `effective_interval = max(user_setting, provider_minimum)` per connection;
 - automatic starts share a durable native admission anchor across foreground and headless
   engines. Startup, timer and periodic work use the current slider preference after queued
-  ownership is obtained. Failed admitted attempts consume spacing; denied work does not.
+  ownership is obtained. Failed admitted attempts consume spacing. Denied claims record no
+  provider attempt. If the clock moves behind the anchor, a claim saves the corrected time
+  and defers automatic work until the effective interval elapses from that sample.
   Token rotation, snapshot invalidation and engine detach do not reset the anchor;
 - reset wakes use `max(5 minutes, provider_minimum)` against that same anchor, including
   under a 60-minute preference. A denied pending reset is rebooked for its earliest eligible

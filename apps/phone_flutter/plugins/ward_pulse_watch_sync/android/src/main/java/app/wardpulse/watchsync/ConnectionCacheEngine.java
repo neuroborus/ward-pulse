@@ -216,7 +216,7 @@ public final class ConnectionCacheEngine {
         FetchLease lease = fetches.get(connection);
         return lease != null && lease.owner.equals(owner) && lease.ticket.equals(ticket);
     }
-    /** Persist an automatic start independently of credential/cache transactions. */
+    /** Persist automatic polling cadence independently of credential/cache transactions. */
     public synchronized Map<String, Object> claimAutomatic(String owner, String connection, String ticket,
             Map<String, String> expected, long intervalMillis) {
         requireConnection(connection);
@@ -231,20 +231,26 @@ public final class ConnectionCacheEngine {
         // Both decisions report the confirmed anchor that reset wakes count from.
         if (state.get("generation").equals(state.get("automaticGeneration"))
                 && state.get("identity").equals(state.get("automaticIdentity"))) {
-            long anchor = Long.parseLong(state.get("automaticAt"));
+            long previousAnchor = Long.parseLong(state.get("automaticAt"));
+            long anchor = Math.min(previousAnchor, now);
             long due = Math.addExact(anchor, intervalMillis);
             if (now < due) {
+                // Persist the first corrected sample so later calls keep the same anchor.
+                if (anchor != previousAnchor) persistAutomaticAnchor(connection, state, anchor);
                 result.put("admitted", false); result.put("nextEligible", due); result.put("automaticAt", anchor);
                 return result;
             }
         }
+        persistAutomaticAnchor(connection, state, now);
+        result.put("admitted", true); result.put("automaticAt", now); return result;
+    }
+    private void persistAutomaticAnchor(String connection, Map<String, String> state, long anchor) {
         Map<String, String> all = readAll();
         all.put(connection + ".automaticGeneration", state.get("generation"));
         all.put(connection + ".automaticIdentity", state.get("identity"));
-        all.put(connection + ".automaticAt", Long.toString(now));
+        all.put(connection + ".automaticAt", Long.toString(anchor));
         // A failed metadata write denies network work but never fences credentials.
         if (!commit(all)) throw new IllegalStateException("Automatic polling storage failed.");
-        result.put("admitted", true); result.put("automaticAt", now); return result;
     }
     public synchronized void releaseFetch(String owner, String connection, String ticket) {
         if (!validFetch(owner, connection, ticket)) return;

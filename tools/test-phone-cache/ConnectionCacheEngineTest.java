@@ -554,14 +554,33 @@ public final class ConnectionCacheEngineTest {
         boolean rejected = false;
         try { claim(engine, "cold", cold, v, 300000); } catch (IllegalStateException expected) { rejected = true; }
         check(rejected, "Released fetch ticket cannot claim.");
+
+        long correctedAt = now[0];
+        long deadline = correctedAt + 900000;
+        now[0] += 86400000;
+        first = fetch(engine, "foreground");
+        check(claim(engine, "foreground", first, v, 900000), "Automatic start is recorded a day ahead.");
+        engine.releaseFetch("foreground", C, first);
+        now[0] = correctedAt;
+        second = fetch(engine, "headless");
+        denial = engine.claimAutomatic("headless", C, second, v, 900000);
+        check(Boolean.FALSE.equals(denial.get("admitted")) && Long.valueOf(deadline).equals(denial.get("nextEligible"))
+            && Long.valueOf(correctedAt).equals(denial.get("automaticAt")), "Clock rollback denies with the corrected anchor and deadline.");
+        engine.detach("headless");
+
+        engine = new ConnectionCacheEngine(disk, () -> now[0]);
+        cold = fetch(engine, "cold");
+        now[0] = deadline - 1;
+        denial = engine.claimAutomatic("cold", C, cold, v, 900000);
+        check(Boolean.FALSE.equals(denial.get("admitted")) && Long.valueOf(deadline).equals(denial.get("nextEligible"))
+            && Long.valueOf(correctedAt).equals(denial.get("automaticAt")), "Restart preserves the corrected anchor one millisecond before the deadline.");
+        now[0] = deadline;
+        check(claim(engine, "cold", cold, v, 900000), "Automatic work resumes at the corrected deadline.");
     }
     static void automaticMetadataFailure() {
-        class UncertainDisk extends Disk {
-            @Override public boolean commit(Map<String, String> values) {
-                data = new HashMap<>(values); return !fail;
-            }
-        }
-        UncertainDisk disk = new UncertainDisk(); long[] now = {1000};
+        MemoryUpdatingDisk disk = new MemoryUpdatingDisk();
+        long confirmedAt = 86401000;
+        long[] now = {confirmedAt};
         ConnectionCacheEngine engine = new ConnectionCacheEngine(disk, () -> now[0]);
         Map<String, String> v = version(login(engine));
         engine.writeSnapshot(C, v, "retained", 1);
@@ -572,13 +591,27 @@ public final class ConnectionCacheEngineTest {
         disk.fail = false; engine.writeSnapshot(C, v, "retained", 2);
         check(!disk.data.containsKey(C + ".automaticAt"), "Later whole-map write cannot leak failed admission.");
         check(claim(engine, "worker", ticket, v, 300000), "Failed persistence consumes no attempt.");
-        now[0] = 301000; disk.fail = true; denied = false;
+        now[0] = confirmedAt + 300000; disk.fail = true; denied = false;
         try { claim(engine, "worker", ticket, v, 300000); } catch (IllegalStateException expected) { denied = true; }
         disk.fail = false;
-        check(Long.valueOf(1000).equals(engine.claimAutomatic("worker", C, ticket, v, 3600000).get("automaticAt")), "Denial reports only the confirmed anchor.");
+        check(Long.valueOf(confirmedAt).equals(engine.claimAutomatic("worker", C, ticket, v, 3600000).get("automaticAt")), "Denial reports only the confirmed anchor.");
         engine.writeSnapshot(C, v, "retained", 3);
-        check(denied && "1000".equals(disk.data.get(C + ".automaticAt")), "Failed update preserves confirmed anchor.");
+        check(denied && Long.toString(confirmedAt).equals(disk.data.get(C + ".automaticAt")), "Failed update preserves confirmed anchor.");
         check(claim(engine, "worker", ticket, v, 300000), "Retry remains eligible after failed update.");
+
+        long beforeRollback = now[0];
+        now[0] -= 86400000;
+        disk.fail = true; denied = false;
+        try { claim(engine, "worker", ticket, v, 900000); } catch (IllegalStateException expected) { denied = true; }
+        check(denied && engine.valid(C, v), "Failed rebase denies automatic work and preserves the credential.");
+        check(Long.toString(now[0]).equals(disk.data.get(C + ".automaticAt")), "Backend exposes the failed rebase in memory.");
+        disk.fail = false;
+        check(engine.writeSnapshot(C, v, "retained", 4), "Later whole-map write succeeds.");
+        check(Long.toString(beforeRollback).equals(disk.data.get(C + ".automaticAt")), "Whole-map write retains only the confirmed anchor.");
+        now[0]++;
+        Map<String, Object> retry = engine.claimAutomatic("worker", C, ticket, v, 900000);
+        check(Boolean.FALSE.equals(retry.get("admitted")) && Long.valueOf(now[0]).equals(retry.get("automaticAt")),
+            "Retry persists its own corrected sample after the failed rebase.");
         engine.detach("worker");
     }
 

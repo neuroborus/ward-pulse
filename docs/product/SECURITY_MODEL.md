@@ -101,13 +101,14 @@ persisted normalized payloads, watch/widget output, logs or user text. This adds
 of dispatched calls and no atomic validation/delivery guarantee across engines.
 
 Automatic polling also persists non-secret generation/principal admission stamps and the
-last admitted start time in this private store. The native owner atomically validates the
-current fetch ticket and credential version before recording an attempt. Token revision,
-cache invalidation and fetch release/detach preserve spacing; credential replacement has
-a new generation. Admission-metadata failure blocks automatic network work without fencing
-valid credentials or retiring snapshots. Failed in-memory commits cannot leak an unconfirmed
-admission into later whole-map writes. This durable admission is separate from ephemeral
-network exclusion and does not hold a credential/storage transaction over network waits.
+cadence anchor in this private store. The native owner atomically validates the current
+fetch ticket and credential version before recording a start or correcting a future anchor.
+Token revision, cache invalidation and fetch release/detach preserve spacing. Credential
+replacement has a new generation. Admission-metadata failure blocks automatic network work
+without fencing valid credentials or retiring snapshots. Later whole-map writes use confirmed
+admission metadata even when a failed commit exposes new values in memory. This durable
+admission is separate from ephemeral network exclusion and does not hold a credential/storage
+transaction over network waits.
 
 ## Codex Account
 

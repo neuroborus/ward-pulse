@@ -26,8 +26,7 @@ final class AutomaticPollContext {
   final admittedVersions = <String, CredentialVersion>{};
   final retainedAccountIds = <String, Set<String>>{};
 
-  /// Native start anchors by connection: the start this load recorded, or the
-  /// durable one that denied it.
+  /// Confirmed native cadence anchors by connection, including corrections.
   final automaticAt = <String, DateTime>{};
   bool get whollySkipped => skipped.isNotEmpty && attempted.isEmpty;
 
@@ -41,8 +40,8 @@ final class AutomaticPollContext {
         : await _readInterval(),
   );
 
-  /// The earliest a reset wake can start [connection], whatever started this
-  /// load, or `null` when this load saw no native anchor for it.
+  /// The earliest a reset wake can start [connection], or `null` when this
+  /// load saw no native anchor for it.
   DateTime? resetEligibleAt(String connection) =>
       automaticAt[connection]?.add(_floored(connection, _resetInterval));
 
