@@ -54,6 +54,8 @@ becoming public Vocs pages.
   audits coverage; the [local bridge](../tools/release/README.md#local-version-preparation)
   preflights explicit version cuts.
 - [Google Play release tooling](../tools/release-google-play/README.md) owns published-bundle preparation, Play apply and offline tests.
+- [Phone cache harness and original19 replay](../tools/test-phone-cache/README.md) owns the
+  guarded HOST replay, release-envelope contract and inert controlled regressions.
 - [../LICENSE](../LICENSE), [../TRADEMARKS.md](../TRADEMARKS.md), [../THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md), and [../brand/README.md](../brand/README.md) define the source license, attribution gate, and brand boundaries.
 
 ## Project Gates

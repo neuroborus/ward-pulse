@@ -2,11 +2,65 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
+import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting_clients.dart';
+import 'package:ward_pulse_phone/sync/report_period.dart';
 
 void main() {
   group('AnthropicReportingClient', () {
+    test(
+      'Admin marker rejection is local and sends no HTTP requests',
+      () async {
+        final transport = _FakeTransport({});
+        final client = AnthropicReportingClient(
+          http: ProviderReportingHttp(transport: transport),
+        );
+        for (final candidate in [
+          'sk-ant-admin-synthetic',
+          '  sk-ant-admin01-synthetic  ',
+        ]) {
+          await expectLater(
+            client.fetchDailyReports(
+              apiKey: candidate,
+              start: DateTime.utc(2026, 11, 1),
+              end: DateTime.utc(2026, 11, 3),
+            ),
+            throwsA(
+              isA<ProviderReportingException>()
+                  .having(
+                    (error) => error.failure,
+                    'failure',
+                    ProviderReportingFailure.authentication,
+                  )
+                  .having(
+                    (error) => error.outcome?.connection,
+                    'connection',
+                    ProviderConnections.anthropicPlatform,
+                  )
+                  .having(
+                    (error) => error.outcome?.category,
+                    'category',
+                    ReportingOutcomeCategory.authenticationRejected,
+                  )
+                  .having(
+                    (error) => error.outcome?.source,
+                    'source',
+                    ReportingOutcomeSource.local,
+                  )
+                  .having(
+                    (error) => error.details,
+                    'nonsecret details',
+                    isNull,
+                  ),
+            ),
+          );
+        }
+        expect(transport.requests, isEmpty);
+      },
+    );
+
     test('splits UTC usage ranges and paginates both bucket widths', () async {
       final transport = _FakeTransport({
         '/v1/organizations/usage_report/messages': [
@@ -25,7 +79,7 @@ void main() {
       );
 
       final reports = await client.fetchDailyReports(
-        adminApiKey: 'secret-admin-key',
+        apiKey: 'sk-ant-api03-synthetic',
         start: DateTime.parse('2026-07-01T03:00:00+03:00'),
         end: DateTime.parse('2026-07-20T01:00:00+13:00'),
       );
@@ -37,7 +91,7 @@ void main() {
               .where((request) => request.uri.path.endsWith('/messages'))
               .toList();
       for (final request in usageRequests) {
-        expect(request.headers['x-api-key'], 'secret-admin-key');
+        expect(request.headers['x-api-key'], 'sk-ant-api03-synthetic');
         expect(request.headers['anthropic-version'], '2023-06-01');
         expect(request.headers.containsKey('Authorization'), isFalse);
         expect(request.uri.queryParametersAll['group_by[]'], ['model']);
@@ -98,11 +152,11 @@ void main() {
         );
         expect(
           request.uri.queryParameters['ending_at'],
-          '2026-07-19T12:00:00.000Z',
+          '2026-07-20T00:00:01.000Z',
         );
       }
       expect(costRequests[1].uri.queryParameters['page'], 'cost-2');
-      expect(reports.usage.join(), isNot(contains('secret-admin-key')));
+      expect(reports.usage.join(), isNot(contains('sk-ant-api03-synthetic')));
     });
 
     for (final scenario in [
@@ -122,7 +176,7 @@ void main() {
 
         await expectLater(
           client.fetchDailyReports(
-            adminApiKey: 'synthetic-key',
+            apiKey: 'synthetic-key',
             start: DateTime.utc(2026, 7, 18),
             end: DateTime.utc(2026, 7, 19),
           ),
@@ -151,6 +205,7 @@ void main() {
         end: DateTime.utc(2026, 7, 19),
         width: '1d',
         limit: '31',
+        costEnd: '2026-07-19T00:00:01.000Z',
       ),
       (
         name: 'current-day-only range retains its supplied start and end',
@@ -158,6 +213,7 @@ void main() {
         end: DateTime.utc(2026, 7, 19, 12, 34, 56),
         width: '1m',
         limit: '1440',
+        costEnd: '2026-07-20T00:00:01.000Z',
       ),
     ]) {
       test(scenario.name, () async {
@@ -170,7 +226,7 @@ void main() {
         );
 
         final reports = await client.fetchDailyReports(
-          adminApiKey: 'synthetic-key',
+          apiKey: 'synthetic-key',
           start: scenario.start,
           end: scenario.end,
         );
@@ -184,17 +240,61 @@ void main() {
           scenario.width,
         );
         expect(usageRequest.uri.queryParameters['limit'], scenario.limit);
-        for (final request in transport.requests) {
-          expect(
-            request.uri.queryParameters['starting_at'],
-            scenario.start.toIso8601String(),
-          );
-          expect(
-            request.uri.queryParameters['ending_at'],
-            scenario.end.toIso8601String(),
-          );
-        }
+        expect(
+          usageRequest.uri.queryParameters['starting_at'],
+          scenario.start.toIso8601String(),
+        );
+        expect(
+          usageRequest.uri.queryParameters['ending_at'],
+          scenario.end.toIso8601String(),
+        );
         expect(transport.requests.last.uri.path, endsWith('/cost_report'));
+        expect(
+          transport.requests.last.uri.queryParameters['starting_at'],
+          scenario.start.toIso8601String(),
+        );
+        expect(
+          transport.requests.last.uri.queryParameters['ending_at'],
+          scenario.costEnd,
+        );
+      });
+    }
+
+    for (final (end, lastDay, fence) in [
+      ('2026-07-20T00:00:00Z', '2026-07-19', '2026-07-20T00:00:01Z'),
+      ('2026-07-20T00:00:00.000001Z', '2026-07-20', '2026-07-21T00:00:01Z'),
+      ('2026-08-01T00:00:00Z', '2026-07-31', '2026-08-01T00:00:01Z'),
+      (
+        '2026-08-01T03:00:00.000001+03:00',
+        '2026-08-01',
+        '2026-08-02T00:00:01Z',
+      ),
+    ]) {
+      test('cost fence admits the last required day at $end', () async {
+        final transport = _FakeTransport({
+          '/v1/organizations/usage_report/messages': [
+            _response(_page()),
+            _response(_page()),
+          ],
+          '/v1/organizations/cost_report': [_response(_page())],
+        });
+        await AnthropicReportingClient(
+          http: ProviderReportingHttp(transport: transport),
+        ).fetchDailyReports(
+          apiKey: 'synthetic-key',
+          start: DateTime.utc(2026, 7),
+          end: DateTime.parse(end),
+        );
+        final request = transport.requests.last;
+        final actual = DateTime.parse(
+          request.uri.queryParameters['ending_at']!,
+        );
+        expect(actual, DateTime.parse(fence));
+        // Model the documented strict bucket-end selector, not publication timing.
+        final bucketStart = DateTime.parse('${lastDay}T00:00:00Z');
+        final bucketEnd = bucketStart.add(const Duration(days: 1));
+        expect(bucketEnd.isBefore(actual), isTrue);
+        expect(request.headers['anthropic-version'], '2023-06-01');
       });
     }
 
@@ -209,7 +309,7 @@ void main() {
         );
 
         final reports = await client.fetchDailyReports(
-          adminApiKey: 'synthetic-key',
+          apiKey: 'synthetic-key',
           start: start,
           end: DateTime.utc(2026, 7, 19, 12),
         );
@@ -237,7 +337,7 @@ void main() {
 
       await expectLater(
         client.fetchDailyReports(
-          adminApiKey: 'secret-admin-key',
+          apiKey: 'sk-ant-api03-synthetic',
           start: DateTime.utc(2026, 7, 1),
           end: DateTime.utc(2026, 7, 19, 12),
         ),
@@ -313,6 +413,7 @@ void main() {
   });
 
   group('CursorPlatformClient', () {
+    final period = ReportPeriodBounds.utc(DateTime.utc(2026, 7, 19, 12));
     const missingScope = 'Team API key missing required scope: read:*';
     const invalidKey = 'Invalid API key';
     const unrelatedPermission = 'Insufficient permissions or scope';
@@ -377,7 +478,6 @@ void main() {
           });
           final client = CursorPlatformClient(
             http: ProviderReportingHttp(transport: transport),
-            clock: () => DateTime.utc(2026, 7, 19, 12),
           );
           final safeDiagnostics = allOf(
             isNot(contains(scenario.body)),
@@ -389,7 +489,7 @@ void main() {
           );
 
           await expectLater(
-            client.fetchReports(adminApiKey: apiKey),
+            client.fetchReports(adminApiKey: apiKey, period: period),
             throwsA(
               isA<ProviderReportingException>()
                   .having((error) => error.failure, 'failure', scenario.failure)
@@ -410,38 +510,311 @@ void main() {
       );
     }
 
-    test('uses Basic auth and paginates spend pages', () async {
-      final transport = _FakeTransport({
-        '/teams/daily-usage-data': [_response('{"data":[]}')],
-        '/teams/spend': [
-          _response(
-            '{"teamMemberSpend":[{"overallSpendCents":100}],"totalPages":2}',
+    test(
+      'uses one period, Basic auth and unchanged raw partial event pages',
+      () async {
+        final row = {
+          'timestamp': '${period.todayStartMs}',
+          'isChargeable': true,
+          'chargedCents': 0.125,
+        };
+        final raw = [
+          jsonEncode(
+            _eventPage(period, events: [row], numPages: 3, total: 2),
+          ).replaceFirst('0.125', '0.125000000000000000000000000001'),
+          jsonEncode(_eventPage(period, numPages: 3, currentPage: 2, total: 2)),
+          jsonEncode(
+            _eventPage(
+              period,
+              events: [row],
+              numPages: 3,
+              currentPage: 3,
+              total: 2,
+            ),
           ),
-          _response(
-            '{"teamMemberSpend":[{"overallSpendCents":50}],"totalPages":2}',
-          ),
-        ],
-      });
-      final client = CursorPlatformClient(
-        http: ProviderReportingHttp(transport: transport),
-        clock: () => DateTime.utc(2026, 7, 19, 12),
-      );
+        ];
+        final transport = _FakeTransport({
+          '/teams/daily-usage-data': [_response('{"data":[]}')],
+          '/teams/filtered-usage-events': raw.map(_response).toList(),
+        });
+        final client = CursorPlatformClient(
+          http: ProviderReportingHttp(transport: transport),
+        );
+        final reports = await client.fetchReports(
+          adminApiKey: 'synthetic-team-key',
+          period: period,
+        );
+        expect(reports.dailyUsage, ['{"data":[]}']);
+        expect(reports.usageEvents, raw);
+        expect(jsonDecode(transport.requestBodies.first!), {
+          'startDate':
+              period.endExclusiveMs - const Duration(days: 14).inMilliseconds,
+          'endDate': period.endExclusiveMs,
+        });
+        for (var index = 1; index < transport.requests.length; index++) {
+          expect(jsonDecode(transport.requestBodies[index]!), {
+            'startDate': period.requestStartMs,
+            'endDate': period.endExclusiveMs - 1,
+            'page': index,
+            'pageSize': 1000,
+          });
+        }
+        for (final request in transport.requests) {
+          expect(
+            request.headers['Authorization'],
+            encodeBasicAuth('synthetic-team-key'),
+          );
+        }
+      },
+    );
 
-      final reports = await client.fetchReports(adminApiKey: 'secret-team-key');
+    test(
+      'skips integer-empty money but retains daily history at midnight and +500us',
+      () async {
+        for (final micros in [0, 500]) {
+          final period = ReportPeriodBounds.utc(
+            DateTime.utc(2026, 6, 1).add(Duration(microseconds: micros)),
+          );
+          final transport = _FakeTransport({
+            '/teams/daily-usage-data': [_response('{"data":[]}')],
+          });
+          final reports = await CursorPlatformClient(
+            http: ProviderReportingHttp(transport: transport),
+          ).fetchReports(adminApiKey: 'synthetic', period: period);
+          expect(reports.usageEvents, isEmpty);
+          expect(reports.dailyUsage, hasLength(1));
+          expect(transport.requests, hasLength(1));
+        }
+      },
+    );
 
-      expect(reports.dailyUsage, ['{"data":[]}']);
-      expect(reports.spend, hasLength(2));
-      final expectedAuth = encodeBasicAuth('secret-team-key');
-      for (final request in transport.requests) {
-        expect(request.headers['Authorization'], expectedAuth);
+    test(
+      'requests a positive wider period even when Today and Month are integer-empty',
+      () async {
+        final period = ReportPeriodBounds.utc(
+          DateTime.utc(2026, 8, 1, 0, 0, 0, 0, 500),
+        );
+        final transport = _FakeTransport({
+          '/teams/daily-usage-data': [_response('{"data":[]}')],
+          '/teams/filtered-usage-events': [
+            _response(jsonEncode(_eventPage(period))),
+          ],
+        });
+        await CursorPlatformClient(
+          http: ProviderReportingHttp(transport: transport),
+        ).fetchReports(adminApiKey: 'synthetic', period: period);
+        expect(period.endExclusiveMs, period.monthStartMs);
+        expect(
+          jsonDecode(transport.requestBodies.last!)['startDate'],
+          period.weekStartMs,
+        );
+      },
+    );
+
+    for (final count in [0, 1]) {
+      for (final current in [0, 1]) {
+        test(
+          'accepts bounded terminal-empty metadata $count/$current',
+          () async {
+            final page = _eventPage(
+              period,
+              numPages: count,
+              currentPage: current,
+            );
+            page['pagination']['hasNextPage'] = false;
+            page['pagination']['hasPreviousPage'] = false;
+            final transport = _FakeTransport({
+              '/teams/daily-usage-data': [_response('{"data":[]}')],
+              '/teams/filtered-usage-events': [_response(jsonEncode(page))],
+            });
+            final reports = await CursorPlatformClient(
+              http: ProviderReportingHttp(transport: transport),
+            ).fetchReports(adminApiKey: 'synthetic', period: period);
+            expect(reports.usageEvents, hasLength(1));
+          },
+        );
       }
-      final spendBodies =
-          transport.requestBodies
-              .where((body) => body != null && body.contains('pageSize'))
-              .toList();
-      expect(jsonDecode(spendBodies[0]!), {'page': 1, 'pageSize': 100});
-      expect(jsonDecode(spendBodies[1]!), {'page': 2, 'pageSize': 100});
-    });
+    }
+
+    for (final scenario in <(String?, String, Object?)>[
+      (null, 'usageEvents', null),
+      (null, 'totalUsageEventsCount', -1),
+      (null, 'totalUsageEventsCount', 0.5),
+      (null, 'totalUsageEventsCount', '1'),
+      ('pagination', 'numPages', 0),
+      ('pagination', 'numPages', 1.5),
+      ('pagination', 'currentPage', 2),
+      ('pagination', 'pageSize', 100),
+      ('pagination', 'hasNextPage', true),
+      ('pagination', 'hasPreviousPage', true),
+      ('pagination', 'hasNextPage', null),
+      ('pagination', 'hasPreviousPage', 'false'),
+      ('period', 'startDate', period.requestStartMs + 1),
+      ('period', 'endDate', period.endExclusiveMs),
+      ('period', 'startDate', '${period.requestStartMs}'),
+    ]) {
+      test(
+        'rejects contradictory event metadata ${scenario.$1}/${scenario.$2}/${scenario.$3}',
+        () async {
+          final page = _eventPage(period, events: [<String, Object?>{}]);
+          final target = scenario.$1 == null ? page : page[scenario.$1] as Map;
+          target[scenario.$2] = scenario.$3;
+          final transport = _FakeTransport({
+            '/teams/daily-usage-data': [_response('{"data":[]}')],
+            '/teams/filtered-usage-events': [_response(jsonEncode(page))],
+          });
+          await expectLater(
+            CursorPlatformClient(
+              http: ProviderReportingHttp(transport: transport),
+            ).fetchReports(adminApiKey: 'synthetic', period: period),
+            throwsA(
+              isA<ProviderReportingException>().having(
+                (error) => error.failure,
+                'failure',
+                ProviderReportingFailure.invalidResponse,
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    test(
+      'rejects missing fields, capacity overflow, unstable counts and page identities',
+      () async {
+        final variants = <List<Map<String, dynamic>>>[];
+        for (final key in [
+          'usageEvents',
+          'totalUsageEventsCount',
+          'pagination',
+          'period',
+        ]) {
+          variants.add([_eventPage(period)..remove(key)]);
+        }
+        for (final key in [
+          'numPages',
+          'currentPage',
+          'pageSize',
+          'hasNextPage',
+          'hasPreviousPage',
+        ]) {
+          final page = _eventPage(period);
+          (page['pagination'] as Map).remove(key);
+          variants.add([page]);
+        }
+        variants.add([_eventPage(period, events: List.filled(1001, null))]);
+        variants.add([_eventPage(period, total: 1)]);
+        for (final (key, value) in [
+          ('currentPage', 1),
+          ('numPages', 3),
+          ('pageSize', 999),
+        ]) {
+          final second = _eventPage(period, numPages: 2, currentPage: 2);
+          second['pagination'][key] = value;
+          variants.add([_eventPage(period, numPages: 2), second]);
+        }
+        variants.add([
+          _eventPage(period, numPages: 2),
+          _eventPage(period, numPages: 2, currentPage: 2, total: 1),
+        ]);
+        for (final pages in variants) {
+          final transport = _FakeTransport({
+            '/teams/daily-usage-data': [_response('{"data":[]}')],
+            '/teams/filtered-usage-events':
+                pages.map((page) => _response(jsonEncode(page))).toList(),
+          });
+          await expectLater(
+            CursorPlatformClient(
+              http: ProviderReportingHttp(transport: transport),
+            ).fetchReports(adminApiKey: 'synthetic', period: period),
+            throwsA(
+              isA<ProviderReportingException>().having(
+                (error) => error.failure,
+                'failure',
+                ProviderReportingFailure.invalidResponse,
+              ),
+            ),
+          );
+        }
+      },
+    );
+
+    test(
+      'validates metadata lexemes before floating-point rounding can hide fractions',
+      () async {
+        final raw = jsonEncode(
+          _eventPage(period, events: [<String, Object?>{}]),
+        );
+        final invalid = [
+          raw.replaceFirst('"numPages":1', '"numPages":1.00000000000000000001'),
+          raw.replaceFirst(
+            '"totalUsageEventsCount":1',
+            '"totalUsageEventsCount":1.00000000000000000001',
+          ),
+          raw.replaceFirst(
+            '"startDate":${period.requestStartMs}',
+            '"startDate":${period.requestStartMs}.00000000000000000001',
+          ),
+        ];
+        for (final page in invalid) {
+          final transport = _FakeTransport({
+            '/teams/daily-usage-data': [_response('{"data":[]}')],
+            '/teams/filtered-usage-events': [_response(page)],
+          });
+          await expectLater(
+            CursorPlatformClient(
+              http: ProviderReportingHttp(transport: transport),
+            ).fetchReports(adminApiKey: 'synthetic', period: period),
+            throwsA(
+              isA<ProviderReportingException>().having(
+                (error) => error.failure,
+                'failure',
+                ProviderReportingFailure.invalidResponse,
+              ),
+            ),
+          );
+        }
+        final integral = raw
+            .replaceFirst('"numPages":1', '"numPages":1e0')
+            .replaceFirst('"pageSize":1000', '"pageSize":1000.0')
+            .replaceFirst(
+              '"startDate":${period.requestStartMs}',
+              '"startDate":${period.requestStartMs}.0',
+            );
+        final transport = _FakeTransport({
+          '/teams/daily-usage-data': [_response('{"data":[]}')],
+          '/teams/filtered-usage-events': [_response(integral)],
+        });
+        final reports = await CursorPlatformClient(
+          http: ProviderReportingHttp(transport: transport),
+        ).fetchReports(adminApiKey: 'synthetic', period: period);
+        expect(reports.usageEvents, [integral]);
+      },
+    );
+
+    test(
+      'rejects a page-100 continuation instead of publishing partial evidence',
+      () async {
+        final transport = _FakeTransport({
+          '/teams/daily-usage-data': [_response('{"data":[]}')],
+          '/teams/filtered-usage-events': [
+            for (var page = 1; page <= 100; page++)
+              _response(
+                jsonEncode(
+                  _eventPage(period, numPages: 101, currentPage: page),
+                ),
+              ),
+          ],
+        });
+        await expectLater(
+          CursorPlatformClient(
+            http: ProviderReportingHttp(transport: transport),
+          ).fetchReports(adminApiKey: 'synthetic', period: period),
+          throwsA(isA<ProviderReportingException>()),
+        );
+        expect(transport.requests, hasLength(101));
+      },
+    );
 
     test('maps a server error to unavailable', () async {
       final transport = _FakeTransport({
@@ -452,14 +825,13 @@ void main() {
             body: '{}',
           ),
         ],
-        '/teams/spend': [_response('{}')],
       });
       final client = CursorPlatformClient(
         http: ProviderReportingHttp(transport: transport),
       );
 
       await expectLater(
-        client.fetchReports(adminApiKey: 'secret-team-key'),
+        client.fetchReports(adminApiKey: 'secret-team-key', period: period),
         throwsA(
           isA<ProviderReportingException>().having(
             (error) => error.failure,
@@ -471,6 +843,28 @@ void main() {
     });
   });
 }
+
+Map<String, dynamic> _eventPage(
+  ReportPeriodBounds period, {
+  List<Object?> events = const [],
+  int numPages = 1,
+  int currentPage = 1,
+  int? total,
+}) => {
+  'usageEvents': events,
+  'totalUsageEventsCount': total ?? events.length,
+  'pagination': <String, Object?>{
+    'numPages': numPages,
+    'currentPage': currentPage,
+    'pageSize': 1000,
+    'hasNextPage': currentPage < numPages,
+    'hasPreviousPage': currentPage > 1,
+  },
+  'period': <String, Object?>{
+    'startDate': period.requestStartMs,
+    'endDate': period.endExclusiveMs - 1,
+  },
+};
 
 ProviderHttpResponse _response(String body) {
   return ProviderHttpResponse(

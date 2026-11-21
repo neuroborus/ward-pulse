@@ -73,6 +73,21 @@ prepare() {
 bounded() {
   local seconds=$1
   shift
+  if (( ${DELIVERY_ACTIVE:-0} )); then
+    # Reserve kill grace and one integral-clock tick inside the delivery budget.
+    local remaining=$((DELIVERY_DEADLINE - SECONDS - 2))
+    (( remaining > 0 )) || hold 'Delivery deadline expired.'
+    (( seconds <= remaining )) || seconds=$remaining
+    timeout --kill-after=1s "${seconds}s" "$@"
+    return
+  fi
+  if (( PRE_DEATH_DEADLINE )); then
+    # Keep the existing five-second kill grace inside this phase's total bound,
+    # with one additional tick for the integral SECONDS clock.
+    local remaining=$((PRE_DEATH_DEADLINE - SECONDS - 6))
+    (( remaining > 0 )) || hold 'Post-update PRE-DEATH evidence deadline expired; quiescence is unproved.'
+    (( seconds <= remaining )) || seconds=$remaining
+  fi
   if (( OBSERVING )); then
     local remaining=$((OBS_LIMIT - SECONDS))
     (( remaining > 0 )) || hold 'Observation deadline expired.'
@@ -88,7 +103,14 @@ hold() {
     OBS_ERROR=$*
     exit 1
   fi
-  printf 'HOLD: %s\n' "$*" >&2
+  if (( ${DELIVERY_ACTIVE:-0} && BASH_SUBSHELL == 0 )); then delivery_report || :; fi
+  if command -v timeout >/dev/null; then
+    # A full or closed stderr cannot keep this failure from reaching owned cleanup.
+    timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "%s\n" "$1" >&2' bash "HOLD: $*" || :
+  else
+    # Timeout is verified before any owned cleanup exists; keep earlier reasons visible.
+    printf 'HOLD: %s\n' "$*" >&2
+  fi
   exit 1
 }
 
@@ -159,45 +181,129 @@ resolve_devices() {
   hold 'Timed out discovering the online canonical phone and Wear pair.'
 }
 
+# One closed record localizes each rejected identity sample. Like the other bounded
+# diagnostic writers, it can neither replace the failure nor delay cleanup.
+process_diagnostic() {
+  local record
+  printf -v record 'Process identity: role=%s action=%s phase=%s guard=%s traversal=%s boundary=%s subject=%s status=%s' \
+    "$1" "${LIFECYCLE_ACTION:-none}" "$2" "$3" "${5:-Unknown}" "${6:-Unknown}" "${7:-Unknown}" "$4"
+  timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "%s\n" "$1" >&2' bash "$record" || :
+}
+
 # ps is reconciled twice around /proc start-time reads. No cmdline, environment,
-# private app data or arbitrary process output leaves the device.
+# private app data or arbitrary process output leaves the device; a rejected
+# sample returns only its closed guard and list position, never identities.
 processes() {
-  local uid=${UIDS[$2]}
-  adb_on "$1" shell -n "uid=$uid" '
+  local uid=${UIDS[$2]} observer= released=0 phase=${3:-Unknown} output status=0 rejected
+  [[ "$uid" =~ ^[1-9][0-9]{0,9}$ ]] && (( uid <= 2147483647 )) \
+    || { process_diagnostic "$2" "$phase" uid_input Unknown; return 1; }
+  if [[ "$2" == phone && -n "$OBSERVER" ]]; then
+    observer=$OBSERVER released=$OBSERVER_RELEASED
+    [[ "$observer" =~ ^[1-9][0-9]*\ [1-9][0-9]*\ wardpulse-work-snapshot-[0-9]+$ &&
+       "$released" =~ ^[01]$ ]] || { process_diagnostic "$2" "$phase" observer_input Unknown; return 1; }
+  fi
+  output=$(adb_on "$1" shell -n "uid=$uid observer=\"$observer\" released=$released" '
     set -eu
+    observer_pid= observer_start= observer_name= retired=0 traversal=Unknown boundary=Unknown subject=Unknown
+    if [ -n "$observer" ]; then read -r observer_pid observer_start observer_name <<EOF
+$observer
+EOF
+    fi
+    # Read errors stay on the device; a rejection prints only this closed record.
+    reject() { printf "reject %s %s %s %s\n" "$1" "$traversal" "$boundary" "$subject"; exit 1; }
     list() {
-      raw=$(ps -A -o UID,PID,NAME) || exit 1
-      printf "%s\n" "$raw" | awk -v uid="$uid" '\''$1 == uid { print $2, $3 }'\'' | sort
+      raw=$(ps -A -o UID,PID,NAME 2>/dev/null) || reject list_read
+      [ "${#raw}" -le 1048576 ] || reject list_size
+      records=$(printf "%s\n" "$raw" | awk -v uid="$uid" -v pid="$observer_pid" -v name="$observer_name" '\''
+        function fail() { bad=1; exit 1 }
+        NR == 1 { if (NF != 3 || $1 != "UID" || $2 != "PID" || $3 != "NAME") fail(); next }
+        $1 == uid || (pid != "" && $2 == pid) {
+          if ($1 != uid || $1 !~ /^[1-9][0-9]*$/ || NF != 3 || $0 ~ /[[:cntrl:]]/ ||
+              ++rows > 128 || (bytes += length($0)+1) > 16384 ||
+              $2 !~ /^[1-9][0-9]*$/ || length($2) > 10 || $2+0 > 2147483647 || seen[$2]++ ||
+              length($3) > 128 || ($2 == pid ? $3 != name : $3 !~ /^app[.]wardpulse(:[a-zA-Z0-9_.]+)?$/)) fail()
+          records[rows]=$2 " " $3
+        }
+        END { if (bad || !NR) exit 1; for (i=1; i<=rows; i++) print records[i] }
+      '\'') || reject list_rows
+      # The list is set in this shell; a rejection inside a substitution would be captured.
+      current=
+      [ -z "$records" ] || current=$(printf "%s\n" "$records" | sort) || reject list_read
     }
     identities() {
-      before=$(list) || exit 1
-      if [ -n "$before" ]; then
-        printf "%s\n" "$before" | while read -r pid name; do
-          start=$(awk '\''{ sub(/^.*\) /, ""); print $20 }'\'' "/proc/$pid/stat") || exit 1
-          case "$start" in ""|*[!0-9]*) exit 1;; esac
-          printf "%s %s %s\n" "$pid" "$start" "$name"
-        done || return 1
-      fi
-      after=$(list) || exit 1
-      [ "$before" = "$after" ]
+      traversal=$1
+      # Keep retirement state in this shell across both lists and traversals.
+      for boundary in before after; do
+        list
+        inventory= found=0
+        while read -r pid name; do
+          [ -n "$pid" ] || continue
+          subject=app
+          if [ "$pid" = "$observer_pid" ]; then
+            subject=observer
+            [ "$retired" = 0 ] || reject observer_reappeared
+            found=1
+          fi
+          start=$(awk '\''{ sub(/^.*\) /, ""); print $20 }'\'' "/proc/$pid/stat" 2>/dev/null) || {
+            [ "$released" = 1 ] && [ "$pid" = "$observer_pid" ] && [ ! -e "/proc/$pid" ] || reject stat_read
+            retired=1
+            continue
+          }
+          printf "%s\n" "$start" | awk '\''
+            NR != 1 || NF != 1 || $0 !~ /^[1-9][0-9]*$/ || length($0) > 20 ||
+            (length($0) == 20 && ("x" $0) > "x18446744073709551615") { exit 1 }
+          '\'' || reject start_value
+          if [ "$pid" = "$observer_pid" ]; then
+            [ "$start" = "$observer_start" ] || reject observer_start
+            [ "$released" = 0 ] || continue
+          fi
+          inventory="$inventory$pid $start $name
+"
+        done <<EOF
+$current
+EOF
+        subject=Unknown
+        if [ "$released" = 1 ] && [ "$found" = 0 ]; then
+          [ ! -e "/proc/$observer_pid" ] || reject observer_present
+          retired=1
+        fi
+        if [ "$boundary" = before ]; then before=$inventory
+        else [ "$before" = "$inventory" ] || reject boundary_mismatch; fi
+      done
     }
-    boot=$(cat /proc/sys/kernel/random/boot_id) || exit 1
-    first=$(identities) || exit 1
-    second=$(identities) || exit 1
-    [ "$first" = "$second" ]
-    [ "$boot" = "$(cat /proc/sys/kernel/random/boot_id)" ]
+    boot=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null) || reject boot_read
+    identities first || exit 1
+    first=$inventory
+    identities second || exit 1
+    traversal=Unknown boundary=Unknown
+    [ "$first" = "$inventory" ] || reject traversal_mismatch
+    [ "$boot" = "$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)" ] || reject boot_continuity
     printf "boot %s\n" "$boot"
-    [ -z "$first" ] || printf "%s\n" "$first"
-  ' | tr -d '\r'
+    if [ "$released" = 1 ] && [ "$retired" = 0 ]; then first="$first$observer
+"; fi
+    printf "%s" "$first" | sort
+  ' | tr -d '\r') || status=$?
+  # Only an allowlisted device record is retained. Any other failure is an acquisition
+  # or command-status failure: beyond its measured status, its cause stays Unknown.
+  rejected='^reject (boot_read|list_read|list_size|list_rows|observer_reappeared|stat_read|start_value|'
+  rejected+='observer_start|observer_present|boundary_mismatch|traversal_mismatch|boot_continuity) '
+  rejected+='(first|second|Unknown) (before|after|Unknown) (app|observer|Unknown)$'
+  if [[ "${output##*$'\n'}" =~ $rejected ]]; then
+    process_diagnostic "$2" "$phase" "${BASH_REMATCH[1]}" "$status" "${BASH_REMATCH[@]:2}"
+    return 1
+  fi
+  (( status == 0 )) || { process_diagnostic "$2" "$phase" acquisition "$status"; return 1; }
+  printf '%s\n' "$output"
 }
 
 app_processes() {
   local snapshot
-  snapshot=$(processes "$1" "$2") || hold 'Process identity read failed or raced.'
-  [[ "${snapshot%%$'\n'*}" == "boot ${BOOT[$2]}" ]] || hold 'Device rebooted during measurement.'
+  snapshot=$(processes "$1" "$2" "${3:-}") || hold 'Process identity read failed or raced.'
+  [[ "${snapshot%%$'\n'*}" == "boot ${BOOT[$2]}" ]] \
+    || { process_diagnostic "$2" "${3:-Unknown}" expected_boot 0; hold 'Device rebooted during measurement.'; }
   local identities
   identities=$(printf '%s\n' "$snapshot" | sed '1d')
-  # The observer is accounted for separately, only for its verified live identity.
+  # Inventory accounts separately for the attested reader after GO, including retirement.
   if [[ "$2" == phone && -n "$OBSERVER" ]]; then
     identities=$(printf '%s\n' "$identities" | awk -v observer="$OBSERVER" '$0 != observer')
   fi
@@ -362,6 +468,8 @@ barrier() {
   adb_on "$serial" shell -n log -p i -t WardPulseGate "$marker" || hold 'Cannot place monitoring boundary.'
   deadline=$((SECONDS + 5))
   if (( OBSERVING && deadline > OBS_LIMIT )); then deadline=$OBS_LIMIT; fi
+  if (( ${DELIVERY_ACTIVE:-0} && deadline > DELIVERY_DEADLINE )); then deadline=$DELIVERY_DEADLINE; fi
+  if (( PRE_DEATH_DEADLINE && deadline >= PRE_DEATH_DEADLINE )); then deadline=$((PRE_DEATH_DEADLINE - 1)); fi
   while (( SECONDS < deadline )); do
     [[ $(wc -c <"$SCRATCH/$role.events") -le 262144 ]] || hold 'Event observation exceeded its safe bound.'
     line=$(awk -v marker="$marker" -v tag="$tag" '$0 == tag " " marker { print NR }' "$SCRATCH/$role.events")
@@ -383,6 +491,10 @@ barrier() {
       CURSOR[$role]=$line
       [[ "$EVENTS" != *GAP* ]] || hold 'Event loss or monitoring gap.'
       record_sync_events "$role"
+      if (( ${DELIVERING:-0} )); then
+        DELIVERY_BOUNDARY[$role]="$line@$SECONDS"
+        DELIVERY_COVERAGE[$role]=CompleteThroughBoundary
+      fi
       if [[ "$tag" == CLOSE ]]; then
         OBS_CLOSED[${PRODUCERS[$role]}]=1 OBS_CLOSED[${PROJECTORS[$role]}]=1
       fi
@@ -447,12 +559,19 @@ wait_for_stable_summary() {
 
 # Native correlation remains supplementary; WorkSpec determines periodicity.
 native_jobs() {
-  local label=$1 phone_live=$2 metadata uid
+  local label=$1 phone_live=$2 metadata uid phase=0 ids states
+  (( ! PRE_DEATH_DEADLINE )) || phase=1
   uid=$(package_uid "$PHONE_SERIAL")
   [[ "$uid" == "${UIDS[phone]}" ]] || hold 'Native scheduling package UID changed.'
   metadata=$(adb_on "$PHONE_SERIAL" shell -n '
     set -o pipefail || exit 1
-    (dumpsys jobscheduler app.wardpulse 2>&1 && printf "\nWP_DONE\n") | awk -v uid='"$uid"' '\''
+    (
+      if [ '"$phase"' = 1 ]; then
+        printf "WP_CLOCK %s %s %s\n" "$(cat /proc/sys/kernel/random/boot_id)" \
+          "$(cut -d " " -f1 /proc/uptime)" "$(date +%s%3N)" || exit 1
+      fi
+      dumpsys jobscheduler app.wardpulse 2>&1 && printf "\nWP_DONE\n"
+    ) | awk -v uid='"$uid"' -v quiet='"$phase"' -v boot='"${BOOT[phone]}"' '\''
     function fail() { bad=1; exit 1 }
     function number(value, limit) {
       return value ~ /^(0|[1-9][0-9]*)$/ && length(value) <= 10 && value+0 <= limit
@@ -469,14 +588,44 @@ native_jobs() {
       }
       return result
     }
+    function duration(value, sign, result, digits, unit, scale, last) {
+      if (value == "none" || value == "0") return 0
+      if (length(value) > 64 || value !~ /^[+-]/) fail()
+      sign=substr(value, 1, 1); value=substr(value, 2); last=86400001
+      if (!length(value)) fail()
+      while (length(value)) {
+        if (!match(value, /^[0-9]+/)) fail()
+        digits=substr(value, 1, RLENGTH); value=substr(value, RLENGTH+1)
+        if (!number(digits, 2147483647)) fail()
+        unit=substr(value, 1, 1)
+        if (substr(value, 1, 2) == "ms") { scale=1; value=substr(value, 3) }
+        else {
+          if (unit == "d") scale=86400000
+          else if (unit == "h") scale=3600000
+          else if (unit == "m") scale=60000
+          else if (unit == "s") scale=1000
+          else fail()
+          value=substr(value, 2)
+        }
+        if (scale >= last) fail()
+        last=scale; result+=digits*scale
+        if (result > 9007199254740991) fail()
+      }
+      return sign == "+" ? result : 0
+    }
     function flush() {
       if (block && (services != 1 || constraints != 1)) fail()
       if (block && relevant) {
         if (!owned || !tagged || !wm || network != 1 ||
             seen_job[id]++ || ++jobs > 64) fail()
         inventory[jobs]="native-job " id " 1 1"
+        if (quiet) {
+          if (readiness != 1 || runtime != 1) fail()
+          eligibility[jobs]="native-ready " id " " (safe && timing == 1) " " delay
+        }
       }
       block=relevant=owned=tagged=services=wm=constraints=network=0
+      readiness=runtime=safe=timing=delay=0
     }
     BEGIN {
       if (!number(uid, 2147483647) || uid%100000 < 10000 || uid%100000 >= 99000) fail()
@@ -512,7 +661,39 @@ native_jobs() {
     }
     /^WP_DONE$/ {
       if (block || !registered || !closed || !footer || blocks > registered_count) fail()
+      if (quiet && (clock != 1 || pending_header != 1 || active_header != 1 || idle_header != 1)) fail()
       complete=1; next
+    }
+    quiet && /^WP_CLOCK / {
+      if (NR != 1 || NF != 4 || $2 != boot || $3 !~ /^[0-9]+[.][0-9][0-9]$/ ||
+          length($3) > 16 || $4 !~ /^[0-9]+$/ || length($4) != 13 || clock++) fail()
+      clock_line="native-clock begin " $3 " " $4; next
+    }
+    quiet && /^Pending queue:$/ {
+      if (!closed || pending_header++ || active_header || idle_header) fail()
+      section="pending"; next
+    }
+    quiet && /^Active jobs:$/ {
+      if (pending_header != 1 || active_header++ || idle_header) fail()
+      section="active"; next
+    }
+    quiet && /^Idle contexts \([0-9]+\):$/ {
+      if (active_header != 1 || idle_header++) fail()
+      section=""; next
+    }
+    quiet && section == "pending" {
+      if (NF) {
+        if ($0 == "  None") { if (pending_none++ || pending_body) fail() }
+        else { if (pending_none) fail(); pending_body++ }
+      }
+      next
+    }
+    quiet && section == "active" {
+      if (NF) {
+        if ($0 == "  N/A") { if (active_none++ || active_body) fail() }
+        else { if (active_none) fail(); active_body++ }
+      }
+      next
     }
     /^[[:space:]]*Registered/ {
       if (registered++ || NF != 3 || $1 != "Registered" || $3 != "jobs:" ||
@@ -583,8 +764,25 @@ native_jobs() {
         if (!($i in constraint_bit) || seen_constraint[blocks, $i]++) fail()
         expected_mask+=constraint_bit[$i]
         if ($i == "CONNECTIVITY") network++
+        if ($i == "TIMING_DELAY") timing++
       }
       if (hex_mask($NF) != expected_mask) fail()
+      next
+    }
+    quiet && block && relevant && $1 == "Run" && $2 == "time:" {
+      if (runtime++ || NF != 6 || $3 !~ /^earliest=.+,$/ || $4 != "latest=none," ||
+          $5 != "original" || $6 != "latest=none") fail()
+      value=$3; sub(/^earliest=/, "", value); sub(/,$/, "", value)
+      delay=duration(value); next
+    }
+    quiet && block && relevant && $1 == "Ready:" {
+      if (readiness++ || NF != 9 || $2 !~ /^(true|false)$/ || $3 !~ /^\(job=(true|false)$/ ||
+          $4 !~ /^user=(true|false)$/ || $5 !~ /^!restricted=(true|false)$/ ||
+          $6 !~ /^!pending=(true|false)$/ || $7 !~ /^!active=(true|false)$/ ||
+          $8 !~ /^!backingup=(true|false)$/ || $9 !~ /^comp=(true|false)\)$/) fail()
+      safe=($2 == "false" && $3 == "(job=false" && $4 == "user=true" &&
+        $5 == "!restricted=true" && $6 == "!pending=true" && $7 == "!active=true" &&
+        $8 == "!backingup=true" && $9 == "comp=true)")
       next
     }
     /^[[:space:]]*(Service|Required[[:space:]]+constraints)/ {
@@ -592,15 +790,57 @@ native_jobs() {
     }
     END {
       if (bad || !complete || !jobs) exit 1
-      for (i=1; i<=jobs; i++) print inventory[i]
+      for (i=1; i<=jobs; i++) {
+        print inventory[i]
+        if (quiet) print eligibility[i]
+      }
       print "native-count", jobs
+      if (quiet) {
+        # A complete UID-filtered active section may be blank or contain only N/A.
+        print "native-queues", (pending_none == 1 && !pending_body && !active_body)
+        print clock_line
+      }
     }
-  '\''') || hold 'Cannot obtain bounded native scheduling metadata.'
+  '\''' 2>/dev/null) || hold 'Cannot obtain bounded native scheduling metadata.'
   [[ $(printf '%s' "$metadata" | wc -c) -le 8192 ]] || hold 'Native scheduling metadata exceeds its safe bound.'
+  if (( phase )); then
+    ids=$(awk '$1 == "native-job" { printf "%s ", $2 }' <<< "$metadata")
+    # One bounded shell queries every registered ID in its verified user/namespace.
+    # The command can report combinations; only the exclusive waiting state is quiet.
+    states=$(adb_on "$PHONE_SERIAL" shell -n '
+      set -eu
+      for id in '"$ids"'; do
+        state=$(cmd jobscheduler get-job-state -u '"$((uid / 100000))"' \
+          -n androidx.work.systemjobscheduler app.wardpulse "$id") || exit 1
+        printf "WP_STATE %s %s\n" "$id" "$state"
+      done
+      printf "WP_CLOCK %s %s %s\n" "$(cat /proc/sys/kernel/random/boot_id)" \
+        "$(cut -d " " -f1 /proc/uptime)" "$(date +%s%3N)"
+    ' 2>/dev/null | tr -d '\r' | awk -v boot="${BOOT[phone]}" '
+      function fail() { bad=1; exit 1 }
+      $1 == "WP_STATE" {
+        if (complete || NF < 3 || NF > 8 || $2 !~ /^[0-9]+$/ || length($2) > 10 ||
+            $2+0 > 2147483647 || seen[$2]++ || ++rows > 64) fail()
+        for (i=3; i<=NF; i++) {
+          if ($i !~ /^(pending|active|user-stopped|backing-up|no-component|ready|waiting)$/ ||
+              token[$2, $i]++ || ($i == "waiting" && NF != 3)) fail()
+        }
+        print "native-state", $2, (NF == 3 && $3 == "waiting"); next
+      }
+      $1 == "WP_CLOCK" {
+        if (NF != 4 || $2 != boot || $3 !~ /^[0-9]+[.][0-9][0-9]$/ || length($3) > 16 ||
+            $4 !~ /^[0-9]+$/ || length($4) != 13 || complete++) fail()
+        print "native-clock end", $3, $4; next
+      }
+      { fail() }
+      END { if (bad || !complete || !rows) exit 1 }
+    ') || hold 'Current native execution state is unknown or raced.'
+    metadata+=$'\n'"$states"
+  fi
   printf '%s\n' "$metadata" >"$SCRATCH/native.current"
   awk -v previous_native="$SCRATCH/native.previous" -v previous_work="$SCRATCH/work.previous" \
     -v current_native="$SCRATCH/native.current" -v activity="$((PHONE_ACTIVITY - WORK_ACTIVITY))" \
-    -v phone_live="$phone_live" -v stage="$label" '
+    -v phone_live="$phone_live" -v stage="$label" -v phase="$phase" '
     function fail() { bad=1; exit 1 }
     function same(x, y) { return ("x" x) == ("x" y) }
     function active(state) { return state == 0 || state == 1 || state == 4 }
@@ -623,6 +863,15 @@ native_jobs() {
       } else if ($1 == "native-count") {
         if (NF != 2 || $2 !~ /^[0-9]+$/ || count++) fail()
         expected=$2
+      } else if (phase && ($1 == "native-ready" || $1 == "native-state")) {
+        if (($1 == "native-ready" ? NF != 4 : NF != 3) || $2 !~ /^[0-9]+$/ ||
+            $3 !~ /^[01]$/ || detail[$1, $2]++ ||
+            ($1 == "native-ready" && $4 !~ /^[0-9]+$/)) fail()
+      } else if (phase && $1 == "native-queues") {
+        if (NF != 2 || $2 !~ /^[01]$/ || queues++) fail()
+      } else if (phase && $1 == "native-clock") {
+        if (NF != 4 || $2 !~ /^(begin|end)$/ || clock[$2]++ ||
+            $3 !~ /^[0-9]+[.][0-9][0-9]$/ || $4 !~ /^[0-9]+$/ || length($4) != 13) fail()
       } else fail()
       next
     }
@@ -651,7 +900,17 @@ native_jobs() {
         fail()
       }
     }
-    END { if (bad || count != 1 || jobs+0 != expected) exit 1 }
+    END {
+      if (bad || count != 1 || jobs+0 != expected) exit 1
+      if (phase) {
+        if (queues != 1 || clock["begin"] != 1 || clock["end"] != 1) exit 1
+        for (id in job) if (detail["native-ready", id] != 1 || detail["native-state", id] != 1) exit 1
+        for (key in detail) {
+          split(key, pair, SUBSEP)
+          if (!(pair[2] in job)) exit 1
+        }
+      }
+    }
   ' "$SCRATCH/native.previous" "$SCRATCH/work.previous" "$SCRATCH/native.current" \
     "$SCRATCH/work.current" || hold 'Native work correspondence was lost or changed without compatible execution/rescheduling evidence.'
   printf '%s\n' "$metadata" >&2
@@ -665,6 +924,7 @@ record_sync_events() {
       key="$role,${pid:-}"
       case "$type" in
         START)
+          (( ! INITIAL_DEATHS )) || hold 'Replacement/background process started after PRE-DEATH handoff.'
           [[ "$LIFECYCLE_ACTION" != "$role:death" ]] \
             || hold 'Replacement/background process started during intended death.'
           (( ! RETAINING )) || [[ "$LIFECYCLE_ACTION" == "$role:start" ]] \
@@ -788,6 +1048,11 @@ package_uid() {
   value=$(adb_on "$1" shell -n cmd package list packages -U "$APP_ID" | tr -d '\r') \
     || hold 'Installed package UID unavailable.'
   [[ ${#value} -le 16384 ]] || hold 'Package UID inventory exceeds its bound.'
+  parse_package_uid "$value" || hold 'Package UID inventory is missing, malformed or ambiguous.'
+}
+
+parse_package_uid() {
+  local value=$1
   # PackageManager applies a substring filter; watchface siblings are valid records.
   # Validate the entire bounded inventory, then require exactly the owned package.
   printf '%s\n' "$value" | awk -v package="$APP_ID" '
@@ -800,7 +1065,7 @@ package_uid() {
       if ($1 == "package:" package) { exact++; result=uid }
     }
     END { if (bad || exact != 1) exit 1; print result }
-  ' || hold 'Package UID inventory is missing, malformed or ambiguous.'
+  '
 }
 
 installed_apk() {
@@ -843,25 +1108,127 @@ prepare_reader() {
   [[ "$built" == "$staged" ]] || hold 'Staged reader differs from the current bounded build.'
 }
 
+reader_diagnostic() {
+  # A synchronous owned timeout reaps each small writer. A blocked diagnostic
+  # sink must neither stall the reader/cleanup nor silently turn evidence into PASS.
+  timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "$@" >&2' bash "$@" \
+    || READER_DIAG_OUTPUT_FAILED=1
+}
+
+reader_stderr_collect() {
+  local LC_ALL=C chunk status remaining deadline=$((SECONDS + 7)) stderr_seen=0 run_as=0 load=0 line_start=1
+  # Drain continuously in bounded chunks, including after a category is found.
+  # Only these three fixed tokens can reach the diagnostic file; raw bytes stay
+  # in the FIFO and this child's bounded memory. Its lifetime matches the wrapper.
+  while :; do
+    remaining=$((deadline - SECONDS))
+    (( remaining > 0 )) || return 1
+    chunk='' status=0
+    IFS= read -r -t "$remaining" -n 256 chunk || status=$?
+    if [[ -n "$chunk" ]] || (( status == 0 )); then
+      if (( ! stderr_seen )); then printf 'OBSERVED\n'; stderr_seen=1; fi
+      if (( line_start )); then
+        case "$chunk" in
+          'run-as: '*)
+            if (( ! run_as )); then printf 'RUN_AS_REPORTED\n'; run_as=1; fi ;;
+          'Error: Could not find class '*|'Error: Could not find or load main class '*|'CANNOT LINK EXECUTABLE '*)
+            if (( ! load )); then printf 'LOAD_REPORTED\n'; load=1; fi ;;
+        esac
+      fi
+      line_start=$(( ${#chunk} < 256 ))
+    fi
+    if (( status != 0 )); then
+      (( status == 1 ))
+      return
+    fi
+  done
+}
+
+reader_stderr() {
+  local phase=$1 token record stderr_seen=0 run_as=0 load=0 category=UNOBSERVED
+  # The owned collector writes at most three fixed lines. Read only that bound,
+  # and never forward even an unexpected token from the private scratch file.
+  for record in 1 2 3; do
+    IFS= read -r -n 32 token || break
+    case "$token" in
+      OBSERVED) stderr_seen=1 ;;
+      RUN_AS_REPORTED) run_as=1 ;;
+      LOAD_REPORTED) load=1 ;;
+    esac
+  done <"$SCRATCH/reader.stderr.categories"
+  if (( run_as && load )); then category=RUN_AS_AND_LOAD_REPORTED
+  elif (( run_as )); then category=RUN_AS_REPORTED
+  elif (( load )); then category=LOAD_REPORTED
+  elif (( stderr_seen )); then category=UNCLASSIFIED; fi
+  reader_diagnostic 'Reader stderr: phase=%s category=%s\n' "$phase" "$category"
+}
+
 work_snapshot() {
-  local label=$1 apk pid ticks name header line output= end= reader_in reader_out reader_host
+  local label=$1 apk pid ticks name header line output= end= rejection= reader_in reader_out reader_host
   local before_phone before_wear current phone_live=0 deadline=$((SECONDS + 8))
+  local started read_status=0 read_outcome=line header_shape=complete wrapper_status diagnostic_status
+  OBSERVER_RELEASED=0
+  if (( RETAINING )); then check_separation "$label-entry"; fi
   barrier phone "$PHONE_SERIAL"
   barrier wear "$WEAR_SERIAL"
   before_phone=$(app_processes "$PHONE_SERIAL" phone) || hold 'Pre-reader phone identity raced.'
   [[ -z "$before_phone" ]] || phone_live=1
   before_wear=$(app_processes "$WEAR_SERIAL" wear) || hold 'Pre-reader Wear identity raced.'
   apk=$(installed_apk "$PHONE_SERIAL")
+  if (( RETAINING )); then check_separation "$label-before-reader"; fi
+  # The existing reader/watchdog limits stay unchanged. Do not start a capture
+  # that cannot fit inside the enclosing PRE-DEATH phase, including kill grace.
+  if (( PRE_DEATH_DEADLINE )); then
+    (( SECONDS + 9 < PRE_DEATH_DEADLINE )) \
+      || hold 'Post-update PRE-DEATH evidence deadline cannot admit a complete Reader capture.'
+  fi
   name="wardpulse-work-snapshot-$$"
   READER_STAGE_ACTIVE=1 READER_BEFORE_PHONE=$before_phone
+  mkfifo "$SCRATCH/reader.stderr" 2>/dev/null || hold 'Cannot allocate reader diagnostic pipe.'
+  # Open both ends before unlinking, so asynchronous startup cannot race path removal.
+  if ! { exec {READER_STDERR_FD}<>"$SCRATCH/reader.stderr" \
+      {READER_STDERR_DRAIN_FD}<"$SCRATCH/reader.stderr"; } 2>/dev/null; then
+    hold 'Cannot open reader diagnostic descriptors.'
+  fi
+  rm -- "$SCRATCH/reader.stderr" 2>/dev/null || hold 'Cannot unlink reader diagnostic pipe.'
+  if ! { : >"$SCRATCH/reader.stderr.categories"; } 2>/dev/null; then
+    hold 'Cannot allocate sanitized reader diagnostics.'
+  fi
+  reader_stderr_collect <&"$READER_STDERR_DRAIN_FD" >"$SCRATCH/reader.stderr.categories" \
+    {READER_STDERR_FD}>&- {READER_STDERR_DRAIN_FD}<&- &
+  READER_DIAG_HOST=$!
   # This one ADB shell intentionally consumes GO from stdin, after identity verification.
   coproc WORK_READER { exec timeout --kill-after=1s 7s "$ADB" -s "$PHONE_SERIAL" shell -T \
-    "run-as app.wardpulse env CLASSPATH=$DEVICE_SCRATCH/reader.dex app_process /system/bin --nice-name=$name WorkSnapshot ${UIDS[phone]} $apk" 2>/dev/null; }
-  reader_host=${WORK_READER_PID:-}
+    "run-as app.wardpulse env CLASSPATH=$DEVICE_SCRATCH/reader.dex app_process /system/bin --nice-name=$name WorkSnapshot ${UIDS[phone]} $apk" \
+    2>&"$READER_STDERR_FD" {READER_STDERR_FD}>&- {READER_STDERR_DRAIN_FD}<&-; }
+  reader_host=$! READER_HOST=$!
   [[ "$reader_host" =~ ^[0-9]+$ ]] || hold 'Reader host process is unavailable.'
-  READER_HOST=$reader_host
-  exec {reader_out}<&"${WORK_READER[0]}" {reader_in}>&"${WORK_READER[1]}"
-  IFS= read -r -t 2 header <&"$reader_out" || hold 'Reader DEX loading/UID/security handshake unavailable.'
+  if [[ ! -v WORK_READER[0] || ! -v WORK_READER[1] ]]; then
+    reader_stderr startup
+    reader_diagnostic 'Reader header: outcome=unavailable elapsed_seconds=unknown content=unknown status=unknown\n'
+    (( ! READER_DIAG_OUTPUT_FAILED )) || exit 1
+    hold 'Reader host descriptors are unavailable.'
+  fi
+  exec {READER_OUTPUT_FD}<&"${WORK_READER[0]}" {READER_INPUT_FD}>&"${WORK_READER[1]}"
+  reader_out=$READER_OUTPUT_FD reader_in=$READER_INPUT_FD
+  exec {READER_STDERR_FD}>&- {READER_STDERR_DRAIN_FD}<&-
+  READER_STDERR_FD='' READER_STDERR_DRAIN_FD=''
+  started=$SECONDS
+  IFS= read -r -t 2 -n 256 header <&"$reader_out" || read_status=$?
+  if (( read_status != 0 )); then
+    if (( read_status > 128 )); then read_outcome=timeout
+    elif (( read_status == 1 )); then read_outcome=eof
+    else read_outcome=error; fi
+    header_shape=empty
+    [[ -z "$header" ]] || header_shape=partial
+  elif (( ${#header} == 256 )); then
+    read_outcome=limit header_shape=bounded
+  fi
+  reader_diagnostic 'Reader header: outcome=%s elapsed_seconds=%s content=%s status=%s\n' \
+    "$read_outcome" "$((SECONDS - started))" "$header_shape" "$read_status"
+  reader_stderr startup
+  (( ! READER_DIAG_OUTPUT_FAILED )) || exit 1
+  [[ "$read_outcome" == line ]] || hold 'Reader DEX loading/UID/security handshake unavailable.'
   header=${header//$'\r'/}
   if [[ "$header" =~ ^HOLD\ [A-Z_]+$ ]]; then hold "Work reader: ${header#HOLD }"; fi
   [[ "$header" =~ ^READER\ ([0-9]+)\ ([0-9]+)$ ]] || hold 'Malformed reader handshake.'
@@ -873,25 +1240,50 @@ work_snapshot() {
   printf 'Reader identity: %s\n' "$OBSERVER"
   printf 'GO\n' >&"$reader_in"
   exec {reader_in}>&-
+  READER_INPUT_FD=
+  OBSERVER_RELEASED=1
+  # Only the exact, separately verified reader identity is excluded by app_processes.
+  if (( RETAINING )); then check_separation "$label-reader-released"; fi
   while IFS= read -r -t 2 line <&"$reader_out"; do
     line=${line//$'\r'/}
     (( SECONDS < deadline && ${#output} < 16384 )) || hold 'Reader exceeded output/time bounds.'
     if [[ "$line" == 'HOLD '* ]]; then
       [[ "$line" =~ ^HOLD\ [A-Z_]+$ ]] || hold 'Malformed reader failure.'
-      hold "Work reader: ${line#HOLD }"
+      rejection=${line#HOLD }
+      case "$rejection" in
+        ORPHAN_SYSTEM_ID|FUTURE_SYSTEM_ID) break ;;
+        *) hold "Work reader: $rejection" ;;
+      esac
     fi
     if [[ "$line" == "END $pid $ticks" ]]; then end=1; break; fi
-    [[ "$line" =~ ^(SCHEMA|SQLITE|TIME|WORK)\ [a-zA-Z0-9._:\ -]+$ ]] || hold 'Malformed or unrecognized reader output.'
+    [[ "$line" =~ ^(SCHEMA|SQLITE|TIME|MAPPINGS|WORK)\ [a-zA-Z0-9._:\ -]+$ ]] || hold 'Malformed or unrecognized reader output.'
     output+="$line"$'\n'
   done
-  [[ "$end" == 1 ]] || hold 'Partial reader evidence.'
+  [[ "$end" == 1 || -n "$rejection" ]] || hold 'Partial reader evidence.'
   if IFS= read -r -t 1 line <&"$reader_out"; then hold 'Unexpected trailing reader output.'; fi
   exec {reader_out}<&-
-  wait "$reader_host" || hold 'Reader process failed or did not retire normally.'
+  READER_OUTPUT_FD=
+  wrapper_status=0
+  wait "$reader_host" || wrapper_status=$?
   READER_HOST=
+  reader_diagnostic 'Reader wrapper: phase=completion exit=%s\n' "$wrapper_status"
+  diagnostic_status=0
+  wait "$READER_DIAG_HOST" || diagnostic_status=$?
+  READER_DIAG_HOST=
+  reader_diagnostic 'Reader stderr collector: phase=completion exit=%s\n' "$diagnostic_status"
+  reader_stderr completion
+  (( ! READER_DIAG_OUTPUT_FAILED )) || exit 1
+  if [[ -n "$rejection" ]]; then
+    (( wrapper_status == 1 )) || hold 'Rejected reader process did not retire with its expected failure.'
+  else
+    (( wrapper_status == 0 )) || hold 'Reader process failed or did not retire normally.'
+  fi
+  (( diagnostic_status == 0 )) || hold 'Reader stderr collector failed or did not retire normally.'
   adb_on "$PHONE_SERIAL" shell -n "test ! -e /proc/$pid" || hold 'Reader PID is still live or reused.'
   READER_DEVICE_PID= OBSERVER=
+  OBSERVER_RELEASED=0
   READER_STAGE_ACTIVE=0
+  if (( RETAINING )); then check_separation "$label-reader-retired"; fi
   current=$(app_processes "$PHONE_SERIAL" phone) || hold 'Post-reader phone identity raced.'
   [[ "$current" == "$before_phone" ]] || hold 'Reader interval included phone activity.'
   current=$(app_processes "$WEAR_SERIAL" wear) || hold 'Post-reader Wear identity raced.'
@@ -901,11 +1293,27 @@ work_snapshot() {
   barrier wear "$WEAR_SERIAL"
   [[ -z "$EVENTS" ]] || hold 'Wear activity raced work observation.'
   printf '%s' "$output" >"$SCRATCH/work.current"
-  reconcile_work "$label"
+  reconcile_work "$label" "$rejection"
+  [[ -z "$rejection" ]] || hold "Work reader: $rejection"
+  if (( RETAINING )); then check_separation "$label-before-native"; fi
   native_jobs "$label" "$phone_live"
+  if (( PRE_DEATH_DEADLINE )); then
+    # Native queries are inside the same identity/event proof as the Reader.
+    [[ $(package_uid "$PHONE_SERIAL") == "${UIDS[phone]}" &&
+       $(package_uid "$WEAR_SERIAL") == "${UIDS[wear]}" ]] || hold 'PRE-DEATH package UID changed.'
+    current=$(app_processes "$PHONE_SERIAL" phone) || hold 'Post-native phone identity raced.'
+    [[ "$current" == "$before_phone" ]] || hold 'Phone identity changed across native observation.'
+    current=$(app_processes "$WEAR_SERIAL" wear) || hold 'Post-native Wear identity raced.'
+    [[ "$current" == "$before_wear" ]] || hold 'Wear identity changed across native observation.'
+    barrier phone "$PHONE_SERIAL"
+    [[ -z "$EVENTS" ]] || hold 'Phone activity raced native observation.'
+    barrier wear "$WEAR_SERIAL"
+    [[ -z "$EVENTS" ]] || hold 'Wear activity raced native observation.'
+    (( SECONDS < PRE_DEATH_DEADLINE )) || hold 'Post-update PRE-DEATH evidence deadline expired.'
+  fi
   if [[ "$label" == preflight ]]; then
     # Keep the narrow installed tuple visible for HOST binding after scratch cleanup.
-    awk '$1 == "SCHEMA" || $1 == "SQLITE"' "$SCRATCH/work.current"
+    awk '$1 == "SCHEMA" || $1 == "SQLITE" || $1 == "MAPPINGS"' "$SCRATCH/work.current"
   fi
   # Advance the accepted pair only after logical AND native evidence reconcile.
   cp "$SCRATCH/work.current" "$SCRATCH/work.previous"
@@ -915,13 +1323,17 @@ work_snapshot() {
 }
 
 reconcile_work() {
-  local label=$1
+  local label=$1 rejection=${2:-}
   # Validate the protocol independently of the Java reader, then reconcile only
   # documented transitions. Activity permits possible enqueue/execution, not
   # arbitrary spec changes or a claim about all intermediate transitions.
-  awk -v previous="$SCRATCH/work.previous" -v activity="$((PHONE_ACTIVITY - WORK_ACTIVITY))" '
+  awk -v previous="$SCRATCH/work.previous" -v activity="$((PHONE_ACTIVITY - WORK_ACTIVITY))" \
+    -v rejected="$rejection" '
     function fail() { bad=1; exit 1 }
     function same(x, y) { return ("x" x) == ("x" y) }
+    function bounded_count(value) {
+      return value ~ /^(0|[1-9][0-9]*)$/ && length(value) <= 10 && value+0 <= 2147483647
+    }
     function terminal(state) { return state == 2 || state == 3 || state == 5 }
     function recovery_transition(before, after) {
       if (before == 0 || before == 1) return after == 0 || after == 1 || after == 2
@@ -935,26 +1347,35 @@ reconcile_work() {
       next
     }
     $1 == "SCHEMA" {
-      if (FNR != 1 || NF != 5 || $2 != "2.11.2" || $3 != 24 || $4 != "08b926448d86528e697981ddd30459f7" ||
+      if (rejected || FNR != 1 || NF != 5 || $2 != "2.11.2" || $3 != 24 || $4 != "08b926448d86528e697981ddd30459f7" ||
           ($5 != "no_backup" && $5 != "databases") || schema++ || (oldschema && $0 != oldschema)) fail()
       next
     }
     $1 == "SQLITE" {
       source=$5; sub(/-alt[0-9]+$/, "", source)
-      if (FNR != 2 || NF != 6 || ($2 != "3.44.3" && $2 != "3.44.4") ||
+      if (rejected || FNR != 2 || NF != 6 || ($2 != "3.44.3" && $2 != "3.44.4") ||
           $3 !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ ||
           $4 !~ /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$/ ||
           length(source) != 64 || source !~ /^[0-9a-f]+$/ || length($5) > 79 ||
           ($6 != "wal" && $6 != "delete") || sqlite++ || (oldsqlite && $0 != oldsqlite)) fail()
       next
     }
-    $1 == "TIME" { if (FNR != 3 || NF != 2 || length($2) != 13 || $2 !~ /^[0-9]+$/ || time++) fail(); now=$2; next }
+    $1 == "TIME" { if (rejected || FNR != 3 || NF != 2 || length($2) != 13 || $2 !~ /^[0-9]+$/ || time++) fail(); now=$2; next }
+    $1 == "MAPPINGS" {
+      if (FNR != (rejected ? 1 : 4) || NF != 6 || mappings++) fail()
+      for (i=2;i<=6;i++) if (!bounded_count($i)) fail()
+      if ($2 != $3+$4+$5+$6) fail()
+      missing=$3; current=$4; future=$6; mapping_record=$0
+      next
+    }
     $1 == "WORK" {
-      if (schema != 1 || sqlite != 1 || time != 1 || NF != 25 || ++rows > 32 || seen[$3]++ ||
+      if (rejected || schema != 1 || sqlite != 1 || time != 1 || mappings != 1 || NF != 25 || ++rows > 32 || seen[$3]++ ||
           ($2 != "wardpulse.providerSync" && $2 != "wardpulse.recoveryWake") ||
           $3 !~ /^[0-9a-f-]+$/ || $4 !~ /^[0-5]$/ ||
           $5 != "dev.fluttercommunity.workmanager.BackgroundWorker") fail()
       for (i=6;i<=25;i++) if ($i !~ /^-?[0-9]+$/) fail()
+      if (!bounded_count($14) || (!same($15, "-1") && !bounded_count($15))) fail()
+      if ($15 >= 0) { if (job_seen[$15]++) fail(); mapped++ }
       if ($25 != -1 && $25 != 0 && $25 != 1) fail()
       if ($9 != 1 || $10 != 0 || $11 != 0 || $12 != 0 || $13 != 0) fail()
       if ($2 == "wardpulse.providerSync") {
@@ -1001,7 +1422,15 @@ reconcile_work() {
     }
     { fail() }
     END {
-      if (bad || schema != 1 || sqlite != 1 || time != 1 || periodic != 1) exit 1
+      if (bad || mappings != 1) exit 1
+      if (rejected) {
+        if (FNR != 1 || !((rejected == "ORPHAN_SYSTEM_ID" && missing > 0) ||
+            (rejected == "FUTURE_SYSTEM_ID" && missing == 0 && future > 0))) exit 1
+        print "Rejected mapping evidence: " mapping_record > "/dev/stderr"
+        exit 0
+      }
+      if (schema != 1 || sqlite != 1 || time != 1 || periodic != 1 || missing != 0 || future != 0 ||
+          mapped+0 != current) exit 1
       for (id in old) {
         # Already-terminal history may be pruned for either logical name.
         if (oldstate[id] == 2 || oldstate[id] == 3 || oldstate[id] == 5) continue
@@ -1019,17 +1448,29 @@ require_no_receipts() {
 }
 
 check_separation() {
-  (( SECONDS < RETENTION_DEADLINE && SECONDS - LAST_OBSERVATION < 3 )) || hold 'Retention deadline or observation gap.'
+  local phase=$1 started=$SECONDS finished current metadata phone
+  [[ "$phase" =~ ^[a-z][a-z-]{0,63}$ ]] || hold 'Invalid retention observation phase.'
+  if (( started >= RETENTION_DEADLINE || started - LAST_OBSERVATION >= 3 )); then
+    hold "Retention timing: phase=$phase boundary=entry" \
+      "total_expired=$((started >= RETENTION_DEADLINE)) gap_expired=$((started - LAST_OBSERVATION >= 3))" \
+      "elapsed_seconds=$((started + 60 - RETENTION_DEADLINE)) remaining_seconds=$((RETENTION_DEADLINE - started))" \
+      "age_seconds=$((started - LAST_OBSERVATION)) work_seconds=0."
+  fi
   barrier phone "$PHONE_SERIAL"
   [[ -z "$EVENTS" ]] || hold 'Phone activity/publication invalidated separation.'
-  local current metadata phone
   phone=$(app_processes "$PHONE_SERIAL" phone) || hold 'Phone process observation failed.'
   [[ -z "$phone" ]] || hold 'Phone app is no longer absent.'
   current=$(summary_hash) || hold 'Retention summary hash read failed.'
   metadata=$(summary_metadata) || hold 'Retention summary stat failed.'
   [[ "$current" == "$BASELINE" && "$metadata" == "$BASELINE_METADATA" ]] || hold 'Saved summary changed or was replaced during retention.'
-  (( SECONDS < RETENTION_DEADLINE && SECONDS - LAST_OBSERVATION < 3 )) || hold 'Retention observation was too slow to reconcile.'
-  LAST_OBSERVATION=$SECONDS
+  finished=$SECONDS
+  if (( finished >= RETENTION_DEADLINE || finished - LAST_OBSERVATION >= 3 )); then
+    hold "Retention timing: phase=$phase boundary=observation-work" \
+      "total_expired=$((finished >= RETENTION_DEADLINE)) gap_expired=$((finished - LAST_OBSERVATION >= 3))" \
+      "elapsed_seconds=$((finished + 60 - RETENTION_DEADLINE)) remaining_seconds=$((RETENTION_DEADLINE - finished))" \
+      "age_seconds=$((finished - LAST_OBSERVATION)) entry_age_seconds=$((started - LAST_OBSERVATION)) work_seconds=$((finished - started))."
+  fi
+  LAST_OBSERVATION=$finished
 }
 
 stop_app() {
@@ -1037,6 +1478,11 @@ stop_app() {
   local deadline=$((SECONDS + 15))
   # The foreground STOP owns one budget, including its surrounding boundaries.
   if (( OBSERVING && deadline > OBS_LIMIT )); then deadline=$OBS_LIMIT; fi
+  if (( INITIAL_DEATHS )); then
+    # The fresh scheduling exclusion must cover this entire original death budget,
+    # including after the intervening Reader. Never reuse an expired quiet proof.
+    (( deadline < INITIAL_DEATH_UNTIL )) || hold 'PRE-DEATH scheduling exclusion expired before intended death.'
+  fi
   barrier "$role" "$serial"
   (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
   if (( RETAINING )); then
@@ -1058,7 +1504,7 @@ stop_app() {
   adb_on "$serial" shell -n input keyevent KEYCODE_HOME || hold 'Cannot background the app.'
   (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
   while (( SECONDS < deadline )); do
-    if (( RETAINING )) && [[ "$role" == wear ]]; then check_separation; fi
+    if (( RETAINING )) && [[ "$role" == wear ]]; then check_separation wear-death-loop; fi
     (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
     barrier "$role" "$serial"
     (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
@@ -1081,6 +1527,7 @@ stop_app() {
       (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
       [[ -z "$EVENTS" ]] || hold 'Activity raced the observed absence.'
       reconcile_role "$role" "$serial" ""
+      if (( RETAINING )) && [[ "$role" == wear ]]; then check_separation wear-death-complete; fi
       (( SECONDS < deadline )) || hold 'Intended death exceeded its deadline.'
       OLD[$role]=$old
       LIFECYCLE_ACTION=
@@ -1157,7 +1604,7 @@ launch_app() {
     adb_on "$serial" shell -n am start -W -n "$component" >/dev/null || hold 'Activity launch failed.'
   fi
   while (( SECONDS < deadline )); do
-    if (( RETAINING )); then check_separation; fi
+    if (( RETAINING )); then check_separation "$role-launch-loop"; fi
     barrier "$role" "$serial"
     if (( RETAINING )); then require_no_receipts "$EVENTS"; fi
     events+="${EVENTS}"$'\n'
@@ -1190,20 +1637,616 @@ launch_app() {
   hold 'Timed out proving a new app process after launch.'
 }
 
+delivery_report() {
+  (( ! DELIVERY_REPORTED )) || return 0
+  DELIVERY_REPORTED=1
+  local elapsed=$((SECONDS - DELIVERY_STARTED)) remaining=$((DELIVERY_DEADLINE - SECONDS)) report line
+  (( remaining >= 0 )) || remaining=0
+  printf -v report 'Delivery: phase=%s elapsed=%ss remaining=%ss process_proof=%s FRESH_PUBLICATION=%s FRESH_RECEIPT=%s sync_attempted=%s stale_ui_snapshots=%s\n' \
+    "$DELIVERY_PHASE" "$elapsed" "$remaining" "$DELIVERY_PROCESS_PROOF" \
+    "$FRESH_PUBLICATION" "$FRESH_RECEIPT" "$DELIVERY_SYNC_ATTEMPTED" "${DELIVERY_UI_STALE:-0}"
+  report+=${DELIVERY_UI_DISCARDS:-}
+  if [[ "$DELIVERY_PHASE" != delivery ]]; then
+    # An interrupted UI attempt names its unfinished stage, which has no duration.
+    printf -v line 'Delivery UI attempt: invocation=%s:%s route=%s %s unfinished=%s since=%s remaining=%s\n' \
+      "$$" "$DELIVERY_UI_INVOCATION" "$DELIVERY_PHASE" "$DELIVERY_UI_FACTS" \
+      "$DELIVERY_UI_STAGE" "$DELIVERY_UI_STAGE_AT" "$((DELIVERY_DEADLINE - DELIVERY_UI_STAGE_AT))"
+    report+=$line
+  fi
+  local role
+  for role in phone wear; do
+    printf -v line 'Delivery observation: role=%s last_completed=%s coverage=%s\n' "$role" \
+      "${DELIVERY_BOUNDARY[$role]:-Unknown}" "${DELIVERY_COVERAGE[$role]:-Unknown}"
+    report+=$line
+  done
+  report+='Zero flags mean no accepted observation; incomplete coverage and causal absence remain Unknown.'
+  # One bounded, best-effort write: a full or closed stderr cannot stall cleanup or change status.
+  timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "%s\n" "$1" >&2' bash "$report"
+}
+
+delivery_check_time() {
+  (( SECONDS < DELIVERY_DEADLINE )) || hold 'Delivery deadline expired.'
+}
+
+# Closes the current UI stage at tick $2 and opens stage $1 there, so one integral-clock
+# read separates them. Only stages after the capture tick have fields: a discard's
+# durations sum to its age, and a stage that is not reached stays Unknown. A trap never
+# runs inside one assignment command, so one publishes the duration with the next stage.
+delivery_ui_stage() {
+  local facts=${DELIVERY_UI_FACTS/"$DELIVERY_UI_STAGE=Unknown"/"$DELIVERY_UI_STAGE=$(($2 - DELIVERY_UI_STAGE_AT))"}
+  DELIVERY_UI_FACTS=$facts DELIVERY_UI_STAGE=$1 DELIVERY_UI_STAGE_AT=$2
+}
+
+# A discarded snapshot keeps one closed record for the bounded delivery report, with
+# no write, pacing or retry here. Each discard needs its own capture at least five
+# ticks old, so the original 30-tick budget holds at most six records. Only the record
+# closes the current stage; one command then retains, counts and ends the attempt.
+delivery_ui_stale() {
+  local site=$1 route=$2 checked=$3 record
+  local facts=${DELIVERY_UI_FACTS/"$DELIVERY_UI_STAGE=Unknown"/"$DELIVERY_UI_STAGE=$((checked - DELIVERY_UI_STAGE_AT))"}
+  printf -v record 'Delivery UI discard: invocation=%s:%s route=%s site=%s %s checked=%s age=%s remaining=%s\n' \
+    "$$" "$DELIVERY_UI_INVOCATION" "$route" "$site" "$facts" "$checked" \
+    "$((checked - DELIVERY_UI_CAPTURED))" "$((DELIVERY_DEADLINE - checked))"
+  DELIVERY_UI_DISCARDS+=$record DELIVERY_UI_STALE=$((DELIVERY_UI_STALE + 1)) DELIVERY_PHASE=delivery
+}
+
+delivery_observe() {
+  local role serial current
+  DELIVERY_PROCESS_PROOF=Unknown
+  for role in phone wear; do
+    serial=$PHONE_SERIAL
+    [[ "$role" == phone ]] || serial=$WEAR_SERIAL
+    delivery_check_time
+    DELIVERY_COVERAGE[$role]=Incomplete
+    barrier "$role" "$serial"
+    DELIVERY_BOUNDARY[$role]="${CURSOR[$role]}@$SECONDS"
+    DELIVERY_COVERAGE[$role]=CompleteThroughBoundary
+    [[ "$EVENTS" != *KILL* && "$EVENTS" != *DEATH* && "$EVENTS" != *START* ]] \
+      || hold 'App process activity raced delivery.'
+    current=$(app_processes "$serial" "$role") || hold 'Cannot observe delivery process.'
+    [[ "$current" == "${RUNNING[$role]}" ]] || hold 'App process changed during delivery.'
+    delivery_check_time
+  done
+  DELIVERY_PROCESS_PROOF=Verified
+}
+
+# Retain one closed failure record before cleanup; reporting cannot replace the failure.
+delivery_ui_fail() {
+  local guard=$1 failure=$2 status=$3 error=$4 detail= record
+  if [[ "$guard" == parser_exit && -f "$SCRATCH/delivery.failure" ]]; then
+    IFS= read -r -n 2048 detail <"$SCRATCH/delivery.failure" || :
+  fi
+  if [[ -n "$detail" ]]; then
+    printf -v record 'Delivery UI: phase=%s invocation=%s:%s status=%s %s' \
+      "$DELIVERY_PHASE" "$$" "$DELIVERY_UI_INVOCATION" "$status" "$detail"
+  else
+    case "$status" in
+      124) error=Timeout ;;
+      137) error=Killed ;;
+      127) error=CommandUnavailable ;;
+    esac
+    printf -v record 'Delivery UI: phase=%s invocation=%s:%s read=%s producer=%s producer_pid=Unknown guard=%s failure=%s status=%s error=%s target=Unknown viewport=Unknown blocking=Unknown' \
+      "$DELIVERY_PHASE" "$$" "$DELIVERY_UI_INVOCATION" "$DELIVERY_UI_READ" \
+      "$DELIVERY_UI_PRODUCER" "$guard" "$failure" "$status" "$error"
+  fi
+  # Match the existing bounded diagnostic-writer pattern, without changing failure status.
+  timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "%s\n" "$1" >&2' bash "$record" || :
+  hold 'Delivery UI qualification failed.'
+}
+
+# Stdout is action-only; bounded, typed failure facts stay in owned scratch until reported.
+delivery_ui_target() {
+  bounded 3 python3 - "$SCRATCH" "$1" "${UIDS[phone]}" <<'PY_UI'
+import os
+import re
+import sys
+from pathlib import Path
+from xml.etree import ElementTree as ET
+
+
+NATIVE_FACTS = ('physical_count', 'override_count', 'density_count', 'density_override_count',
+                'focus_count', 'focused_app_count', 'window_count', 'window_ordinal',
+                'visibility_count', 'frame_count', 'host_count', 'host_owner_match',
+                'obstruction_count')
+facts = dict.fromkeys(NATIVE_FACTS + ('read', 'native_stable', 'node_count', 'package_match',
+                      'dialog_count', 'match_count', 'semantic_match', 'enabled',
+                      'control_scope', 'action_owner_match', 'clickable', 'visible',
+                      'navigation_selected',
+                      'inside_frame', 'inside_display', 'overlap_count', 'target', 'hit_area',
+                      'viewport', 'blocking'), 'Unknown')
+
+
+class GuardRejected(Exception):
+    pass
+
+
+def require(ok, guard, **measured):
+    facts.update(measured)
+    if not ok:
+        raise GuardRejected(guard)
+
+
+def rect(value):
+    match = re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', value)
+    require(match, 'rectangle_syntax')
+    box = tuple(map(int, match.groups()))
+    require(box[0] < box[2] and box[1] < box[3], 'rectangle_order')
+    return box
+
+
+def inside(a, b):
+    return b[0] <= a[0] < a[2] <= b[2] and b[1] <= a[1] < a[3] <= b[3]
+
+
+def overlap(a, b):
+    return max(a[0], b[0]) < min(a[2], b[2]) and max(a[1], b[1]) < min(a[3], b[3])
+
+
+def native(path, uid):
+    # An unfinished after-read must not inherit successful before-read facts.
+    facts.update(dict.fromkeys(NATIVE_FACTS, 'Unknown'))
+    facts['read'] = 'NativeBefore' if path.name == 'delivery.before' else 'NativeAfter'
+    body = path.read_text()
+    require(len(body) <= 262144, 'native_size')
+    physical = re.findall(r'^Physical size: (\d+)x(\d+)\r?$', body, re.M)
+    override = re.findall(r'^Override size: (\d+)x(\d+)\r?$', body, re.M)
+    require(len(physical) == 1 and len(override) <= 1, 'display_unique',
+            physical_count=len(physical), override_count=len(override))
+    width, height = map(int, (override or physical)[0])
+    require(0 < width < height <= 8192, 'display_portrait')
+    physical_density = re.findall(r'^Physical density: (\d+)\r?$', body, re.M)
+    override_density = re.findall(r'^Override density: (\d+)\r?$', body, re.M)
+    require(len(physical_density) == 1 and len(override_density) <= 1, 'density_unique',
+            density_count=len(physical_density), density_override_count=len(override_density))
+    density = int((override_density or physical_density)[0])
+    require(0 < density <= 1280, 'density_range')
+    focus = re.findall(r'mCurrentFocus=Window\{([^}]+)\}', body)
+    require(len(focus) == 1 and re.fullmatch(
+        r'[a-f0-9]+ u0 app\.wardpulse/(?:app\.wardpulse)?\.MainActivity', focus[0]),
+        'foreground_window', focus_count=len(focus))
+    focused = re.findall(r'mFocusedApp=.*ActivityRecord\{([^}]+)\}', body)
+    require(len(focused) == 1 and re.search(
+        r'\bu0 app\.wardpulse/(?:app\.wardpulse)?\.MainActivity(?: |$)', focused[0]),
+        'foreground_activity', focused_app_count=len(focused))
+    windows = list(re.finditer(r'(?m)^([ \t]*)Window #\d+ Window\{([^}\r\n]+)\}:[^\n]*$', body))
+    facts['window_count'] = len(windows)
+    host = []
+    obstructions = []
+    for ordinal, record in enumerate(windows, 1):
+        facts.update(window_ordinal=ordinal, visibility_count='Unknown', frame_count='Unknown')
+        # Full-service output also contains global/display records. Only deeper
+        # indented lines belong to this window; never borrow another frame.
+        lines = []
+        for line in body[record.end():].splitlines():
+            if not line.strip():
+                continue
+            if len(line) - len(line.lstrip()) <= len(record[1]):
+                break
+            lines.append(line)
+        window = '\n'.join(lines)
+        identity = record[2]
+        if 'mHasSurface=true' not in window:
+            continue
+        shown = re.findall(r'\bisOnScreen=(true|false)\b', window)
+        visible = re.findall(r'\bisVisible=(true|false)\b', window)
+        require(len(shown) == len(visible) == 1, 'window_visibility_unique',
+                visibility_count=(len(shown), len(visible)))
+        if shown == ['false'] or visible == ['false']:
+            continue
+        frames = set(re.findall(r'(?:mFrame=|\bframe=)(\[\d+,\d+\]\[\d+,\d+\])', window))
+        require(len(frames) == 1, 'window_frame_unique', frame_count=len(frames))
+        frame = rect(frames.pop())
+        if identity == focus[0]:
+            owner_match = bool(re.search(r'\bmOwnerUid=' + re.escape(uid) + r'\b', window))
+            require(owner_match, 'host_owner', host_owner_match=owner_match)
+            require('mViewVisibility=0x0' in window and 'mObscured=false' in window,
+                    'host_visible_unobscured')
+            require('mHaveFrame=true' in window and inside(frame, (0, 0, width, height)),
+                    'host_frame')
+            host.append(frame)
+        else:
+            obstructions.append(frame)
+    require(len(host) == 1, 'host_unique', host_count=len(host),
+            obstruction_count=len(obstructions))
+    return focus[0], host[0], (0, 0, width, height), density, sorted(obstructions)
+
+
+def target(scratch, mode, uid):
+    before = native(scratch / 'delivery.before', uid)
+    after = native(scratch / 'delivery.after', uid)
+    require(before == after, 'native_stable', native_stable=before == after)
+    _, frame, display, density, obstructions = after
+    facts['read'] = 'Hierarchy'
+    data = (scratch / 'delivery.xml').read_bytes()
+    require(len(data) <= 262144 and b'<!' not in data, 'hierarchy_size_markup')
+    root = ET.fromstring(data)
+    require(root.tag == 'hierarchy' and root.get('rotation') == '0', 'hierarchy_root_rotation')
+    nodes = list(root.iter('node'))
+    require(0 < len(nodes) <= 2048, 'hierarchy_nodes', node_count=len(nodes))
+    package_match = all(n.get('package') in ('app.wardpulse', 'com.android.systemui', '') for n in nodes)
+    require(package_match, 'hierarchy_packages', package_match=package_match)
+    dialogs = sum(n.get('class', '').endswith('Dialog') for n in nodes)
+    require(not dialogs, 'hierarchy_dialogs', dialog_count=dialogs)
+    parents = {child: parent for parent in root.iter() for child in parent}
+
+    def labels(node):
+        return [line.strip() for attr in ('text', 'content-desc')
+                for line in node.get(attr, '').splitlines() if line.strip()]
+
+    def has(node, text):
+        return text in labels(node)
+
+    def bounds(node):
+        return rect(node.get('bounds', ''))
+
+    def visible(node):
+        return node.get('visible-to-user', 'true') == 'true' and overlap(bounds(node), frame)
+
+    def matches(text):
+        return [n for n in nodes if has(n, text) and visible(n)]
+
+    def unique(items, guard):
+        require(len(items) == 1, guard, match_count=len(items))
+        return items[0]
+
+    def actionable(node, scope):
+        facts.update(dict.fromkeys(('action_owner_match', 'enabled', 'clickable',
+                                    'visible', 'target'), 'Unknown'))
+        facts['control_scope'] = scope
+        require(node.get('package') == 'app.wardpulse' and node.get('enabled') == 'true',
+                'action_owner_enabled', action_owner_match=node.get('package') == 'app.wardpulse',
+                enabled=node.get('enabled') == 'true')
+        clickable = node.get('clickable') == 'true'
+        shown = visible(node) if clickable else 'Unknown'
+        require(clickable and shown, 'action_clickable_visible',
+                clickable=clickable, visible=shown)
+
+    def safe(box, hit=None):
+        facts['target'] = box
+        require(inside(box, frame) and inside(box, display), 'target_inside',
+                inside_frame=inside(box, frame), inside_display=inside(box, display))
+        blocking = [other for other in obstructions if overlap(hit or box, other)]
+        require(not blocking, 'target_unobstructed', overlap_count=len(blocking),
+                blocking=blocking[0] if blocking else 'Unknown')
+
+    def interior(box):
+        # A tap may leave out only a fringe: an obstruction across one whole side
+        # of the control that stops short of its would-be center. Any other overlap
+        # stays in the hit area and still blocks the tap.
+        x, y = (box[0] + box[2]) // 2, (box[1] + box[3]) // 2
+        left, top, right, bottom = box
+        for other in obstructions:
+            full_width = other[0] <= box[0] and box[2] <= other[2]
+            full_height = other[1] <= box[1] and box[3] <= other[3]
+            if full_width and y < other[1] < box[3] <= other[3]:
+                bottom = min(bottom, other[1])
+            elif full_width and other[1] <= box[1] < other[3] <= y:
+                top = max(top, other[3])
+            elif full_height and x < other[0] < box[2] <= other[2]:
+                right = min(right, other[0])
+            elif full_height and other[0] <= box[0] < other[2] <= x:
+                left = max(left, other[2])
+        return left, top, right, bottom
+
+    def tap(node):
+        actionable(node, 'Tap')
+        box = bounds(node)
+        hit = interior(box)
+        facts['hit_area'] = hit
+        safe(box, hit)
+        require(hit[2] - hit[0] >= 24 and hit[3] - hit[1] >= 24, 'tap_size')
+        for other in nodes:
+            if other is node or other.get('clickable') != 'true' or not visible(other):
+                continue
+            related = node in other.iter() or other in node.iter()
+            other_box = bounds(other) if not related else None
+            conflict = not related and overlap(box, other_box)
+            require(not conflict, 'tap_unrelated_control', semantic_match=related,
+                    blocking=other_box if conflict else 'Unknown')
+        print('TAP', (hit[0] + hit[2]) // 2, (hit[1] + hit[3]) // 2)
+
+    def controls(text):
+        # Merged semantics may contain several lines, while an unmerged label
+        # may be a child of the actual enabled clickable node.
+        candidates = set()
+        for node in matches(text):
+            while node in parents and node.get('clickable') != 'true':
+                node = parents[node]
+            if node.get('clickable') == 'true':
+                candidates.add(node)
+        return list(candidates)
+
+    def control(text):
+        # The label selects a guard internally; arbitrary captured text is never reported.
+        guards = {'Dashboard': 'dashboard_control_unique', 'Settings': 'settings_control_unique',
+                  'Mock data': 'mock_control_unique'}
+        return unique(controls(text), guards[text])
+
+    selected = 'Dashboard' if mode == 'dashboard' else 'Settings'
+    navigation = control(selected)
+    actionable(navigation, 'Navigation')
+    require(navigation.get('selected') == 'true', 'navigation_selected',
+            navigation_selected=navigation.get('selected') == 'true')
+    if mode == 'dashboard':
+        if not matches('Usage dashboard'):
+            require(not matches('Dashboard unavailable') and not matches('Open Providers'),
+                    'dashboard_readiness')
+            print('WAIT')
+            return
+        unique(matches('Usage dashboard'), 'dashboard_heading_unique')
+        require(any(visible(n) and any(line.startswith(('Updated ', 'Showing previous data · Updated '))
+                                     for line in labels(n)) for n in nodes), 'dashboard_timestamp')
+        tap(control('Settings'))
+        return
+
+    scroll = unique([n for n in nodes if n.get('scrollable') == 'true' and visible(n)],
+                    'settings_scroll_unique')
+    facts.update(dict.fromkeys(('clickable', 'visible', 'target'), 'Unknown'))
+    require(scroll.get('package') == 'app.wardpulse' and scroll.get('enabled') == 'true',
+            'settings_scroll_owner_enabled', control_scope='SettingsScroll',
+            action_owner_match=scroll.get('package') == 'app.wardpulse',
+            enabled=scroll.get('enabled') == 'true')
+    require(any(matches(text) for text in ('Refresh', 'Refresh interval', 'Notifications',
+                                         'Mock data', 'Diagnostics', 'Watch summary',
+                                         'Widget summary', 'Send to watch', 'Help')), 'settings_semantics')
+    box = bounds(scroll)
+    viewport = (max(box[0], frame[0]), max(box[1], frame[1]),
+                min(box[2], frame[2]), min(box[3], frame[3], bounds(navigation)[1]))
+    facts['viewport'] = viewport
+    require(viewport[2] - viewport[0] >= 100 and viewport[3] - viewport[1] >= 160,
+            'settings_viewport')
+
+    def seek(distance=None):
+        # Upward content scrolling never invokes the list's pull-to-refresh.
+        height = viewport[3] - viewport[1]
+        # Flutter consumes up to 18 logical pixels before dragging content.
+        # Reserve that distance even when revealing only a clipped edge.
+        slop = (18 * density + 159) // 160
+        distance = min(height // 3, slop + (distance or height // 3))
+        require(distance > slop, 'scroll_drag_threshold')
+        x = (viewport[0] + viewport[2]) // 2
+        end = viewport[1] + height // 3
+        start = end + distance
+        safe((x - 2, end - 2, x + 2, start + 2))
+        print('SCROLL', x, start, x, end)
+
+    if mode == 'mock':
+        if not matches('Mock data'):
+            require(not matches('Diagnostics') and not matches('Send to watch'), 'mock_not_skipped')
+            seek()
+            return
+        mock = control('Mock data')
+        require(mock in scroll.iter(), 'mock_scroll_owner', semantic_match=mock in scroll.iter())
+        actionable(mock, 'Mock')
+        require(mock.get('checkable') == 'true' and mock.get('checked') == 'false', 'mock_off')
+        mock_box = bounds(mock)
+        facts['target'] = mock_box
+        if not inside(mock_box, viewport):
+            require(mock_box[1] >= viewport[1] and mock_box[2] <= viewport[2], 'mock_reveal_direction')
+            seek(max(16, mock_box[3] - viewport[3] + 16))
+            return
+        safe(mock_box)
+        print('MOCK_OFF')
+        return
+
+    require(mode == 'sync', 'sync_mode')
+    rows = matches('Send to watch')
+    if not rows:
+        require(not matches('Help'), 'sync_not_skipped')
+        seek()
+        return
+    row = unique(rows, 'sync_row_unique')
+    require(row in scroll.iter(), 'sync_row_owner', semantic_match=row in scroll.iter())
+    # Diagnostics' static "Sync" status is never an action or a receipt. Flutter
+    # may merge all noninteractive card labels while keeping its button separate.
+    row_box = bounds(row)
+    buttons = controls('Sync')
+    if not buttons:
+        # A clipped row can expose its label before its trailing control exists
+        # in the visible hierarchy. Reveal only a small further slice of content.
+        require(row_box[3] >= viewport[3], 'sync_clipped_control')
+        seek(max(16, (viewport[3] - viewport[1]) // 8))
+        return
+    button = unique(buttons, 'sync_button_unique')
+    require(button in scroll.iter(), 'sync_button_owner', semantic_match=button in scroll.iter())
+    actionable(button, 'Sync')
+    button_box = bounds(button)
+    facts['target'] = button_box
+    require(row_box[1] <= (button_box[1] + button_box[3]) // 2 <= row_box[3]
+            or (button_box[1] <= (row_box[1] + row_box[3]) // 2 <= button_box[3]), 'sync_row_alignment')
+    ancestor = row
+    while ancestor in parents and button not in ancestor.iter():
+        ancestor = parents[ancestor]
+    associated = ancestor is not scroll and ancestor in scroll.iter()
+    require(associated, 'sync_card_owner', semantic_match=associated)
+    require(inside(button_box, bounds(ancestor)), 'sync_card_bounds')
+    require(not any(has(n, 'Mock data') for n in ancestor.iter('node')), 'sync_card_not_mock')
+    if any(has(n, text) for n in ancestor.iter('node')
+           for text in ('Watch summary', 'Widget summary')):
+        # The shared Diagnostics card must own both the complete label group
+        # and its sole action; a nearby Sync elsewhere in the list is ambiguous.
+        require(all(any(has(n, text) for n in ancestor.iter('node'))
+                    for text in ('Sync', 'Watch summary', 'Widget summary', 'Send to watch')),
+                'sync_card_complete')
+        require(ancestor.get('clickable') != 'true', 'sync_card_noninteractive')
+        require(all(n in button.iter() or button in n.iter()
+                    for n in ancestor.iter('node') if n.get('clickable') == 'true'), 'sync_card_sole_action')
+    if (not inside(button_box, viewport) or button_box[3] - button_box[1] < 24
+            or (button_box[1] + button_box[3]) // 2 > viewport[3] - 16):
+        require(button_box[1] >= viewport[1] and button_box[2] <= viewport[2], 'sync_reveal_direction')
+        seek(max(16, button_box[3] - viewport[3] + 16))
+        return
+    tap(button)
+
+
+def failure(guard, kind, error):
+    # Only literals, bounded counts/booleans and parsed integer rectangles are retained.
+    def value(item):
+        if isinstance(item, tuple):
+            return ','.join(value(part) for part in item)
+        if isinstance(item, int) and not isinstance(item, bool) and not 0 <= item <= 1048576:
+            return 'Unknown'
+        return str(item)
+
+    record = f'guard={guard} failure={kind} error={error} producer=PythonTarget '
+    record += f'producer_pid={os.getpid()} '
+    record += ' '.join(f'{key}={value(item)}' for key, item in facts.items())
+    try:
+        (Path(sys.argv[1]) / 'delivery.failure').write_text(record[:2048] + '\n')
+    except OSError:
+        pass
+
+
+try:
+    target(Path(sys.argv[1]), sys.argv[2], sys.argv[3])
+except GuardRejected as rejected:
+    failure(str(rejected), 'predicate', 'GuardRejected')
+    sys.exit(1)
+except ET.ParseError:
+    failure('hierarchy_parse', 'parse', 'InvalidXml')
+    sys.exit(1)
+except UnicodeError:
+    failure('capture_encoding', 'parse', 'InvalidEncoding')
+    sys.exit(1)
+except (ValueError, OSError) as error:
+    failure('capture_read' if isinstance(error, OSError) else 'numeric_parse',
+            'acquisition' if isinstance(error, OSError) else 'parse',
+            'ReadError' if isinstance(error, OSError) else 'InvalidNumber')
+    sys.exit(1)
+PY_UI
+}
+
+delivery_ui_observe() {
+  local mode=$1 packages uid status
+  DELIVERY_PROCESS_PROOF=Unknown
+  DELIVERY_UI_INVOCATION=$(( ${DELIVERY_UI_INVOCATION:-0} + 1 ))
+  DELIVERY_UI_FACTS='captured=Unknown acquisition=Unknown parse=Unknown qualification=Unknown pre_input=Unknown'
+  # Publish the route last; a report never pairs it with another attempt's facts or stage.
+  DELIVERY_UI_STAGE=preparation DELIVERY_UI_STAGE_AT=$SECONDS DELIVERY_PHASE=$mode
+  DELIVERY_UI_READ=Uid DELIVERY_UI_PRODUCER=AdbPackageList
+  packages=$(adb_on "$PHONE_SERIAL" shell -n cmd package list packages -U "$APP_ID" | tr -d '\r') \
+    || delivery_ui_fail package_uid acquisition "$?" ExitStatus
+  [[ ${#packages} -le 16384 ]] || delivery_ui_fail uid_inventory_size predicate 1 GuardRejected
+  DELIVERY_UI_PRODUCER=AwkPackageUid
+  status=0
+  uid=$(parse_package_uid "$packages") || status=$?
+  if (( status != 0 )); then
+    (( status != 1 )) || delivery_ui_fail uid_inventory predicate "$status" GuardRejected
+    delivery_ui_fail uid_inventory subprocess "$status" ExitStatus
+  fi
+  [[ "$uid" == "${UIDS[phone]}" ]] || delivery_ui_fail uid_match predicate 1 GuardRejected
+  DELIVERY_UI_PRODUCER=AdbPackageList
+  packages=$(adb_on "$PHONE_SERIAL" shell -n cmd package list packages -U --uid "${UIDS[phone]}" | tr -d '\r') \
+    || delivery_ui_fail uid_ownership acquisition "$?" ExitStatus
+  [[ "$packages" == "package:$APP_ID uid:${UIDS[phone]}" ]] || delivery_ui_fail uid_exclusive predicate 1 GuardRejected
+  if [[ -z "$DELIVERY_UI_DIR" ]]; then
+    DELIVERY_UI_READ=Staging DELIVERY_UI_PRODUCER=AdbMktemp
+    DELIVERY_UI_DIR=$(adb_on "$PHONE_SERIAL" shell -n mktemp -d /data/local/tmp/wardpulse-sync-XXXXXXXX | tr -d '\r') \
+      || delivery_ui_fail staging_create acquisition "$?" ExitStatus
+    [[ "$DELIVERY_UI_DIR" =~ ^/data/local/tmp/wardpulse-sync-[a-zA-Z0-9]{8}$ ]] \
+      || delivery_ui_fail staging_path predicate 1 GuardRejected
+  fi
+  DELIVERY_UI_READ=NativeBefore DELIVERY_UI_PRODUCER=AdbWindow
+  adb_on "$PHONE_SERIAL" shell -n 'wm size; wm density; dumpsys window -a' >"$SCRATCH/delivery.before" \
+    || delivery_ui_fail native_before acquisition "$?" ExitStatus
+  DELIVERY_UI_CAPTURED=$SECONDS
+  # Preparation has no field; one command publishes the capture tick with acquisition.
+  DELIVERY_UI_FACTS=${DELIVERY_UI_FACTS/captured=Unknown/captured=$DELIVERY_UI_CAPTURED} \
+    DELIVERY_UI_STAGE=acquisition DELIVERY_UI_STAGE_AT=$DELIVERY_UI_CAPTURED
+  DELIVERY_UI_READ=Hierarchy DELIVERY_UI_PRODUCER=AdbUiAutomator
+  adb_on "$PHONE_SERIAL" shell -n "
+    rm -f '$DELIVERY_UI_DIR/hierarchy.xml' &&
+    uiautomator dump '$DELIVERY_UI_DIR/hierarchy.xml' >/dev/null &&
+    test \"\$(wc -c <'$DELIVERY_UI_DIR/hierarchy.xml')\" -le 262144 &&
+    cat '$DELIVERY_UI_DIR/hierarchy.xml'
+  " >"$SCRATCH/delivery.xml" || delivery_ui_fail hierarchy_capture acquisition "$?" ExitStatus
+  DELIVERY_UI_READ=NativeAfter DELIVERY_UI_PRODUCER=AdbWindow
+  adb_on "$PHONE_SERIAL" shell -n 'wm size; wm density; dumpsys window -a' >"$SCRATCH/delivery.after" \
+    || delivery_ui_fail native_after acquisition "$?" ExitStatus
+  delivery_ui_stage parse "$SECONDS"
+  DELIVERY_UI_READ=Target DELIVERY_UI_PRODUCER=PythonTarget
+  : >"$SCRATCH/delivery.failure"
+  status=0
+  DELIVERY_TARGET=$(delivery_ui_target "$mode") || status=$?
+  (( status == 0 )) || delivery_ui_fail parser_exit subprocess "$status" ExitStatus
+  delivery_ui_stage qualification "$SECONDS"
+  delivery_observe
+  # Completed qualification remains mandatory; accepted publication needs no input.
+  (( ! FRESH_PUBLICATION )) || return 0
+  delivery_check_time
+}
+
 wait_for_summary() {
-  local current deadline=$((SECONDS + 30))
-  while (( SECONDS < deadline )); do
-    barrier phone "$PHONE_SERIAL"
-    [[ "$EVENTS" != *KILL* && "$EVENTS" != *DEATH* && "$EVENTS" != *START* ]] || hold 'Phone process activity raced delivery.'
-    barrier wear "$WEAR_SERIAL"
-    [[ "$EVENTS" != *KILL* && "$EVENTS" != *DEATH* && "$EVENTS" != *START* ]] || hold 'Wear process activity raced delivery.'
-    [[ "$EVENTS" != *RECEIPT* ]] || FRESH_RECEIPT=1
-    current=$(app_processes "$WEAR_SERIAL" wear) || hold 'Cannot observe delivery process.'
-    [[ "$current" == "${RUNNING[wear]}" ]] || hold 'Wear process changed during delivery.'
-    if (( FRESH_RECEIPT && FRESH_PUBLICATION )); then return; fi
+  local route=dashboard scrolls=0 action x y end_x end_y extra checked
+  DELIVERY_STARTED=$SECONDS DELIVERY_DEADLINE=$((SECONDS + 30))
+  DELIVERY_ACTIVE=1 DELIVERY_REPORTED=0 DELIVERY_SYNC_ATTEMPTED=0 DELIVERY_UI_STALE=0
+  DELIVERY_PHASE=delivery DELIVERY_PROCESS_PROOF=Unknown DELIVERY_UI_DISCARDS=
+  while (( SECONDS < DELIVERY_DEADLINE )); do
+    delivery_observe
+    if (( FRESH_RECEIPT && FRESH_PUBLICATION )); then DELIVERY_ACTIVE=0; return; fi
+    if (( ! FRESH_PUBLICATION && ! DELIVERY_SYNC_ATTEMPTED )); then
+      delivery_ui_observe "$route"
+      if (( FRESH_RECEIPT && FRESH_PUBLICATION )); then DELIVERY_ACTIVE=0; return; fi
+      if (( FRESH_PUBLICATION )); then DELIVERY_PHASE=delivery; continue; fi
+      # Evidence five ticks old, here or immediately before input, is discarded
+      # without input. The next pass requalifies from a new complete capture
+      # within the same original deadline. One clock read serves each check and its record.
+      checked=$SECONDS
+      (( checked - DELIVERY_UI_CAPTURED < 5 )) \
+        || { delivery_ui_stale after_qualification "$route" "$checked"; continue; }
+      delivery_ui_stage pre_input "$checked"
+      read -r action x y end_x end_y extra <<< "$DELIVERY_TARGET"
+      DELIVERY_PROCESS_PROOF=Unknown
+      DELIVERY_COVERAGE[phone]=Incomplete
+      barrier phone "$PHONE_SERIAL"
+      [[ "$EVENTS" != *KILL* && "$EVENTS" != *DEATH* && "$EVENTS" != *START* ]] \
+        || hold 'Phone process activity raced guarded input.'
+      DELIVERY_BOUNDARY[phone]="${CURSOR[phone]}@$SECONDS"
+      DELIVERY_COVERAGE[phone]=CompleteThroughBoundary
+      DELIVERY_PROCESS_PROOF=Verified
+      delivery_check_time
+      if (( FRESH_RECEIPT && FRESH_PUBLICATION )); then DELIVERY_ACTIVE=0; return; fi
+      if (( FRESH_PUBLICATION )); then DELIVERY_PHASE=delivery; continue; fi
+      [[ -z "$extra" ]] || hold 'Malformed guarded delivery action.'
+      # Recheck the monitored stream after qualification, immediately before any
+      # input. Publication observed on the way to Settings needs no extra Sync.
+      if (( ! FRESH_PUBLICATION )); then
+        case "$action" in
+          WAIT) [[ "$route" == dashboard && -z "$x$y$end_x$end_y" ]] || hold 'Unexpected readiness state.' ;;
+          MOCK_OFF) [[ "$route" == mock && -z "$x$y$end_x$end_y" ]] || hold 'Unexpected Mock proof.'; route=sync ;;
+          TAP)
+            [[ "$x $y" =~ ^[0-9]+\ [0-9]+$ && -z "$end_x$end_y" ]] || hold 'Malformed guarded tap.'
+            [[ "$route" == dashboard || "$route" == sync ]] || hold 'Unexpected delivery tap.'
+            checked=$SECONDS
+            (( checked - DELIVERY_UI_CAPTURED < 5 )) \
+              || { delivery_ui_stale before_tap "$route" "$checked"; continue; }
+            delivery_ui_stage input "$checked"
+            delivery_check_time
+            if [[ "$route" == sync ]]; then DELIVERY_SYNC_ATTEMPTED=1; fi
+            adb_on "$PHONE_SERIAL" shell -n input tap "$x" "$y" || hold 'Guarded delivery tap failed.'
+            if [[ "$route" == dashboard ]]; then route=mock; fi ;;
+          SCROLL)
+            [[ "$route" == mock || "$route" == sync ]] || hold 'Unexpected delivery scroll.'
+            [[ "$x $y $end_x $end_y" =~ ^[0-9]+\ [0-9]+\ [0-9]+\ [0-9]+$ ]] || hold 'Malformed guarded scroll.'
+            # A discarded scroll performs no gesture and consumes no scrolling bound.
+            checked=$SECONDS
+            (( checked - DELIVERY_UI_CAPTURED < 5 )) \
+              || { delivery_ui_stale before_scroll "$route" "$checked"; continue; }
+            delivery_ui_stage input "$checked"
+            (( ++scrolls <= 6 )) || hold 'Send to watch was not safely revealed within bounded scrolling.'
+            delivery_check_time
+            adb_on "$PHONE_SERIAL" shell -n input swipe "$x" "$y" "$end_x" "$end_y" 200 \
+              || hold 'Guarded delivery scroll failed.' ;;
+          *) hold 'Unrecognized guarded delivery action.' ;;
+        esac
+        delivery_check_time
+      fi
+    fi
+    DELIVERY_PHASE=delivery
+    delivery_check_time
     sleep 0.2
   done
-  hold 'No fresh redacted WardPulseSync callback after the measurement boundary.'
+  hold 'No distinct fresh publication and Wear receipt within the original delivery deadline.'
 }
 
 package_update_time() {
@@ -1221,7 +2264,7 @@ update_install() {
   # dumpsys timestamps have second precision; make a real same-APK update observable.
   sleep 1
   barrier "$role" "$serial"
-  old=$(app_processes "$serial" "$role") || hold 'Cannot record pre-update process identities.'
+  old=$(app_processes "$serial" "$role" pre-update) || hold 'Cannot record pre-update process identities.'
   reconcile_role "$role" "$serial" "$old"
   printf '%s pre-update process identities (empty means already absent):\n%s\n' "$role" "$old"
   LIFECYCLE_ACTION="$role:update"
@@ -1238,7 +2281,7 @@ update_install() {
   if [[ "$role" == phone ]]; then
     PHONE_APK_PATH=$path PHONE_APK_HASH=$built PHONE_UPDATE_TIME=$after
   fi
-  current=$(app_processes "$serial" "$role") || hold 'Cannot observe post-update processes.'
+  current=$(app_processes "$serial" "$role" post-update) || hold 'Cannot observe post-update processes.'
   reconcile_role "$role" "$serial" "$current"
   while read -r pid ticks name; do
     [[ -n "$pid" ]] || continue
@@ -1685,23 +2728,86 @@ observe() {
 
 cleanup() {
   local result=$? pid deadline retired=1 current identity unknown
+  local PRE_DEATH_DEADLINE=0
+  if (( ${DELIVERY_ACTIVE:-0} && result != 0 )); then delivery_report || :; fi
+  DELIVERY_ACTIVE=0
+  if [[ "$DELIVERY_UI_DIR" =~ ^/data/local/tmp/wardpulse-sync-[a-zA-Z0-9]{8}$ ]]; then
+    if ! adb_on "$PHONE_SERIAL" shell -n rm -f "$DELIVERY_UI_DIR/hierarchy.xml" ||
+       ! adb_on "$PHONE_SERIAL" shell -n rmdir "$DELIVERY_UI_DIR"; then
+      # Staging failure reports are bounded too, so a blocked stderr cannot delay monitor retirement.
+      timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "%s\n" "$1" >&2' bash \
+        'HOLD: Owned delivery UI staging could not be removed.' || :
+      result=1
+    fi
+  fi
+  # Preserve the failure status and the Reader's existing cleanup budgets.
+  local running stopped wrapper_state=unowned wrapper_exit=unknown wrapper_action=none cleanup_exit=unknown
+  local device_retirement=unobserved uid_retirement=unobserved staging=absent descriptors=closed
+  local diagnostic_action=none diagnostic_exit=unknown
   trap - EXIT
   if [[ -n "$READER_HOST" ]]; then
-    kill "$READER_HOST" 2>/dev/null || :
-    wait "$READER_HOST" 2>/dev/null || :
+    # Inspect the owned job before any cleanup action. Only an already completed
+    # child can supply an original exit status; a later TERM result is cleanup.
+    running=$(jobs -pr) stopped=$(jobs -ps)
+    if [[ $'\n'"$running"$'\n' == *$'\n'"$READER_HOST"$'\n'* ]]; then
+      wrapper_state=active
+    elif [[ $'\n'"$stopped"$'\n' == *$'\n'"$READER_HOST"$'\n'* ]]; then
+      wrapper_state=stopped
+    else
+      wrapper_exit=0
+      wait "$READER_HOST" 2>/dev/null || wrapper_exit=$?
+      if (( wrapper_exit == 127 )); then wrapper_state=unknown wrapper_exit=unknown
+      else wrapper_state=exited; fi
+    fi
   fi
+  reader_diagnostic 'Reader wrapper: phase=pre_cleanup state=%s exit=%s\n' "$wrapper_state" "$wrapper_exit"
+  if [[ -n "$READER_DIAG_HOST" ]]; then reader_stderr pre_cleanup; fi
+  if [[ "$wrapper_state" == active || "$wrapper_state" == stopped ]]; then
+    wrapper_action=term_requested
+    # Without job control, Bash may still list a stopped child as active. Resume
+    # only this owned job so its timeout can forward TERM and retire its children.
+    kill -CONT "$READER_HOST" 2>/dev/null || :
+    kill "$READER_HOST" 2>/dev/null || wrapper_action=term_unavailable
+    cleanup_exit=0
+    wait "$READER_HOST" 2>/dev/null || cleanup_exit=$?
+  fi
+  READER_HOST=
+  reader_diagnostic 'Reader wrapper: phase=cleanup action=%s wait_status=%s\n' "$wrapper_action" "$cleanup_exit"
+  if [[ -n "$READER_INPUT_FD" ]] && ! exec {READER_INPUT_FD}>&-; then result=1 descriptors=failed; fi
+  if [[ -n "$READER_OUTPUT_FD" ]] && ! exec {READER_OUTPUT_FD}<&-; then result=1 descriptors=failed; fi
+  if [[ -n "$READER_STDERR_FD" ]] && ! exec {READER_STDERR_FD}>&-; then result=1 descriptors=failed; fi
+  if [[ -n "$READER_STDERR_DRAIN_FD" ]] && ! exec {READER_STDERR_DRAIN_FD}<&-; then result=1 descriptors=failed; fi
+  if [[ -n "$READER_DIAG_HOST" ]]; then
+    running=$(jobs -pr) stopped=$(jobs -ps)
+    if [[ $'\n'"$running"$'\n' == *$'\n'"$READER_DIAG_HOST"$'\n'* || \
+          $'\n'"$stopped"$'\n' == *$'\n'"$READER_DIAG_HOST"$'\n'* ]]; then
+      diagnostic_action=term_requested
+      kill -CONT "$READER_DIAG_HOST" 2>/dev/null || :
+      kill "$READER_DIAG_HOST" 2>/dev/null || diagnostic_action=term_unavailable
+    fi
+    diagnostic_exit=0
+    wait "$READER_DIAG_HOST" 2>/dev/null || diagnostic_exit=$?
+    READER_DIAG_HOST=
+    reader_stderr post_cleanup
+  fi
+  reader_diagnostic 'Reader stderr collector: phase=cleanup action=%s wait_status=%s\n' \
+    "$diagnostic_action" "$diagnostic_exit"
   # The standalone reader also has its own six-second watchdog. Never kill an
   # application PID to hide a surviving observer, or call its lifetime absence.
   if [[ -n "$READER_DEVICE_PID" ]]; then
     deadline=$((SECONDS + 8))
     while ! adb_on "$PHONE_SERIAL" shell -n "test ! -e /proc/$READER_DEVICE_PID"; do
       if (( SECONDS >= deadline )); then
-        printf 'HOLD: Reader retirement is unproved; owned staging retained.\n' >&2
+        # Retirement HOLDs are bounded too, so a blocked stderr cannot stall the
+        # staging decision or the remaining owned cleanup.
+        timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "%s\n" "$1" >&2' bash \
+          'HOLD: Reader retirement is unproved; owned staging retained.' || :
         result=1 retired=0
         break
       fi
       sleep 0.2
     done
+    if (( retired )); then device_retirement=absent; else device_retirement=unproved; fi
   fi
   if (( READER_STAGE_ACTIVE && retired )); then
     # Loading can fail before the handshake/watchdog. Reconcile the whole UID,
@@ -1719,16 +2825,31 @@ cleanup() {
       sleep 0.2
     done
     if (( ! retired )); then
-      printf 'HOLD: Failed reader loading left unreconciled UID processes; staging retained.\n' >&2
+      timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "%s\n" "$1" >&2' bash \
+        'HOLD: Failed reader loading left unreconciled UID processes; staging retained.' || :
+      uid_retirement=unproved
+    else
+      uid_retirement=reconciled
     fi
   fi
-  if (( retired )) && [[ -n "$DEVICE_SCRATCH" ]] && ! remove_reader_staging; then
-    printf 'HOLD: Owned device reader staging could not be removed.\n' >&2
-    result=1
+  if [[ -n "$DEVICE_SCRATCH" ]]; then
+    staging=retained
+    if (( retired )); then
+      if remove_reader_staging; then staging=removed
+      else
+        timeout --kill-after=0.1s 0.1s "$BASH" -c 'printf "%s\n" "$1" >&2' bash \
+          'HOLD: Owned device reader staging could not be removed.' || :
+        result=1 staging=failed
+      fi
+    fi
   fi
+  (( ! READER_DIAG_OUTPUT_FAILED )) || result=1
+  reader_diagnostic 'Reader cleanup: descriptors=%s device_pid=%s uid=%s staging=%s result=%s\n' \
+    "$descriptors" "$device_retirement" "$uid_retirement" "$staging" "$result"
   for pid in "${MONITORS[@]}"; do kill "$pid" 2>/dev/null || :; done
   for pid in "${MONITORS[@]}"; do wait "$pid" 2>/dev/null || :; done
   [[ -z "$SCRATCH" ]] || rm -rf -- "$SCRATCH"
+  (( ! READER_DIAG_OUTPUT_FAILED )) || result=1
   exit "$result"
 }
 
@@ -1738,7 +2859,7 @@ verify() {
   [[ -n "$FLUTTER_BIN" && -x "$FLUTTER_BIN" ]] || hold 'Flutter not found; set WARDPULSE_FLUTTER_BIN explicitly.'
   require_executable "$REPO_ROOT/apps/wear_android/gradlew"
   local tool role serial snapshot pid ticks name key
-  for tool in timeout awk sha256sum mktemp mkfifo sort sed tr cut wc cp grep mkdir rm rmdir sleep; do
+  for tool in python3 timeout awk sha256sum mktemp mkfifo sort sed tr cut wc cp grep mkdir rm rmdir sleep; do
     command -v "$tool" >/dev/null || hold "Required host executable not found: $tool"
   done
   (( BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 4) )) \
@@ -1808,6 +2929,113 @@ verify() {
   work_snapshot after-wear-update
   sender_coverage "$phone_apk"
 
+  # One settling phase, never renewed. Failed/raced captures still HOLD; pacing
+  # only separates fresh complete observations, without resetting either ledger.
+  # Three matching quiet proofs over >=2 integral ticks corroborate stability.
+  # Quiet also needs a current native timing exclusion of five minutes, covering
+  # both 15s initial deaths and their intervening bounded Reader/native proof.
+  # This is prospective evidence, not an explanation of the historical dispatch.
+  PRE_DEATH_DEADLINE=$((SECONDS + 30))
+  reader_diagnostic 'Post-update PRE-DEATH: phase=evidence bound_seconds=30\n'
+  (( ! READER_DIAG_OUTPUT_FAILED )) || exit 1
+  local predeath_phone predeath_wear predeath_phone_cursor predeath_wear_cursor predeath_counts
+  local quiet_samples=0 quiet_since=0 quiet_work= quiet_native= quiet_phone= quiet_wear=
+  local quiet_phone_cursor=0 quiet_wear_cursor=0 sample_work sample_native sample_started continuous
+  while :; do
+    sample_started=$SECONDS
+    predeath_phone=$(app_processes "$PHONE_SERIAL" phone) || hold 'Post-update phone identity is unproved.'
+    reconcile_role phone "$PHONE_SERIAL" "$predeath_phone"
+    predeath_phone_cursor=${CURSOR[phone]}
+    predeath_wear=$(app_processes "$WEAR_SERIAL" wear) || hold 'Post-update Wear identity is unproved.'
+    reconcile_role wear "$WEAR_SERIAL" "$predeath_wear"
+    predeath_wear_cursor=${CURSOR[wear]}
+    work_snapshot post-update-pre-death
+    reconcile_role phone "$PHONE_SERIAL" "$predeath_phone"
+    reconcile_role wear "$WEAR_SERIAL" "$predeath_wear"
+    continuous=1
+    for role in phone wear; do
+      if [[ "$role" == phone ]]; then snapshot=$predeath_phone_cursor; else snapshot=$predeath_wear_cursor; fi
+      awk -v lo="$snapshot" -v hi="${CURSOR[$role]}" '
+        NR > lo && NR <= hi && $1 != "MARK" { activity=1 }
+        END { exit activity }
+      ' "$SCRATCH/$role.events" || hold 'Activity crossed PRE-DEATH evidence; quiescence is unproved.'
+      if (( quiet_samples )); then
+        if [[ "$role" == phone ]]; then snapshot=$quiet_phone_cursor; else snapshot=$quiet_wear_cursor; fi
+        if ! awk -v lo="$snapshot" -v hi="${CURSOR[$role]}" '
+          NR > lo && NR <= hi && $1 != "MARK" { activity=1 }
+          END { exit activity }
+        ' "$SCRATCH/$role.events"; then continuous=0; fi
+      fi
+    done
+    predeath_counts=$(awk -v native="$SCRATCH/native.current" -v age="$((SECONDS - sample_started + 1))" '
+      FILENAME == native {
+        if ($1 == "native-job") { jobs[$2]=1; count++ }
+        if ($1 == "native-ready") { safe[$2]=$3; delay[$2]=$4 }
+        if ($1 == "native-state") waiting[$2]=$3
+        if ($1 == "native-queues") queues=$2
+        if ($1 == "native-clock") { uptime[$2]=$3*1000; epoch[$2]=$4 }
+        next
+      }
+      $1 == "TIME" { worktime=$2 }
+      $1 == "WORK" {
+        if ($4 == 1) running++
+        if ($4 == 4) blocked++
+        if ($4 == 0 || $4 == 1 || $4 == 4) {
+          active++
+          if ($15 >= 0 && ($15 in jobs)) matched[$15]++
+          else unmatched_work++
+          if ($17 == -1) unscheduled++
+        }
+      }
+      END {
+        elapsed=uptime["end"]-uptime["begin"]
+        wall=epoch["end"]-epoch["begin"]
+        skew=wall-elapsed; if (skew < 0) skew=-skew
+        if (elapsed < 0 || elapsed > 30000 || wall < 0 || wall > 30000 || skew >= 1000 ||
+            worktime > epoch["begin"] || epoch["begin"]-worktime > 30000) exit 1
+        for (id in jobs) {
+          if (matched[id] != 1) unmatched++
+          # Subtract the complete same-device query interval and a conservative
+          # host capture age; a Ready:false flag alone is never a quiet proof.
+          if (safe[id] != 1 || waiting[id] != 1 || delay[id]-elapsed < 300000+age*1000) eligible++
+        }
+        quiet=queues == 1 && active > 0 && !running && !blocked && !unscheduled &&
+          !unmatched_work && !unmatched && !eligible
+        printf "quiet=%d owned_running=%d owned_blocked=%d owned_unscheduled=%d native_jobs=%d unmatched_native=%d unsafe_native=%d", \
+          quiet, running, blocked, unscheduled, count, unmatched, eligible
+      }
+    ' "$SCRATCH/native.current" "$SCRATCH/work.current") || hold 'PRE-DEATH scheduling clocks are unknown or inconsistent.'
+    sample_work=$(awk '$1 == "WORK"' "$SCRATCH/work.current")
+    sample_native=$(awk '$1 == "native-job"' "$SCRATCH/native.current" | sort)
+    (( SECONDS < PRE_DEATH_DEADLINE )) || hold 'Post-update PRE-DEATH evidence deadline expired; quiescence is unproved.'
+    if [[ "$predeath_counts" == quiet=1\ * ]]; then
+      if (( quiet_samples && continuous )) && [[ "$sample_work" == "$quiet_work" && "$sample_native" == "$quiet_native" &&
+          "$predeath_phone" == "$quiet_phone" && "$predeath_wear" == "$quiet_wear" ]]; then
+        quiet_samples=$((quiet_samples + 1))
+      else
+        quiet_samples=1 quiet_since=$SECONDS
+      fi
+      quiet_work=$sample_work quiet_native=$sample_native quiet_phone=$predeath_phone quiet_wear=$predeath_wear
+      quiet_phone_cursor=${CURSOR[phone]} quiet_wear_cursor=${CURSOR[wear]}
+      if (( quiet_samples >= 3 && SECONDS - quiet_since >= 2 )); then
+        reader_diagnostic 'Post-update PRE-DEATH: phase=quiet-handoff samples=%s window_seconds=%s %s\n' \
+          "$quiet_samples" "$((SECONDS - quiet_since))" "$predeath_counts"
+        (( ! READER_DIAG_OUTPUT_FAILED )) || exit 1
+        (( SECONDS < PRE_DEATH_DEADLINE )) || hold 'Post-update PRE-DEATH handoff deadline expired.'
+        INITIAL_DEATH_UNTIL=$((sample_started + 300))
+        INITIAL_DEATHS=1 PRE_DEATH_DEADLINE=0
+        break
+      fi
+    else
+      quiet_samples=0
+    fi
+    reader_diagnostic 'Post-update PRE-DEATH: phase=settling samples=%s %s\n' "$quiet_samples" "$predeath_counts"
+    (( ! READER_DIAG_OUTPUT_FAILED )) || exit 1
+    # Pacing is not evidence. Every next iteration repeats all logical, native,
+    # identity and event proofs within the original thirty-second phase.
+    sleep 1
+  done
+
   stop_app wear "$WEAR_SERIAL" optional
   work_snapshot after-initial-wear-death
   stop_app phone "$PHONE_SERIAL" optional
@@ -1816,7 +3044,7 @@ verify() {
   # distinct from the REQUIRED fresh Wear TYPE_CHANGED/save callback.
   barrier phone "$PHONE_SERIAL"
   barrier wear "$WEAR_SERIAL"
-  FRESH_RECEIPT=0 FRESH_PUBLICATION=0 DELIVERING=1
+  FRESH_RECEIPT=0 FRESH_PUBLICATION=0 DELIVERING=1 INITIAL_DEATHS=0
   launch_app wear "$WEAR_SERIAL" "$APP_ID/app.wardpulse.wear.MainActivity"
   work_snapshot after-delivery-wear-launch
   launch_app phone "$PHONE_SERIAL" "$APP_ID/.MainActivity"
@@ -1838,19 +3066,19 @@ verify() {
   barrier phone "$PHONE_SERIAL"
   [[ -z "$EVENTS" ]] || hold 'Phone activity raced separation.'
   LAST_OBSERVATION=$SECONDS
-  check_separation
+  check_separation retention-start
   work_snapshot after-retention-phone-death
-  check_separation
+  check_separation after-retention-phone-death
   stop_app wear "$WEAR_SERIAL" required
   work_snapshot after-retention-wear-death
-  check_separation
+  check_separation after-retention-wear-death
   launch_app wear "$WEAR_SERIAL" "$APP_ID/app.wardpulse.wear.MainActivity"
   work_snapshot after-retention-wear-launch
-  check_separation
+  check_separation after-retention-wear-launch
   # SECONDS is integral: eleven ticks guarantee at least ten elapsed seconds.
   local until=$((SECONDS + 11)) after
   while (( SECONDS < until )); do
-    check_separation
+    check_separation retention-window
     barrier wear "$WEAR_SERIAL"
     [[ -z "$EVENTS" ]] || hold 'New Wear process/callback invalidated retention.'
     snapshot=$(app_processes "$WEAR_SERIAL" wear) || hold 'Cannot observe retained Wear process.'
@@ -1858,15 +3086,15 @@ verify() {
     sleep 0.2
   done
   after=$(wait_for_stable_summary)
-  check_separation
+  check_separation retention-stable-summary
   barrier wear "$WEAR_SERIAL"
   [[ -z "$EVENTS" ]] || hold 'Late callback/process activity invalidated retention.'
   [[ "$BASELINE" == "$after" ]] || hold 'Saved Wear summary changed after actual restart.'
   work_snapshot final
-  check_separation
+  check_separation final-work
   verify_sender_identity
   remove_reader_staging || hold 'Owned reader staging cleanup failed.'
-  check_separation
+  check_separation final-reader-cleanup
   reconcile_role phone "$PHONE_SERIAL"
   barrier phone "$PHONE_SERIAL"
   [[ -z "$EVENTS" ]] || hold 'Phone activity raced final preservation evidence.'
@@ -1875,7 +3103,7 @@ verify() {
   [[ -z "$EVENTS" ]] || hold 'Wear activity raced final preservation evidence.'
   snapshot=$(app_processes "$WEAR_SERIAL" wear) || hold 'Final Wear process observation failed.'
   [[ "$snapshot" == "${RUNNING[wear]}" ]] || hold 'Wear identity changed before completion.'
-  check_separation
+  check_separation retention-complete
   barrier wear "$WEAR_SERIAL"
   [[ -z "$EVENTS" ]] || hold 'Wear activity raced completion.'
   printf '%s\n' 'Phone-to-watch acceptance passed.' \
@@ -1887,13 +3115,25 @@ declare -A BOOT=() OLD=() RUNNING=() CURSOR=() UIDS=() LIVE=() START_TICKS=() KI
 declare -A PRODUCERS=() PROJECTORS=() OBS_CLOSE=() OBS_CLOSED=()
 MONITORS=()
 SCRATCH= DEVICE_SCRATCH= EVENTS= BASELINE= BASELINE_METADATA= OBSERVER=
+OBSERVER_RELEASED=0
 READER_HOST= READER_DEVICE_PID=
 READER_STAGE_ACTIVE=0 READER_BEFORE_PHONE=
+READER_INPUT_FD='' READER_OUTPUT_FD='' READER_STDERR_FD='' READER_STDERR_DRAIN_FD=''
+READER_DIAG_HOST=
+READER_DIAG_OUTPUT_FAILED=0
 LIFECYCLE_ACTION=
 PHONE_APK_PATH= PHONE_APK_HASH= PHONE_UPDATE_TIME=
 SEQUENCE=0 RETAINING=0 DELIVERING=0 FRESH_RECEIPT=0 FRESH_PUBLICATION=0
+INITIAL_DEATHS=0 INITIAL_DEATH_UNTIL=0
 RETENTION_DEADLINE=0 LAST_OBSERVATION=0 LEDGER_READY=0 SENDER_COVERED=0
 PHONE_ACTIVITY=0 WORK_ACTIVITY=0
+PRE_DEATH_DEADLINE=0
+DELIVERY_ACTIVE=0 DELIVERY_REPORTED=0 DELIVERY_STARTED=0 DELIVERY_DEADLINE=0
+DELIVERY_PHASE=delivery DELIVERY_PROCESS_PROOF=Unknown DELIVERY_SYNC_ATTEMPTED=0
+DELIVERY_UI_DIR= DELIVERY_TARGET= DELIVERY_UI_CAPTURED=0 DELIVERY_UI_STALE=0
+DELIVERY_UI_INVOCATION=0 DELIVERY_UI_READ=Unknown DELIVERY_UI_PRODUCER=Unknown
+DELIVERY_UI_DISCARDS= DELIVERY_UI_FACTS= DELIVERY_UI_STAGE=Unknown DELIVERY_UI_STAGE_AT=0
+declare -A DELIVERY_BOUNDARY=() DELIVERY_COVERAGE=()
 OBSERVING=0 OBS_REQUEST=0 OBS_COMPLETE=0 OBS_LIMIT=0 OBS_EXPIRES=0
 OBS_OUTPUT_FAILED=0 OBS_PROTOCOL=1
 OBS_LAUNCHING=0 OBS_PENDING_SIGNAL=0

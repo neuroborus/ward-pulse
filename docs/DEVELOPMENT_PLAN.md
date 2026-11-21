@@ -352,15 +352,20 @@ Synchronization should be pull-based by default. Usage and cost data should be t
 
 The Rust core should own stable product models. Platform-specific models can exist, but they should be derived from the Rust models.
 
-Suggested core model:
+Canonical identity model (see `ProviderFamily`, `ProviderConnectionId`, `ProviderIdentity`
+and `ProviderSource` in `core/ward-pulse-core/src/model/identity.rs`):
 
 ```rust
-enum ProviderKind {
-    OpenAi,
-    Codex,
-    Claude,
-    Cursor,
+enum ProviderFamily { OpenAi, Anthropic, Cursor }
+enum ConnectionKind { Plan, Platform }
+struct ProviderConnectionId {
+    family: ProviderFamily,
+    kind: ConnectionKind,
+}
+enum SourceOrigin {
+    Connection(ProviderConnectionId),
     Mock,
+    UnresolvedLegacy,
 }
 
 enum ProviderStatus {
@@ -375,7 +380,7 @@ enum ProviderStatus {
 
 struct ProviderAccount {
     id: AccountId,
-    provider: ProviderKind,
+    provider: ProviderIdentity,
     display_name: String,
     workspace_name: Option<String>,
     masked_credential: Option<String>,
@@ -430,7 +435,7 @@ struct BudgetState {
 
 struct ProviderSnapshot {
     account_id: AccountId,
-    provider: ProviderKind,
+    source: ProviderSource,
     status: ProviderStatus,
     today: BudgetState,
     week: BudgetState,
@@ -455,7 +460,21 @@ struct DashboardSnapshot {
 }
 ```
 
-The exact Rust structs can change, but the direction should remain stable: provider-specific raw data enters the core, normalized dashboard snapshots leave the core.
+`ProviderIdentity` records family membership and retains a private legacy display/wire tag.
+Accounts require no source. `ProviderSource` adds a canonical origin and retains the original
+optional connection independently. Private Serde DTOs keep the five provider tokens and six
+connection IDs unchanged; the new family/source fields stay internal. Synthetic Mock has no
+production family or connection. Connectionless OpenAI/Codex snapshots retain their historical
+source distinction; Claude/Cursor origin remains unresolved. Unknown explicit connections are
+retained without inferring a supported source, including mismatched tag/key pairs.
+
+Family membership never merges accounts or authorizes a sibling connection. Account IDs,
+credential/session identities, `HistoryOwner`, and lifecycle/currentness proofs remain separate.
+Alerts prefer every explicit connection, including unknown keys; their legacy fallback is
+routing compatibility, not source evidence. Condition-key provider tokens, consumed-marker
+addressing, recovery requirements and private ownership keep their existing encodings.
+
+Provider-specific raw data enters the core; normalized dashboard snapshots leave the core.
 
 ---
 
@@ -483,6 +502,16 @@ Owned by Rust:
 - normalize usage buckets;
 - map provider-specific errors to shared error types;
 - calculate dashboard-ready states.
+
+Family-owned normalization lives under `openai/{plan,platform}.rs`,
+`anthropic/{plan,platform}.rs` and `cursor/{plan,platform}.rs` in
+`core/ward-pulse-providers/src/`. Small family parents and compatibility reexports preserve
+the existing `openai`, `codex`, `claude` and `cursor` entrypoints and result/error types.
+`connection_capabilities` in `core/ward-pulse-providers/src/lib.rs` selects the descriptor
+owned by each source. It never unions sibling features. Missing optional report values do
+not change a supported capability; synthetic Mock has its own descriptor.
+`guidance` in `core/ward-pulse-providers/src/poll.rs` uses the same `ProviderConnectionId`
+for cadence floors and Cursor Team freshness guidance.
 
 This keeps platform-sensitive behavior outside Rust and keeps deterministic product logic inside Rust.
 
@@ -538,9 +567,11 @@ Widget. Surface configuration lives on those tabs, not under Settings.
 - **Widget** — configure the phone home-screen widget metrics and preview (Phase 14).
 - **Providers** — full connection catalog (every plan/platform row, with reporting-key
   verification and failure states), credentials / auth, **all** user alert thresholds
-  (plan/purchased per connection; Today/Week/Month on platform connections), the spend limits those budget
+  (Plan defaults, individual Plan windows and Purchased per connection; Today/Week/Month
+  on reporting connections), the spend limits those budget
   thresholds need — their own row entry, because a limit is a ceiling and not a rule —
-  and live status for synced accounts. Threshold UI speaks **% left**.
+  and live status for synced accounts. The shared threshold editor accepts presets or
+  custom whole **0–100% left**.
 - **Settings** — systemic only: global polling interval, diagnostics, data deletion,
   legal, debug toggles — not connections, credentials, display surface toggles, alert
   rules, glance layout, or a sixth Alerts tab.
@@ -593,15 +624,22 @@ It owns:
   and failure states;
 - credentials / auth entry for each connection (OAuth, session, API key — as today);
 - **all user-configured** alert thresholds:
-  - plan / purchased meters on plan rows (opt-in; no hard-coded cutoffs);
-  - Today / Week / Month spend budgets on organization-key rows, each a user-entered
+  - connection-local Plan defaults, sparse overrides for each normalized Plan window,
+    and Purchased meters on plan rows (opt-in; no hard-coded cutoffs). Missing overrides
+    inherit Plan; an explicit Off suppresses that fallback. The catalogue includes every
+    reported Plan window, including unknown usage, independently of watch selection;
+  - Today / Week / Month spend budgets on reporting rows, each a user-entered
     limit plus its own threshold (providers do not report a budget). The limit is entered
     through its own row action, not through the alert dialog — it is the ceiling every
     percentage depends on, and a threshold without it can never fire;
-  - UI speaks **% left**; storage and Rust keep used%;
+  - every shared editor accepts presets and custom whole **0–100% left**; storage and Rust
+    keep used%. Enabled endpoints, Off and window inheritance remain distinct. Invalid
+    active drafts block Save; retained unavailable-window overrides remain inspectable/resettable;
 - live status, last successful sync, last error, and supported metrics when connected.
 
-Rules can be prepared before the first successful sync because Not connected rows stay visible.
+General Plan/Purchased and local budget settings can be prepared before the first successful
+sync because Not connected rows stay visible. Actual window controls come from that connection's
+report; saved overrides survive temporary absence and reuse their identity when a window returns.
 
 Reporting-key feedback is implemented for OpenAI Platform reporting, Anthropic Organization
 reporting and Cursor Team Admin API. Saving or replacing a key starts one existing live
@@ -616,9 +654,10 @@ procedure; their receipts record acceptance separately from this implementation 
 
 ### Settings
 
-Settings is **systemic only** — no connection catalog, credentials, display toggles, or alerts:
+Settings is **systemic only** — no connection catalog, credentials, display layouts, or alert rules:
 
 - global minimum polling interval;
+- independent Alert notifications and Plan recovery delivery switches;
 - local-only diagnostics export;
 - data deletion;
 - legal disclaimer;
@@ -635,9 +674,10 @@ Split runtime output from configuration:
 | Concern | Surface | Notes |
 |---------|---------|--------|
 | Active alerts | Dashboard alerts panel (and Wear Alerts detail) | Only rules the user enabled, evaluated against the latest snapshot |
-| Plan / purchased alert rules | **Providers** (plan catalog rows) | One opt-in threshold per meter as **% left** |
+| Alert notification delivery | **Settings → Notifications** | Default on when unset; independent of Plan recovery and of the opt-in threshold rules |
+| Plan defaults / window overrides / Purchased alert rules | **Providers** (plan catalog rows) | Connection-local opt-in thresholds as whole **0–100% left**, including custom values; a missing window override inherits Plan, explicit Off disables it |
 | Today / Week / Month budget **limits** | **Providers**, its own per-connection entry | The ceiling itself, not an alert — it is what makes a percentage exist at all. Platform / organization connections only; not under Settings and not inside the alert dialog |
-| Today / Week / Month budget **alert rules** | **Providers** (alert dialog) | Same remaining-% editor; a period stays disabled until that connection has a limit for it |
+| Today / Week / Month budget **alert rules** | **Providers** (alert dialog) | Same preset/custom whole **0–100% left** editor; a period stays disabled until that connection has a limit for it, retaining its saved threshold |
 
 **Product rule:** alerts are opt-in. Provider status chrome (`Warning` / `RateLimited` from
 reported utilization) must **not** invent dashboard alerts by itself. Empty “No alerts” is the
@@ -649,7 +689,13 @@ using the persisted user rules. Platform shells persist rule preferences and ren
 Do not reintroduce automatic alerts from allowance/budget status alone.
 
 `build_dashboard_snapshot` always emits an empty alerts list; the phone host applies stored
-threshold prefs after each load (and on prefs change) before Dashboard / Wear sync.
+threshold prefs after each load before Dashboard / Wear / home-widget sync. A saved rule change
+reevaluates the latest owned undecorated provider snapshot, so changing or disabling a rule is
+reversible without another provider request. Evaluation precedes persistence; failed evaluation or
+storage does not publish a partial change. Credential/mode/refresh ownership guards prevent stale
+input from being republished. Genuine provider and intrinsic budget statuses remain intact;
+sync attempts through watch and home-widget paths are independent and use the resulting
+current snapshot.
 
 ---
 
@@ -765,6 +811,24 @@ restoration of the agreed share follow the acceptance record. Actual results bel
 separate Owner receipt and final handoff, without a second status-only Source commit.
 Closure of that task requires Owner ZERO; this status makes no documentation-build
 acceptance claim.
+
+**No-summary action refinement, 2026-10-28 — emulator/docs/browser verified; physical deferred.**
+The [dated design](product/WEAR_GLANCE_DESIGN.md#revision-2026-10-28--compact-no-summary-watch-face-action)
+specifies a compact label-only tonal Watch face action below the initial sync prompt, with
+an ordinary full-text tonal button when measured width or line height requires it. It keeps
+system scaling, touch size and complete scrolling, while requiring pre-summary content to
+clear the retained straight clock at every settled position. Other destinations, the clock
+matrix and installation/consent/status behavior remain unchanged. The reviewed working-tree
+candidate based on HEAD `eb0a371` passed `just check-wear`, the 39-test round suite, four
+focused square cases and separate actual
+OS-font-2.0 cases on both SDK 36 targets. Native review covered initial readability, a genuine
+interior, both physical limits, every prompt line through scrolling and the complete usable
+action, with preserved touch/navigation and restored settings/saved summaries. Full
+`just check-docs` and the public Watch-guide browser review passed before this status record,
+including actual light/dark desktop and mobile views. Physical OnePlus verification remains
+deferred. Root's final whole integration review and documentation recheck follow this status
+update. Earlier intermediate results and the historical utility overlap retain their
+original scope; no new public screenshot cohort is needed.
 
 Original working inputs remain `LOCAL_ARTIFACTS/business-model/WATCH_FACE_PUSH_TASK.md`,
 `LOCAL_ARTIFACTS/business-model/PLAY_RELEASE.md` sections “Автоматическая установка
@@ -1456,8 +1520,10 @@ features and release tooling in one unpublished initial `0.1.0` entry. Stock gen
 consumed the initial and tooling fragments for the explicitly selected version, without a
 native version transition. The guarded local version bridge and
 [prepare-release skill](../.agents/skills/prepare-release/SKILL.md) add explicit version cuts
-and repository-wide semantic coverage review; current native versions/codes stay 0.1.0 and
-1/2/1/1. Earlier local HOST acceptance on **2026-10-23** passed 33 tooling tests, including
+and repository-wide semantic coverage review. That preparation retained 0.1.0 and
+1/2/1/1; the later adaptive compatibility allocation used 0.1.0 and 3/4/2/2, followed by
+the main-comparison correction advancing only Push to 3, without a release cut or release
+preparation. Earlier local HOST acceptance on **2026-10-23** passed 33 tooling tests, including
 real pinned CLI/bootstrap/bridge integration in isolated fixtures. Separate verification passed
 initially empty-cache acquisition and offline tests with a root CLI already installed, plus
 independent raw partial/complete coverage skill scenarios. Fresh local checks of `df23ee9`
@@ -1695,7 +1761,7 @@ Deliverables:
 - named minimum-interval constants in `core/ward-pulse-providers`, one per connection kind,
   each with a comment linking its source (see section 14);
 - a `const fn` lookup in `ward-pulse-providers::poll`, the cadence counterpart of
-  `provider_capabilities`, returning the minimum poll interval and freshness guidance for a
+  `connection_capabilities`, returning the minimum poll interval and freshness guidance for a
   provider connection;
 - one global refresh interval setting rendered as a slider from the strictest hard minimum
   (rounded up) to 60 minutes;
@@ -1744,6 +1810,18 @@ a 429 response still slows the affected provider without blocking others
 
 ### Phase 12 — Anthropic and Cursor adapters on the connection model
 
+**Integration correction, 2026-11-03.** Restore Console/API collection, management and
+source-owned Dashboard Money while retaining Claude Plan monthly Extra used/cap Credits
+and optional percentage. Preserve existing homogeneous Anthropic/Cursor budget rings and
+all IDs/preferences; no exclusion or migration. The direct collection's absent current-day
+cost bucket leaves its totals Unknown; it proves no positive expense or all-time no-charge
+claim. Correct three malformed downstream fixtures, nine Console integration dependencies
+and the separate Codex action hit; preserve all lifecycle assertions and parser-negative tests.
+Historical 692-pass/13-failure HOST evidence remains RED until corrected HOST execution.
+Native checks and full Root Source/HOST/build/install/UI acceptance are separately required.
+Approved raw-Money/Extra used-cap widget runtime adoption is the next separate scope, OPEN
+until its own acceptance. No new payload/native/layout/generator/PNG or Core/schema work.
+
 Status: implemented as of 2026-07-25.
 
 Rationale: the section 15 research shows both remaining providers fit the plan/platform split
@@ -1771,9 +1849,45 @@ Deliverables:
   billing-cycle spend accepts canonical pooled totals or complete included-plus-on-demand
   member totals, preserving unknown data; daily counts use complete funding-channel raw
   events without adding the overlapping feature breakdown;
-- capability descriptors registered for `ProviderKind::Claude` and `ProviderKind::Cursor`;
+- source-owned capability descriptors for Anthropic and Cursor plan/platform connections,
+  selected by the shared core `ProviderConnectionId`;
 - `docs/product/PROVIDER_NOTES.md` updated per provider with credential type, permissions,
   rate limits, revocation path, and redaction rules.
+
+Cursor sign-in recovery correction (2026-10-27): source adds exact HTTPS navigation for
+Cursor's six current identity hosts while retaining Cursor-only session capture. Google
+embedded authorization is blocked without UA disguise, including Android subframe/resource
+requests through a native client guard. Native interception also enforces approved HTTPS
+main-frame hosts for POST requests, while explicit retirement preserves internal blanking.
+Native main-document HTTP failures enter page recovery while optional resource failures
+remain harmless. Startup, page, probe and redirect
+failures expose Retry/Cancel/Help; finite polling pauses for human input with Check again.
+Attempts and shared-cookie cleanup are fenced across Retry, failure, Cancel/back/dispose and
+reopen; reconnect keeps the previous saved connection until valid replacement completion.
+Failed blank-page retirement can be retried without opening the shared jar early.
+Screen-event, real adapter, native callback and cookie boundary test source covers these contracts.
+
+Local verification on 2026-10-27–28 passed the unchanged complete phone check
+(559 Flutter tests), all eight affected Flutter files (140 tests) and the additional
+native callback JVM harness. Normal and seeded debug APKs were built and
+installed with data preserved on the API36 phone emulator. Native offline page recovery,
+Retry, Cancel/back/reopen, Help and the empty Advanced paste editor were observed;
+the current normal build repeated page recovery and Cancel after the bootstrap change.
+Saved-connection presence was retained without inspecting its value.
+
+The debug-only `WARD_PULSE_MOCK_SEED` build define now selects a reproducible initial
+Mock scenario, advances once when a loaded scenario is invalidated and restarts from
+the configured seed with a fresh repository. It leaves explicit Mock opt-in and release
+repository selection unchanged. Native seed 51 → Refresh 52 → cold restart 51 was
+verified. See [Reproducible Debug Mock Data](../apps/phone_flutter/README.md#reproducible-debug-mock-data)
+for invocation and accepted input. The [four refreshed Help/Paste captures](assets/README.md#cursor-recovery-capture-refresh-2026-10-28)
+share that cached Mock reference in both actual themes; its neutral unavailable Cursor
+periods are not presented as all-healthy or live reporting.
+
+**Pending:** unobserved current Google/email migration, external browser return, new live
+session capture, entitlement and live-provider acceptance. This does not claim Google
+login or billing repair. See
+[Cursor plan reporting](product/PROVIDER_NOTES.md#cursor-plan-reporting).
 
 Verified 2026-10-20: the Anthropic current-day and Cursor normalization corrections passed
 host Rust checks (113 tests, no failures), JSON validation (23 files parsed, including schemas
@@ -1800,6 +1914,21 @@ no tokens, cookies, or raw payloads appear in logs
 ```
 
 ### Phase 13 — configurable watch rings
+
+**Whole-composition scale and seam candidate, 2026-11-02 — Source/review only; acceptance Pending.**
+The [owning revision](product/WATCH_RING_DESIGN.md#revision-2026-11-02--whole-composition-scale-and-paired-source-allowance)
+enlarges the accepted radius-202 composition by 225/202 about (225,225) on the unchanged
+450 canvas, including time, cells, logo, legend, strokes, clips and textures. Legal full-face
+owners carry the scale once; customizable cell bounds/content are rebased together. Paired
+partial SOURCE strokes gain one reference unit per radial side behind unchanged nominal masks,
+testing an AA hypothesis without bridge geometry, recoloring or changed zero/full semantics.
+All 18 textures gain effective-scale samples and review exports share one composition transform;
+the historical fixed illustration no longer has independent 216-radius geometry. Integer/float
+and raster rounding are documented, with original logo pixels and all admission/identity guards
+retained. Official WFF2/Push validation, whole joined Round interactive/ambient fit and contour
+controls, guarded newer-Live-preserving restoration and Root's complete independent review remain
+Pending after the owning Runner lifecycle. Physical STOP and protected Square remain; no release,
+version, all-device, public-capture or native seam-repair acceptance is claimed.
 
 **Selected-zero follow-up, design, injected-watch and live phone-to-watch acceptance
 verified 2026-10-13.** The owner's screenshots at 11:36 and 11:38 showed Claude 5h at `0% left`
@@ -1983,11 +2112,77 @@ When multi-profile lands, same-provider rings need hatch/pattern as well as fami
 
 ### Phase 14 — Watchface / Widget tabs and phone home-screen widget
 
+**Claude/Fable Source revision 2026-11-01 — implementation present; HOST/public acceptance Pending.**
+The optional joined weekly quota normalizes to an independent nullable Fable allowance.
+Exact metric accents and closed `fable` tokens preserve ordinary Claude identity; the phone
+now offers Claude plan and Fable separately, packing selected known halves inside/left and
+outside/right and ranking by the tighter half. Shared admission enforces three bands and two
+splits for catalogue-order defaults, additions and publication. Explicit choices are not
+capacity-trimmed; invalid stored combinations remain removable with correction guidance and
+retain the last watch publication. Dashboard/provider polling and the six-row expanded widget
+continue independently. Provider evidence is zero-consumption only; positive arithmetic
+fixtures and review art are explicitly synthetic.
+
+Native gate results belong to the actual Runner step records. Full phone/Wear/watchface
+checks, Rust-for-Android and x64 build/install identity, normal delivery and correction/zero/
+unknown/reset behavior, widget independence, and affected healthy public captures/browser
+verification remain mandatory post-execution HOST work after whole-run DONE, owning CLI exit,
+owned-process retirement and fresh separate idle. Review art is not acceptance; historical
+captures retain their dated scope. The independent full zero-findings pass follows the last
+Runner correction. This revision does not close pending widget/native/public work or alter
+the separate tiny-cap, notifications and release sequence.
+
+**Current widget revision 2026-11-01 — visual baseline approved; replacement native acceptance pending.**
+The phone-private payload carries structured family/pool labels and only the selected
+allowance's real optional reset. The native widget fills its actual allocation with
+complete measured content, bundled Noto Regular/Bold typography and bounded decorative
+bitmap layers. Keep six selections, expanded windows, IDs/migrations, ordering, known 0%,
+unavailable omission, purchased eligibility, root accessibility and Dashboard taps.
+The generator owns the updated review/picker exports. The owning baseline records the
+approved image and measurements; nominal examples are not universal host thresholds.
+Full phone checks, x64 build/install identity, bounded font/resize/theme/data/a11y/navigation
+acceptance and necessary healthy public captures remain POST-RUN work after whole Runner
+DONE, actual CLI exit, owned-process retirement and fresh separate idle. Earlier evidence
+below describes the former renderer and proves no acceptance of the replacement.
+
+**Historical former-renderer record — 2026-07-27 through 2026-10-25.**
+
 Status: largely landed (2026-07-27). Primary nav, Watchface + Widget tabs, locked
 `PHONE_WIDGET_DESIGN.md` review art, and the Android App Widget surface are in tree.
 Large (6-slot) prefs unlocked; launcher hugs complete rows/columns (1–6 by height;
 credits→label drop by width); Claude windows stay expanded on the phone widget;
-exhausted pools render as `0% left`.
+exhausted pools render as `0%` under the 2026-10-24 compact numeric revision.
+
+**Compact numeric columns — implementation and bounded HOST/capture acceptance 2026-10-25.**
+The native presentation removes only terminal ` left` / ` credits` from the two numeric
+fields, preserving exact tokens and descriptive Dart storage/Widget-tab wording. Old and
+bare cache forms share the same rendering path without a new sync or widget replacement.
+The widget's single accessibility description retains metric identity and remaining/purchased
+credit meaning, omitting hidden rows and hidden or absent balances without duplicate cell
+speech. Runtime 12sp, picker 11sp, geometry, fit, selection, eligibility, states and navigation
+remain unchanged. The existing JVM harness has presentation regressions alongside its fit,
+empty-state and navigation cases; the owning generator has regenerated its eight exports.
+
+After execution retirement, `just check-phone` passed **51 JVM widget assertions** and
+**472 Flutter tests**, format and analysis. The current compiled APK was installed byte-exact.
+At actual system font scale **1.5** on the canonical phone, existing widget **2** redrew from
+unchanged descriptive cache without re-add or provider sync. Full/label/percentage widths,
+zero/stale/hidden rows, empty/Resize and normal short cases were inspected. Bare-cache proof
+is limited to the separately evidenced label and full zero/stale cases; no blanket later-width
+or no-sync result is inferred. The compiled compressed hierarchy exposed one meaningful
+widget description with remaining/purchased units and no hidden or duplicate metric entries;
+audio/TalkBack playback remains untested. Art drift, citations/full docs and the affected
+Android skill validation passed.
+
+The ten healthy light/dark public captures use baseline font scale **1.0**, five unchanged
+selections and a shared actual Live cache. Their capture/export and restored original
+cache/span/OS state are recorded in the [screenshot index](assets/README.md#widget-numeric-column-capture-refresh-2026-10-25).
+The Widget guide passed browser review in both real themes at 1280px desktop and 390px
+mobile viewports: all 20 current-theme image observations confirmed loading and natural
+dimensions 864×1920 without horizontal overflow, original-image links were correct, and all ten served PNGs matched
+canonical bytes. These bounded emulator and browser cases do not establish every launcher,
+hardware or font combination, or resolve central-label truncation. Older measurements and
+October 23 captures remain historical.
 
 Read on a launcher for the first time on **2026-10-11**, on the canonical phone AVD: the locked
 composition held on every rule a home screen can show — the hug and the credits drop by width,
@@ -2012,6 +2207,8 @@ each row at 31 dp. Very short widget heights and very large font scales remain s
 acceptance cases. The zero-row resize prompt versus an empty selection has JVM coverage;
 its screen output was not exercised in this audit. These observations do not extend the
 widget's failed-refresh marker into an age-based freshness rule.
+
+**Current phase contract, including the 2026-11-01 widget revision.**
 
 Rationale: glance configuration is a first-class product surface, not a Settings footnote.
 Watchface and Widget each get a primary tab between Dashboard and Providers. The phone
@@ -2047,11 +2244,12 @@ Deliverables:
 - Android App Widget hosted by the Flutter phone shell (`home_widget` + RemoteViews);
 - Widget tab selects which metrics appear (same catalog idea as Watchface: provider plan
   windows, purchased/credit % when available, per-connection local budgets);
-- small→tall resize shows 1–6 complete column-rows by allocated height (olive card hugs
-  rows/columns; width drops credits→label→%); day/night chrome + overlay face watermark;
+- the card fills the actual allocation with up to six complete measured rows; width omits
+  crowded resets, then whole detail and label columns; day/night chrome + quiet overlay mark;
+  own bundled typography stays independent of system font/bold settings;
   prefs cap `phoneWidgetSlotCount = 6`; Claude windows stay expanded; exhausted pools as
-  `0% left`; Glance-style credits end-aligned (label centered);
-- render only configured, available metrics (exhausted stay as `0% left`); omit empty
+  `0%`; compact purchased balances end-aligned (label centered), with spoken units retained;
+- render only configured, available metrics (exhausted stay as `0%`); omit empty
   slots rather than inventing `Unknown` filler;
 - **remaining** language for percent metrics (same meaning as watch rings); family colors from
   the shared palette in `WATCH_RING_DESIGN.md`, with a budget row taking its connection's family
@@ -2061,8 +2259,8 @@ Deliverables:
 - tap opens the phone app (Dashboard);
 - no credentials, account ids, or raw provider payloads on the widget surface or in widget
   logs;
-- widget payload unit tests; emulator smoke for at least one size; review art in
-  `apps/phone_flutter/design/`.
+- widget payload/layout regressions; bounded native acceptance as recorded in
+  `PHONE_WIDGET_DESIGN.md`; generated review art in `apps/phone_flutter/design/`.
 
 Acceptance:
 
@@ -2073,7 +2271,8 @@ Providers owns connection catalog, credentials, and connection alert thresholds
 Settings is systemic only (polling, diagnostics, legal)
 Widget tab owns widget prefs independently of Watchface
 PHONE_WIDGET_DESIGN.md baseline locked with review art for small/medium
-widget shows configured available metrics (exhausted as 0% left); hugs complete rows/columns
+widget shows configured available metrics (exhausted as 0%); full card with complete measured rows/columns
+real optional allowance resets use device-local English; missing/budget resets are not invented
 remaining-% / family colors match the product palette
 tap opens the phone app; no credential UI on the widget
 failed refresh retains existing widget data and marks it stale; no age-based window is defined
@@ -2092,7 +2291,8 @@ multi-profile hatch patterns (same future note as Phase 13)
 
 ### Phase 15 — plan recovery notifications
 
-Status: complete as of 2026-10-05.
+Original Phase 15 implementation: complete as of 2026-10-05. Current delivery revision
+acceptance is recorded separately below.
 
 Everything WardPulse itself controls is covered by tests: the edge in the Rust core, the phone's
 memory of what was spent, the notification and what it may say, the wake booked from the reset
@@ -2105,7 +2305,50 @@ notification access: a notification posted on the phone appeared on the watch, b
 `WearServices` rather than reposted. WardPulse's Wear app posts no notifications of its own, so
 it cannot create a duplicate itself.
 
-Rationale: an exhausted plan window is the one state the user is actively waiting to leave.
+**2026-11-02 delivery revision — Source candidate; HOST acceptance Pending:** Rust now exposes
+typed `alertConditions` through the existing JSON export. Phone Alert notifications are
+independent of Plan recovery, with secure default-on delivery choices preserving saved Off.
+Only configured threshold observations qualify; provider errors/status alone do not notify.
+Consumed markers are keyed by provider/account/resolved connection and allowance source/ID or
+budget period, never messages, labels or threshold values. Positive clear rearms; unknown,
+absent and disabled observations retain history. Muted/denied crossings are consumed without
+backlog. Claim failures suppress that condition and may retry; after a successful claim, plugin
+failure/crash can lose delivery until clear. Per-isolate serialization supplies no cross-isolate
+atomic claim: duplicates and bookkeeping races remain possible. Neither notification kind has
+an exactly-once guarantee, and stable IDs/tags/counts are not proof of no repost.
+
+Production composition now injects secure delivery stores, including the previously omitted
+recovery preference; scheduled foreground acceptance also invokes recovery work. Delivery
+preferences are resolved inside independent delivery steps, and failed recovery preference
+reads mute posting while retaining tracking/wake work. The 2026-11-02 foreground repair adds
+one shared coordinator in production composition: successful effective-choice reads plus a
+completed resumed frame authorize one persisted automatic attempt when either delivery choice
+is On. Both Off suppress it. Pending/failed reads, writes and stale ownership cannot ask;
+provider loading need not complete. Explicit Off→On retry and blocking feedback remain.
+The durable marker records an attempted bootstrap, not historical OS permission state; an
+upgrade gets one OS-bounded opportunity, and a crash after claiming can consume it. Existing
+permission decisions and saved choices are retained. Both system channels are registered before
+posting, without policy resets or dummy notifications. Polling and notifier show never ask.
+Lock-screen privacy, existing
+watch/widget behavior and recovery tracking remain independent. No Wear dispatcher is added.
+New source regressions do not establish actual Android delivery. Full phone checks, real
+production Off/restart, timer/headless dispatch, artifact joins and original shade observations
+remain required HOST work after the complete execution retires. The SDK integration target and
+stock attach driver are available through the phone README's data-retaining route; when run,
+they provide injected-pipeline/real-adapter evidence, not production composition or dispatch
+proof. Historical device observations above apply only to their dated artifacts.
+
+Foreground permission/channel acceptance is **Pending HOST execution**: normal-APK actual
+dialog, channels before posting, denied/restart anti-nag, explicit retries and bounded
+background non-prompting. The existing SDK target selects either its original denied
+13-barrier delivery case with handled startup state, or the focused real-request case with
+unhandled case-owned state. Their OS prerequisites require separate invocations; manual grant
+proves delivery only. Retain all original consumption, tracking, no-backlog, identity/copy and
+3/2 attempt assertions. Naturally eligible/reversible state, artifact/runtime joins and safe
+normal-state restoration remain mandatory; absent prerequisites leave acceptance Pending.
+Physical/OEM menu proof and public capture/release work are outside this repair.
+
+Original Phase 15 rationale (historical): an exhausted plan window is the state the user was actively waiting to leave.
 Today the product says nothing when it ends — the ring simply reappears after the next poll,
 and the user learns it by opening the app they could not use. A recovery is worth an
 interruption; nothing else in the product is.
@@ -2116,7 +2359,7 @@ edge — `usedPercent >= 100` yesterday, usable now — that happens once, has n
 needs no rule to configure. It must not enter the alerts list, must not be counted by Wear's
 `Alerts: N`, and must not bring back a phone Alerts tab.
 
-Deliverables:
+Original deliverables (historical; delivery controls and guarantees are revised above):
 
 - the edge is computed in Rust from the windows the phone remembered as spent and the new
   snapshot, so the rule stays deterministic and testable and the shells stay transport-only;
@@ -2168,7 +2411,7 @@ does not survive between polls. Keys, not whole snapshots — phone preferences 
 platform-secure storage beside credentials, and a few window ids belong there in a way that
 kilobytes of usage data do not.
 
-Acceptance:
+Original acceptance goals (historical; exactly-once wording is not a current delivery guarantee):
 
 ```text
 a window crossing exhausted → usable notifies exactly once per crossing
@@ -2322,6 +2565,47 @@ changing watch, Glance, or widget surface order
 ```
 
 ### Phase 17 — the watch's second page
+
+**Entry repair 2026-10-26 — candidate HOST acceptance Pending.** MainActivity now reuses a
+top owner and consumes actionless face entries through its retained navigation, returning
+to Glance (or the no-summary prompt) while launcher returns keep their current route.
+Back and committed swipes at Home background the whole task without finishing retained
+owners or cleaning up legacy tasks; nested Back and canceled previews remain local.
+The canonical component WFF Launch, resources and missing-app routing are unchanged.
+Production-owner regressions supplement all twelve existing navigation cases and preserve
+the consent suite's intentional separate-task owners. Full Wear/docs/paired HOST checks,
+Round/Square/API34 navigation and consent coverage, measured added test cost, real wordmark,
+ranged/short-text and launcher cold/warm/Home cycles, pending operations/recreation/new data,
+preserving updates with old tokens, and historical N=2 same/separate-task acceptance remain
+Pending after Runner retirement. Measured old-build actionless wordmarks on API36 and physical
+OnePlus API34 establish routing only; they do not accept the candidate or every OEM. The
+historical captures and acceptance below remain bounded to their original builds.
+
+**Integration status 2026-10-25 — bounded HOST proof, full acceptance open.** The
+[clock-free Glance revision](product/WEAR_GLANCE_DESIGN.md#revision-2026-10-24--clock-free-glance-and-larger-legend)
+keeps the preferred 27/23 legend, measured fitting/wrapping and local scrolling, with clocks
+retained on Plan windows, Alerts and the setup utility. Its admitted Source, twelve navigation
+cases and Glance artwork are preserved alongside the separate-face guidance and release APK
+naming changes. External return, re-entry and saved-state reconstruction during an old
+separate-face query retain a refresh in the controller's ViewModel-owned call until that
+query settles. Additive deterministic navigation coverage uses the real retained controller
+and a held old absence across each boundary; a queued supported observation does not repeat
+Push inventory or activity reads. Round's 32 native tests and Square/API34's 12 navigation
+tests each passed on the unchanged reviewed product Source. Physical 466 active Glance/Face were verified
+while securely unlocked and charging; the seven-frame healthy public cohort is refreshed.
+Public browser review passed 15 routes in both themes, all 35 served PNGs matched canonical
+bytes, and 147 local links/anchors had no outstanding issues. Unchanged runtime-face,
+face-review and Glance-review generators exited normally in a throwaway checkout; all 136
+outputs matched the reviewed checkout without canonical regeneration.
+Injected lifecycle/installer callbacks do not prove actual Activity recreation or every
+physical gesture. The pre-upgrade witness and remaining interaction matrix stay open.
+The bounded Reader and gate corrections completed through their owning executions. The
+complete canonical paired `just test-phone-watch-sync` HOST gate passed after fresh Reader
+Java/DEX and Flutter builds and a renewed 32-test Wear suite, covering quiet handoff,
+initial process deaths, delivery/relaunch, retention and final saved-summary preservation.
+The earlier post-update WorkManager service start was observed, but its exact job/worker
+trigger and attribution to job1969 remain unproved. This closes that canonical pair's gate,
+not the broader physical or interaction/variant acceptance above.
 
 Status: completed as of 2026-08-17. Replaces the Today, Week, and Providers screens delivered by
 Phase 4, together with the Usage and Last sync screens and the menu that led to them; Phase 4
@@ -2505,19 +2789,132 @@ the mono wordmark remains reserved for watermark use and is not duplicated besid
 
 ### Phase 20 — three upper cells on the watch face
 
-**Selected-zero revision 2026-10-13.** The retained-zero ring and legend treatment changes
-no upper-cell geometry. The current `WATCH_RING_DESIGN.md` revisions own the complete cells
-at integer origins `(152,114)`, `(204,100)`, `(256,114)`, the three-unit downward move, full
-temperature labels and shortest radial border fades. The acceptance below follows those
-current revisions; new exhausted-state review art must use the same geometry.
+**Active-clock revision 2026-11-01 — approved translation; native/public acceptance Pending.**
+The operative [active-clock target](product/WATCH_RING_DESIGN.md#revision-2026-11-01--approved-active-clock-translation)
+raises the whole active clock **10 design units**: **86 Bold/y166**, height90, and ordinary
+review baseline **240.78125** (rounded **240.8**), retaining complete device-synchronized time.
+Ambient remains **96 Thin/y175**, height90, baseline **254.296875**, with unchanged switching
+and alpha. Logo pixels/geometry/alpha, cells, legend, bands, textures, data and delivery remain
+unchanged. Canonical WFF generation precedes face art, including affected active boards,
+mirrors, PNGs and the shipped portrait. The old active fixed-bottom/equal-gap target is history;
+no per-time or per-count offsets follow. New-runtime native/public acceptance stays **Pending**
+until post-execution HOST identity/rendering review and exact restoration. Existing public
+captures retain their dated provenance; new-runtime images require fresh native captures and
+owning index review. This revision closes neither adaptive-band nor widget acceptance.
 
-Status: design locked 2026-10-09 in `docs/product/WATCH_RING_DESIGN.md` (upper-cell revision,
-with the melt-length and cell-layout corrections of the same day), and the first implementation
-pass is in the tree. `tools/render-watchface.mjs` now bounds the
-three ring slots with a full-canvas `BoundingBox` and declares each band at the 20 units it
-paints; `watchface.xml` is regenerated from it. The nine ring textures came out byte-identical,
-and the review-art generators and the Wear complication sources are still untouched. The rest of
-this entry is what the design commits the remaining passes to.
+**Historical composition revision 2026-10-27 — calibrated upward digits; bounded native evidence.**
+That [upward-digit face target](product/WATCH_RING_DESIGN.md#revision-2026-10-27--upward-digits-and-fixed-reference-bottoms)
+uses 52-unit cells at (147,109)/(199,95)/(251,109), preferred **18** with existing **14/12** readings,
+46×24 text at (3,14), 24-unit icons at inset **14** and original outward lighting with added
+bottom treatment only laterally. Whole-clock **86 Bold/y176** and **96 Thin/y175**, both height 90,
+were the Round-calibrated settings. Digits enlarged upward, preserving the measured
+08:08 bottoms **250.78125 active/254.296875 ambient** and balancing visible logo→time and
+time→legend gaps only in the reference with three full rows: targets **8.21875/4.703125** respectively.
+Other strings retain natural optical variation; do not retune by row count. Review art
+used per-mode fixed baselines; the owning revision records actual Round metrics and bounded fit for those bytes.
+The original logo sits above the clock/below the central cell: active **64×64** at (193,141),
+alpha95; ambient **54×54** at (198,146), alpha70; centre (225,173). Preserve original PNG pixels.
+Equal 132×26 wells at x159/y259,286,313 use 120-unit 20/18/16 whole-label branches, bottom339
+and unchanged bottom anchoring/marker semantics. The calculated aperture margin is 2.0730.
+Historical centred 2026-10-27 Round 384 originals at **09:11/08:08/11:11** in INTERACTIVE and actual
+AMBIENT all measured centre 193 native pixels (226.171875 design units) at initial nominal y182.
+The inherited y181/70 Bold/81 Thin candidate (Source6397) supplied the 08:08 reference
+bottoms above. Its old centre225 goal and review `TIME_LIFT=0` are superseded; arithmetic
+and older native results do not establish enlarged-clock acceptance or a new tolerance.
+Slots, sources, units, protocols, ring geometry/textures and navigation stay unchanged;
+adaptive-width item 12 remains separate. That revision's XML1685 passed post-retirement checkout/HOST
+checks, strict Push validation and canonical-resource equality in both APKs. Native evidence
+is for active legacy `app.wardpulse.watchface`, `wfId-15`. The previous upward
+Source54f6 measured clean active 86/y175 08:08 bottom 213 versus reference 214, and true
+AMBIENT 97/y175 bottom 217 with height 61 on Round 384. The owning revision preserves the dated
+bounds/gaps and subsequent corrected Round calibration: that 08:08 case retained both reference
+bottoms, with settled 53-pixel Bold and 60-pixel Thin ink. The older mixed Thin/Bold first-wake
+frame remains rejected despite INTERACTIVE metadata.
+One inspected actual 08:08 active original was already delivered through an Owner-visible
+channel; no further approval is required. Root reviewed the Round anchors/six-frame clock corpus,
+20 originals from ten fit cases plus four supplemental originals, and restored Live data.
+Square's 24 case originals/restored MUTE frame passed only clock/legend/cell-well fit;
+cleared upper cells and an external system indicator prove neither populated defaults nor
+bottom-ring contour/public cleanliness. Summary/settings and the asynchronously restored
+Square notification were reverified. All seven healthy Live public originals and proportional
+exports were captured and Root-reviewed with filled defaults and actual matching phone themes;
+the [current cohort](assets/README.md#shared-state-capture-refresh-2026-10-27) and its scoped
+publication review are accepted. Temporary-time unfilled
+weather is not showcase proof. Physical/custom/extreme-weather, signed-money native fit,
+active Push rendering and live Codex/Spark selection remain unproved; no all-string or
+all-row-count equal-gap claim follows. Older native measurements prove only their dated bytes.
+
+**Historical readability acceptance 2026-10-25 — bounded native cases for that layout.**
+The combined layout used 120×26 wells at x165 with 18/16/14 labels, both clocks at y152 and
+watermark centre247. Actual combined-layout 415f and name-repair 88 executions completed and
+retired; their
+strict Push and legacy WFF2 validation/builds passed. Round 384 active/AOD passed independent
+review with actual visible `AMBIENT`/Dozing and later `INTERACTIVE`/Awake confirmed;
+physical 466 active charging/unlocked Face/Glance were verified, and the coherent
+seven-frame public group and its final browser placement passed review. Independent
+API 34 ten-fixture/twenty-frame review covered mapping, fit, zero/one/two/three bands,
+paired zero values, long credits and budgets, using the settled case-06 supplement.
+Cases 02–10 prove actual `AMBIENT`; case 01's original thin-clock frame has only the
+mode boolean and its supplement held before any fixture write. Square 360 proves only
+`MUTE` with NoData upper cells; true ambient, populated Square defaults, physical AOD and
+unobserved variants remain unproved. Fixture data/radios and original Square DND/summary
+were restored. The owning revision records the bounded acceptance, and all 136 outputs
+matched unchanged generators in the separate throwaway HOST correspondence check.
+Earlier failed generation/candidate records and measurements below apply to their dated
+builds. This face refinement adds no widget feature and does not close Phase 17's paired gate.
+
+**Face-local temperature choice 2026-11-01 — scoped emulator acceptance complete; physical/OEM deferred.**
+`face` and `cellReadingText` in `tools/render-watchface.mjs` add one WFF2 Temperature editor list,
+default Auto, with Celsius and Fahrenheit options using canonical strings shared by Legacy
+and Push. Auto and matching units preserve the original integer; a known opposite WEATHER
+unit converts that original value to whole degrees with an explicit target suffix and sizing
+from the displayed value. Unknown units keep the degree-only fallback, availability retains
+the bare recess, and assigned-provider text/opaque wells/assignments/taps remain unchanged.
+There is no phone preference, new weather service, schema/transport change or additional slot.
+`check_temperature` in `tools/check-watchface-structure.py` covers emitted configuration and
+numerical/fallback/provider contracts through the existing generator invocation. Illustrative
+Auto/Celsius art stays illustrative. Source commit `bbc9a46` completed its owning Lazy execution;
+HOST full WFF/Wear gates passed. On the canonical 384×384 round API36 emulator, installed
+Legacy `6fc79b39…` retained instance `f78b616d…`: Celsius and Fahrenheit survived editor
+reopening, with separate live `57°F` → `14°C` → `57°F` observations. Auto was restored and
+again showed live `57°F`; the final read-only eight-slot bracket passed against the expected
+restored configuration. Fixed editor-preview `25°C`/`77°F` is not live-weather evidence or an
+exact simultaneous cohort. The selection applies only to built-in WEATHER; external opaque-
+provider `7°` was not natively retested in this session. Native negative/extreme values and
+unsupported/unavailable-source branches remain unobserved and source-only
+coverage is not promoted to native proof. Physical/OEM confirmation stays deferred. See
+[Upper cells](product/WATCH_RING_DESIGN.md#upper-cells-revision-2026-10-09) for the locked behavior.
+
+**Upper-complication compatibility audit 2026-11-01 — bounded emulator proof; no runtime change.**
+On the canonical Round API36 emulator, retained Legacy `6fc79b39…`/instance `f78b616d…`
+showed Battery short text `100` in all three cells, with weather/UV occluded, true AMBIENT
+and an INTERACTIVE return. Emulator Heart Rate showed mock `79`; WardPulse outer half 1
+showed ranged data with supplied text `64`, separate from editor-preview `62`. A centre-region
+tap opened Settings Battery; specific completed slot dispatch was not identified. Exact
+Day/Empty/Empty plus Auto were restored, with a passing six-inventory eight-slot read-only
+bracket against `a0f58cef…` and newer Live metrics preserved. Current `cellSlot` reads TEXT
+only: numeric fallback remains design intent, not a primary-contract guarantee or a native
+missing-TEXT observation. Monochrome/ambient-image, long/custom/extreme labels, positive
+NoData-placeholder and physical/OEM compatibility remain unproved. No runtime correction
+is justified from the unavailable case; the owning design retains the historical evidence.
+
+**Selected-zero revision 2026-10-13.** The retained-zero ring and legend treatment changes
+no upper-cell geometry. That build used the complete cells
+at integer origins `(152,114)`, `(204,100)`, `(256,114)`, the three-unit downward move, full
+temperature labels and shortest radial border fades. The historical acceptance block below
+records those dated revisions; current acceptance follows the active-translation contract above.
+
+**Historical first implementation status, 2026-10-09.** The design was locked in
+`docs/product/WATCH_RING_DESIGN.md` (upper-cell revision, with the melt-length and cell-layout
+corrections of the same day), and the first implementation pass was in the tree.
+`tools/render-watchface.mjs` bounded the
+three ring slots with a full-canvas `BoundingBox` and declared each band at the 20 units it
+painted; `watchface.xml` was regenerated from it. The nine ring textures came out byte-identical,
+and the review-art generators and the Wear complication sources were still untouched at that
+point. The following records preserve the original scope and dated observations. Current
+implementation and acceptance follow the
+[active-translation contract](product/WATCH_RING_DESIGN.md#revision-2026-11-01--approved-active-clock-translation);
+the historical geometry below does not prescribe future passes or accept the current candidate.
 
 Unrelated to the cells, and found while reading the system face picker on 2026-10-09: the
 picker was advertising the face with `drawable/preview.png`, unchanged since `2c5aec3`, which
@@ -2732,7 +3129,9 @@ Measured during the design (recorded with its numbers in the design baseline):
   and with the one width that is estimated rather than measured, under *Reading revision
   2026-10-12* in `docs/product/WATCH_RING_DESIGN.md`, Upper cells, rule 11.
 
-Scope when the implementation runs:
+**Historical implementation scope — superseded geometry.** This records the original cell
+implementation scope. Its 42-unit wells, 37×18 text box, degree-only offset and 21-unit icons
+are superseded by the upward-digit contract above; they are not remaining implementation work.
 
 - `tools/render-watchface.mjs` — three cell slots of 42 units on new ids, centred on the arc of
   radius 106.8 at −29° / 0 / +29° (boxes at `152, 111`, `204, 97`, `256, 111`), the wells as
@@ -2753,15 +3152,25 @@ Scope when the implementation runs:
   three strip services fold into the ring services, which gain the strip label on `TEXT` and the
   combined token on `TITLE`.
 
-Migration risk, named here rather than in the design baseline: the Wear complication sources
+**Historical migration risk — 2026-10-09 slot folding.** The Wear complication sources
 already carry comments reading *class name kept for installed faces*, because earlier slot
 reshuffles broke faces that were installed at the time, and Split band rule 4 records the exact
-shape of that damage. This revision moves more slots than any revision before it — three slots
-change what they draw, and three more are new. An installed old face paired with the new app
-will show wrong data until both are updated, and keeping the service names stable cannot prevent
-it, as the 2026-09-16 revision already learned. The face and the app have to ship together.
+shape of that damage. That revision moved more slots than any revision before it — three slots
+changed what they drew, and three more were new. An installed old face paired with the new app
+would show wrong data until both were updated; keeping the service names stable could not
+prevent it, as the 2026-09-16 revision already learned. The face and the app had to ship together
+for that migration. The current composition refinement changes no slots, services or transport.
 
-Acceptance:
+**Current acceptance — active translation Pending; earlier evidence remains dated.** Use the
+active-translation contract's remaining proof requirements; prior native/public observations
+do not accept the new active placement. The eight-slot budget, weather chrome and occlusion,
+customizable bindings, provider taps, complete-label rendering, bottom anchoring, tightest-first
+ordering, ring/texture preservation and ambient retention below remain required with current
+geometry. Earlier device observations establish only their dated artifacts.
+
+**Historical acceptance criteria — superseded 2026-10-09/13 geometry.** The original criteria
+are retained below, including the old cell origins, 37-unit text box and legend rows
+283/304/325. Those dimensions do not apply to the current candidate.
 
 ```text
 the face declares exactly eight complication slots and the validator passes
@@ -2984,6 +3393,12 @@ just check-docs passes, including the repository source-citation gate and Vocs b
 - golden snapshot tests.
 
 ### Flutter phone app
+
+- Persistent saved-connection rejection warnings cover shared foreground/headless collection,
+  durable dismissal and lifecycle races, plus exact Providers reveal and independent X actions.
+  Runtime regressions, baseline/candidate comparison where compatible, native phone rendering
+  and reversible-state restoration passed HOST verification. No live-provider rejection or old
+  disconnection migration is established by synthetic acceptance.
 
 - widget tests for dashboard cards;
 - widget tests for provider states;
@@ -3217,6 +3632,18 @@ for the planned sequence. These milestones do not establish release readiness or
 
 ## 25. Product roadmap beyond the Android MVP
 
+**Claude reporting qualification, 2026-11-03.** The focused Console correction restores
+its retained collection/management and Dashboard expenses alongside independent Plan Extra
+Credits. Corrected HOST/native acceptance remains pending; raw Money and Extra used/cap
+widget rows stay in the next approved runtime task. This adds no release date, positive
+live-expense proof or completed widget/release claim.
+
+**Status complication aging, 2026-11-20.** The optional Wear Status complication supplies
+an expiring fresh reading and a stale timeline entry. The Wear build and device regression
+passed on HOST. Legacy API 34 showed a Live transition in active mode without a new summary.
+Broader renderer acceptance remains open. See
+[Status complication aging](../apps/wear_android/README.md#status-complication-aging).
+
 Owner direction recorded on 2026-10-15. These are planned milestones, not shipped features
 or release acceptance. The public summary is owned by
 [Roadmap](product/user-guide/ROADMAP.md).
@@ -3256,16 +3683,248 @@ credential model. It does not authorize uploading provider credentials or usage 
 WardPulse backend. Any later service design must define its own data and security boundaries
 before implementation and update the applicable privacy guidance.
 
-### Deferred watch-face refinement
+### Adaptive watch-face bands — active integration
 
-**Status: deferred, excluded from 0.1.0.** Adaptive radial ring widths are future work
-after 0.1.0, without a promised release or date.
+**2026-10-30 guarded integration allocation: item12 remains OPEN.** The eight fixture cohorts
+add 46 valid schema9 inputs through the existing private decoder/complication/API tests;
+construction evidence proves neither delivery nor WFF paint. Source now allocates only the
+guarded Push default 3→5, retaining phone 3/Wear 4/Legacy 2, all versionNames 0.1.0, identities,
+signers and release-bridge guards. Historical candidate 4 flags/instrumentation, the real 3→4
+journal and accepted N1 44/22, N2 32/16, N3/legacy 20/10 geometry/Alpha remain unchanged.
+Schema/producer/drawing/storage/delivery behavior is unchanged by these prerequisites.
+Newly evidenced essential scope issues still require concrete reviewed findings; no historical
+no-renderer-change statement is a premise.
 
-- Automatically choose fixed layouts for one, two or three occupied bands, retaining the
-  current three-band outer boundary and central clearance: three unchanged, two widened,
-  one filling the available annulus.
-- A supported half-ring pair occupies one band; one full ring plus two halves occupies two.
-  Known 0% remains occupied. Preserve ordering and remaining-percent semantics; add no setting.
-- Future implementation owners: WFF generator, Wear complication band-count metadata and
-  matching review-art generators; retain the current phone-to-watch schema. Review halves,
-  0%/near-0%/100%, ambient rendering and budget textures.
+The [current qualification](product/RELEASE_CHECKLIST.md#guarded-integration-allocation-2026-10-30)
+retains the sole ordered Native FINALIZE inventory and all nine mandatory HOST duties.
+All HOST starts follow whole nine-step DONE, run-owned process retirement, owning CLI exit
+if used and fresh separate public/OS idle; none gates Native completion or commits. Nontarget
+full check-wear/check-watchface, pure complete check-phone and final docs/fixtures/release
+checks may then run without install/adb or changing installed phone 1. Target/test-APK
+provisioning, test-wear-device, live phone 1→3/sync and UI Update/selection remain held for
+the separately admitted typed-API/guard scope against preserved Round Wear 4/asset 3/Push 4,
+Legacy active. Typed SDK/client/NodeClient access remains unmeasured; the five-key dump stopped
+before client bind at its requester mapping guard, proving no API denial. Those nine commits
+included no API fix.
+
+**2026-10-30 independent read-only harness:** Source now adds separately selected existing-client
+metadata, typed own-provider configs, caller-owned Push inventory/active status and direct
+`NodeClient.connectedNodes` observations. Current caller UID/package/APK/signer admission is
+independent of historical mutation journals, requester mappings and quiet-bridge evidence;
+read-only receipts cannot authorize overrides. Existing-platform `wear-sdk` compile wiring
+retains SDK/dependency versions and the required-library contract. Actual returned domains
+remain separate, unresolved joins keep raw metadata useful, and empty peers prove no producer
+quiescence. See [Wear observations](../apps/wear_android/README.md#owned-push-inventory-and-connected-peers)
+and [invocation/acceptance boundaries](ANDROID_TOOLCHAIN.md#owned-push-inventory-and-connected-peers).
+The historical SDK3→4 path, one-shot journal and settled witness remain unchanged. Source/built
+Push5 does not identify installed Round Wear4/asset3/Push4; Legacy-only Square needs no fabricated
+Push history. Compilation, guard execution/applicable RED→GREEN, complete Wear checks and renewed
+artifact/graph evidence remain later HOST duties after whole DONE, all owned-process retirement,
+any owning-CLI exit and fresh separate public idle. Reviewed watch observations require fresh
+runtime identity/custody, necessary test-only provisioning and cleanup/recovery; expose real target
+dependencies without target replacement to manufacture access. No phone action is authorized by
+this scope. Malformed/delayed/missing-main native coverage, restoration, comprehensive artifact/
+compatibility and healthy public acceptance remain mandatory and pending. API signatures, metadata,
+ACKs, supplied bitmaps and active paint remain separate; no universal PASS, physical-device
+acceptance or whole-#12 closure follows from Source completion.
+
+**2026-10-31 finite normal fixture route (Source only):** the existing manual
+`NativeDatasourceTransitionTest.observeDelivery`/`observeRestoration` path now admits exactly
+19 already-packaged assets as 18 `fixture-*` scenarios through `NativeSummaryLease`, the
+normal store and targeted services. The [finite catalog and evidence layout](../apps/wear_android/README.md#guarded-normal-datasource-observations)
+and [exact invocation](ANDROID_TOOLCHAIN.md#guarded-datasource-observations) retain independent
+input hashes, original bytes/mock timestamps, current caller/resource/runtime/full-eight/system-ID
+provenance, selected first receipt/PNG hashes, global single-use/prior-recovery fences and
+newer-data-safe recovery. N3 reorder publishes both inputs in one lease with separate bounded
+stages; unseen stages stay Pending. Existing SDK/client and four normal controls remain distinct.
+No test methods/default exclusions change; expected source discovery stays 47 default + 48 manual,
+with packaged counts still requiring HOST verification. Native required checks remain pending
+their dedicated FINALIZE gate. Compilation, affected guards, unchanged defaults, test-APK
+provenance/provisioning, current native reads, quiet custody, finite delivery/paint and separate
+settled restoration remain unrun/Pending for this change. These HOST duties retain the
+post-whole-DONE/retirement/CLI-exit/fresh-idle order above. Actual Push5,
+the separate UI4→5 witness gap and historical SDK3→4 remain qualified; no device mutation,
+target replacement, replay, downgrade/reset/code6 or physical-phone action is admitted here.
+This Source route closes neither the original twelve duties nor broader item12/public acceptance.
+
+**2026-10-31 retained-extra repair (Source only):** Square's delayed
+Codex37 + Cursor70/Other50 → main-only Codex80 counterexample showed retained Other paint
+overlapping the new band until extra NoData. Ordering extras before mains removed the large
+old teal half in native f5, but matched same-clock main-only/extra-cleared originals still
+differed at **1031 outer-edge pixels**, maximum channel difference **57**, with identical
+main core. Strong-teal classifier zero did not establish fringe acceptance.
+`n1BackdropRestore` in `tools/render-watchface.mjs` now restores the matching opaque lift
+through a local named WFF2 SOURCE/MASK Group before admitted unsplit N1 foreground, including
+zero. Its ROUND 387/27 mask spans radii 180–207 across the unchanged outer contour 202;
+foreground geometry, colors, Float precision, MAX semantics, endpoints, ordinal/family
+placement, credits, periods, ambient treatment and valid extra with main NoData remain fixed.
+Compatible split branches have no restoration. The emitted-XML declaration regression checks
+locality, matching backdrop and coverage, rejects missing/insufficient restoration, retains
+every extra field while mains change and still distinguishes the former scene order. It
+proves neither native compositing/antialiasing nor the historical redacted TITLE/selected
+branch. The [owning notes](product/WATCH_RING_DESIGN.md#implementation-repair-2026-10-31--retained-extra-paint)
+and [manual observation contract](ANDROID_TOOLCHAIN.md#retained-extra-production-payload-observation)
+describe a separately recorded delayed attempt for an explicitly Root-admitted changed
+production XML, with complete reviewed baseline/candidate source/generated/built/installed/
+active provenance, durable reservation, same-payload/partial-attempt/global-latest fencing,
+newer-data-safe recovery and separate later restoration. Original consumed Square scenarios,
+observations, Pending labels and exact recovery receipts remain immutable. Source preparation
+does not provision that admission or authorize device action. Shared fixtures, schemas and
+payload versions remain unchanged; no fixture-validator inventory expansion is needed.
+
+The new-artifact matched delayed witness remains **Pending**; consumed f5 and its separate
+normal recovery are not acceptance for these bytes. Native required checks
+belong to dedicated FINALIZE; no checks are attested here. After whole execution DONE, owning
+CLI exit, owned-process retirement and a fresh separate idle observation, Root still owns full
+Source review and all original HOST duties: full Wear/watch-face/docs checks, official WFF2 and
+Push semantic validation, affected tests, candidate artifact joins/build/install, exact delayed
+and justified finite observations, exact recovery and restored ordinary Face/Glance viewing.
+Unused fixtures, SDK, obsolete or recovery cases cannot replace unseen delayed evidence.
+Public acceptance follows native acceptance; item12 and all historical compatibility gaps stay open.
+
+**2026-10-31 near-full main candidate (Source only):** Root and an independent reviewer
+confirmed the missing large green Codex inner arc in both requested and bounded Square
+originals for the existing singleton pair, Codex used0.1 / Spark used99.96875. Rounded 100/0
+labels, requests/events/types and exact-color counts establish neither effective native
+fields, selected branch nor provider-attributed subpixel paint. The renderer cause and
+whether this is a regression from an earlier product revision remain unknown.
+`bandArcs` in `tools/render-watchface.mjs` now retains three stable named foreground Groups
+with mutually exclusive alpha gates for full/tiny/ordinary-partial, following the outer-half
+structure. Tracks stay outside the gates and `bandPaint`, main admission/layout/split
+selectors, geometry, palette, Float/MAX scaling, semantic labels, modes, services and eight
+slots are unchanged. Extras still precede mains and only admitted unsplit N1 restores its
+backdrop. Emitted-declaration assertions retain all cutoff/endpoint cases, reject suppressed
+or overlapping foreground gates and model the incident's projected Floats with independent
+tiny/zero/full outer variants. This proves declarations, not restored native paint. See the
+[dated candidate contract](product/WATCH_RING_DESIGN.md#implementation-candidate-2026-10-31--near-full-main-paint).
+
+**Native acceptance remains Pending.** The consumed incident fixture and all prior evidence
+remain immutable. This source candidate creates no replay or device permission.
+Native required checks belong solely to dedicated FINALIZE and are not attested here.
+After whole DONE, actual owning CLI exit, scoped process retirement and fresh separate idle,
+Root retains complete relevant HOST gates, official WFF2/strict Push semantic validation,
+affected tests, source/generated/built/installed/active joins, separately reviewed witness
+admission and inspection of every original with effective-data limits. Confirm the large
+green main and tiny outer independently, exact restoration, separate later recovery and
+ordinary Face/Glance recovery. The retained-extra witness, all original item12 compatibility,
+delivery, split, endpoint/cutoff, shape/mode, phone-retention and public-cohort obligations
+remain open. Root repeats its full independent pass after the last correction; public
+acceptance follows native acceptance. No item12 completion is claimed.
+
+**2026-10-31 near-full witness support (Source only):** The existing production-payload
+admission path in `NativeDatasourceState.kt` and `NativeDatasourceTransitionTest` now admits
+exactly `fixture-n1_pair_near_full_tiny` alongside the unchanged delayed route. It requires
+that scenario's separately reviewed consumed-baseline receipt/recovery, complete reviewed
+baseline/candidate source/generated/built/installed/active joins, genuinely changed generator
+and production XML, and the existing packaged fixture's fixed SHA-256
+`4aa6180f44dcb5c920a15f12ef5f5dd4167d87ab1e9ff7ee8b86bd2b8d97f4e8` before reservation/effects.
+The fixture's bytes and timestamp pass unchanged through the existing lease/store/targeted
+services. Exact scenario/payload authorization, durable once-only reservation, global latest,
+partial-attempt and arm-before-write fencing, separate later recovery and newer-write
+protection remain in force. Incident payload receipts fence subsequent writes but never
+qualify as normal controls. All consumed history stays consumed; identifier churn or the
+same XML confers no eligibility. Existing guard methods add bounded rejection, unchanged-byte
+publication and reserved failure/newer-write recovery coverage; discovery/exclusions are unchanged.
+The [owning observation contract](../apps/wear_android/README.md#guarded-normal-datasource-observations)
+and [invocation/recovery arguments](ANDROID_TOOLCHAIN.md#retained-extra-production-payload-observation)
+describe the extension. No admission is provisioned or witness run here. Kotlin execution
+remains HOST-owned; required Native checks belong only to FINALIZE, with no PASS attested.
+Near-full paint, artifact identity joins, exact/later and ordinary Face/Glance recovery,
+retained-extra and every broader item12/public-cohort duty above remain **Pending**.
+
+Before later explicit normal UI Update 4→5, freshly prove installed Push 4/hash/signer,
+owned manager slot, eight retained choices and quiet-writer custody. Keep Legacy active;
+verify returned same-slot identity and separate settled retention through the existing
+validated embedded APK/token/client/UI path. Unexpected advancement stops the witness: no
+code 6, replay, downgrade, reset or invented button success. Later retained-Push selection/
+rendering is separate HOST work, not automatic activation. All six cells remain required:
+Push old-old/new-old/new-new and Legacy old-old/old-new/new-new. Unavailable history needs
+explicit Root-reviewed forward-only reconciliation; retained 4/final 5 cannot recreate it.
+Both-shape first/separate-settled endpoints/transitions/true-AMBIENT, malformed/missing/
+delayed delivery, absent-summary/preview capability, phone preservation/sync, restoration
+and later healthy public guidance/captures remain mandatory and separate from valid fixtures.
+
+Both extras stay queued. The ignored/unapplied UI guard requires delegated correction,
+blind test, whole review, validator/docs checks, Root ZERO and a separate commit after
+successful whole execution and before new UI acceptance. Later time-position work follows
+all previous work and requires visible design/preview plus explicit owner approval before
+implementation. No device, update, public acceptance, release or item12 completion is claimed.
+
+**Historical 2026-10-29 harness support: native acceptance remained Pending.** The
+[guarded client probe](../apps/wear_android/README.md#guarded-complication-client-probe)
+adds test-only watchface-client 1.2.1 existing-instance access and bounded unsupported,
+malformed and partial-map observations. Access, permissions and restoration are capability
+gates, not promised override PASS. Supplied-data bitmaps are separate from ordinary active
+publication, transitions and true ambient. That stage retained phone 3/Wear 4/legacy 2/Push
+default 3/common 0.1.0; candidate 4 was a test input. Its prospective order required the
+baseline-host Push 3→4 result, separate settled observation/restoration and owner retirement
+before provisioning the ordinary rebuilt seam-bearing target and confirming the original
+isolated 40. Warm and fresh task-owned empty-cache/reuse dependency checks, remaining builds/official validation,
+release parity, both shapes/compatibility cells/transitions, native restoration, healthy public
+captures, docs/browser and Root whole ZERO remain ordered post-DONE HOST work. This neither
+closes UNKNOWN historical causality nor old-Push1 matrix, explicit 1→2/2→3 manager or utility
+button gaps; the older 2→3 requirement below remains an unobserved historical obligation.
+
+**Historical 2026-10-28 status: implementation authored; native integration known Pending.** This
+supersedes the earlier post-0.1.0 deferral. The
+[dated design revision](product/WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)
+owns automatic 68/32/20 full widths and 34/16/10 halves for resolved N1/N2/N3, retaining
+belt 202..134, gap 4, no pair gap and required actual aperture≥133.8. Ordinary plans,
+independent budgets, pairs and known zero count once; unavailable data is never fake zero.
+Current N3 art/textures and the 52-unit cells/logo/clock/132×26 legend stay fixed.
+
+Wear complication responses derive count/order/pools/semantic fields from one accepted
+summary, then encode generic binary 2/4/8 ranges 0/200, 0/400, 0/800. MAX100 always uses legacy
+fixed widths for any count. Invalid contracts paint no lower component; obsolete producer
+selections return actual NoData. Valid extras survive absent delivered mains, while resolved
+singletons remain full bands. Independent delivery promises no common-N/atomic/ACK/grace
+contract; harmful mixing or persistent wrong output is a finding. All eight scene slots,
+five lower identities, six updaters including Status and wearer-owned upper choices remain.
+
+The main-comparison correction keeps each main `isValid` Compare in slots 101/102/105 to
+one stable named full-canvas Group containing the existing selector then strip. The
+Python-standard-library parsed-XML regression runs through the awaited generation route
+before emission in generation and `--check`. Parsing the baseline generated XML with the
+existing structure checker reproduced the three-branch RED; corrected generation in
+`--check` mode returned GREEN, retaining existing semantic assertions. The structural
+defect is proven; its exact native causal effect is still
+unknown. Corrected native rendering must repeat the original controlled N2 blue/green/teal
+witness, including semantic 37 as VALUE148/MAX400, with actual effective responses and frames.
+
+That correction used phone 0.1.0+3/Wear 4/legacy 2/Push default 3, common versionName 0.1.0,
+with signers/identities and native_state parity preserved. Phone UI, core, providers and
+summary/schema/settings/auth were unchanged. It was one compatibility change, not a
+release cut; only the guarded Push default advanced 2→3. Producer JVM,
+geometry/admission assertions and focused Android API/wire/Parcel coverage are retained;
+corrected full builds and official/native acceptance remain Pending.
+
+HOST owns acceptance after whole execution DONE, owned retirement, actual owning CLI exit
+where applicable and fresh separate public/OS idle. Preserve original APK receipts and
+installed history. The original smallest-round Push path required old-old, Wear 2→4 retaining
+Push 1, then explicit **Update watch face** Push 1→2. Installing Wear 4 was followed by Push 2
+before any explicit update; the trigger remains unknown. Original new-Wear4/old-Push1 and
+explicit 1→2 were not observed and remain gaps. The then-required explicit manager update
+from installed Push 2 to candidate 3 was also unobserved. The current guarded 4→5 path above
+supersedes that prospective operation without closing its gap; bundled installation cannot
+prove explicit update. Complete all six compatibility cells through supported, Root-reviewed
+forward-only reconciliation where historical evidence is unavailable, preserving the
+[incident qualification](product/RELEASE_CHECKLIST.md#adaptive-integration-qualification-2026-10-28).
+On nonround legacy: old-old, face 1→2 retaining
+Wear 2, then Wear 2→4. Verify retained bindings/upper choices/signers and source→canonical→
+built→installed→active identity. Conflicts require reviewed correction, never downgrade,
+reinstall or reset. Later update the existing phone emulator 1→3 with retained data/settings/
+credentials. Physical phone work is forbidden; physical watch 466 remains deferred.
+
+Full unchanged phone/Wear/legacy/Push builds and official validation, device/API wire tests,
+read-only release-status parity and docs checks remain mandatory HOST work. Prove settled
+N0..3, pairs/budgets/credits/NoData/malformed suppression, old ratio compatibility and actual
+interactive/true-ambient aperture, outer-half clipping, caps, textures and N3 continuity.
+Preserve original transient plus settled frames for N3↔N1/N2, pair appearance/removal,
+same-count reorder and delayed/interrupted recovery through normal summary updates.
+Unseen transitions stay Pending; sleeps/retries/final-frame substitutes do not prove them.
+Use existing AVDs only, without copies/worktrees/new snapshots/clearing. Delegated design/
+documentation owners in this same integration must refresh healthy shared-state captures,
+the index and browser uses after native acceptance, restore guarded summary/data/bindings/
+settings/time/font/ambient/pairing, then obtain Root's whole zero-findings review after the
+last correction. These HOST obligations are not a Native-commit prerequisite. Native
+implementation completion does not close integration acceptance.

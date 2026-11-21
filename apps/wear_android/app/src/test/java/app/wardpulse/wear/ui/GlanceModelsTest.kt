@@ -45,6 +45,28 @@ class GlanceModelsTest {
     }
 
     @Test
+    fun refreshChrome_retainedSelectionOutranksAggregateWarning() {
+        val chrome = glanceRefreshChrome(
+            baseSummary(overall = PulseStatus.WARNING, isStale = true),
+            refreshAllowed = true,
+        )
+        assertEquals("Stale", chrome.detail)
+        assertFalse(chrome.ok)
+        assertTrue(chrome.enabled)
+    }
+
+    @Test
+    fun refreshChrome_freshSelectionIgnoresAggregateStale() {
+        val chrome = glanceRefreshChrome(
+            baseSummary(overall = PulseStatus.STALE, isStale = false),
+            refreshAllowed = true,
+        )
+        assertNull(chrome.detail)
+        assertTrue(chrome.ok)
+        assertTrue(chrome.enabled)
+    }
+
+    @Test
     fun refreshChrome_rateLimitedDisablesWithDetail() {
         val chrome =
             glanceRefreshChrome(
@@ -145,7 +167,7 @@ class GlanceModelsTest {
         assertEquals(3, rows.size)
         assertEquals("Codex plan · Weekly", rows[0].title)
         assertEquals("8% left · 320 credits", rows[0].subtitle)
-        assertEquals("Cursor plan", rows[1].title)
+        assertEquals("Cursor / Others", rows[1].title)
         assertEquals("24% · 0% left", rows[1].subtitle)
         assertEquals(0f, requireNotNull(rows[1].secondaryArc).remainingFraction)
         assertEquals(listOf(6 until 8), rows[1].exhaustedPercentRanges)
@@ -161,13 +183,39 @@ class GlanceModelsTest {
                 allowances = listOf(cursorCredits()),
             ),
         ).single()
-        assertEquals("Cursor plan", row.title)
+        assertEquals("Cursor / Others", row.title)
         assertEquals("82% · 41% left · 320 credits", row.subtitle)
         assertEquals(0.82f, row.remainingFraction, 0.0001f)
         assertEquals(RingFamily.CURSOR_OWN, row.colorArgb)
         val outer = requireNotNull(row.secondaryArc)
         assertEquals(0.41f, outer.remainingFraction, 0.0001f)
         assertEquals(RingFamily.CURSOR, outer.colorArgb)
+    }
+
+    @Test
+    fun legendRows_cursorPairTitleUsesExactIdsRegardlessOfLabels() {
+        val pair = cursorPair()
+        val renamed = pair.copy(
+            label = "Renamed inner pool",
+            split = requireNotNull(pair.split).copy(label = "Renamed outer pool"),
+        )
+        assertEquals("Cursor / Others", glanceLegendRows(baseSummary(rings = listOf(renamed))).single().title)
+    }
+
+    @Test
+    fun legendRows_cursorNonmatchesKeepLiteralFallbackTitles() {
+        val pair = cursorPair()
+        val outer = requireNotNull(pair.split)
+        for (other in listOf(
+            pair.copy(id = "allowance.cursor.cursor-plan-models-lookalike"),
+            pair.copy(split = outer.copy(id = "allowance.cursor.cursor-plan-other-lookalike")),
+            pair.copy(id = outer.id, label = outer.label, split = outer.copy(id = pair.id, label = pair.label)),
+            pair.copy(id = "allowance.cursor.plan"),
+        )) {
+            assertEquals("Cursor plan", glanceLegendRows(baseSummary(rings = listOf(other))).single().title)
+        }
+        val unrelated = pair.copy(id = "unrelated.models", split = outer.copy(id = "unrelated.other"))
+        assertEquals("Cursor Models plan", glanceLegendRows(baseSummary(rings = listOf(unrelated))).single().title)
     }
 
     @Test
@@ -182,7 +230,7 @@ class GlanceModelsTest {
             rings = listOf(cursorPair(), codex, single),
             allowances = listOf(credits),
         ))
-        assertEquals(listOf("Cursor plan", "Codex plan", "Claude plan · Sonnet weekly"), rows.map { it.title })
+        assertEquals(listOf("Cursor / Others", "Codex plan", "Claude plan · Sonnet weekly"), rows.map { it.title })
         assertEquals("82% · 41% left", rows[0].subtitle)
         assertEquals("82% · 41% left · 320 credits", rows[1].subtitle)
         assertEquals(RingFamily.CODEX, rows[1].colorArgb)
@@ -222,7 +270,7 @@ class GlanceModelsTest {
             val row = glanceLegendRows(
                 baseSummary(rings = listOf(cursorPair(innerUsed, outerUsed))),
             ).single()
-            assertEquals("Cursor plan", row.title)
+            assertEquals("Cursor / Others", row.title)
             assertEquals(subtitle, row.subtitle)
             assertEquals(RingFamily.CURSOR_OWN, row.colorArgb)
             assertEquals(RingFamily.CURSOR, requireNotNull(row.secondaryArc).colorArgb)
@@ -235,7 +283,7 @@ class GlanceModelsTest {
             val pair = cursorPair(innerUsed, outerUsed)
             val allowances = listOf(cursorCredits())
             val actual = glanceLegendRows(baseSummary(rings = listOf(pair), allowances = allowances))
-            assertEquals("Cursor plan", actual.single().title)
+            assertEquals("Cursor / Others", actual.single().title)
             assertEquals(RingFamily.CURSOR_OWN, actual.single().colorArgb)
             assertEquals(RingFamily.CURSOR, requireNotNull(actual.single().secondaryArc).colorArgb)
             assertEquals(
@@ -256,6 +304,55 @@ class GlanceModelsTest {
         assertEquals(0f, row.remainingFraction)
         assertEquals(0f, requireNotNull(row.secondaryArc).remainingFraction)
         assertEquals(listOf(0 until 2, 5 until 7), row.exhaustedPercentRanges)
+    }
+
+    @Test
+    fun legendRows_onlyOriginalZeroIsFullBeforeRemainingLosesPrecision() {
+        for ((used, expectedFraction) in listOf(
+            0.0 to 1f,
+            0.1 to 0.999f,
+            0.000001 to 1f,
+            Double.MIN_VALUE to 1f,
+        )) {
+            val ring = cursorPair(used, used).copy(split = null)
+            val row = glanceLegendRows(baseSummary(rings = listOf(ring))).single()
+            assertEquals("100% left", row.subtitle)
+            assertEquals(expectedFraction, row.remainingFraction)
+            assertEquals("used=$used", used == 0.0, row.isFull)
+        }
+    }
+
+    @Test
+    fun legendRows_keepFullDistinctFromRoundedFullInBothArcPositions() {
+        for (partialUsed in listOf(0.1, 0.000001, Double.MIN_VALUE)) {
+            for ((innerUsed, outerUsed) in listOf(0.0 to partialUsed, partialUsed to 0.0)) {
+                val row = glanceLegendRows(baseSummary(rings = listOf(cursorPair(innerUsed, outerUsed)))).single()
+                val outer = requireNotNull(row.secondaryArc)
+                assertEquals("100% · 100% left", row.subtitle)
+                assertEquals("inner used=$innerUsed", innerUsed == 0.0, row.isFull)
+                assertEquals("outer used=$outerUsed", outerUsed == 0.0, outer.isFull)
+                assertEquals(if (innerUsed == 0.1) 0.999f else 1f, row.remainingFraction)
+                assertEquals(if (outerUsed == 0.1) 0.999f else 1f, outer.remainingFraction)
+            }
+        }
+    }
+
+    @Test
+    fun legendRows_preserveFullClassificationForEitherKnownSurvivor() {
+        for (used in listOf(0.0, 0.1, 0.000001, Double.MIN_VALUE)) {
+            for (ring in listOf(
+                cursorPair(used, Double.NaN),
+                cursorPair(Double.NaN, used),
+                fablePair(used, Double.NaN),
+                fablePair(Double.NaN, used),
+            )) {
+                val row = glanceLegendRows(baseSummary(rings = listOf(ring))).single()
+                assertNull(row.secondaryArc)
+                assertEquals("100% left", row.subtitle)
+                assertEquals(if (used == 0.1) 0.999f else 1f, row.remainingFraction)
+                assertEquals("used=$used ring=$ring", used == 0.0, row.isFull)
+            }
+        }
     }
 
     @Test
@@ -300,7 +397,12 @@ class GlanceModelsTest {
             providers = listOf(app.wardpulse.wear.model.ProviderSummary("claude", PulseStatus.OK, null)),
         )
         assertEquals(listOf("Choose percent rings", "in the phone app"), glanceEmptyLines(selectedEmpty))
-        assertEquals(listOf("Connect a provider", "on your phone"), glanceEmptyLines(selectedEmpty.copy(providers = emptyList())))
+        for (flagged in listOf(false, true)) {
+            assertEquals(
+                listOf("Connect a provider", "on your phone"),
+                glanceEmptyLines(selectedEmpty.copy(providers = emptyList(), selectedRingDataUnavailable = flagged)),
+            )
+        }
     }
 
     @Test
@@ -356,7 +458,7 @@ class GlanceModelsTest {
         assertEquals(
             listOf(
                 "Codex plan · Weekly",
-                "Cursor plan",
+                "Cursor / Others",
                 "Budget · Today",
             ),
             rows.map { it.title },
@@ -462,6 +564,62 @@ class GlanceModelsTest {
                     ),
                 ),
         )
+
+    @Test
+    fun fablePairKeepsItsTitleIdentityOrderCreditsAndExhaustionTokens() {
+        val credits = cursorCredits().copy(label = "Claude · Extra usage", remaining = Quantity("80", "credits"))
+        for ((inner, outer, expected) in listOf(
+            Triple(18.0, 59.0, "82% · 41% left · 80 credits"),
+            Triple(59.0, 18.0, "41% · 82% left · 80 credits"),
+            Triple(100.0, 59.0, "0% · 41% left · 80 credits"),
+            Triple(18.0, 100.0, "82% · 0% left · 80 credits"),
+            Triple(100.0, 100.0, "0% · 0% left · 80 credits"),
+        )) {
+            val row = glanceLegendRows(baseSummary(
+                rings = listOf(fablePair(inner, outer)),
+                allowances = listOf(credits),
+            )).single()
+            assertEquals("Claude / Fable", row.title)
+            assertEquals(expected, row.subtitle)
+            assertEquals(RingFamily.CLAUDE, row.colorArgb)
+            assertEquals(RingFamily.CLAUDE_FABLE, requireNotNull(row.secondaryArc).colorArgb)
+            val secondStart = expected.indexOf(" · ") + 3
+            assertEquals(buildList {
+                if (inner >= 100.0) add(0 until 2)
+                if (outer >= 100.0) add(secondStart until secondStart + 2)
+            }, row.exhaustedPercentRanges)
+        }
+        val unlimited = credits.copy(unlimited = true)
+        assertEquals("82% · 41% left", glanceLegendRows(baseSummary(
+            rings = listOf(fablePair()), allowances = listOf(unlimited),
+        )).single().subtitle)
+    }
+
+    @Test
+    fun fableUnknownHalvesFallBackWithoutInventingZeroOrPairIdentity() {
+        val outer = glanceLegendRows(baseSummary(rings = listOf(fablePair(Double.NaN, 100.0)))).single()
+        assertEquals("Claude · Fable weekly", outer.title)
+        assertEquals("0% left", outer.subtitle)
+        assertEquals(RingFamily.CLAUDE_FABLE, outer.colorArgb)
+        assertNull(outer.secondaryArc)
+        val inner = glanceLegendRows(baseSummary(rings = listOf(fablePair(18.0, Double.NaN)))).single()
+        assertEquals("Claude plan · Weekly", inner.title)
+        assertEquals("82% left", inner.subtitle)
+        assertNull(inner.secondaryArc)
+        assertTrue(glanceLegendRows(baseSummary(rings = listOf(fablePair(Double.NaN, Double.NaN)))).isEmpty())
+        val pair = fablePair()
+        for (other in listOf(
+            pair.copy(id = "allowance.claude.plan-other"),
+            pair.copy(split = pair.split!!.copy(id = "allowance.claude.claude-seven-day-fable-other")),
+        )) {
+            assertEquals("Claude plan", glanceLegendRows(baseSummary(rings = listOf(other))).single().title)
+        }
+    }
+
+    private fun fablePair(innerUsed: Double = 18.0, outerUsed: Double = 59.0) = RingSummary(
+        "allowance.claude.plan", "Weekly", innerUsed, PulseStatus.OK,
+        split = RingHalf("allowance.claude.claude-seven-day-fable", "Fable weekly", outerUsed, PulseStatus.OK),
+    )
 
     private fun cursorPair(innerUsed: Double = 18.0, outerUsed: Double = 59.0) = RingSummary(
         "allowance.cursor.cursor-plan-models",

@@ -12,36 +12,64 @@
       <stop offset="100%" stop-color="#242A27"/>
     </radialGradient>
   </defs>
+  <g id="composition" transform="translate(225 225) scale(1.113861386138614) translate(-225 -225)">
   <rect width="450" height="450" fill="url(#lift)"/>
 
     <circle cx="225" cy="225" r="143.91" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
+    <defs>
+      <mask id="arc-225-225-143.91-20.205000000000002" maskUnits="userSpaceOnUse" x="0" y="0" width="450" height="450">
+        <circle cx="225" cy="225" r="143.91" fill="none" stroke="#ffffff"
+          stroke-width="20.205000000000002" stroke-linecap="butt"
+          stroke-dasharray="9.042131975562151 904.2131975562143"
+          stroke-dashoffset="-890.649999592871" transform="rotate(-90 225 225)" />
+        <ellipse cx="225" cy="81.09" rx="4.515122369015427" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(354.6 225 225)" />
+      <ellipse cx="225" cy="81.09" rx="4.515122369015427" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(358.2 225 225)" />
+      </mask>
+    </defs>
     <circle cx="225" cy="225" r="143.91" fill="none" stroke="#65D78A"
-      stroke-width="20.205000000000002" stroke-linecap="butt"
-      stroke-dasharray="18.08 904.21"
-      stroke-dashoffset="-886.13"
-      transform="rotate(-90 225 225)" />
+      stroke-width="20.205000000000002" mask="url(#arc-225-225-143.91-20.205000000000002)" />
     <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
+    <defs>
+      <mask id="arc-225-225-167.89499999999998-20.205000000000002" maskUnits="userSpaceOnUse" x="0" y="0" width="450" height="450">
+        <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#ffffff"
+          stroke-width="20.205000000000002" stroke-linecap="butt"
+          stroke-dasharray="707.6866240327523 1054.9153971489166"
+          stroke-dashoffset="-337.1262731161642" transform="rotate(-90 225 225)" />
+        <ellipse cx="225" cy="57.10500000000002" rx="10.102500000000001" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(115.04757504708846 225 225)" />
+      <ellipse cx="225" cy="57.10500000000002" rx="10.102500000000001" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(356.5524249529116 225 225)" />
+      </mask>
+    </defs>
     <circle cx="225" cy="225" r="167.89499999999998" fill="none" stroke="#E8915A"
-      stroke-width="20.205000000000002" stroke-linecap="round"
-      stroke-dasharray="707.69 1054.92"
-      stroke-dashoffset="-337.13"
-      transform="rotate(-90 225 225)" />
+      stroke-width="20.205000000000002" mask="url(#arc-225-225-167.89499999999998-20.205000000000002)" />
     <circle cx="225" cy="225" r="191.88" fill="none" stroke="#2E3632"
       stroke-width="20.205000000000002" />
+    <defs>
+      <mask id="arc-225-225-191.88-20.205000000000002" maskUnits="userSpaceOnUse" x="0" y="0" width="450" height="450">
+        <circle cx="225" cy="225" r="191.88" fill="none" stroke="#ffffff"
+          stroke-width="20.205000000000002" stroke-linecap="butt"
+          stroke-dasharray="1113.075540937122 1205.617596741619"
+          stroke-dashoffset="-82.43955580449722" transform="rotate(-90 225 225)" />
+        <ellipse cx="225" cy="33.120000000000005" rx="10.102500000000001" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(24.616628166202414 225 225)" />
+      <ellipse cx="225" cy="33.120000000000005" rx="10.102500000000001" ry="10.102500000000001"
+        fill="#ffffff" transform="rotate(356.9833718337977 225 225)" />
+      </mask>
+    </defs>
     <circle cx="225" cy="225" r="191.88" fill="none" stroke="#7E93B8"
-      stroke-width="20.205000000000002" stroke-linecap="round"
-      stroke-dasharray="1113.08 1205.62"
-      stroke-dashoffset="-82.44"
-      transform="rotate(-90 225 225)" />
+      stroke-width="20.205000000000002" mask="url(#arc-225-225-191.88-20.205000000000002)" />
 
-    <circle cx="173.0" cy="135.0" r="21.0" fill="#0B0E0C" />
+    <circle cx="173.0" cy="135.0" r="26.0" fill="#0B0E0C" />
 
     <defs>
       <linearGradient id="cellRing0" gradientUnits="userSpaceOnUse"
-        x1="183.130621" y1="152.533768"
-        x2="162.869379" y2="117.466232">
+        x1="185.632009" y1="156.863093"
+        x2="160.367991" y2="113.136907">
         <stop offset="0" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
         <stop offset="0.5" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
         <stop offset="0.625" stop-color="#F4FBF8" stop-opacity="0.5686274509803921" />
@@ -49,19 +77,33 @@
         <stop offset="0.875" stop-color="#F4FBF8" stop-opacity="0.13725490196078433" />
         <stop offset="1" stop-color="#F4FBF8" stop-opacity="0.0392156862745098" />
       </linearGradient>
+      <linearGradient id="cellBottom0" gradientUnits="userSpaceOnUse"
+        x1="173" y1="109.75"
+        x2="173" y2="160.25">
+        <stop offset="0" stop-color="white" stop-opacity="1" />
+        <stop offset="0.5" stop-color="white" stop-opacity="1" />
+        <stop offset="0.625" stop-color="white" stop-opacity="0.8549019607843137" />
+        <stop offset="0.75" stop-color="white" stop-opacity="0.5294117647058824" />
+        <stop offset="0.875" stop-color="white" stop-opacity="0.20784313725490197" />
+        <stop offset="1" stop-color="white" stop-opacity="0.058823529411764705" />
+      </linearGradient>
+      <mask id="cellBottomMask0" maskUnits="userSpaceOnUse"
+        x="147" y="109" width="52" height="52">
+        <rect x="147" y="109" width="52" height="52" fill="url(#cellBottom0)" />
+      </mask>
     </defs>
-    <circle cx="173.0" cy="135.0" r="20.25" fill="none"
+    <circle cx="173.0" cy="135.0" r="25.25" fill="none"
       stroke="url(#cellRing0)" stroke-width="1.50"
-      stroke-opacity="1" />
+      stroke-opacity="1" mask="url(#cellBottomMask0)" />
     <text x="173.0" y="135.0" text-anchor="middle" dominant-baseline="central"
-      font-family="Noto Sans, sans-serif" font-size="14.0"
+      font-family="Noto Sans, sans-serif" font-size="18.0"
       font-weight="700" fill="#F4FBF8" fill-opacity="1">Tue</text>
-    <circle cx="225.0" cy="121.0" r="21.0" fill="#0B0E0C" fill-opacity="0.92" />
+    <circle cx="225.0" cy="121.0" r="26.0" fill="#0B0E0C" fill-opacity="0.92" />
 
     <defs>
       <linearGradient id="cellRing1" gradientUnits="userSpaceOnUse"
-        x1="225" y1="141.25"
-        x2="225" y2="100.75">
+        x1="225" y1="146.25"
+        x2="225" y2="95.75">
         <stop offset="0" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
         <stop offset="0.5" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
         <stop offset="0.625" stop-color="#F4FBF8" stop-opacity="0.5686274509803921" />
@@ -70,18 +112,18 @@
         <stop offset="1" stop-color="#F4FBF8" stop-opacity="0.0392156862745098" />
       </linearGradient>
     </defs>
-    <circle cx="225.0" cy="121.0" r="20.25" fill="none"
+    <circle cx="225.0" cy="121.0" r="25.25" fill="none"
       stroke="url(#cellRing1)" stroke-width="1.50"
       stroke-opacity="1" />
     <text x="225.0" y="121.0" text-anchor="middle" dominant-baseline="central"
-      font-family="Noto Sans, sans-serif" font-size="14.0"
+      font-family="Noto Sans, sans-serif" font-size="18.0"
       font-weight="700" fill="#F4FBF8" fill-opacity="1">18°C</text>
-    <circle cx="277.0" cy="135.0" r="21.0" fill="#0B0E0C" fill-opacity="0.92" />
+    <circle cx="277.0" cy="135.0" r="26.0" fill="#0B0E0C" fill-opacity="0.92" />
 
     <defs>
       <linearGradient id="cellRing2" gradientUnits="userSpaceOnUse"
-        x1="266.869379" y1="152.533768"
-        x2="287.130621" y2="117.466232">
+        x1="264.367991" y1="156.863093"
+        x2="289.632009" y2="113.136907">
         <stop offset="0" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
         <stop offset="0.5" stop-color="#F4FBF8" stop-opacity="0.6666666666666666" />
         <stop offset="0.625" stop-color="#F4FBF8" stop-opacity="0.5686274509803921" />
@@ -89,50 +131,65 @@
         <stop offset="0.875" stop-color="#F4FBF8" stop-opacity="0.13725490196078433" />
         <stop offset="1" stop-color="#F4FBF8" stop-opacity="0.0392156862745098" />
       </linearGradient>
+      <linearGradient id="cellBottom2" gradientUnits="userSpaceOnUse"
+        x1="277" y1="109.75"
+        x2="277" y2="160.25">
+        <stop offset="0" stop-color="white" stop-opacity="1" />
+        <stop offset="0.5" stop-color="white" stop-opacity="1" />
+        <stop offset="0.625" stop-color="white" stop-opacity="0.8549019607843137" />
+        <stop offset="0.75" stop-color="white" stop-opacity="0.5294117647058824" />
+        <stop offset="0.875" stop-color="white" stop-opacity="0.20784313725490197" />
+        <stop offset="1" stop-color="white" stop-opacity="0.058823529411764705" />
+      </linearGradient>
+      <mask id="cellBottomMask2" maskUnits="userSpaceOnUse"
+        x="251" y="109" width="52" height="52">
+        <rect x="251" y="109" width="52" height="52" fill="url(#cellBottom2)" />
+      </mask>
     </defs>
-    <circle cx="277.0" cy="135.0" r="20.25" fill="none"
+    <circle cx="277.0" cy="135.0" r="25.25" fill="none"
       stroke="url(#cellRing2)" stroke-width="1.50"
-      stroke-opacity="1" />
+      stroke-opacity="1" mask="url(#cellBottomMask2)" />
     <text x="277.0" y="135.0" text-anchor="middle" dominant-baseline="central"
-      font-family="Noto Sans, sans-serif" font-size="14.0"
+      font-family="Noto Sans, sans-serif" font-size="18.0"
       font-weight="700" fill="#F4FBF8" fill-opacity="1">UV 7</text>
-    <text x="225" y="228.4" text-anchor="middle"
-      font-family="Noto Sans, sans-serif" font-size="69.8"
+    <text x="225" y="240.8" text-anchor="middle"
+      font-family="Noto Sans, sans-serif" font-size="86.0"
       font-weight="700" fill="#F4FBF8">10:08</text>
-    <rect x="181.0" y="283.0"
-      width="88.0" height="18.0"
+    <rect x="159.0" y="259.0"
+      width="132.0" height="26.0"
       rx="6.0" fill="#0B0E0C" fill-opacity="0.92" />
-    <rect x="181.0"
-      y="283.5"
+    <rect x="159.0"
+      y="263.5"
       width="4.5"
       height="17.0"
       rx="2.3" fill="#65D78A" />
-    <text x="226.0" y="292.0"
+    <text x="225.0" y="272.0"
       text-anchor="middle" dominant-baseline="central"
-      font-family="Noto Sans, sans-serif" font-size="12.0"
+      font-family="Noto Sans, sans-serif" font-size="20.0"
       font-weight="700" fill="#F4FBF8">2%</text>
-    <rect x="181.0" y="304.0"
-      width="88.0" height="18.0"
+    <rect x="159.0" y="286.0"
+      width="132.0" height="26.0"
       rx="6.0" fill="#0B0E0C" fill-opacity="0.92" />
-    <rect x="181.0"
-      y="304.5"
+    <rect x="159.0"
+      y="290.5"
       width="4.5"
       height="17.0"
       rx="2.3" fill="#E8915A" />
-    <text x="226.0" y="313.0"
+    <text x="225.0" y="299.0"
       text-anchor="middle" dominant-baseline="central"
-      font-family="Noto Sans, sans-serif" font-size="12.0"
+      font-family="Noto Sans, sans-serif" font-size="20.0"
       font-weight="700" fill="#F4FBF8">69%</text>
-    <rect x="181.0" y="325.0"
-      width="88.0" height="18.0"
+    <rect x="159.0" y="313.0"
+      width="132.0" height="26.0"
       rx="6.0" fill="#0B0E0C" fill-opacity="0.92" />
-    <rect x="181.0"
-      y="325.5"
+    <rect x="159.0"
+      y="317.5"
       width="4.5"
       height="17.0"
       rx="2.3" fill="#7E93B8" />
-    <text x="226.0" y="334.0"
+    <text x="225.0" y="326.0"
       text-anchor="middle" dominant-baseline="central"
-      font-family="Noto Sans, sans-serif" font-size="12.0"
+      font-family="Noto Sans, sans-serif" font-size="20.0"
       font-weight="700" fill="#F4FBF8">94%</text>
+  </g>
 </svg>

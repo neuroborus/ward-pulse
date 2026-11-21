@@ -5,16 +5,16 @@ description: WardPulse delegation contract — who does the work and who checks 
 
 # Delegation — WardPulse
 
-Neither the coordinating session nor a standalone subagent implements code outside Agent
-Runner. Design is delegated to a subagent; the coordinator verifies the result independently.
-This is the owner's standing instruction, clarified 2026-10-13.
+**Homogeneity is mandatory across providers and surfaces:** use shared semantics/patterns and reuse existing components; justify provider/platform differences with concrete data or platform capabilities and compare matched states side by side before acceptance.
+Neither the coordinating session nor a standalone subagent implements code outside Agent Runner. Design is delegated to a subagent; the coordinator verifies the result independently.
+These are the owner's standing instructions: authorship clarified 2026-10-13; homogeneity reaffirmed 2026-11-03.
 
 ## Who does what
 
 | Work | Owner | Coordinator's job |
 | --- | --- | --- |
 | Design: locked baselines, visual language, mocks, review art | A subagent | Verify to zero findings |
-| Code: source, tests, schemas, build/tool scripts, generator source | Agent Runner execution and independent review steps | Verify to zero findings |
+| Code: source, tests, schemas, build/tool scripts, generator source | Agent Runner execution under the [owner-selected mode](references/owner-selected-mode.md) | Verify to zero findings |
 | Documentation and workflow prose | A delegated subagent | Verify to zero findings |
 | Measurement, device capture, reading sources, running checks | Coordinator | — |
 | Deciding what to build | Owner | Put the choice in front of them |
@@ -25,9 +25,12 @@ helper remains code even when placed in Markdown or `LOCAL_ARTIFACTS/`.
 
 ## Code goes through the runner
 
+Before scoping a task or plan, apply [Focused Commit Boundaries](../finalization/references/commit-boundaries.md).
+It owns cohesive commit/integration boundaries; read [Parallel work](references/parallel-work.md) before overlapping delegates, guarded lifecycles or shared resources.
+
 Before choosing or operating a Runner route, read the complete
 [Runner operation contract](references/runner-operation.md). It preserves actual execution
-and independent review, default pipelines, commit boundaries, explicit Native/HOST gates,
+under the [owner-selected mode](references/owner-selected-mode.md), default pipelines, commit boundaries, explicit Native/HOST gates,
 frozen configuration, backend-upgrade recovery and command-alias ownership.
 Outside Runner supply requirements, measurements, findings and acceptance criteria, never
 a prewritten implementation patch or a standalone code fallback.
@@ -57,6 +60,9 @@ return design findings to the same design subagent so it keeps its context. Afte
 fix, repeat the whole final pass, not only the previously failing part. Verify independently:
 recompute the arithmetic, re-measure on the device, check every cross-reference and every claim
 against the actual source. An author's own report is not independent evidence.
+
+For every work request/correction to an existing collaboration agent, use `followup_task` by default, even when already running; reserve `send_message` for context/informational updates.
+Queued messages do not restart completed/idle agents. Verify actual running state or a fresh work reply before waiting for results; delivery acknowledgement alone is not started work.
 
 Report to the owner what checked out as well as what did not. A finding list with no account
 of what was verified tells them nothing about how hard anyone looked.

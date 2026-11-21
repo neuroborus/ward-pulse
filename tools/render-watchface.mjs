@@ -14,25 +14,29 @@
  * them needs ImageMagick, as `just export-icons` already does.
  *
  * Usage: node tools/render-watchface.mjs [--check]
- *   --check  compare the XML against the file on disk and exit non-zero on drift
+ *   --check  compare XML and verify effective-scale texture dimensions without writes
+ *   --n1-pair-diagnostics-output PATH  write only a debug build-directory XML overlay
  *
- * `--check` covers the XML only: the images are what a rasterizer made of it, and
- * comparing bytes would fail on a different ImageMagick rather than on a real
- * drift. A missing one still stops the build — the face names each by resource.
+ * `--check` does not compare raster pixels: their bytes depend on ImageMagick.
+ * Sampling dimensions are deterministic and checked; missing images also fail.
  */
 
-import { execFileSync } from 'node:child_process'
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 
 import { emit } from './design-output.mjs'
 
+const runFile = promisify(execFile)
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const target = join(root, 'apps/watchface_wff/src/main/res/raw/watchface.xml')
-// `-nodpi`, because the images are already sized to the canvas: the density
-// buckets would rescale them on load and soften what was baked to be exact.
+// `-nodpi` keeps Android density buckets from rescaling the deliberate samples.
+// Reference image boxes are enlarged only by their owning composition carrier.
 const drawables = join(root, 'apps/watchface_wff/src/main/res/drawable-nodpi')
 // The same face the review generators measure with, and named as a file for the
 // same reason: the rasterizer resolves a family through fontconfig, which
@@ -49,9 +53,17 @@ const FONT_FILE = '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf'
  */
 const FACE = { size: 450, center: 225 }
 
+// Reference geometry stays in its accepted 202-radius language. Only these
+// documented carriers enlarge it; nested fonts, images, clips and strokes do not.
+const COMPOSITION_SCALE = 225 / 202
+const SCALE_ATTRIBUTES = `scaleX="${COMPOSITION_SCALE}" scaleY="${COMPOSITION_SCALE}" pivotX="0.5" pivotY="0.5"`
+const PAIRED_SOURCE_ALLOWANCE = 1
+const PAIRED_MAIN_COVERAGE = 1
+
 /**
  * Both ends of the melt: usage opens clockwise from 12, remaining ends at 12.
- * `359.9` rather than a closed circle — at 360 the ROUND tip collapses.
+ * `359.9` retains the historical watch workaround: a literal 360 ROUND sweep
+ * collapsed to a tip. Exact full uses the same sweep without either cap inset.
  */
 const SWEEP = { start: 0, end: 359.9 }
 
@@ -109,24 +121,29 @@ const RINGS = [
  */
 const BAND_THICKNESS = 20
 
-/**
- * An arc inside a slot takes **twice its centre line** in `width`, so a band
- * whose outer edge is `diameter / 2` is drawn one half-thickness further in.
- */
-function bandCentre(diameter) {
-  return diameter - BAND_THICKNESS
+/** MAX100 never asserts a resolved count: it always uses the legacy positions. */
+const LAYOUTS = [
+  { name: 'Legacy', count: 3, max: 100, thickness: 20 },
+  ...[44, 32, 20].map((thickness, index) => ({
+    name: `N${index + 1}`, count: index + 1, max: 100 * 2 ** (index + 1), thickness,
+  })),
+]
+
+function bandGeometry(layout, index) {
+  const { thickness } = layout
+  const diameter = layout.count === 3
+    ? RINGS[index].diameter : 404 - 2 * index * (thickness + 4)
+  return {
+    diameter, thickness, full: diameter - thickness,
+    inner: diameter - 1.5 * thickness, outer: diameter - thickness / 2,
+    half: thickness / 2,
+  }
 }
 
-/**
- * Halves of a shared band, measured on the watch 2026-08-13
- * (`WATCH_RING_DESIGN.md`, Ring geometry): centre lines at `outer - 5` and
- * `outer - 15`, both at thickness 10, and inside a slot `width` is **twice the
- * centre line**. A band's `diameter` here is twice its outer edge, so the two
- * halves are `diameter - 10` and `diameter - 30`.
- */
-const HALF_THICKNESS = 10
-const OUTER_HALF_INSET = 10
-const INNER_HALF_INSET = 30
+/** Equality and bounded comparisons also reject non-finite fields (including NaN). */
+function rangeGuard(max) {
+  return `[COMPLICATION.RANGED_VALUE_MIN] == 0 && [COMPLICATION.RANGED_VALUE_MAX] == ${max} && [COMPLICATION.RANGED_VALUE_VALUE] >= 0 && [COMPLICATION.RANGED_VALUE_VALUE] <= ${max}`
+}
 
 /**
  * Two outer-half slots dispatch by outside-counted band index in TITLE.
@@ -219,8 +236,8 @@ const TEXTURE_FONT_SIZE = Number((TEXTURE_CAP / TEXTURE.capRatio).toFixed(1))
 /**
  * The baseline, as an inset from the ring's outer edge: an image is that ring's
  * own square, so the band runs along its rim and a baseline half a cap below the
- * band's centreline leaves the cap centred on it. One number for every ring —
- * what changes between them is the square, not where the type sits in the band.
+ * band's centreline leaves the cap centred on it. This is the historical N3
+ * baseline; wider bands derive their inset from the same fixed cap height.
  */
 const TEXTURE_BASELINE = Number(((TEXTURE.band + TEXTURE_CAP) / 2).toFixed(2))
 
@@ -244,6 +261,12 @@ const TOKENS = [
   { period: 'Month', title: 'M', repeats: [12, 10, 9] },
 ]
 
+const ADAPTIVE_REPEATS = {
+  // Radius-180 raster fits, including 360/384 downscales (2026-10-30 design revision).
+  1: { D: [11], '7D': [7], M: [9] },
+  2: { D: [15, 11], '7D': [9, 6], M: [12, 9] },
+}
+
 /**
  * Rings the type can label — all of them: the baseline caps the face at three
  * bands, and the counts above are fitted per band. A shared band carries no
@@ -258,32 +281,40 @@ if (TOKENS.some(({ repeats }) => repeats.length !== TEXTURE_RINGS)) {
 }
 
 /**
- * Strips, one per ring, stacked below the wordmark. Measured off the face, not
- * sized to content: 88x18 boxes stepping 21 from y=283, wide enough for
- * "100% · 10.0M" and kept inside the inner ring aperture.
+ * Strips, one per ring, stacked below the clock. Fixed in the face's units, not
+ * sized to content: 132x26 boxes stepping 27 from y=259, inside the unchanged
+ * inner ring aperture. Literal WFF2 font branches fit the bounded label grammar.
  */
 const STRIP = {
-  x: 181,
-  top: 283,
-  pitch: 21,
-  width: 88,
-  height: 18,
+  x: 159,
+  top: 259,
+  pitch: 27,
+  width: 132,
+  height: 26,
   radius: 6,
   textInset: 6,
-  // Its own measured value, not `width - 2 * textInset`: the label box is
-  // pulled off the accent bar on the left and runs closer to the right edge.
-  textWidth: 78,
-  fontSize: 12,
+  textWidth: 120,
+  fontSize: 20,
 }
 
 /**
- * The wordmark, centred between the clock and the strip stack. Both boxes are
+ * The wordmark, centred below the middle cell and above the clock. Both boxes are
  * square because the asset is — WFF stretches the image to fill its box, and
  * the earlier 66x55 / 54x45 boxes flattened the mark by 17%. The PNG carries
- * its own padding, so the ink lands at 243-268: clear of the clock, which ends
- * at 229, and of the strips, which start at 283.
+ * its own padding: active ink spans y=156.333333-181, ambient 158.9375-179.75.
+ * Native clock ink and resampling still need matched device measurements.
  */
-const WORDMARK = { centerX: FACE.center, centerY: 260, size: 66, ambientSize: 54 }
+const WORDMARK = { centerX: FACE.center, centerY: 173, size: 64, ambientSize: 54 }
+
+/**
+ * Both modes share the approved active clock's reference size and placement;
+ * ambient keeps Thin weight. Matching boxes do not establish optical alignment:
+ * native ink bounds and clearances still require matched device measurements.
+ */
+const CLOCK = {
+  active: { y: 166, height: 90, fontSize: 86 },
+  ambient: { y: 166, height: 90, fontSize: 86 },
+}
 
 /**
  * Which row of the stack a ring's own slot paints, counted from the top.
@@ -291,7 +322,7 @@ const WORDMARK = { centerX: FACE.center, centerY: 260, size: 66, ambientSize: 54
  * The stack anchors to its **bottom** row, so the outermost ring — which binds
  * the loosest payload when several are active — takes the lowest row, and the
  * innermost takes the highest. Arc slots fill from the outside, so the occupied
- * rows are always contiguous and always end at y=325, whatever the ring count
+ * rows are always contiguous and always end at y=313, whatever the ring count
  * (`WATCH_RING_DESIGN.md`, Upper cells, rule 3). A top-anchored stack could not
  * be folded at all: the row a slot paints would move with the ring count, and
  * one slot has one height.
@@ -305,35 +336,24 @@ const CREDITS_RING_INDEX = 0
 
 /**
  * The three cells above the clock retain the original curved row. Since
- * 2026-10-13 the whole row sits three units lower, so it is no longer exactly
- * concentric with the face. Origins are the integers `WATCH_RING_DESIGN.md`
- * rule 1 locks; the middle cell remains fourteen units above the outer two.
+ * 2026-10-27 the wells are 52 units. Origins are the integers
+ * `WATCH_RING_DESIGN.md` rule 1 locks; the middle remains fourteen units raised.
  */
 const CELL = {
-  size: 42,
-  /** The 18-unit line box the strips use, centred by `(42 - 18) / 2`. */
-  textY: 12,
+  size: 52,
+  /** Both the 46x24 text box and the 24-unit icon centre on the integer grid. */
+  textY: 14,
+  textX: 3,
+  textWidth: 46,
+  textHeight: 24,
+  fontSize: 18,
+  iconSize: 24,
   /**
-   * Inset to where the well still admits that box's full height: a circle of
-   * radius 21 is `sqrt(441 - 81)` = 18.97 wide at 9 units off its midline. The
-   * exact inset is 2.5 and the grid is integral, so the box sits half a unit
-   * left of the cell's own centre.
+   * The border that says a cell is holding something. Its 1.5-unit stroke,
+   * retained from 2026-10-13, now follows a 50.5 path: radius 24.5 to 26.0,
+   * inscribed in the enlarged well.
    */
-  textX: 2,
-  textWidth: 37,
-  fontSize: 14,
-  /**
-   * Half the diameter, so an icon leaves the rim of a round recess clear. It
-   * cannot sit exactly centred for the same reason the line box cannot: 21 in
-   * 42 leaves 10.5 a side and the grid is integral.
-   */
-  iconSize: 21,
-  /**
-   * The border that says a cell is holding something. Since 2026-10-13 a
-   * stroke of 1.5 on a path of 40.5 runs from radius 19.5 to 21.0. Widening
-   * inward keeps it inscribed in the well and leaves the band clearance alone.
-   */
-  ringDiameter: 40.5,
+  ringDiameter: 50.5,
   ringThickness: 1.5,
   /**
    * The ring dims in ambient with everything else a cell carries. Rule 12 keeps
@@ -346,12 +366,20 @@ const CELL = {
 }
 
 const CELLS = [
-  { slotId: 201, x: 152, y: 114, label: 'cell1', provider: 'DAY_OF_WEEK', type: 'SHORT_TEXT' },
-  { slotId: 202, x: 204, y: 100, label: 'cell2', provider: 'EMPTY', type: 'EMPTY' },
-  { slotId: 203, x: 256, y: 114, label: 'cell3', provider: 'EMPTY', type: 'EMPTY' },
+  { slotId: 201, x: 147, y: 109, label: 'cell1', provider: 'DAY_OF_WEEK', type: 'SHORT_TEXT' },
+  { slotId: 202, x: 199, y: 95, label: 'cell2', provider: 'EMPTY', type: 'EMPTY' },
+  { slotId: 203, x: 251, y: 109, label: 'cell3', provider: 'EMPTY', type: 'EMPTY' },
 ]
 
-/** Smoothstep on the outward half, with the watermark's six-percent floor. */
+// Local carriers retain the global mapping; CELLS still owns the reference
+// coordinates used by the chrome and the occupied cells' radial fades.
+const CELL_CARRIERS = {
+  201: { x: 141, y: 99, pivotX: 291 / 598, pivotY: 162 / 299 },
+  202: { x: 199, y: 83, pivotX: 1 / 2, pivotY: 283 / 598 },
+  203: { x: 257, y: 99, pivotX: 307 / 598, pivotY: 162 / 299 },
+}
+
+/** Outward-half dissolve, also normalized for the lateral bottom masks. */
 const CELL_RING_FADE = [
   { position: 0, alpha: 0xaa },
   { position: 0.5, alpha: 0xaa },
@@ -369,10 +397,11 @@ const CELL_RING_FADE = [
  *
  * Both expressions yield a bare number, so the template is what makes the
  * reading legible — `51` alone says neither degrees nor anything else. The
- * temperature takes its device-provided scale: TEMPERATURE_UNIT is an integer
- * enum, 1 for Celsius and 2 for Fahrenheit, so a condition selects the glyph.
- * An unsupported value keeps just the degree sign instead of guessing a scale
- * (`WATCH_RING_DESIGN.md`, Upper cells, revision 2026-10-13).
+ * temperature defaults to its device-provided scale: TEMPERATURE_UNIT is an
+ * integer enum, 1 for Celsius and 2 for Fahrenheit. The face-local editor
+ * choice converts only a known opposite scale, rounding the original integer
+ * to whole degrees. Unsupported units keep just the degree sign without
+ * conversion (`WATCH_RING_DESIGN.md`, Upper cells, revision 2026-11-01).
  *
  * Centre the complete reading, including its scale, just as the UV name is
  * centred with its number. The former two-unit degree-only correction would
@@ -385,10 +414,13 @@ const CELL_CHROME = [
   { template: 'UV %s', expression: '[WEATHER.UV_INDEX]' },
 ]
 
+const TEMPERATURE_CONFIGURATION = 'temperatureUnit'
+
 /** Closed vocabulary shared with WatchComplicationText.splitPoolToken. */
 const SPLIT_POOLS = [
   { token: 'cursor-other', color: '#67E8D4' },
   { token: 'spark', color: '#186020' },
+  { token: 'fable', color: '#FF603D' },
 ]
 
 /**
@@ -414,6 +446,7 @@ const SPLIT_TITLES = SPLIT_BASE_TITLES.flatMap((base) => [
   base,
   ...ZERO_STATES.map((state) => `${base}${TOKEN_SEPARATOR}${state}`),
 ])
+const ORDINARY_TITLES = ['', ZERO_TOKEN, ...TOKENS.map(({ title }) => title)]
 
 /** Every slot names a service in the Wear app; nothing else may fill them. */
 function provider(service) {
@@ -426,8 +459,8 @@ const HEADER = `<?xml version="1.0" encoding="utf-8"?>
   (docs/product/WATCH_RING_DESIGN.md, baseline 2026-07-25).
 
   Visual target: apps/wear_android/design/round-*-plan*.svg
-  — radial lift background, 40-unit ring stroke (WFF paints about half of it), equal-width
-  sunk strips (88, rx=6) sized for "100% · 10.0M". Strip slots are RANGED_VALUE so accents
+  — radial lift background, 20-unit ring stroke, equal-width sunk strips (132x26,
+  rx=6) with bounded 20/18/16-unit labels. Ring slots are RANGED_VALUE so accents
   use the same ColorRamp as arcs ([COMPLICATION.RANGED_VALUE_COLORS]).
 
   Ring type: the budget period from COMPLICATION.TITLE (D / 7D / M) repeated around the
@@ -442,30 +475,32 @@ const HEADER = `<?xml version="1.0" encoding="utf-8"?>
   Ring TITLE = the band's own token, suffixed with the outer-pool token when the
   band is shared: one slot, two jobs, one string to say both in.
   Remaining melt: Transform startAngle (1 - value/max)*359.9, endAngle fixed 359.9
-  so usage opens clockwise from 12 and remaining ends at 12.
+  so usage opens clockwise from 12 and remaining ends at 12. Exact full alone
+  has no cap insets: one ROUND path from 0 to 359.9, retaining the live ColorRamp.
 -->`
 
 /** Radial lift, brighter above centre so the stack reads as sunk into it. */
-function lift() {
-  return `        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="lift">
-            <Ellipse x="0" y="0" width="${FACE.size}" height="${FACE.size}">
-                <Fill color="#ff101412">
-                    <RadialGradient
-                        centerX="${FACE.center}"
-                        centerY="216"
-                        radius="279"
-                        colors="#ff18201C #ff101412 #ff0A0D0B"
-                        positions="0.0 0.55 1.0" />
-                </Fill>
-            </Ellipse>
-        </PartDraw>`
+function lift({ pad = ' '.repeat(8), name = 'lift', renderMode = null } = {}) {
+  const mode = renderMode === null ? '' : ` renderMode="${renderMode}"`
+  return `${pad}<PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}"${mode}>
+${pad}    <Ellipse x="0" y="0" width="${FACE.size}" height="${FACE.size}">
+${pad}        <Fill color="#ff101412">
+${pad}            <RadialGradient
+${pad}                centerX="${FACE.center}"
+${pad}                centerY="216"
+${pad}                radius="279"
+${pad}                colors="#ff18201C #ff101412 #ff0A0D0B"
+${pad}                positions="0.0 0.55 1.0" />
+${pad}        </Fill>
+${pad}    </Ellipse>
+${pad}</PartDraw>`
 }
 
 function cellChromeComment() {
   const rows = CELLS.map(({ x, y }) => `${x},${y}`).join('  ')
   return `        <!-- What lies under the cells, declared ahead of every slot so a filled
              cell's own opaque well covers it: ${rows} at ${CELL.size} units, centres on a
-             curved row translated three units below its original concentric layout.
+             curved row with the middle cell raised fourteen units.
              The middle and right cells
              carry the default weather, which costs no complication slot. -->`
 }
@@ -483,11 +518,11 @@ function cellComment() {
  * complication, whose text arrives ready to read, and carries the mark or the
  * name for a weather reading, which arrives as a bare number (`CELL_CHROME`).
  */
-function cellText(template, parameter, pad) {
-  return `${pad}<PartText x="${CELL.textX}" y="${CELL.textY}" width="${CELL.textWidth}" height="18" alpha="255">
+function cellText(template, parameter, pad, fontSize = CELL.fontSize) {
+  return `${pad}<PartText x="${CELL.textX}" y="${CELL.textY}" width="${CELL.textWidth}" height="${CELL.textHeight}" alpha="255">
 ${pad}    <Variant mode="AMBIENT" target="alpha" value="140" />
 ${pad}    <Text align="CENTER" ellipsis="TRUE">
-${pad}        <Font family="SYNC_TO_DEVICE" size="${CELL.fontSize}" weight="BOLD" color="${COLOR.text}">
+${pad}        <Font family="SYNC_TO_DEVICE" size="${fontSize}" weight="BOLD" color="${COLOR.text}">
 ${pad}            <Template>${template}
 ${pad}                <Parameter expression="${parameter}" />
 ${pad}            </Template>
@@ -496,24 +531,58 @@ ${pad}    </Text>
 ${pad}</PartText>`
 }
 
-/** Select the scale from the weather source, whose unit is an integer enum. */
+/** Convert only known source units; Auto and matching units keep the original integer. */
 function cellReadingText({ template, expression, unit }, pad) {
+  const reading = (template, pad, value = expression) => cellSizedText(
+    template, value, pad,
+    unit ? `${value} < 0 || ${value} >= 100` : `${value} >= 10`,
+    unit ? `${value} <= -100` : 'false',
+  )
   if (!unit) {
-    return cellText(template, expression, pad)
+    return reading(template, pad)
   }
+  const selection = `[CONFIGURATION.${TEMPERATURE_CONFIGURATION}]`
+  // Condition chooses the first match, so conversions precede the source-unit branches.
   return `${pad}<Condition>
 ${pad}    <Expressions>
+${pad}        <Expression name="convertToCelsius"><![CDATA[${selection} == "celsius" && ${unit} == 2]]></Expression>
+${pad}        <Expression name="convertToFahrenheit"><![CDATA[${selection} == "fahrenheit" && ${unit} == 1]]></Expression>
 ${pad}        <Expression name="isCelsius"><![CDATA[${unit} == 1]]></Expression>
 ${pad}        <Expression name="isFahrenheit"><![CDATA[${unit} == 2]]></Expression>
 ${pad}    </Expressions>
+${pad}    <Compare expression="convertToCelsius">
+${reading('%s°C', `${pad}        `, `round((${expression} - 32) * 5 / 9)`)}
+${pad}    </Compare>
+${pad}    <Compare expression="convertToFahrenheit">
+${reading('%s°F', `${pad}        `, `round(${expression} * 9 / 5 + 32)`)}
+${pad}    </Compare>
 ${pad}    <Compare expression="isCelsius">
-${cellText('%s°C', expression, `${pad}        `)}
+${reading('%s°C', `${pad}        `)}
 ${pad}    </Compare>
 ${pad}    <Compare expression="isFahrenheit">
-${cellText('%s°F', expression, `${pad}        `)}
+${reading('%s°F', `${pad}        `)}
 ${pad}    </Compare>
 ${pad}    <Default>
-${cellText(template, expression, `${pad}        `)}
+${reading(template, `${pad}        `)}
+${pad}    </Default>
+${pad}</Condition>`
+}
+
+/** Finite WFF2 sizes; the narrowest branch takes precedence without changing data. */
+function cellSizedText(template, parameter, pad, medium, small) {
+  return `${pad}<Condition>
+${pad}    <Expressions>
+${pad}        <Expression name="smallText"><![CDATA[${small}]]></Expression>
+${pad}        <Expression name="mediumText"><![CDATA[!(${small}) && (${medium})]]></Expression>
+${pad}    </Expressions>
+${pad}    <Compare expression="smallText">
+${cellText(template, parameter, `${pad}        `, 12)}
+${pad}    </Compare>
+${pad}    <Compare expression="mediumText">
+${cellText(template, parameter, `${pad}        `, 14)}
+${pad}    </Compare>
+${pad}    <Default>
+${cellText(template, parameter, `${pad}        `)}
 ${pad}    </Default>
 ${pad}</Condition>`
 }
@@ -533,12 +602,10 @@ ${pad}</PartDraw>`
  * cell is a dark disc on a dark field and only the glyphs read, so the cell
  * itself goes unseen. An empty cell does not wear one: its recess already says
  * what it is, and the two together make the language exact — ring means
- * occupied, recess means free. Its outward half dissolves along the radial
- * vector from the face centre through the cell's actual integer centre: the
- * shortest path to the nearest band's circular boundary, independent of its
- * current value or end angle.
+ * occupied, recess means free. Every border retains its radial outward fade;
+ * only lateral borders multiply it by an additional vertical bottom fade.
  */
-function cellRing({ x, y }, pad) {
+function cellRing({ x, y, name }, pad) {
   const centre = CELL.size / 2
   const radius = CELL.ringDiameter / 2
   const vx = x + centre - FACE.center
@@ -547,8 +614,6 @@ function cellRing({ x, y }, pad) {
   if ([centre, radius, CELL.ringThickness, distance].some((value) => !Number.isFinite(value) || value <= 0)) {
     throw new Error('Cell border geometry requires finite positive size, radius, stroke and distance from the face centre')
   }
-  const dx = (radius * vx) / distance
-  const dy = (radius * vy) / distance
   const coordinate = (value) => {
     if (!Number.isFinite(value)) {
       throw new Error('Cell border gradient coordinates must be finite')
@@ -559,8 +624,12 @@ function cellRing({ x, y }, pad) {
     .map(({ alpha }) => `#${alpha.toString(16).padStart(2, '0')}${COLOR.cellRing.slice(3)}`)
     .join(' ')
   const positions = CELL_RING_FADE.map(({ position }) => position).join(' ')
-  return `${pad}<PartDraw x="0" y="0" width="${CELL.size}" height="${CELL.size}" alpha="255">
-${pad}    <Variant mode="AMBIENT" target="alpha" value="${CELL.ringAmbientAlpha}" />
+  // WFF gradient colours encode alpha on the eight-bit grid. Normalize before
+  // encoding so the mask's upper half is opaque, preserving outward lighting.
+  const maskColors = CELL_RING_FADE
+    .map(({ alpha }) => `#${Math.round(alpha * 255 / 0xaa).toString(16).padStart(2, '0')}ffffff`)
+    .join(' ')
+  const border = (pad, ambient = '') => `${pad}<PartDraw x="0" y="0" width="${CELL.size}" height="${CELL.size}" alpha="255">${ambient}
 ${pad}    <Arc
 ${pad}        centerX="${centre}"
 ${pad}        centerY="${centre}"
@@ -570,15 +639,37 @@ ${pad}        startAngle="${SWEEP.start}"
 ${pad}        endAngle="${SWEEP.end}">
 ${pad}        <Stroke thickness="${CELL.ringThickness}" color="${COLOR.text}" cap="BUTT">
 ${pad}            <LinearGradient
-${pad}                startX="${coordinate(centre - dx)}"
-${pad}                startY="${coordinate(centre - dy)}"
-${pad}                endX="${coordinate(centre + dx)}"
-${pad}                endY="${coordinate(centre + dy)}"
+${pad}                startX="${coordinate(centre - radius * vx / distance)}"
+${pad}                startY="${coordinate(centre - radius * vy / distance)}"
+${pad}                endX="${coordinate(centre + radius * vx / distance)}"
+${pad}                endY="${coordinate(centre + radius * vy / distance)}"
 ${pad}                colors="${colors}"
 ${pad}                positions="${positions}" />
 ${pad}        </Stroke>
 ${pad}    </Arc>
 ${pad}</PartDraw>`
+  if (vx === 0) {
+    return border(pad, `\n${pad}    <Variant mode="AMBIENT" target="alpha" value="${CELL.ringAmbientAlpha}" />`)
+  }
+  // MASK affects only its parent group. The well and content remain siblings;
+  // ambient dims the composed border once, outside the source and mask.
+  return `${pad}<Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${name}" alpha="255">
+${pad}    <Variant mode="AMBIENT" target="alpha" value="${CELL.ringAmbientAlpha}" />
+${border(pad + ' '.repeat(4))}
+${pad}    <PartDraw x="0" y="0" width="${CELL.size}" height="${CELL.size}" renderMode="MASK">
+${pad}        <Rectangle x="0" y="0" width="${CELL.size}" height="${CELL.size}">
+${pad}            <Fill color="#ffffffff">
+${pad}                <LinearGradient
+${pad}                    startX="${centre}"
+${pad}                    startY="${coordinate(centre - radius)}"
+${pad}                    endX="${centre}"
+${pad}                    endY="${coordinate(centre + radius)}"
+${pad}                    colors="${maskColors}"
+${pad}                    positions="${positions}" />
+${pad}            </Fill>
+${pad}        </Rectangle>
+${pad}    </PartDraw>
+${pad}</Group>`
 }
 
 /**
@@ -623,7 +714,7 @@ function cellChrome({ x, y, label }, index) {
                 <Compare expression="hasWeather">
                     <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}Reading">
 ${cellWellFlat(COLOR.strip, ' '.repeat(24))}
-${cellRing({ x, y }, ' '.repeat(24))}
+${cellRing({ x, y, name: `${label}ReadingBorder` }, ' '.repeat(24))}
 ${cellReadingText(chrome, ' '.repeat(24))}
                     </Group>
                 </Compare>
@@ -651,39 +742,54 @@ ${body}
  *
  * The well inside the slot is the occluder, and it is opaque for that reason.
  * It carries no ambient variant: switching it off would let the chrome back out
- * from under the complication, with two values in the same 42 units.
+ * from under the complication, with two values in the same 52 units.
  */
 function cellSlot({ slotId, x, y, label, provider: systemProvider, type }) {
+  const carrier = CELL_CARRIERS[slotId]
   const pad = ' '.repeat(20)
-  const well = `${cellWellFlat(COLOR.cellWell, pad)}
-${cellRing({ x, y }, pad)}`
-  const body = (parameter) => `            <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}">
-${well}
-${cellText('%s', parameter, pad)}
+  const well = (name) => `${cellWellFlat(COLOR.cellWell, pad)}
+${cellRing({ x, y, name }, pad)}`
+  const parameter = '[COMPLICATION.TEXT]'
+  const providerText = (pad) => cellSizedText('%s', parameter, pad,
+    `textLength(${parameter}) >= 5`, `textLength(${parameter}) >= 7`)
+  const ranged = `${pad}<Condition>
+${pad}    <Expressions>
+${pad}        <Expression name="hasText"><![CDATA[textLength(${parameter}) > 0]]></Expression>
+${pad}    </Expressions>
+${pad}    <Compare expression="hasText">
+${providerText(`${pad}        `)}
+${pad}    </Compare>
+${pad}    <Default>
+${cellText('%s', '[COMPLICATION.RANGED_VALUE_VALUE]', `${pad}        `)}
+${pad}    </Default>
+${pad}</Condition>`
+  const body = (reading, name) => `            <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}">
+${well(name)}
+${reading}
             </Group>`
-  // 21 in 42 leaves 10.5 a side and the grid is integral, so the icon sits half
-  // a unit in from centre — the same rounding, in the same direction, that
-  // rule 7 records for the line box.
-  const inset = Math.floor((CELL.size - CELL.iconSize) / 2)
-  // The tint goes on a group of its own, not on the slot: tinting the slot
-  // would take the well with it. It is the text colour rather than a family
-  // colour — on this face a family colour means *this ring's provider*, and a
-  // cell is not a ring — so an icon reads as face text rather than as a
-  // foreign mark.
+  const inset = (CELL.size - CELL.iconSize) / 2
+  // The live icon's alpha masks a face-coloured source inside its own group.
+  // Keep the well and border outside, and dim the composed icon only once.
   const icon = `            <Group x="0" y="0" width="${CELL.size}" height="${CELL.size}" name="${label}Icon">
-${well}
-                <Group x="${inset}" y="${inset}" width="${CELL.iconSize}" height="${CELL.iconSize}" name="${label}Tint" tintColor="${COLOR.text}">
-                    <PartImage x="0" y="0" width="${CELL.iconSize}" height="${CELL.iconSize}" alpha="255">
-                        <Variant mode="AMBIENT" target="alpha" value="140" />
+${well(`${label}IconBorder`)}
+                <Group x="${inset}" y="${inset}" width="${CELL.iconSize}" height="${CELL.iconSize}" name="${label}Tint" alpha="255">
+                    <Variant mode="AMBIENT" target="alpha" value="140" />
+                    <PartDraw x="0" y="0" width="${CELL.iconSize}" height="${CELL.iconSize}" alpha="255" renderMode="SOURCE">
+                        <Rectangle x="0" y="0" width="${CELL.iconSize}" height="${CELL.iconSize}">
+                            <Fill color="${COLOR.text}" />
+                        </Rectangle>
+                    </PartDraw>
+                    <PartImage x="0" y="0" width="${CELL.iconSize}" height="${CELL.iconSize}" alpha="255" renderMode="MASK">
                         <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
                     </PartImage>
                 </Group>
             </Group>`
   return `        <ComplicationSlot
-            x="${x}"
-            y="${y}"
+            x="${carrier.x}"
+            y="${carrier.y}"
             width="${CELL.size}"
             height="${CELL.size}"
+            scaleX="${COMPOSITION_SCALE}" scaleY="${COMPOSITION_SCALE}" pivotX="${carrier.pivotX}" pivotY="${carrier.pivotY}"
             slotId="${slotId}"
             displayName="@string/${label}_complication"
             supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE EMPTY"
@@ -693,10 +799,10 @@ ${well}
                 defaultSystemProviderType="${type}" />
             <BoundingBox x="0" y="0" width="${CELL.size}" height="${CELL.size}" />
             <Complication type="SHORT_TEXT">
-${body('[COMPLICATION.TEXT]')}
+${body(providerText(pad), `${label}TextBorder`)}
             </Complication>
             <Complication type="RANGED_VALUE">
-${body('[COMPLICATION.TEXT]')}
+${body(ranged, `${label}RangedBorder`)}
             </Complication>
             <Complication type="MONOCHROMATIC_IMAGE">
 ${icon}
@@ -706,8 +812,9 @@ ${icon}
 }
 
 /** The drawable a ring's period is baked into, and the name WFF resolves it by. */
-function textureResource(index, period) {
-  return `ring${index + 1}_type_${period.toLowerCase()}`
+function textureResource(index, period, count = 3) {
+  const prefix = count === 3 ? 'ring' : `ring_n${count}_`
+  return `${prefix}${index + 1}_type_${period.toLowerCase()}`
 }
 
 /**
@@ -715,8 +822,12 @@ function textureResource(index, period) {
  * by one, each rotated onto its share of the sweep, so the spacing is uniform by
  * construction — which is the whole reason the type is baked rather than set.
  */
-function textureImage(diameter, title, repeats) {
+function textureImage(diameter, title, repeats, thickness = BAND_THICKNESS) {
   const centre = diameter / 2
+  // Preserve the measured N3 placement byte for byte. Wider bands keep the same
+  // glyph cap height, centred at their actual new radius, rather than stretching.
+  const baseline = thickness === BAND_THICKNESS
+    ? TEXTURE_BASELINE : Number(((thickness + TEXTURE_CAP) / 2).toFixed(2))
   const pitch = 360 / TEXTURE.sweeps
   const slot = (pitch - TEXTURE.sweepGap) / repeats
   // Half a sweep off 12, so the breaks fall on the diagonals: 12 is where both
@@ -726,7 +837,7 @@ function textureImage(diameter, title, repeats) {
   const tokens = Array.from({ length: TEXTURE.sweeps }, (_, sweep) =>
     Array.from({ length: repeats }, (_, repeat) => {
       const angle = (origin + sweep * pitch + (repeat + 0.5) * slot).toFixed(2)
-      return `<text x="${centre}" y="${TEXTURE_BASELINE}" transform="rotate(${angle} ${centre} ${centre})">${title}</text>`
+      return `<text x="${centre}" y="${baseline}" transform="rotate(${angle} ${centre} ${centre})">${title}</text>`
     }).join(''),
   ).join('')
   // One user unit per design unit: a viewBox that scales makes the rasterizer
@@ -741,20 +852,56 @@ function textureImage(diameter, title, repeats) {
 
 /**
  * ImageMagick, as `just export-icons` already uses it; no new tool for this. The
- * density is what sizes the output: 96 is one pixel per SVG user unit, and the SVG
- * is written in design units, so the image lands at exactly the pixels its box
- * covers on the canvas and the renderer draws it one to one. Baking finer buys
- * nothing — the scene is rasterized at canvas size before it reaches the screen.
+ * density supplies ceil(reference diameter * composition scale) samples. The
+ * reference SVG and WFF image box stay unchanged beneath the single slot scale.
+ * Integer raster rounding changes sampling, never the nominal glyph geometry.
  *
  * Through a file, never a pipe: ImageMagick hands a named SVG to a real renderer
  * and falls back to its own on stdin, and that fallback drops the centre a
  * `rotate()` turns about — every token lands on a circle around the corner.
  *
  * `-strip` for the sake of the diff: it drops the render timestamp, without which
- * every run rewrites nine committed binaries whose pixels did not change.
+ * every run rewrites committed binaries whose pixels did not change.
  */
-function rasterize(file, png) {
-  execFileSync('convert', ['-background', 'none', '-density', '96', '-strip', file, `png32:${png}`])
+async function rasterize(file, png, diameter, signal) {
+  const pixels = texturePixels(diameter)
+  const density = 96 * pixels / diameter
+  const render = runFile('convert', ['-background', 'none', '-density', String(density), '-strip', file, `png32:${png}`], { signal })
+  const closed = new Promise((resolve) => render.child.once('close', resolve))
+  try {
+    await render
+  } finally {
+    // Abort rejects before close; the caller must not remove the SVG yet.
+    await closed
+  }
+  await assertTextureDimensions(png, pixels)
+}
+
+function texturePixels(diameter) {
+  // Multiply the integer numerator first: 404 * (225/202) rounds slightly
+  // above 450 in binary arithmetic and must not acquire a spurious 451st pixel.
+  return Math.ceil(diameter * 225 / 202)
+}
+
+async function assertTextureDimensions(path, pixels) {
+  const png = await readFile(path)
+  if (png.length < 24 || png.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a' ||
+      png.toString('ascii', 12, 16) !== 'IHDR' ||
+      png.readUInt32BE(16) !== pixels || png.readUInt32BE(20) !== pixels) {
+    throw new Error(`${path}: expected a ${pixels}-square period texture at the effective scale`)
+  }
+}
+
+async function assertTextures() {
+  for (const layout of LAYOUTS.filter(({ name }) => name !== 'Legacy')) {
+    for (let index = 0; index < layout.count; index += 1) {
+      const { diameter } = bandGeometry(layout, index)
+      for (const { period } of TOKENS) {
+        await assertTextureDimensions(join(drawables, `${textureResource(index, period, layout.count)}.png`),
+          texturePixels(diameter))
+      }
+    }
+  }
 }
 
 /** One drawable per ring and period: what the face draws instead of setting type. */
@@ -763,18 +910,34 @@ async function writeTextures() {
     throw new Error(`${FONT_FILE} is missing; ring type would bake in a substituted font`)
   })
   await mkdir(drawables, { recursive: true })
-  const scratch = await mkdtemp(join(tmpdir(), 'wardpulse-type-'))
+  const controller = new AbortController()
+  const interrupt = () => controller.abort()
+  process.on('SIGINT', interrupt)
+  process.on('SIGTERM', interrupt)
+  let scratch
   try {
-    for (const [index, { diameter }] of RINGS.slice(0, TEXTURE_RINGS).entries()) {
-      for (const { period, title, repeats } of TOKENS) {
-        const name = textureResource(index, period)
-        const svg = join(scratch, `${name}.svg`)
-        await writeFile(svg, textureImage(diameter, title, repeats[index]))
-        rasterize(svg, join(drawables, `${name}.png`))
+    scratch = await mkdtemp(join(tmpdir(), 'wardpulse-type-'))
+    controller.signal.throwIfAborted()
+    for (const layout of LAYOUTS.filter(({ name }) => name !== 'Legacy')) {
+      for (let index = 0; index < layout.count; index += 1) {
+        const { diameter, thickness } = bandGeometry(layout, index)
+        for (const { period, title, repeats } of TOKENS) {
+          const name = textureResource(index, period, layout.count)
+          const svg = join(scratch, `${name}.svg`)
+          const repeat = ADAPTIVE_REPEATS[layout.count]?.[title][index] ?? repeats[index]
+          await writeFile(svg, textureImage(diameter, title, repeat, thickness))
+          await rasterize(svg, join(drawables, `${name}.png`), diameter, controller.signal)
+        }
       }
     }
+    controller.signal.throwIfAborted()
   } finally {
-    await rm(scratch, { recursive: true, force: true })
+    try {
+      if (scratch) await rm(scratch, { recursive: true, force: true })
+    } finally {
+      process.off('SIGINT', interrupt)
+      process.off('SIGTERM', interrupt)
+    }
   }
 }
 
@@ -787,12 +950,12 @@ async function writeTextures() {
  * inside that square, so a box sized to the ring needs no separate bounds and
  * lines the image up with the arc by construction.
  */
-function ringTextureBranch(diameter, index, period) {
+function ringTextureBranch(diameter, index, period, count) {
   const inset = Number(((FACE.size - diameter) / 2).toFixed(1))
   return `                                <Compare expression="is${period}">
                                     <PartImage x="${inset}" y="${inset}" width="${diameter}" height="${diameter}" alpha="${TEXTURE_ALPHA}">
                                         <Variant mode="AMBIENT" target="alpha" value="${TEXTURE_ALPHA_AMBIENT}" />
-                                        <Image resource="${textureResource(index, period)}" />
+                                        <Image resource="${textureResource(index, period, count)}" />
                                     </PartImage>
                                 </Compare>`
 }
@@ -802,7 +965,7 @@ function ringTextureBranch(diameter, index, period) {
  * rather than being labelled with whichever token the fallback happened to be.
  * A ring past the cap gets none either — there is no image baked for it.
  */
-function ringTexture(diameter, index) {
+function ringTexture(diameter, index, count = 3) {
   if (index >= TEXTURE_RINGS) return ''
   // A period token needs no combined spelling: only a split band carries a pool
   // token, and a budget ring is never shared (`WATCH_RING_DESIGN.md`, Split band).
@@ -816,7 +979,7 @@ function ringTexture(diameter, index) {
                                 <Expressions>
 ${expressions}
                                 </Expressions>
-${TOKENS.map(({ period }) => ringTextureBranch(diameter, index, period)).join('\n')}
+${TOKENS.map(({ period }) => ringTextureBranch(diameter, index, period, count)).join('\n')}
                             </Condition>`
 }
 
@@ -834,105 +997,226 @@ function capDegrees(diameter, thickness) {
 
 function meltGeometry(diameter, thickness) {
   const cap = capDegrees(diameter, thickness)
+  const twoCapCutoff = (2 * cap) / SWEEP.end
   return {
     cap,
-    twoCapCutoff: (2 * cap) / SWEEP.end,
+    twoCapCutoff,
+    // Only Legacy/N3 use 20/10-unit strokes; retain their published branch boundary.
+    cutoffLiteral: thickness === BAND_THICKNESS || thickness === BAND_THICKNESS / 2
+      ? twoCapCutoff.toFixed(6) : String(twoCapCutoff),
     insetEnd: SWEEP.end - cap,
   }
 }
 
-function meltBranchAngles(geometry, remaining, nearEmpty) {
-  return {
-    nearEmpty,
-    strokeCap: nearEmpty ? 'BUTT' : 'ROUND',
-    start: (1 - remaining) * SWEEP.end + (nearEmpty ? 0 : geometry.cap),
-    end: nearEmpty ? SWEEP.end : geometry.insetEnd,
+function meltAngles(diameter, thickness, remaining) {
+  const cap = capDegrees(diameter, thickness)
+  const sweep = remaining * SWEEP.end
+  const inset = Math.min(cap, sweep / 4)
+  const tangent = thickness / 2 * Math.tan(inset * Math.PI / 180) / Math.tan(cap * Math.PI / 180)
+  return { sweep, inset, tangent, start: SWEEP.end - sweep + inset, end: SWEEP.end - inset }
+}
+
+function visibleSweep(angles, diameter, thickness) {
+  const halfExtent = Math.atan(angles.tangent / Math.sqrt((diameter / 2) ** 2 - (thickness / 2) ** 2)) * 180 / Math.PI
+  return angles.end - angles.start + 2 * halfExtent
+}
+
+/**
+ * Conservative radial coverage at the midpoint between two ROUND endpoints.
+ * Elsewhere in that gap the nearer cap covers more; outside it the stroke has
+ * its complete annular envelope. This is ideal geometry, not a native AA test.
+ */
+function roundClosureEnvelope(diameter, thickness, start, end) {
+  const radius = diameter / 2
+  const halfGap = ((360 - (end - start)) * Math.PI) / 360
+  const along = radius * Math.cos(halfGap)
+  const across = radius * Math.sin(halfGap)
+  const reach = Math.sqrt((thickness / 2) ** 2 - across ** 2)
+  return { inner: along - reach, outer: along + reach }
+}
+
+function assertFullRing(diameter, thickness, full) {
+  const arcs = [...full.matchAll(/<Arc\s+([\s\S]*?)<\/Arc>/g)]
+  const attributes = Object.fromEntries(
+    [...(arcs[0]?.[1] ?? '').matchAll(/(\w+)="([^"]*)"/g)].map((match) => [match[1], match[2]]),
+  )
+  const start = Number(attributes.startAngle)
+  const end = Number(attributes.endAngle)
+  const envelope = roundClosureEnvelope(diameter, thickness, start, end)
+  const inner = (diameter - thickness) / 2
+  const outer = (diameter + thickness) / 2
+  // Bound the ideal edge deficit to a hundredth of one design unit, not a
+  // fullness epsilon. The old asymmetric full path misses by 0.77–1.50 units.
+  if (
+    arcs.length !== 1 ||
+    full.includes('<Transform') ||
+    attributes.centerX !== String(FACE.center) ||
+    attributes.centerY !== String(FACE.center) ||
+    attributes.width !== String(diameter) ||
+    attributes.height !== String(diameter) ||
+    attributes.thickness !== String(thickness) ||
+    attributes.cap !== 'ROUND' ||
+    attributes.colors !== '[COMPLICATION.RANGED_VALUE_COLORS]' ||
+    start !== SWEEP.start || end <= start || end >= 360 ||
+    !Number.isFinite(envelope.inner) || !Number.isFinite(envelope.outer) ||
+    envelope.inner < inner || envelope.inner - inner > 0.01 ||
+    envelope.outer > outer || outer - envelope.outer > 0.01 ||
+    !full.includes('alpha="255"') ||
+    !full.includes('<Variant mode="AMBIENT" target="alpha" value="140" />')
+  ) {
+    throw new Error(`ring ${diameter}/${thickness}: full path must cover the centered annulus without an inset or added junction`)
   }
 }
 
-function meltAngles(diameter, thickness, remaining) {
-  const geometry = meltGeometry(diameter, thickness)
-  const nearEmpty = remaining <= geometry.twoCapCutoff
-  return meltBranchAngles(geometry, remaining, nearEmpty)
-}
-
-function visibleSweep(angles, roundCap) {
-  return angles.end - angles.start + (angles.strokeCap === 'ROUND' ? 2 * roundCap : 0)
+/** Legacy and N3 keep the published cutoff, including its six-decimal rounding. */
+function assertLegacyCutoffs() {
+  const tinyDecision = (diameter, thickness) => emittedPaintDecisions(bandArcs(diameter, thickness, ''))
+    .find(({ name }) => name.endsWith('_tiny'))
+  const emittedCutoff = (diameter, thickness) => Number(tinyDecision(diameter, thickness)?.expression
+    .match(/<= ([\d.]+)/)?.[1])
+  // This Float lies between the analytical and published 336/20 cutoffs.
+  // Both the old percentage range and binary-scaled N3 must still select tiny.
+  const percent = Math.fround(1.8949854373931885)
+  const selectsTiny = tinyDecision(336, 20).alpha
+  for (const max of [100, 800]) {
+    const value = Math.fround(percent * (max / 100))
+    const ratio = Math.fround(value / max)
+    if (!(ratio <= emittedCutoff(336, 20)) || selectsTiny(0, max, value, '') !== 255) {
+      throw new Error(`MAX${max}: the preserved boundary remainder must select tiny`)
+    }
+  }
+  for (const [diameter, thickness, cutoff] of [
+    [384, 20, 0.016560], [336, 20, 0.018950], [288, 20, 0.022117],
+    [374, 10, 0.008502], [326, 10, 0.009780], [278, 10, 0.011448],
+    [394, 10, 0.008058], [346, 10, 0.009225], [298, 10, 0.010670],
+  ]) {
+    if (emittedCutoff(diameter, thickness) !== cutoff) {
+      throw new Error(`ring ${diameter}/${thickness}: published Legacy/N3 cutoff changed`)
+    }
+  }
 }
 
 function assertNearExhaustedArcs() {
   const epsilon = 0.000001
   const tolerance = 0.000000001
-  for (const { diameter } of RINGS) {
-    const centre = bandCentre(diameter)
-    const geometry = meltGeometry(centre, BAND_THICKNESS)
-    const belowRemaining = geometry.twoCapCutoff - epsilon
-    const below = meltAngles(centre, BAND_THICKNESS, belowRemaining)
-    const expectedBelowSweep = belowRemaining * SWEEP.end
-    if (
-      !below.nearEmpty ||
-      below.strokeCap !== 'BUTT' ||
-      below.end <= below.start ||
-      Math.abs(visibleSweep(below, geometry.cap) - expectedBelowSweep) > tolerance
-    ) {
-      throw new Error(
-        `ring ${diameter}: a remainder below the two-cap cutoff must stay visible and proportional`,
-      )
+  const geometries = LAYOUTS.filter(({ name }) => name !== 'Legacy').flatMap((layout) =>
+    Array.from({ length: layout.count }, (_, index) => {
+      const { full, inner, outer, thickness, half } = bandGeometry(layout, index)
+      return [[full, thickness, false], [inner, half, true], [outer, half, false]]
+    }).flat(),
+  )
+  for (const [centre, thickness, paired] of geometries) {
+    const gate = meltGeometry(centre, thickness)
+    const paintDiameter = centre + (paired ? PAIRED_MAIN_COVERAGE : 0)
+    const paintThickness = thickness + (paired ? PAIRED_MAIN_COVERAGE : 0)
+    const geometry = meltGeometry(paintDiameter, paintThickness)
+    const saturation = 4 * geometry.cap / SWEEP.end
+    const cases = [0, 0.0000001, Number(gate.cutoffLiteral) - epsilon,
+      Number(gate.cutoffLiteral) + epsilon, saturation - epsilon, saturation, saturation + epsilon,
+      0.04, 0.37, 0.99, 0.996, 0.999, 1 - 2 ** -24, 1]
+    const radius = paintDiameter / 2
+    const half = paintThickness / 2
+    // atan is 1-Lipschitz: |atan(k*tan(a)) - a| <= |k-1|*tan(a).
+    // This retains the rounded historical c calibration rather than claiming
+    // an exact footprint from proportional ellipse radius alone.
+    const c = geometry.cap * Math.PI / 180
+    const k = half / (Math.sqrt(radius ** 2 - half ** 2) * Math.tan(c))
+    for (const remaining of cases.filter((value) => value > 0 && value < 1)) {
+      const angles = meltAngles(paintDiameter, paintThickness, remaining)
+      const errorBound = 2 * Math.abs(k - 1) * Math.tan(angles.inset * Math.PI / 180) * 180 / Math.PI
+      if (angles.end <= angles.start || angles.end - angles.start < angles.sweep / 2 - tolerance ||
+          angles.tangent <= 0 || angles.tangent > half + tolerance ||
+          Math.abs(visibleSweep(angles, paintDiameter, paintThickness) - angles.sweep) > errorBound + tolerance ||
+          errorBound > 0.04136 || errorBound > angles.sweep * 0.00151 ||
+          Math.abs(angles.tangent / Math.tan(angles.inset * Math.PI / 180) - half / Math.tan(c)) > tolerance ||
+          (remaining >= saturation && Math.abs(angles.start - ((1 - remaining) * SWEEP.end + geometry.cap)) > tolerance) ||
+          (remaining >= saturation && (angles.end !== geometry.insetEnd || Math.abs(angles.tangent - half) > tolerance))) {
+        throw new Error(`ring ${centre}/${thickness}: partial core/caps lost proportional scaling, containment or ordinary silhouette`)
+      }
     }
+    const zero = meltAngles(paintDiameter, paintThickness, 0)
+    if (zero.tangent !== 0 || zero.start !== zero.end) throw new Error('zero must have no cap footprint')
+    const markup = bandArcs(centre, thickness, '', 'band', paired)
+    const decisions = emittedPaintDecisions(markup)
+    assertFullRing(paintDiameter, paintThickness, decisions.find(({ name }) => name.endsWith('_full'))?.body ?? '')
+    for (const remaining of cases) {
+      const active = decisions.filter(({ alpha }) => {
+        const value = alpha(0, 100, remaining * 100, '')
+        if (value !== 0 && value !== 255) throw new Error('main paint gate must emit only 0 or 255')
+        return value === 255
+      })
+      const kind = remaining === 1 ? 'full' : remaining <= Number(gate.cutoffLiteral) ? 'tiny' : 'round'
+      if (decisions.length !== 3 || active.length !== (remaining === 0 ? 0 : 1) ||
+          (active.length === 1 && !active[0].name.endsWith(`_${kind}`))) {
+        throw new Error(`ring ${centre}/${thickness}: emitted paint gates must select only their admitted branch`)
+      }
+    }
+    if (!decisions.find(({ name }) => name.endsWith('_tiny'))?.expression.includes(`<= ${gate.cutoffLiteral}`)) {
+      throw new Error(`ring ${centre}/${thickness}: published cutoff changed`)
+    }
+  }
 
-    const aboveRemaining = geometry.twoCapCutoff + epsilon
-    const above = meltAngles(centre, BAND_THICKNESS, aboveRemaining)
-    const expectedStart = (1 - aboveRemaining) * SWEEP.end + geometry.cap
+  for (const [ordinal, slot] of OUTER_HALVES.entries()) {
+    const markup = outerHalfSlot(slot, ordinal)
+    const decisions = emittedPaintDecisions(markup)
+    const clip = markup.match(/<BoundingArc\s+([\s\S]*?)\/>/)?.[1] ?? ''
+    const attributes = Object.fromEntries(
+      [...clip.matchAll(/(\w+)="([^"]*)"/g)].map((match) => [match[1], match[2]]),
+    )
+    const clipThickness = Number(attributes.thickness)
+    const envelope = roundClosureEnvelope(
+      Number(attributes.width) - clipThickness, clipThickness,
+      Number(attributes.startAngle), Number(attributes.endAngle),
+    )
     if (
-      above.nearEmpty ||
-      above.strokeCap !== 'ROUND' ||
-      above.start !== expectedStart ||
-      above.end !== geometry.insetEnd ||
-      Math.abs(visibleSweep(above, geometry.cap) - aboveRemaining * SWEEP.end) > tolerance
+      attributes.centerX !== String(FACE.center) || attributes.centerY !== String(FACE.center) ||
+      attributes.width !== attributes.height || attributes.isRoundEdge !== 'TRUE' ||
+      !Number.isFinite(envelope.inner) || !Number.isFinite(envelope.outer)
     ) {
-      throw new Error(`ring ${diameter}: geometry above the two-cap cutoff must stay inset`)
+      throw new Error(`slot ${slot.slotId}: outer-half clip must stay centered with round edges`)
     }
-
-    const buttAtCutoff = meltBranchAngles(geometry, geometry.twoCapCutoff, true)
-    const roundAtCutoff = meltBranchAngles(geometry, geometry.twoCapCutoff, false)
-    const cutoffSweep = geometry.twoCapCutoff * SWEEP.end
-    if (
-      Math.abs(visibleSweep(buttAtCutoff, geometry.cap) - cutoffSweep) > tolerance ||
-      Math.abs(visibleSweep(roundAtCutoff, geometry.cap) - cutoffSweep) > tolerance
-    ) {
-      throw new Error(`ring ${diameter}: melt branches must meet at the two-cap cutoff`)
+    for (const layout of LAYOUTS) {
+      for (let index = 0; index < layout.count; index += 1) {
+        const active = decisions.filter(({ alpha }) => alpha(0, layout.max, layout.max, String(index)) !== 0)
+        if (index >= layout.count - ordinal) {
+          if (active.length !== 0) throw new Error(`impossible split ordinal ${ordinal}/${layout.name}/${index}`)
+          continue
+        }
+        if (active.length !== 1) throw new Error(`slot ${slot.slotId}: expected exactly one active full Group`)
+        const branch = active[0].body
+        const { outer, half } = bandGeometry(layout, index)
+        const full = branch?.match(/<PartDraw[^>]*alpha="255">[\s\S]*?<\/PartDraw>/)?.[0] ?? ''
+        assertFullRing(outer, half, full)
+        if ((outer - half) / 2 <= envelope.inner || (outer + half) / 2 >= envelope.outer) {
+          throw new Error(`slot ${slot.slotId}/${layout.name}/${index}: entire half must fit inside the clip`)
+        }
+      }
     }
-
-    const markup = bandArcs(centre, BAND_THICKNESS, '')
-    const rawStart = `(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}`
-    const caps = [...markup.matchAll(/cap="(ROUND|BUTT)"/g)].map((match) => match[1])
-    if (
-      !markup.includes(`<= ${geometry.twoCapCutoff.toFixed(6)}`) ||
-      !markup.includes('<Compare expression="isNearEmpty">') ||
-      !markup.includes('<Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>') ||
-      !markup.includes('<Compare expression="hasRemaining">') ||
-      markup.indexOf(`color="${COLOR.track}"`) >= markup.indexOf('<Compare expression="hasRemaining">') ||
-      !markup.includes(`value="${rawStart}"`) ||
-      !markup.includes(`* ${SWEEP.end} + ${geometry.cap}`) ||
-      caps.join(',') !== 'ROUND,ROUND,BUTT,ROUND'
-    ) {
-      throw new Error(
-        `ring ${diameter}: generated markup does not preserve both melt branches`,
-      )
+  }
+  for (const layout of LAYOUTS) {
+    const beltEnd = layout.count === 1 ? 158 : 134
+    for (let index = 0; index < layout.count; index += 1) {
+      const { diameter, full, inner, outer, thickness, half } = bandGeometry(layout, index)
+      const edge = diameter / 2
+      if ((full - thickness) / 2 < beltEnd - 0.2 || edge > 202 ||
+          (outer - half) / 2 !== (inner + half) / 2 ||
+          (inner + PAIRED_MAIN_COVERAGE - (half + PAIRED_MAIN_COVERAGE)) / 2 !== edge - thickness ||
+          (inner + PAIRED_MAIN_COVERAGE + half + PAIRED_MAIN_COVERAGE) / 2 !== (outer - half) / 2 + 1 ||
+          (inner - half) / 2 !== edge - thickness ||
+          (outer + half) / 2 !== edge) {
+        throw new Error(`${layout.name}/${index}: band envelope or gapless split drifted`)
+      }
+      if (index > 0) {
+        const previous = bandGeometry(layout, index - 1)
+        if ((previous.full - thickness) / 2 - edge !== 4) throw new Error('band gap must remain four')
+      }
     }
+    const last = bandGeometry(layout, layout.count - 1)
+    if ((last.full - last.thickness) / 2 !== beltEnd) throw new Error(`${layout.name}: belt must end at ${beltEnd}`)
   }
 }
 
-/**
- * Track plus melt for one arc. The melt keeps its own `PartDraw` so ambient can
- * dim it without touching the track underneath.
- *
- * Above the cutoff, the melt is inset by one cap at each end, so the round caps
- * fill exactly the space the inset freed. At or below it, straight ends keep the
- * visible sweep equal to the proportional centreline.
- */
-function bandArcs(diameter, thickness, pad) {
-  const geometry = meltGeometry(diameter, thickness)
+function bandTrack(diameter, thickness, pad) {
   return `${pad}<PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}">
 ${pad}    <Arc
 ${pad}        centerX="${FACE.center}"
@@ -943,96 +1227,193 @@ ${pad}        startAngle="${SWEEP.start}"
 ${pad}        endAngle="${SWEEP.end}">
 ${pad}        <Stroke color="${COLOR.track}" thickness="${thickness}" cap="ROUND" />
 ${pad}    </Arc>
-${pad}</PartDraw>
-${pad}<Condition>
-${pad}    <Expressions>
-${pad}        <Expression name="hasRemaining"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
-${pad}    </Expressions>
-${pad}    <!-- Zero retains only the track; no coloured arc or cap is drawn. -->
-${pad}    <Compare expression="hasRemaining">
-${pad}<Condition>
-${pad}    <Expressions>
-${pad}        <Expression name="isFull"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= [COMPLICATION.RANGED_VALUE_MAX]]]></Expression>
-${pad}        <Expression name="isNearEmpty"><![CDATA[([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) <= ${geometry.twoCapCutoff.toFixed(6)}]]></Expression>
-${pad}    </Expressions>
-${pad}    <!-- Nothing spent yet: there is no melt to inset, and the inset would
-${pad}         leave a seam at 12 on a ring that has spent nothing. Drawn without
-${pad}         the transform so the two round caps close over each other. -->
-${pad}    <Compare expression="isFull">
-${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
-${pad}            <Variant mode="AMBIENT" target="alpha" value="140" />
-${pad}            <Arc
-${pad}                centerX="${FACE.center}"
-${pad}                centerY="${FACE.center}"
-${pad}                width="${diameter}"
-${pad}                height="${diameter}"
-${pad}                startAngle="${SWEEP.start}"
-${pad}                endAngle="${geometry.insetEnd.toFixed(2)}">
-${pad}                <WeightedStroke
-${pad}                    thickness="${thickness}"
-${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-${pad}                    cap="ROUND" />
-${pad}            </Arc>
-${pad}        </PartDraw>
-${pad}    </Compare>
-${pad}    <!-- The two-cap inset cannot represent a smaller positive remainder:
-${pad}         its sweep would be zero or negative. Keep the proportional
-${pad}         centreline without either inset and use straight ends so the
-${pad}         visible sweep does not overstate the remainder. -->
-${pad}    <Compare expression="isNearEmpty">
-${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
-${pad}            <Variant mode="AMBIENT" target="alpha" value="140" />
-${pad}            <Arc
-${pad}                centerX="${FACE.center}"
-${pad}                centerY="${FACE.center}"
-${pad}                width="${diameter}"
-${pad}                height="${diameter}"
-${pad}                startAngle="${SWEEP.start}"
-${pad}                endAngle="${SWEEP.end}">
-${pad}                <Transform
-${pad}                    target="startAngle"
-${pad}                    value="(1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end}" />
-${pad}                <WeightedStroke
-${pad}                    thickness="${thickness}"
-${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-${pad}                    cap="BUTT" />
-${pad}            </Arc>
-${pad}        </PartDraw>
-${pad}    </Compare>
-${pad}    <Default>
-${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
-${pad}            <Variant mode="AMBIENT" target="alpha" value="140" />
-${pad}            <Arc
-${pad}                centerX="${FACE.center}"
-${pad}                centerY="${FACE.center}"
-${pad}                width="${diameter}"
-${pad}                height="${diameter}"
-${pad}                startAngle="${SWEEP.start}"
-${pad}                endAngle="${geometry.insetEnd.toFixed(2)}">
-${pad}                <Transform
-${pad}                    target="startAngle"
-${pad}                    value="clamp((1 - ([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX])) * ${SWEEP.end} + ${geometry.cap}, ${SWEEP.start}, ${geometry.insetEnd.toFixed(2)})" />
-${pad}                <WeightedStroke
-${pad}                    thickness="${thickness}"
-${pad}                    colors="[COMPLICATION.RANGED_VALUE_COLORS]"
-${pad}                    cap="ROUND" />
-${pad}            </Arc>
-${pad}        </PartDraw>
-${pad}    </Default>
-${pad}</Condition>
-${pad}    </Compare>
-${pad}</Condition>`
+${pad}</PartDraw>`
 }
 
-function ringSlot({ slotId, diameter, service }, index) {
-  const name = `ring${index + 1}`
+/**
+ * Restore the actual backdrop across the unsplit N1 outer contour before its
+ * foreground. Matching ideal track edges alone left retained-extra fringe paint.
+ * The inner mask edge is inside the opaque track; 207 is the existing extra clip.
+ * This local WFF2 mask leaves foreground geometry and compatible pairs unchanged.
+ */
+function n1BackdropRestore(pad) {
+  return `${pad}<Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="ring1N1BackdropRestore">
+${lift({ pad: `${pad}    `, name: 'ring1N1BackdropSource', renderMode: 'SOURCE' })}
+${pad}    <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" renderMode="MASK">
+${pad}        <Arc
+${pad}            centerX="${FACE.center}"
+${pad}            centerY="${FACE.center}"
+${pad}            width="387"
+${pad}            height="387"
+${pad}            startAngle="${SWEEP.start}"
+${pad}            endAngle="${SWEEP.end}">
+${pad}            <Stroke color="#ffffffff" thickness="27" cap="ROUND" />
+${pad}        </Arc>
+${pad}    </PartDraw>
+${pad}</Group>`
+}
+
+/** The same three drawings serve alpha-gated main/inner and extra decisions. */
+function bandPaint(diameter, thickness, kind, pad, name, sourceAllowance = 0) {
+  if (kind === 'full') {
+    return `${pad}<PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" alpha="255">
+${pad}    <Variant mode="AMBIENT" target="alpha" value="140" />
+${pad}    <Arc
+${pad}        centerX="${FACE.center}"
+${pad}        centerY="${FACE.center}"
+${pad}        width="${diameter}"
+${pad}        height="${diameter}"
+${pad}        startAngle="${SWEEP.start}"
+${pad}        endAngle="${SWEEP.end}">
+${pad}        <WeightedStroke
+${pad}            thickness="${thickness}"
+${pad}            colors="[COMPLICATION.RANGED_VALUE_COLORS]"
+${pad}            cap="ROUND" />
+${pad}    </Arc>
+${pad}</PartDraw>`
+  }
+  const cap = capDegrees(diameter, thickness)
+  const sweep = `([COMPLICATION.RANGED_VALUE_VALUE] / [COMPLICATION.RANGED_VALUE_MAX]) * ${SWEEP.end}`
+  const inset = `clamp((${sweep}) / 4, 0, ${cap})`
+  const tangent = `${thickness / 2} * tan((${inset}) * ${Math.PI / 180}) / ${Math.tan(cap * Math.PI / 180)}`
+  const start = `(${SWEEP.end} - (${sweep})) + (${inset})`
+  const end = `${SWEEP.end} - (${inset})`
+  // Ellipse base rectangles are integers; the live x Transform retains sub-unit placement.
+  const caps = [['start', start], ['end', end]].map(([side, angle]) => `${pad}        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}_${side}Cap" angle="0" pivotX="0.5" pivotY="0.5">
+${pad}            <Transform target="angle" value="${angle}" />
+${pad}            <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}">
+${pad}                <Ellipse x="${Math.floor(FACE.center - thickness / 2)}" y="${FACE.center - diameter / 2 - thickness / 2}" width="${thickness}" height="${thickness}">
+${pad}                    <Transform target="x" value="${FACE.center} - (${tangent})" />
+${pad}                    <Transform target="width" value="2 * (${tangent})" />
+${pad}                    <Fill color="#ffffffff" />
+${pad}                </Ellipse>
+${pad}            </PartDraw>
+${pad}        </Group>`).join('\n')
+  // Paired partial SOURCE retains one unit beyond each owning mask edge.
+  // One opaque mask unions core/caps; ambient alpha belongs to the composition.
+  return `${pad}<Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}_foreground" alpha="255">
+${pad}    <Variant mode="AMBIENT" target="alpha" value="140" />
+${pad}    <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}" renderMode="SOURCE">
+${pad}        <Arc centerX="${FACE.center}" centerY="${FACE.center}" width="${diameter}" height="${diameter}" startAngle="${SWEEP.start}" endAngle="${SWEEP.end}">
+${pad}            <WeightedStroke thickness="${thickness + 2 * sourceAllowance}" colors="[COMPLICATION.RANGED_VALUE_COLORS]" cap="ROUND" />
+${pad}        </Arc>
+${pad}    </PartDraw>
+${pad}    <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}_mask" renderMode="MASK">
+${pad}        <PartDraw x="0" y="0" width="${FACE.size}" height="${FACE.size}">
+${pad}            <Arc centerX="${FACE.center}" centerY="${FACE.center}" width="${diameter}" height="${diameter}" startAngle="${SWEEP.start}" endAngle="${SWEEP.end}">
+${pad}                <Transform target="startAngle" value="${start}" />
+${pad}                <Transform target="endAngle" value="${end}" />
+${pad}                <Stroke color="#ffffffff" thickness="${thickness}" cap="BUTT" />
+${pad}            </Arc>
+${pad}        </PartDraw>
+${caps}
+${pad}    </Group>
+${pad}</Group>`
+}
+
+/** Track plus mutually exclusive full/tiny/round gates; both partial gates share one silhouette. */
+function bandArcs(diameter, thickness, pad, name = 'band', paired = false) {
+  // Gate and track geometry stay nominal; only positive paired MAIN paint grows.
+  const geometry = meltGeometry(diameter, thickness)
+  const coverage = paired ? PAIRED_MAIN_COVERAGE : 0
+  const value = '[COMPLICATION.RANGED_VALUE_VALUE]'
+  const maximum = '[COMPLICATION.RANGED_VALUE_MAX]'
+  const partial = `${value} > 0 && ${value} < ${maximum}`
+  const decisions = [
+    ['full', `${value} > 0 && ${value} >= ${maximum}`],
+    ['tiny', `${partial} && (${value} / ${maximum}) <= ${geometry.cutoffLiteral}`],
+    ['round', `${partial} && (${value} / ${maximum}) > ${geometry.cutoffLiteral}`],
+  ].map(([kind, predicate]) => `${pad}<Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}_${kind}" alpha="0">
+${alphaTransform(predicate, `${pad}    `)}
+${bandPaint(diameter + coverage, thickness + coverage, kind, `${pad}    `, `${name}_${kind}`, paired ? PAIRED_SOURCE_ALLOWANCE : 0)}
+${pad}</Group>`).join('\n')
+  return `${bandTrack(diameter, thickness, pad)}
+${pad}<!-- Stable foreground trees have mutually exclusive alpha gates.
+${pad}     Zero retains only the track; ambient dims each unchanged drawing. -->
+${decisions}`
+}
+
+// All six readout boxes are inside r139..171.25, below the clock, outside the
+// preserved original-frame r137..159 measurement annulus at 360/450 scale.
+function n1Text(template, column, row, parameter = null) {
+  // Static Font content must not include XML formatting whitespace.
+  const content = parameter === null ? `<![CDATA[${template}]]>` : `
+            <Template>${template}<Parameter expression="${parameter}" /></Template>
+        `
+  return `<PartText x="${173 + column * 35}" y="${364 + row * 12}" width="34" height="12">
+    <Text align="CENTER" ellipsis="TRUE">
+        <Font family="SYNC_TO_DEVICE" size="10" weight="BOLD" color="${COLOR.text}">${content}</Font>
+    </Text>
+</PartText>`
+}
+
+function alphaTransform(predicate, pad) {
+  const value = `(${predicate}) ? 255 : 0`.replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
+  return `${pad}<Transform target="alpha" value="${value}" />`
+}
+
+function n1Group(name, content, predicate = null) {
+  const alpha = predicate === null ? '' : ' alpha="0"'
+  const transform = predicate === null ? '' : alphaTransform(predicate, '')
+  return `<Group x="0" y="0" width="450" height="450" name="n1Diag_${name}"${alpha}>${transform}${content}</Group>`
+}
+
+function n1Witness(name, text, column, row) {
+  return n1Group(`add_${name}`, n1Text(text, column, row))
+}
+
+/** Fields are independent of admission, with no raw TITLE or unbounded literals. */
+function n1ConsumerFields() {
+  const numbers = [['VALUE', 'V'], ['MIN', 'm'], ['MAX', 'M']].map(([field, label], column) => {
+    const value = `[COMPLICATION.RANGED_VALUE_${field}]`
+    return `<Condition>
+    <Expressions><Expression name="bounded${field}"><![CDATA[${value} >= 0 && ${value} <= 800]]></Expression></Expressions>
+    <Compare expression="bounded${field}">${n1Group(`add_field_${field}`, n1Text(`${label}%s`, column, 0, value))}</Compare>
+    <Default>${n1Witness(`field_${field}_other`, `${label}?`, column, 0)}</Default>
+</Condition>`
+  }).join('\n')
+  const titles = ['0', '1', '2', ''].map((title, index) =>
+    `<Expression name="title${index}"><![CDATA[[COMPLICATION.TITLE] == "${title}"]]></Expression>`,
+  ).join('\n')
+  const branches = ['T0', 'T1', 'T2', 'TE'].map((label, index) =>
+    `<Compare expression="title${index}">${n1Witness(`title${index}`, label, 0, 1)}</Compare>`,
+  ).join('\n')
+  return n1Group('add_fields', `${numbers}
+<Condition><Expressions>${titles}</Expressions>${branches}
+    <Default>${n1Witness('titleOther', 'T?', 0, 1)}</Default>
+</Condition>`)
+}
+
+/** Geometry is selected solely from this response; no sibling can supply a count. */
+function mainBand(layout, index) {
+  const { diameter, thickness, full, inner, half } = bandGeometry(layout, index)
+  const name = `ring${index + 1}${layout.name}`
+  const restore = layout.name === 'N1' ? `${n1BackdropRestore(' '.repeat(40))}\n` : ''
+  return `                                    <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}Half" alpha="0">
+${alphaTransform(`${rangeGuard(layout.max)} && (${titleEquals(...SPLIT_TITLES)})`, ' '.repeat(40))}
+${bandArcs(inner, half, ' '.repeat(40), `${name}Half`, true)}
+                                    </Group>
+                                    <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}" alpha="0">
+${alphaTransform(`${rangeGuard(layout.max)} && (${titleEquals(...ORDINARY_TITLES)})`, ' '.repeat(40))}
+${restore}${bandArcs(full, thickness, ' '.repeat(40), name)}${ringTexture(diameter, index, layout.count)}
+                                    </Group>`
+}
+
+function ringSlot({ slotId, service }, index) {
+  const layouts = LAYOUTS.filter(({ count }) => index < count)
+  const titles = titleEquals(...ORDINARY_TITLES, ...SPLIT_TITLES)
+  const credits = index === CREDITS_RING_INDEX
+    ? ` || (${rangeGuard(100)} && ${titleEquals(CREDITS_TOKEN)})` : ''
+  // Keep drawing serialization stable; only the geometry selection changes.
   return `        <ComplicationSlot
             x="0"
             y="0"
             width="${FACE.size}"
             height="${FACE.size}"
+            ${SCALE_ATTRIBUTES}
             slotId="${slotId}"
-            displayName="@string/${name}_complication"
+            displayName="@string/ring${index + 1}_complication"
             supportedTypes="RANGED_VALUE EMPTY"
             isCustomizable="FALSE">
             <DefaultProviderPolicy
@@ -1042,74 +1423,70 @@ function ringSlot({ slotId, diameter, service }, index) {
                 defaultSystemProviderType="EMPTY" />
             <BoundingBox x="0" y="0" width="${FACE.size}" height="${FACE.size}" />
             <Complication type="RANGED_VALUE">
-                <!-- The band, unless this is the lone credits row: that one has a
-                     reading but no ring behind it, so it draws its strip only. -->
                 <Condition>
                     <Expressions>
-                        <Expression name="hasBand">
-                            <![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] >= 0 && !(${titleEquals(CREDITS_TOKEN)})]]>
-                        </Expression>
+                        <Expression name="isValid"><![CDATA[((${layouts.map(({ max }) => `(${rangeGuard(max)})`).join(' || ')}) && (${titles}))${credits}]]></Expression>
                     </Expressions>
-                    <Compare expression="hasBand">
-                        <!-- Shared band: this slot keeps the inner half, the outer one
-                             comes from the slot that serves every band. -->
-                        <Condition>
-                            <Expressions>
-                                <Expression name="isSplit"><![CDATA[${titleEquals(...SPLIT_TITLES)}]]></Expression>
-                            </Expressions>
-                            <Compare expression="isSplit">
-                                <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}Half">
-${bandArcs(diameter - INNER_HALF_INSET, HALF_THICKNESS, ' '.repeat(36))}
-                                </Group>
-                            </Compare>
-                            <Default>
-                                <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="${name}">
-${bandArcs(bandCentre(diameter), BAND_THICKNESS, ' '.repeat(36))}${ringTexture(diameter, index)}
-                                </Group>
-                            </Default>
-                        </Condition>
+                    <!-- Invalid range, value, TITLE or position paints nothing, including the well. -->
+                    <Compare expression="isValid">
+                        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="ring${index + 1}_main">
+${layouts.map((layout) => mainBand(layout, index)).join('\n')}
+${stripRow(index, ' '.repeat(24))}
+                        </Group>
                     </Compare>
                 </Condition>
-                <!-- The legend row this ring owns. Its own slot since 2026-10-09:
-                     the three the strips held are the three the cells took. -->
-${stripRow(index, ' '.repeat(16))}
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>`
 }
 
 /**
- * One selected split ordinal, three possible radii: the watch
- * writes the band index — counted from the outside — into TITLE, and the branch
- * below turns it into a radius. A missing split ordinal yields `NoData`, so
- * that slot draws nothing.
- *
- * Its `BoundingArc` has to reach every band it may draw on, so it spans from the
- * outermost half down to the innermost one rather than hugging a single band.
- * A `BoundingArc` takes its **outer edge** in `width` — unlike the arcs inside a
- * slot, which take twice their centre line. Measured 2026-08-16: with `width`
- * set to twice the centre the clip cut the outermost half in half.
+ * Each extra carries its own envelope and exact outside index. Ordinal one
+ * cannot occupy the innermost band: an earlier pair must precede it in payload
+ * order. No delivered main is required and no main paint/label is synthesized.
  */
-function outerHalfSlot({ slotId, service, label }) {
-  const centres = RINGS.map(({ diameter }) => (diameter - OUTER_HALF_INSET) / 2)
-  const clipOuter = Math.max(...centres) + HALF_THICKNESS
-  const clipInner = Math.min(...centres) - HALF_THICKNESS
-  const branches = RINGS.map(
-    ({ diameter }, index) => `                    <Compare expression="isBand${index}">
-                        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="outerHalf${slotId}_${index + 1}">
-${bandArcs(diameter - OUTER_HALF_INSET, HALF_THICKNESS, ' '.repeat(28))}
-                        </Group>
-                    </Compare>`,
-  ).join('\n')
-  const expressions = RINGS.map(
-    (_, index) =>
-      `                        <Expression name="isBand${index}"><![CDATA[[COMPLICATION.TITLE] == "${index}"]]></Expression>`,
-  ).join('\n')
+function outerHalfSlot({ slotId, service, label }, ordinal, diagnostics = false) {
+  const positions = LAYOUTS.flatMap((layout) =>
+    Array.from({ length: layout.count - ordinal }, (_, index) => ({ layout, index })),
+  )
+  // Retain the accepted N3 clip, with margin around every new half as well.
+  const clipOuter = 207
+  const clipInner = 139
+  const decisions = positions.flatMap(({ layout, index }) => {
+    const { outer, half } = bandGeometry(layout, index)
+    const value = '[COMPLICATION.RANGED_VALUE_VALUE]'
+    const maximum = '[COMPLICATION.RANGED_VALUE_MAX]'
+    const partial = `${value} > 0 && ${value} < ${maximum}`
+    const cutoff = meltGeometry(outer, half).cutoffLiteral
+    return [
+      ['Full', `${value} == ${maximum}`],
+      ['Tiny', `${partial} && (${value} / ${maximum}) <= ${cutoff}`],
+      ['Round', `${partial} && (${value} / ${maximum}) > ${cutoff}`],
+      ['Zero', `${value} == 0`],
+    ].map(([state, test]) => ({ layout, index, outer, half, state,
+      predicate: `${rangeGuard(layout.max)} && [COMPLICATION.TITLE] == "${index}" && (${test})`,
+    }))
+  })
+  const admission = positions.map(({ layout, index }) =>
+    `(${rangeGuard(layout.max)} && [COMPLICATION.TITLE] == "${index}")`,
+  ).join(' || ')
+  const branches = decisions.map(({ layout, index, outer, half, state, predicate }) => {
+    const kind = state.toLowerCase()
+    const paintToken = { full: 'PF', tiny: 'PT', round: 'PR', zero: 'PN' }[kind]
+    return `                        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="outerHalf${slotId}_${layout.name}_${index + 1}_${kind}" alpha="0">
+${alphaTransform(predicate, ' '.repeat(28))}
+${bandTrack(outer, half, ' '.repeat(28))}${kind === 'zero' ? '' : `
+${bandPaint(outer, half, kind, ' '.repeat(28), `outerHalf${slotId}_${layout.name}_${index + 1}_${kind}`, PAIRED_SOURCE_ALLOWANCE)}`}${diagnostics ? `
+${n1Witness(`admit_${layout.name}_${index}_${kind}`, layout.name === 'N1' ? 'A1' : 'AO', 1, 1)}${layout.name === 'N1' ? `
+${n1Witness(kind === 'zero' ? 'paintNone' : `paint_${kind}`, paintToken, 2, 1)}` : ''}` : ''}
+                        </Group>`
+  }).join('\n')
   return `        <ComplicationSlot
             x="0"
             y="0"
             width="${FACE.size}"
             height="${FACE.size}"
+            ${SCALE_ATTRIBUTES}
             slotId="${slotId}"
             displayName="@string/${label}"
             supportedTypes="RANGED_VALUE EMPTY"
@@ -1128,26 +1505,166 @@ ${bandArcs(diameter - OUTER_HALF_INSET, HALF_THICKNESS, ' '.repeat(28))}
                 startAngle="${SWEEP.start}"
                 endAngle="${SWEEP.end}"
                 isRoundEdge="TRUE" />
-            <Complication type="RANGED_VALUE">
-                <Condition>
-                    <Expressions>
-${expressions}
-                    </Expressions>
-${branches}
-                </Condition>
+            <Complication type="RANGED_VALUE">${diagnostics ? `
+${n1ConsumerFields()}` : ''}
+${branches}${diagnostics ? `
+${n1Group('add_rejected', `${n1Text('AX', 1, 1)}${n1Text('PN', 2, 1)}`, `!(${admission})`)}` : ''}
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>`
 }
 
+function emittedValue(expression) {
+  const source = expression.replaceAll('[COMPLICATION.RANGED_VALUE_MIN]', 'min')
+    .replaceAll('[COMPLICATION.RANGED_VALUE_MAX]', 'max')
+    .replaceAll('[COMPLICATION.RANGED_VALUE_VALUE]', 'value')
+    .replaceAll('[COMPLICATION.TITLE]', 'title')
+  return new Function('min', 'max', 'value', 'title', `return ${source}`)
+}
+
+function emittedExpressions(markup) {
+  return new Map([...markup.matchAll(/<Expression name="([^"]+)"><!\[CDATA\[([\s\S]*?)\]\]><\/Expression>/g)]
+    .map(([, name, expression]) => [name, emittedValue(expression)]))
+}
+
+/** Paint gates have fixed drawing Groups; the XML checker enforces that structure. */
+function emittedPaintDecisions(markup) {
+  return [...markup.matchAll(/<Group [^>]*name="([^"]+)" alpha="0">\s*<Transform target="alpha" value="([^"]+)" \/>/g)]
+    .map((match) => {
+      const [, name, encoded] = match
+      const content = markup.slice(match.index + match[0].length)
+      // Partial paint now contains nested composition/cap Groups. Retain the
+      // complete owning body; the Python XML check validates its actual tree.
+      let depth = 1
+      let body
+      for (const tag of content.matchAll(/<\/?Group\b[^>]*>/g)) {
+        depth += tag[0].startsWith('</') ? -1 : 1
+        if (depth === 0) {
+          body = content.slice(0, tag.index)
+          break
+        }
+      }
+      if (body === undefined) throw new Error(`unclosed paint decision ${name}`)
+      const expression = encoded.replaceAll('&quot;', '"').replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>').replaceAll('&amp;', '&')
+      return { name, body, expression, alpha: emittedValue(expression) }
+    })
+}
+
+/** Exercise every emitted alpha decision, including non-finite wire fields. */
+function assertLowerContracts() {
+  for (const [index, ring] of RINGS.entries()) {
+    const markup = ringSlot(ring, index)
+    const valid = emittedExpressions(markup).get('isValid')
+    for (const [max, allowed] of [[100, true], [200, index === 0], [400, index < 2], [800, true]]) {
+      if (valid(0, max, 0, 'zero') !== allowed || valid(0, max, max, '') !== allowed) {
+        throw new Error(`main ${index}: legacy/adaptive position or endpoint admission drifted`)
+      }
+    }
+    const malformed = [
+      [0, 300, 50, ''], [1, 200, 50, ''], [0, 200, -1, ''], [0, 200, 201, ''],
+      [0, 200, NaN, ''], [0, 200, Infinity, ''], [0, Infinity, 50, ''],
+      [NaN, 200, 50, ''], [0, NaN, 50, ''], [0, 800, 50, 'split:unknown'],
+    ]
+    if (malformed.some((fields) => valid(...fields)) ||
+        valid(0, 100, 100, CREDITS_TOKEN) !== (index === CREDITS_RING_INDEX) ||
+        valid(0, 200, 100, CREDITS_TOKEN)) {
+      throw new Error(`main ${index}: malformed data or count-bearing credits admitted`)
+    }
+    for (const title of SPLIT_TITLES) {
+      if (!valid(0, 800, 100, title)) {
+        throw new Error(`main ${index}: recognized paired TITLE ${title} rejected`)
+      }
+    }
+    for (const title of ['split:fable:unknown', 'split:fable-extra', 'split:fable:zero']) {
+      if (valid(0, 800, 100, title)) {
+        throw new Error(`main ${index}: unknown paired TITLE ${title} admitted`)
+      }
+    }
+    // Every drawing, including the row, is below the single valid-position gate.
+    const body = markup.split('<Complication type="RANGED_VALUE">')[1].split('</Complication>')[0]
+    if (body.indexOf('<Compare expression="isValid">') > body.indexOf('<PartDraw') ||
+        !body.trimEnd().endsWith('</Compare>\n                </Condition>')) {
+      throw new Error(`main ${index}: a lower component escaped its admission gate`)
+    }
+  }
+  for (const [ordinal, slot] of OUTER_HALVES.entries()) {
+    const decisions = emittedPaintDecisions(outerHalfSlot(slot, ordinal))
+    const selected = (...fields) => decisions.filter(({ alpha }) => {
+      const value = alpha(...fields)
+      if (value !== 0 && value !== 255) throw new Error(`extra ${ordinal}: gate must emit only 0 or 255`)
+      return value === 255
+    })
+    for (const [max, lastIndex] of [[100, 2], [200, 0], [400, 1], [800, 2]]) {
+      for (let index = 0; index < 3; index += 1) {
+        for (const value of [0, max * 2 ** -20, max * 0.37, max * 0.999, max]) {
+          const active = selected(0, max, value, String(index))
+          if (active.length !== (index <= lastIndex - ordinal ? 1 : 0)) {
+            throw new Error(`extra ${ordinal}/${max}/${index}: impossible ordinal or position admitted`)
+          }
+          const body = active[0]?.body
+          const partial = value > 0 && value < max
+          if (body !== undefined && ((body.match(/<Stroke /g)?.length ?? 0) !== (partial ? 2 : 1) ||
+              (body.match(/<WeightedStroke/g)?.length ?? 0) !== (value > 0 ? 1 : 0) ||
+              (body.match(/<Ellipse /g)?.length ?? 0) !== (partial ? 2 : 0) ||
+              body.includes('<Condition>'))) {
+            throw new Error(`extra ${ordinal}: selected decision must own its track and only its paint`)
+          }
+        }
+      }
+    }
+    const malformed = [[0, 300, 50, '0'], [1, 800, 50, '0'],
+      [0, 800, -1, '0'], [0, 800, 801, '0']]
+    for (const invalid of [NaN, Infinity, -Infinity]) {
+      malformed.push([invalid, 800, 50, '0'], [0, invalid, 50, '0'], [0, 800, invalid, '0'])
+    }
+    for (const title of ['', '00', '0.0', ' 0', '0 ', '3', 'split', '0:zero']) {
+      malformed.push([0, 800, 50, title])
+    }
+    if (malformed.some((fields) => selected(...fields).length !== 0)) {
+      throw new Error(`extra ${ordinal}: malformed response admitted`)
+    }
+    // These are source-driven gate changes, not proof of retained-engine behavior.
+    for (let index = 0; index < 2 - ordinal; index += 1) {
+      const n2 = selected(0, 400, 148, String(index))
+      const n3 = selected(0, 800, 296, String(index))
+      if (n2.length !== 1 || n3.length !== 1 ||
+          n2[0].name !== `outerHalf${slot.slotId}_N2_${index + 1}_round` ||
+          n3[0].name !== `outerHalf${slot.slotId}_N3_${index + 1}_round` ||
+          n2[0].alpha(0, 800, 296, String(index)) !== 0 ||
+          n3[0].alpha(0, 400, 148, String(index)) !== 0) {
+        throw new Error(`extra ${ordinal}/${index}: N2-to-N3 must hide the old half and reveal the new half`)
+      }
+    }
+  }
+  const markers = emittedExpressions(splitMarker(''))
+  for (const [index, { token, color }] of SPLIT_POOLS.entries()) {
+    const base = `${SPLIT_TOKEN}${TOKEN_SEPARATOR}${token}`
+    for (const title of [base, ...ZERO_STATES.map((state) => `${base}:${state}`)]) {
+      const active = [...markers].filter(([, expression]) => expression(0, 800, 100, title))
+      if (active.length !== 1 || active[0][0] !== `isPool${index}`) {
+        throw new Error(`marker ${token}: paired/zero TITLE lost its pool identity`)
+      }
+    }
+    if (!splitMarker('').includes(`<Stroke thickness="3" color="${color}" cap="BUTT" />`)) {
+      throw new Error(`marker ${token}: pool color missing`)
+    }
+  }
+  for (const title of ['', 'split:unknown', 'split:fable-extra', 'split:fable:unknown']) {
+    if ([...markers.values()].some((expression) => expression(0, 800, 100, title))) {
+      throw new Error(`unknown TITLE ${title} selected a far marker`)
+    }
+  }
+}
+
 /** Two clocks, not one: the ambient copy is thinner and swaps in by alpha. */
 function clock() {
-  return `        <DigitalClock x="0" y="0" width="${FACE.size}" height="${FACE.size}">
+  return `        <DigitalClock x="0" y="0" width="${FACE.size}" height="${FACE.size}" ${SCALE_ATTRIBUTES}>
             <TimeText
                 x="0"
-                y="160"
+                y="${CLOCK.active.y}"
                 width="${FACE.size}"
-                height="90"
+                height="${CLOCK.active.height}"
                 alpha="255"
                 align="CENTER"
                 format="hh:mm"
@@ -1155,16 +1672,16 @@ function clock() {
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <Font
                     family="SYNC_TO_DEVICE"
-                    size="70"
+                    size="${CLOCK.active.fontSize}"
                     weight="BOLD"
                     slant="NORMAL"
                     color="${COLOR.text}" />
             </TimeText>
             <TimeText
                 x="0"
-                y="160"
+                y="${CLOCK.ambient.y}"
                 width="${FACE.size}"
-                height="90"
+                height="${CLOCK.ambient.height}"
                 alpha="0"
                 align="CENTER"
                 format="hh:mm"
@@ -1172,7 +1689,7 @@ function clock() {
                 <Variant mode="AMBIENT" target="alpha" value="255" />
                 <Font
                     family="SYNC_TO_DEVICE"
-                    size="81"
+                    size="${CLOCK.ambient.fontSize}"
                     weight="THIN"
                     slant="NORMAL"
                     color="${COLOR.text}" />
@@ -1184,9 +1701,9 @@ function clock() {
 function wordmark() {
   const box = (size) =>
     `x="${WORDMARK.centerX - size / 2}" y="${WORDMARK.centerY - size / 2}" width="${size}" height="${size}"`
-  return `        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="wardpulse">
+  return `        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="wardpulse" ${SCALE_ATTRIBUTES}>
             <Launch target="app.wardpulse/app.wardpulse.wear.MainActivity" />
-            <!-- The asset is padded: the box runs to 293, the ink stops at 268. -->
+            <!-- Preserve the original padded PNG; visible clock clearance needs native measurement. -->
             <PartImage ${box(WORDMARK.size)} alpha="95">
                 <Variant mode="AMBIENT" target="alpha" value="0" />
                 <Image resource="wardpulse_mono" />
@@ -1244,7 +1761,7 @@ function stripText(pad) {
   // WFF may evaluate inactive branches; keep both cut points ordered inside TEXT.
   const innerEnd = `clamp(2, 0, ${length})`
   const outerStart = `clamp(${length} - 2, ${innerEnd}, ${length})`
-  const part = (runs, innerPad) => `${innerPad}<PartText x="${textInset}" y="0" width="${textWidth}" height="${height}">
+  const partAtSize = (runs, fontSize, innerPad) => `${innerPad}<PartText x="${textInset}" y="0" width="${textWidth}" height="${height}">
 ${innerPad}    <Text align="CENTER" ellipsis="TRUE">
 ${runs.map(([expression, exhausted]) => `${innerPad}        <Font family="SYNC_TO_DEVICE" size="${fontSize}" weight="BOLD" color="${exhausted ? COLOR.exhaustedPercent : COLOR.text}">
 ${innerPad}            <Template>%s
@@ -1253,6 +1770,22 @@ ${innerPad}            </Template>
 ${innerPad}        </Font>`).join('\n')}
 ${innerPad}    </Text>
 ${innerPad}</PartText>`
+  // Size the complete mixed-run label together, preserving its centre and baseline.
+  const part = (runs, innerPad) => `${innerPad}<Condition>
+${innerPad}    <Expressions>
+${innerPad}        <Expression name="longLabel"><![CDATA[${length} == 11]]></Expression>
+${innerPad}        <Expression name="longestLabel"><![CDATA[${length} >= 12]]></Expression>
+${innerPad}    </Expressions>
+${innerPad}    <Compare expression="longLabel">
+${partAtSize(runs, 18, `${innerPad}        `)}
+${innerPad}    </Compare>
+${innerPad}    <Compare expression="longestLabel">
+${partAtSize(runs, 16, `${innerPad}        `)}
+${innerPad}    </Compare>
+${innerPad}    <Default>
+${partAtSize(runs, fontSize, `${innerPad}        `)}
+${innerPad}    </Default>
+${innerPad}</Condition>`
   const zeroTitles = (state) => SPLIT_BASE_TITLES.map((base) => `${base}${TOKEN_SEPARATOR}${state}`)
   const states = [
     {
@@ -1323,19 +1856,21 @@ ${branches}
 ${pad}</Condition>`
 }
 
-function face() {
+function face(diagnostics = false) {
   // A blank line means "a different slot starts here". The lift is the ground
   // the first ring sits on and the comment introduces the strip stack, so
   // neither is cut off from what follows it.
+  const chrome = [lift(), cellChromeComment(), CELLS.map(cellChrome).join('\n\n')]
+    .join('\n').split('\n').map((line) => line ? `    ${line}` : line).join('\n')
   const body = [
+    `        <Group x="0" y="0" width="${FACE.size}" height="${FACE.size}" name="compositionChrome" ${SCALE_ATTRIBUTES}>
+${chrome}
+        </Group>`,
     [
-      lift(),
-      cellChromeComment(),
-      CELLS.map(cellChrome).join('\n\n'),
-    ].join('\n'),
-    [
+      // Current main foreground follows extras; unsplit N1 first restores its backdrop.
+      // Compatible halves remain adjacent; absent mains still paint nothing.
+      OUTER_HALVES.map((slot, ordinal) => outerHalfSlot(slot, ordinal, diagnostics && slot.slotId === 106)).join('\n\n'),
       RINGS.map(ringSlot).join('\n\n'),
-      OUTER_HALVES.map(outerHalfSlot).join('\n\n'),
     ].join('\n\n'),
     clock(),
     wordmark(),
@@ -1349,6 +1884,14 @@ function face() {
     <Metadata key="CLOCK_TYPE" value="DIGITAL" />
     <Metadata key="PREVIEW_TIME" value="10:08:00" />
 
+    <UserConfigurations>
+        <ListConfiguration id="${TEMPERATURE_CONFIGURATION}" displayName="@string/temperature" defaultValue="auto">
+            <ListOption id="auto" displayName="@string/temperature_auto" />
+            <ListOption id="celsius" displayName="@string/temperature_celsius" />
+            <ListOption id="fahrenheit" displayName="@string/temperature_fahrenheit" />
+        </ListConfiguration>
+    </UserConfigurations>
+
     <Scene backgroundColor="${COLOR.background}">
 ${body}
     </Scene>
@@ -1356,14 +1899,55 @@ ${body}
 `
 }
 
+/** Parse the actual output before either writing it or comparing it with disk. */
+async function assertConditionTrees(xml, baseline = null) {
+  const check = runFile('python3', [join(root, 'tools/check-watchface-structure.py'),
+    ...(baseline === null ? [] : ['--n1-pair-diagnostics'])])
+  const closed = new Promise((resolve) => check.child.once('close', resolve))
+  // Both trees come from this invocation, so canonical regeneration remains possible.
+  const input = baseline === null ? xml : `<N1DiagnosticComparison>
+${baseline.slice(baseline.indexOf('<WatchFace'))}
+${xml.slice(xml.indexOf('<WatchFace'))}
+</N1DiagnosticComparison>`
+  try {
+    await Promise.all([check, pipeline([input], check.child.stdin)])
+  } finally {
+    await closed
+  }
+}
+
 const xml = face()
+const diagnosticXml = face(true)
 
+assertLegacyCutoffs()
 assertNearExhaustedArcs()
-await emit(target, xml, 'render-watchface')
+assertLowerContracts()
+for (const [diameter, pixels] of [[404, 450], [356, 397], [332, 370], [308, 344]]) {
+  if (texturePixels(diameter) !== pixels) throw new Error(`reference ${diameter}: texture sampling/ceil boundary drifted`)
+}
+await assertConditionTrees(xml)
+await assertConditionTrees(diagnosticXml, xml)
+const outputFlag = process.argv.indexOf('--n1-pair-diagnostics-output')
+if (outputFlag !== -1) {
+  const path = process.argv[outputFlag + 1]
+  if (!path || path.startsWith('--') || process.argv.includes('--check')) {
+    throw new Error('diagnostic output requires a build-directory path and cannot use --check')
+  }
+  const output = resolve(path)
+  const withinBuild = relative(join(root, 'apps/watchface_wff/build'), output)
+  if (isAbsolute(withinBuild) || withinBuild.startsWith('..') || !withinBuild.endsWith('/raw/watchface.xml')) {
+    throw new Error('diagnostic XML must be a raw/watchface.xml overlay under apps/watchface_wff/build')
+  }
+  await mkdir(dirname(output), { recursive: true })
+  await writeFile(output, diagnosticXml)
+} else {
+  if (process.argv.includes('--check')) await assertTextures()
+  await emit(target, xml, 'render-watchface')
 
-// Textures are rasterized, not compared: ImageMagick stamps metadata that
-// differs between runs on pixel-identical output (see design-output.mjs).
-if (!process.argv.includes('--check')) {
-  await writeTextures()
-  console.log(`wrote ${TEXTURE_RINGS * TOKENS.length} ring textures to ${drawables}`)
+  // Textures are rasterized, not compared: ImageMagick stamps metadata that
+  // differs between runs on pixel-identical output (see design-output.mjs).
+  if (!process.argv.includes('--check')) {
+    await writeTextures()
+    console.log(`wrote ${LAYOUTS.filter(({ name }) => name !== 'Legacy').reduce((total, { count }) => total + count, 0) * TOKENS.length} ring textures to ${drawables}`)
+  }
 }

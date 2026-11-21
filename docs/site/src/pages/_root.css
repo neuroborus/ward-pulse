@@ -3,6 +3,10 @@
   --vocs-spacing-content: calc(46.1826rem + (var(--vocs-spacing-content-px) * 2));
 }
 
+footer[data-v-footer]:has(> [data-wardpulse-roadmap-audio]) {
+  display: none;
+}
+
 :where([data-v-content]) span[id] {
   scroll-margin-top: calc(var(--vocs-spacing-topNav) + 4rem);
 }

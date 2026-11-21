@@ -15,7 +15,7 @@ typedef AlertSettingsJsonEffect =
 
 /// Applies phone alert prefs through the Rust core.
 ///
-/// When no rules are enabled, clears leftover alerts without calling FFI
+/// When no rules are enabled, clears alerts and observations without calling FFI
 /// (default-off path for first-run hosts and widget tests).
 DashboardSnapshot applyUserAlertSettings(
   DashboardSnapshot snapshot,
@@ -23,7 +23,7 @@ DashboardSnapshot applyUserAlertSettings(
   AlertSettingsJsonEffect applyJson = applyAlertSettingsJson,
 }) {
   if (!settings.hasEnabledRules) {
-    if (snapshot.alerts.isEmpty) {
+    if (snapshot.alerts.isEmpty && snapshot.alertConditions.isEmpty) {
       return snapshot;
     }
     return DashboardSnapshot(
@@ -37,7 +37,9 @@ DashboardSnapshot applyUserAlertSettings(
       watchSummary: snapshot.watchSummary,
       syncIssue: snapshot.syncIssue,
       syncDetails: snapshot.syncDetails,
+      syncRejection: snapshot.syncRejection,
       connectionVersions: snapshot.connectionVersions,
+      snapshotOrdering: snapshot.snapshotOrdering,
       reportingOutcomes: snapshot.reportingOutcomes,
     );
   }
@@ -54,10 +56,13 @@ DashboardSnapshot applyUserAlertSettings(
     weekTotal: applied.weekTotal,
     monthTotal: applied.monthTotal,
     alerts: applied.alerts,
+    alertConditions: applied.alertConditions,
     watchSummary: applied.watchSummary,
     syncIssue: snapshot.syncIssue,
     syncDetails: snapshot.syncDetails,
+    syncRejection: snapshot.syncRejection,
     connectionVersions: snapshot.connectionVersions,
+    snapshotOrdering: snapshot.snapshotOrdering,
     reportingOutcomes: snapshot.reportingOutcomes,
   );
 }

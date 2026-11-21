@@ -3,11 +3,17 @@
 from copy import deepcopy
 import hashlib
 import itertools
+import json
+import os
 from pathlib import Path
+import re
+import shutil
 import tempfile
+import textwrap
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import urllib.parse
+import zipfile
 
 import release_github as release
 
@@ -68,7 +74,10 @@ class PublicationTests(unittest.TestCase):
         self.addCleanup(scratch.cleanup)
         self.directory = Path(scratch.name)
         self.manifest = {}
-        for name in [f"binary-{index}.apk" for index in range(7)] + ["SHA256SUMS", "provenance.json"]:
+        for name in ["wardpulse-phone-0.1.0-code1.aab", "WardPulse-0.1.0-Android.apk",
+                     "wardpulse-wear-0.1.0-code2.aab", "WardPulse-0.1.0-WearOS.apk",
+                     "wardpulse-legacy-0.1.0-code1.aab", "WardPulse-0.1.0-WatchFace-WearOS5Plus.apk",
+                     "wardpulse-push-0.1.0-code1.apk", "SHA256SUMS", "provenance.json"]:
             data = (name + "\n").encode()
             (self.directory / name).write_bytes(data)
             self.manifest[name] = {"size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
@@ -117,6 +126,8 @@ class PublicationTests(unittest.TestCase):
                 self.assertIs(self.api.release["prerelease"], prerelease == "true")
                 self.assertEqual(self.api.release["body"], NOTES)
                 self.assertNotIn("make_latest", self.api.release)
+                self.assertEqual({asset["name"]: {"size": asset["size"], "sha256": asset["digest"][7:]}
+                                  for asset in self.api.assets}, self.manifest)
 
     def test_invalid_options_fail_before_checkout_notes_or_api(self):
         for flags in (("true", "false", "true"), ("false", "true", "true"), ("yes", "false", "false"), ("false", "false", "legacy")):
@@ -263,6 +274,119 @@ class PublicationTests(unittest.TestCase):
             self.assertIs(self.api.release["draft"], stage != "transition")
             self.assertTrue(all(method in ("POST", "PATCH") for _, method, _ in effects))
             self.assertEqual(len(effects), {"create": 1, "upload": 2, "transition": 11}[stage])
+
+
+class WorkflowTransferTests(unittest.TestCase):
+    """Exercise current workflow scripts with synthetic bytes and injected signer/Git reads."""
+
+    def test_staging_upload_allowlist_and_verified_transfer_agree(self):
+        workflow = (Path(__file__).resolve().parents[2] / ".github/workflows/release-github.yml").read_text()
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        root = Path(scratch.name).resolve()
+        checkout, temporary = root / "checkout", root / "temporary"
+        checkout.mkdir()
+        temporary.mkdir()
+        original = Path.cwd()
+        self.addCleanup(os.chdir, original)
+        os.chdir(checkout)
+
+        def script(step):
+            block = workflow.split("      - name: " + step + "\n", 1)[1]
+            return textwrap.dedent(block.split("<<'PY'\n", 1)[1].split("\n          PY", 1)[0])
+
+        paths = [
+            "apps/phone_flutter/build/app/outputs/bundle/release/app-release.aab",
+            "apps/phone_flutter/build/app/outputs/flutter-apk/app-release.apk",
+            "apps/wear_android/app/build/outputs/bundle/release/app-release.aab",
+            "apps/wear_android/app/build/outputs/apk/release/app-release.apk",
+            "apps/watchface_wff/build/outputs/bundle/release/WardPulseWatchFace-release.aab",
+            "apps/watchface_wff/build/outputs/apk/release/WardPulseWatchFace-release.apk",
+            "apps/wear_android/watchface_push/build/outputs/apk/release/watchface_push-release.apk",
+        ]
+        names = ["wardpulse-phone-1.2.3-code9.aab", "WardPulse-1.2.3-Android.apk",
+                 "wardpulse-wear-1.2.3-code10.aab", "WardPulse-1.2.3-WearOS.apk",
+                 "wardpulse-legacy-1.2.3-code4.aab", "WardPulse-1.2.3-WatchFace-WearOS5Plus.apk",
+                 "wardpulse-push-1.2.3-code6.apk"]
+        push = b"synthetic Push bytes"
+        for index, path in enumerate(paths):
+            binary = Path(path)
+            binary.parent.mkdir(parents=True, exist_ok=True)
+            binary.write_bytes(push if index == 6 else ("synthetic binary " + str(index)).encode())
+        generated = Path("apps/wear_android/app/build/generated/defaultWatchFace/release/assets/default_watchface.apk")
+        generated.parent.mkdir(parents=True)
+        generated.write_bytes(push)
+        for index, entry in ((2, "base/assets/default_watchface.apk"), (3, "assets/default_watchface.apk")):
+            with zipfile.ZipFile(paths[index], "w") as archive:
+                archive.writestr(entry, push)
+
+        upload_pin = "d02f85820e60d6cf49e939a1af72a84c17d3ce107c840b4e9d3ac0f3946f078e"
+        push_pin = "04fa77a4feabb08e8c71fb1ddc32000c63f18e6ff5967e3b5b8acbd5b36d4950"
+        def signer(arguments, **kwargs):
+            if arguments[0] == "jarsigner":
+                return Mock(returncode=0, stdout="jar verified.\n")
+            if arguments[0] == "keytool":
+                return Mock(returncode=0, stdout="SHA256: " + upload_pin + "\n")
+            self.assertTrue(arguments[0].endswith("/apksigner"))
+            pin = push_pin if arguments[-1] == paths[6] else upload_pin
+            return Mock(returncode=0, stdout="Verifies\nSigner #1 certificate SHA-256 digest: " + pin + "\n")
+
+        environment = {"RELEASE_VERSION": "1.2.3", "RELEASE_TAG": "v1.2.3", "SOURCE_SHA": SHA,
+                       "PHONE_CODE": "9", "WEAR_CODE": "10", "LEGACY_CODE": "4", "PUSH_CODE": "6",
+                       "UPLOAD_CERT_SHA256": upload_pin, "PUSH_CERT_SHA256": push_pin,
+                       "RELEASE_PRIVATE_DIR": str(temporary / "private"), "ANDROID_HOME": str(root / "sdk"),
+                       "RUNNER_TEMP": str(temporary), "GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "2",
+                       "GITHUB_EVENT_NAME": "workflow_dispatch", "GITHUB_REF": "refs/heads/main",
+                       "BUILD_RESULT": "success", "DISPATCH_SHA": SHA, "DISPATCH_TAG": "v1.2.3",
+                       "BUILD_ARTIFACT_ID": "42", "BUILD_RUN_ID": "123", "BUILD_RUN_ATTEMPT": "2",
+                       "BUILD_ARTIFACT_NAME": "wardpulse-android-v1.2.3-123-attempt-2",
+                       "GITHUB_ENV": str(temporary / "environment")}
+        with patch.dict(os.environ, environment, clear=True), patch("subprocess.run", side_effect=signer):
+            exec(script("Verify signatures and stage the explicit allowlist"), {})
+        stage = temporary / "wardpulse-android-release-artifacts"
+        expected_names = set(names) | {"SHA256SUMS", "provenance.json"}
+        self.assertEqual({path.name for path in stage.iterdir()}, expected_names)
+        for name, path in zip(names, paths):
+            self.assertEqual((stage / name).read_bytes(), Path(path).read_bytes())
+
+        allowlist = re.findall(r"^            \$\{\{ runner.temp \}\}/wardpulse-android-release-artifacts/(.+)$",
+                               workflow, re.MULTILINE)
+        for key in ("version", "phone_code", "wear_code", "legacy_code", "push_code"):
+            value = "1.2.3" if key == "version" else environment[key.upper()]
+            allowlist = [name.replace("${{ steps.versions.outputs." + key + " }}", value) for name in allowlist]
+        self.assertEqual(len(allowlist), 9)
+        self.assertEqual(set(allowlist), expected_names)
+
+        sources = {"apps/phone_flutter/pubspec.yaml": "version: 1.2.3+9\n",
+                   "apps/wear_android/app/build.gradle.kts": 'versionCode = 10\nversionName = "1.2.3"\n',
+                   "apps/watchface_wff/build.gradle.kts": 'versionCode = 4\nversionName = "1.2.3"\n',
+                   "apps/wear_android/watchface_push/build.gradle.kts":
+                       'versionName = "1.2.3"\n}.orElse(6)\n'}
+        def git(arguments, **kwargs):
+            if arguments == ["git", "rev-parse", "HEAD"]:
+                return SHA + "\n"
+            self.assertEqual(arguments[:2], ["git", "show"])
+            sha, path = arguments[2].split(":", 1)
+            self.assertEqual(sha, SHA)
+            return sources[path]
+
+        with patch.dict(os.environ, environment, clear=True), patch("subprocess.check_output", side_effect=git):
+            exec(script("Bind successful build outputs to the original dispatch and source"), {})
+        environment.update(line.split("=", 1) for line in Path(environment["GITHUB_ENV"]).read_text().splitlines())
+        expected = json.loads(Path(environment["EXPECTED_TRANSFER"]).read_text())
+        self.assertEqual(expected["binaries"], {name: push_pin if name == names[-1] else upload_pin for name in names})
+        for path in stage.iterdir():
+            shutil.copyfile(path, Path(environment["TRANSFER_DIR"]) / path.name)
+        with patch.dict(os.environ, environment, clear=True):
+            exec(script("Independently verify the nine received files and receipts"), {})
+        manifest = json.loads(Path(environment["VERIFIED_TRANSFER"]).read_text())
+        self.assertEqual(manifest, {path.name: {"size": path.stat().st_size,
+                                               "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+                                    for path in stage.iterdir()})
+        provenance = json.loads((stage / "provenance.json").read_bytes())
+        self.assertEqual([record["file"] for record in provenance["binaries"]], names)
+        self.assertEqual((provenance["source_sha"], provenance["build_run_id"], provenance["build_run_attempt"]),
+                         (SHA, "123", "2"))
 
 
 if __name__ == "__main__":

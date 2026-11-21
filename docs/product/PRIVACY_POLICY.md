@@ -20,8 +20,12 @@ They keep their original successful-update times and are marked stale after a fa
 Those stored records contain no credentials, prompts or full provider reports.
 
 Removing or replacing a connection prevents its obsolete stored data from being reused.
-Disconnect removes the selected local credential; if secure storage is temporarily
-unavailable, remaining cleanup can be retried later without reconnecting the removed account.
+After confirmed local removal, the selected credential and its obsolete data cannot be used
+again, even if remaining encrypted-storage cleanup fails. If removal cannot be confirmed,
+WardPulse shows an unavailable state; this does not mean the connection was removed.
+For Codex, unavailable encrypted sign-in material need not prevent local removal when that
+removal can still be confirmed. Optional provider sign-out is best effort when the needed
+material is readable; local removal does not guarantee provider-side revocation.
 Cancelling a replacement sign-in preserves an existing valid connection. Clearing Android
 app storage removes local credentials, stored data and preferences.
 

@@ -8,12 +8,17 @@ The [product release ledger](../../tools/release/README.md#product-ledger) is th
 `@wardpulse/app` workspace. Stock Changesets owns its version, generated changelog and
 consumed fragments. [Pending fragments](../../.changeset/README.md) must target only that
 product; root tooling and docs remain `0.0.0`, while Cargo and Dart metadata are independent.
-The complete stock-generated initial `0.1.0` entry covers the candidate and release tooling,
-with no pending normal fragment. The Owner explicitly selected this unpublished initial
-version; Root verified and removed the old unpublished GitHub draft. Local preparation,
-generated notes, tags alone and drafts do not prove publication or authorize a new release
-operation. Verify actual publication records before correcting unpublished notes, stop on
-conflicting evidence and preserve published history and delivered artifacts.
+The 2026-10-23 initial stock regeneration consumed the candidate and release-tooling inputs;
+Root's removal of the old unpublished GitHub draft belongs to that dated preparation.
+On 2026-11-04, replacement stock generation consumed all eight reconstructed product inputs
+into one complete initial `0.1.0` entry, with no pending normal fragment or native version
+transition. The [release owner](../../tools/release/README.md#initial-candidate) records the
+semantic range, generation and current publication limits. The Owner explicitly selected
+this unpublished initial version; no deletion of the currently observed draft is delegated.
+Local preparation, generated notes, tags alone and drafts do not prove publication or
+authorize a new release operation. Verify actual publication records before correcting
+unpublished notes, stop on conflicting evidence and preserve published history and delivered
+artifacts.
 
 Use the [prepare-release skill](../../.agents/skills/prepare-release/SKILL.md) to audit the
 actual repository-wide release range against pending fragments and generated notes. Inspect
@@ -22,16 +27,25 @@ The [local bridge](../../tools/release/README.md#local-version-preparation) pref
 official plan and all native declarations before stock generation or native writes, then
 mirrors a genuine transition with phone +2, next even Wear and independent legacy/Push +1.
 A fully matching target changes nothing and preserves pending fragments. Partial generation
-or I/O requires reconciliation, not an automatic retry. This setup retains 0.1.0 and 1/2/1/1.
+or I/O requires reconciliation, not an automatic retry. The guarded integration allocation
+retains 0.1.0 with phone/Wear/legacy/Push 3/4/2/5; only Push's default advances 3→5.
+That scoped packaging change did not itself perform a release cut or release preparation.
+Its metadata/status qualification was recorded Pending; this reconstruction does not close
+the earlier artifact or integration acceptance records. For the 2026-11-04 notes-only
+reconstruction, Native FINALIZE requires exactly `git diff --check HEAD` and full
+`just check-docs`. These checks remain unexecuted at the implementation checkpoint.
+Mandatory post-DONE HOST qualification includes final readiness, same-target byte identity
+and actual `just release-status` output, retaining the stock error after fragment consumption;
+no HOST result is claimed here.
 
-The 0.1.0 RC source versions are:
+The current 0.1.0 source versions are:
 
 | Artifact | Package | versionName | versionCode | Source |
 | --- | --- | --- | --- | --- |
-| Phone AAB | `app.wardpulse` | `0.1.0` | `1` | `version` in [pubspec.yaml](../../apps/phone_flutter/pubspec.yaml) (`0.1.0+1`) |
-| Wear host AAB | `app.wardpulse` | `0.1.0` | `2` | `defaultConfig` in [Wear build.gradle.kts](../../apps/wear_android/app/build.gradle.kts) |
-| Legacy WFF AAB | `app.wardpulse.watchface` | `0.1.0` | `1` | `defaultConfig` in [WFF build.gradle.kts](../../apps/watchface_wff/build.gradle.kts) |
-| Bundled Push APK | `app.wardpulse.watchfacepush.main` | `0.1.0` | `1` | `pushVersionCode` / `defaultConfig` in [Push build.gradle.kts](../../apps/wear_android/watchface_push/build.gradle.kts) |
+| Phone AAB | `app.wardpulse` | `0.1.0` | `3` | `version` in [pubspec.yaml](../../apps/phone_flutter/pubspec.yaml) (`0.1.0+3`) |
+| Wear host AAB | `app.wardpulse` | `0.1.0` | `4` | `defaultConfig` in [Wear build.gradle.kts](../../apps/wear_android/app/build.gradle.kts) |
+| Legacy WFF AAB | `app.wardpulse.watchface` | `0.1.0` | `2` | `defaultConfig` in [WFF build.gradle.kts](../../apps/watchface_wff/build.gradle.kts) |
+| Bundled Push APK | `app.wardpulse.watchfacepush.main` | `0.1.0` | `5` | `pushVersionCode` / `defaultConfig` in [Push build.gradle.kts](../../apps/wear_android/watchface_push/build.gradle.kts) |
 
 Phone and Wear share a package and delivered app-signing identity, but need distinct
 versionCodes. WardPulse allocates coordinated pairs as **odd phone / next even Wear**:
@@ -48,8 +62,11 @@ internal positive `versionCode`; see Android's
 [version settings](https://developer.android.com/studio/publish/versioning#version-settings).
 
 Both face packages have independent version histories. Push's positive
-`wardpulsePushVersionCode` input currently defaults to 1; its N/N+1 development upgrade examples do
-not set the Wear host code or require Push code 2 for this RC. Root must resolve first
+`wardpulsePushVersionCode` input currently defaults to 5. Historical candidate 4 flags and
+instrumentation remain unchanged; legacy 1→2 remains independent of the phone 3/Wear 4 pair.
+Preserve the original unobserved Push 1→2 and 2→3 steps and real 3→4 journal; the
+[guarded integration qualification](#guarded-integration-allocation-2026-10-30) owns the
+current forward-only 4→5 path. Root must resolve first
 publication versus existing signing and uploaded-version history before provisioning
 credentials or treating these versions as publishable. If actual history conflicts with
 this RC, return the material decision to Root before release execution; do not silently
@@ -214,6 +231,170 @@ size, alt, caption and original link. Restore the agreed original-directory/path
 share. Record actual results in a separate Owner receipt and final handoff; whole-task
 closure requires Owner ZERO. This procedure does not predict Docs GREEN or require a
 second status-only Source commit. Concrete findings return through supported Runner repair.
+
+#### Adaptive integration qualification (2026-10-28)
+
+##### Guarded integration allocation (2026-10-30)
+
+Source allocates only the guarded Push default 3→5. Phone 3, Wear 4, Legacy 2, all
+versionNames 0.1.0, package identities, signing and release-bridge guards remain unchanged.
+Historical candidate 4 opt-in flags/instrumentation and the actual 3→4 attempt journal stay
+intact. The preserved Round baseline is installed Wear 4/bundled asset 3/Push 4 with Legacy 2
+active; Legacy's active instance is not proof of an owned Push slot. Source 5 is an allocation,
+not a device, explicit-update, rendering, release or item12-completion result.
+
+The 46 valid schema9 integration fixtures and existing private decoder, complication and
+Android API/Parcel cases establish construction contracts only when executed. They establish
+neither service delivery nor WFF paint. Preserve schema/producer/storage/delivery behavior,
+accepted N1 44/22, N2 32/16, N3/legacy 20/10 geometry and Alpha behavior. Do not assume that no
+renderer change can be needed: any newly evidenced essential scope issue requires a concrete
+reviewed finding before execution.
+
+Both independent Worker and Reviewer retain this sole ordered Native inventory. Worker
+executes applicable checks during dedicated FINALIZE; Reviewer discovers the same inventory
+and reviews its eventual Worker executor without running FINALIZE. No result is claimed here.
+
+| ID | Exact command | Applicable commits |
+| --- | --- | --- |
+| C1 | `just validate-fixtures` | 1–9, including final combined candidate |
+| C2 | `node tools/render-watchface.mjs --check` | 9, final combined candidate |
+| C3 | `just release-status` | 9 |
+| C4 | `just check-docs` | 1–9, including each owning coverage update |
+| C5 | `git diff --check HEAD` | 1–9 |
+
+Execute applicable commands in catalogue order. C4 includes its citation prerequisite;
+add no duplicate citation gate, aliases, Kotlin/Android Native execution or configuration
+changes. Report genuine environmental failures through the supported route.
+
+All six original compatibility cells remain required, with actual historical evidence kept
+at its recorded scope. Unavailable historical cells require explicit Root-reviewed,
+supported forward-only reconciliation; retained Push 4 and final 5 cannot recreate them.
+
+| Channel / cell | Original required combination | Qualification still required |
+| --- | --- | --- |
+| Push old-old | Wear 2 / Push 1 | Bind original installed-code/frame receipts; the distinct calibration APK is not equivalent evidence. |
+| Push new-old | Wear 4 / Push 1 | Not observed; Root-reviewed forward-only reconciliation required. |
+| Push new-new | Wear 4 / Push 2 | Installed 2 was observed, but explicit 1→2 was not; Root-reviewed forward-only reconciliation required. |
+| Legacy old-old | Wear 2 / Legacy 1 | Bind historical evidence or obtain Root-reviewed forward-only reconciliation if unavailable. |
+| Legacy old-new | Wear 2 / Legacy 2 | Face 1→2 retaining Wear 2; bind historical evidence or obtain Root-reviewed forward-only reconciliation if unavailable. |
+| Legacy new-new | Wear 4 / Legacy 2 | Wear 2→4 retaining Legacy 2; bind retained choices and actual artifacts, reconciling unavailable historical evidence with Root. |
+
+Mandatory HOST duties remain ordered below. **All begin only after whole nine-step execution
+DONE, retirement of every run-owned process, owning CLI exit if used and fresh separate
+public/OS idle.** They never gate Native completion or commits; all unverified duties remain
+Pending.
+
+1. Run nontarget full `just check-wear`, `just check-watchface` and unchanged complete
+   `just check-phone` (format/analyze/Flutter tests/cache and widget harnesses, no install/adb
+   or change to installed phone 1), plus final fixture/docs/design/source/release checks and
+   the supported Push build/signing/token graph. Preserve warm and fresh task-owned empty-cache/
+   reuse dependency checks. Verify normal/diagnostic official XML validation and actual pinned
+   Push semantic success, effective compiled flags/default-false/release/Push/no-clean guards,
+   recovery of the complete normal tree after diagnostic stripping, renderable literal padding
+   and exact per-variant/embedded resource routes. Bind Source/canonical/built/signer hashes;
+   builds authorize no install.
+2. Keep `just test-wear-device`, target/test-APK provisioning, live phone 1→3/sync and normal
+   UI Update/selection **HELD** for the separately admitted typed-API/guard-phase capability
+   scope against preserved old Round Wear 4/asset 3/Push 4. Typed SDK/client/NodeClient access
+   remains unmeasured; the five-key dump stopped at its requester mapping guard before client
+   bind, proving no API denial. No API/harness fix belongs to these nine commits. The ignored,
+   unapplied UI-guard correction requires delegated correction, blind test, whole review,
+   validator/docs checks, Root ZERO and a separate commit after successful whole execution and
+   before new UI acceptance. Nontarget checks waive none of these held duties.
+3. After that scope is resolved, run full unchanged `just test-wear-device`, including private
+   decoder and Android API/Parcel cases with actual counts/results. Complete pure `check-phone`
+   remains required in duty 1; no subset or Source inspection replaces runtime gates.
+   No physical-phone action.
+4. Before a later explicit normal **Update watch face** 4→5, freshly prove installed Push 4/
+   APK hash/signer, the owned manager slot, all eight retained choices and quiet-writer custody.
+   Keep Legacy active. Use the existing validated embedded APK/token/client/UI path; verify
+   returned same-slot/result/resource identity and separate settled retention. Installing the
+   final host must not silently advance this explicit witness. Unexpected advancement stops
+   it: no code 6, replay, downgrade, reset or invented button success. Later retained-Push
+   selection/rendering is a separate normal HOST operation, not automatic activation.
+5. Complete or explicitly reconcile all six compatibility cells above. Preserve original
+   Wear 2→4/Push 1→2 and Legacy 1→2/Wear 2→4 ordering and all missing manager-update evidence;
+   neither real 3→4 nor later 4→5 reconstructs history. Phone 1→3 follows reviewed combinations.
+6. After approved installs, bind exact built→installed→active identities. Install the final
+   normal candidate before guest boot. Require matched FIRST and separate SETTLED S1..S7 plus
+   remaining both-shape native endpoints, zero/tiny/near/full, period/radius, true-AMBIENT,
+   transitions/reorder/credits, clip and clearance cases. Retain each frame's inputs/mode/
+   viewport/IDs, obstruction/Unknown qualifications and safe stop-RED recovery; final frames,
+   sleeps or retries cannot replace transition evidence.
+7. Keep malformed envelope/type/TITLE/impossible-position, delayed/missing-main/valid-extra,
+   absent-summary and preview capability blockers separate from the 46 valid fixtures.
+   Existing manual routes still require actual producer/ID/owner/caller/target/custody and
+   restoration proof, without synthesized mappings, blanket-update fallback or raw-token output.
+8. After reviewed combinations, preserve the existing phone emulator through 1→3, including
+   data/settings/credentials/consent/jobs, and prove fresh phone→watch/widget sync against
+   actual history. No physical-phone work is included.
+9. Restore guarded original bytes/metadata/eight choices/transport/time/font/policy/ambient
+   and full derived Glance/Face before retiring exact undo/backups. After native acceptance,
+   refresh a healthy coherent public cohort, screenshots/index/owning guides/docs/browser,
+   with independent image/prose review and Root's whole ZERO. Stale mock controls are not
+   healthy public examples.
+
+Item12 remains **OPEN** and both extras remain queued. Later time-position work follows all
+previous work and requires visible design/preview plus explicit owner approval before
+implementation. This allocation accepts no device, update, public surface or release.
+
+##### Historical qualification receipts
+
+**Historical 2026-10-29 support status:** the [client probe](../../apps/wear_android/README.md#guarded-complication-client-probe)
+uses test-only watchface-client 1.2.1, guarded public existing-instance access and bounded
+unsupported/malformed/partial observations. Actual resolution/checksum (warm plus new empty
+task-owned cache and reuse), service access/permission, mappings, overrides and effective
+normal-data restoration remain Pending. Rejection is not WFF suppression; supplied bitmaps
+are not ordinary datasource/transition/true-ambient evidence. The genuine stock-runner 3→4
+witness must preserve the original host/asset 3 through result and separate settled native
+observation/restoration before owner retirement and ordinary seam-bearing target provisioning.
+At that stage candidate 4 was an integration input, with phone 3/Wear 4/legacy 2/Push default
+3/common 0.1.0 unchanged. Neither support nor a later 3→4 result closes UNKNOWN causality,
+old-Push1 matrix gaps, missing explicit 1→2/2→3 manager evidence or the utility-button gap. Full ordered HOST
+acceptance, both shapes/compatibility cells/transitions, retained choices, public captures,
+docs/browser, restoration and Root whole ZERO remain Pending after whole Runner DONE and
+retirement; none becomes a Native-commit prerequisite.
+
+The item12 baseline `604e2e5` emitted 221 Compare branches. Each main `isValid` branch in
+slots 101/102/105 had two direct element trees (layout Condition, then strip Group); the
+other 218 had one. This violates the documented
+[Condition single-tree contract](https://developer.android.com/reference/wear-os/wff/common/condition).
+`ringSlot` in `tools/render-watchface.mjs` now wraps each main selector and strip in one
+stable named full-canvas Group. `tools/check-watchface-structure.py` parses actual generated
+XML before emission in both modes, counts direct Compare/Default element children and
+checks that the selector and strip remain below the main tree. The existing structure checker
+reproduced the three-branch RED by parsing the baseline generated XML; corrected generation
+in `--check` mode returned GREEN. This proves the structural repair;
+its exact native causal effect remains unknown until corrected native observation.
+
+The original controlled N2 input was `[Codex ordinary, Cursor pair]`: Cursor OWN blue at
+outer j0's inner half, Codex green at inner j1's full band and Cursor OTHER teal at outer-half
+j0, with semantic 37 encoded as VALUE148/MAX400. The unaccepted Push 2 frame retained main
+legends but showed only the teal usage arc. Do not infer producer reordering, a colour
+workaround or blanket main admission failure. HOST must repeat this identical witness,
+binding source → emitted XML → built raw resources → installed package → active face and
+effective responses, and inspect original corrected interactive/true-ambient frames.
+
+During that attempt, installing Wear 4 was followed by installed Push 2 before any explicit
+**Update watch face** operation. The observed receiver is not a proved trigger. Original
+new-Wear4/old-Push1 and explicit Push 1→2 were **not observed**. Preserve original APK,
+runtime and frame receipts, including the distinct preadaptive calibration XML; do not
+relabel these gaps or the dated 2026-10-16 results above.
+
+The main-comparison correction allocated only the guarded Push default 2→3 and required a
+genuine explicit manager update from installed Push 2 to candidate 3. That update was not
+observed; preserve the gap and historical receipts. The current allocation and six-cell
+reconciliation above supersede that prospective path. Bundled installation cannot prove
+explicit update; never downgrade, reset, reinstall or synthesize an old baseline.
+
+Corrected builds, official validation, API/wire/device checks, both channels, remaining
+settled/transition and phone/version/sync coverage, full documentation/browser acceptance,
+healthy public captures, guarded restoration and Root's whole zero-findings review remain
+**Pending**. HOST follows whole execution DONE, owned-process retirement, owning CLI exit
+where applicable and fresh separate public/OS idle; it is not a Native-commit prerequisite.
+A Native commit does not close item12. Physical-phone work remains forbidden and physical
+watch work deferred. The [adaptive design](WATCH_RING_DESIGN.md#revision-2026-10-28--adaptive-bands-from-resolved-count)
+owns the unchanged geometry and remaining native matrix.
 
 ## Signing
 
@@ -381,19 +562,22 @@ and guarded ordinary release APK builds produce these seven files for the curren
 
 | File in the Actions artifact | Purpose |
 | --- | --- |
-| `wardpulse-phone-0.1.0-code1.aab` | Phone Play upload bundle |
-| `wardpulse-phone-0.1.0-code1.apk` | Direct phone installer |
-| `wardpulse-wear-0.1.0-code2.aab` | Wear Play upload bundle |
-| `wardpulse-wear-0.1.0-code2.apk` | Direct Wear installer |
-| `wardpulse-legacy-0.1.0-code1.aab` | Legacy WFF Play upload bundle |
-| `wardpulse-legacy-0.1.0-code1.apk` | Direct legacy WFF installer |
-| `wardpulse-push-0.1.0-code1.apk` | Separate Push identity, embedded by the Wear producer |
+| `wardpulse-phone-0.1.0-code3.aab` | Phone Play upload bundle |
+| `WardPulse-0.1.0-Android.apk` | Direct phone installer |
+| `wardpulse-wear-0.1.0-code4.aab` | Wear Play upload bundle |
+| `WardPulse-0.1.0-WearOS.apk` | Direct Wear installer |
+| `wardpulse-legacy-0.1.0-code2.aab` | Legacy WFF Play upload bundle |
+| `WardPulse-0.1.0-WatchFace-WearOS5Plus.apk` | Separate Wear OS 5+ face installer |
+| `wardpulse-push-0.1.0-code5.apk` | Separate Push identity, embedded by the Wear producer |
 
 The three direct installers are signed with the **upload key**. This does not promise update
 compatibility with debug installs or Play-delivered installs, whose app-signing certificates
 may differ. Push retains its separate persistent signer. These are direct release producer
 APKs; no debug or bundletool universal substitute is used. Installer basenames are discovered
-from the actual producer output directories, including legacy filename casing.
+from the actual producer output directories, including legacy filename casing. Only their
+staged copies receive the friendly names above, interpolating the coherent source version;
+no binary is repacked or re-signed to rename it. Technical AAB and Push names, embedded
+Push paths and the exact nine-file payload stay unchanged; no old-name aliases are added.
 
 Standard `jarsigner`/`keytool` verify the three AABs; `apksigner` verifies all four APKs.
 Positive verification evidence and fixed signer pins are required. The pinned imported
@@ -422,12 +606,23 @@ only the exact artifact ID; it does not select a name or a latest artifact. No s
 Actions run/job/artifact metadata API or whole-workflow success is required.
 
 The receiver re-reads version/code declarations at the exact source commit, derives the
-seven binary names and requires exactly those files plus `SHA256SUMS` and `provenance.json`
-as regular root files. Unsafe, nested, unexpected or missing files, duplicate receipt keys
+same seven binary names from that producer's convention and requires exactly those files
+plus `SHA256SUMS` and `provenance.json` as regular root files. Unsafe, nested, unexpected or
+missing files, duplicate receipt keys
 or records, conflicting identities, incomplete/extra hashes and hash mismatches fail closed.
 It recomputes every binary hash and checks provenance source/tag/version/run/origin-attempt,
 signer pins and completed producer checks. A download digest warning is not verification.
 The receiver does not duplicate the producer's APK/token parsing or signature tooling.
+
+The producer records `WARDPULSE_APK_NAMING: friendly-v1` in its workflow. The newer Play
+receiver reads this immutable source declaration as data under its existing tag/ancestry
+checks. Historical producer source without the marker retains the old names, even when
+version/codes equal a newer source's declarations. Unknown, malformed, duplicate or unreadable
+evidence fails closed; no asset-name inference, mixed convention, historical execution,
+retroactive rename or receipt rewrite is permitted. See
+[Play preparation](../../tools/release-google-play/README.md#preparation-interface).
+Source consistency review and synthetic tests do not establish an actual production signed
+staging run or delivery; those acceptance gates remain pending.
 
 Before any release mutation, authenticated paginated List releases includes drafts and rejects
 every existing release for the exact tag. GET-by-tag absence is not used. An existing tag is

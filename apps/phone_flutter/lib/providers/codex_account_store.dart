@@ -39,11 +39,14 @@ abstract interface class CodexAccountStore {
 
   Future<void> write(CodexAccountSession value);
 
-  Future<void> delete();
+  Future<void> delete({void Function(CredentialVersion)? onRetired});
 }
 
 final class SecureCodexAccountStore
-    implements CodexAccountStore, VersionedAccountStore<CodexAccountSession> {
+    implements
+        CodexAccountStore,
+        VersionedAccountStore<CodexAccountSession>,
+        ConnectionRejectionRecorder {
   SecureCodexAccountStore({
     FlutterSecureStorage? storage,
     ConnectionCachePlatform? platform,
@@ -66,11 +69,17 @@ final class SecureCodexAccountStore
                 ).accountId.trim(),
       );
   @override
+  Future<void> observeLifecycle(CredentialLifecycleObserver observer) =>
+      _credentials.observeLifecycle(observer);
+  @override
   Future<bool> isCurrent(CredentialVersion expected) =>
       _credentials.isCurrent(expected);
   @override
   Future<R> serializeFetch<R>(Future<R> Function() operation) =>
       _credentials.serializeFetch(operation);
+  @override
+  Future<void> admitAutomatic(CredentialVersion expected) =>
+      _credentials.admitAutomatic(expected);
   @override
   Future<VersionedCredential<CodexAccountSession>?> readVersioned() async {
     final value = await _credentials.read();
@@ -90,14 +99,18 @@ final class SecureCodexAccountStore
   Future<void> write(CodexAccountSession value) =>
       _credentials.write(jsonEncode(value.toJson()));
   @override
-  Future<void> delete() async {
-    await _credentials.delete();
+  Future<void> delete({void Function(CredentialVersion)? onRetired}) async {
+    await _credentials.delete(onRetired: onRetired);
     await _storage.delete(key: _legacyCompanionKey);
   }
 
   @override
+  Future<bool> rejectAuthentication(CredentialVersion expected) =>
+      _credentials.recordRejection(expected, removeCredential: true);
+
+  @override
   Future<void> deleteIfCurrent(CredentialVersion expected) =>
-      _credentials.delete(expected);
+      _credentials.delete(expected: expected);
   @override
   Future<CredentialVersion?> refresh(
     CodexAccountSession value,

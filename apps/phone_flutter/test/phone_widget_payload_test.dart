@@ -1,17 +1,23 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/provider_status_color.dart';
+import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_payload.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
+import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
+import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
+
+import 'selected_data_freshness_test_support.dart';
 
 void main() {
   final snapshot = DashboardSnapshot.fromJsonString(
     File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
   );
 
-  test('builds remaining rows from available percent metrics', () {
+  test('builds remaining and expense rows from available metrics', () {
     final payload = buildPhoneWidgetPayload(
       _asConnection(snapshot),
       const PhoneWidgetPreferences(),
@@ -20,8 +26,266 @@ void main() {
     expect(payload.rows, isNotEmpty);
     for (final row in payload.rows) {
       expect(row.remainingPercent, inInclusiveRange(0, 100));
-      expect(row.line, contains('% left ·'));
+      if (row.kind == PhoneWidgetRowKind.budget) {
+        expect(row.line, contains(row.spent!.label));
+      } else {
+        expect(row.line, contains('% left ·'));
+      }
     }
+  });
+
+  test(
+    'Fable widget zero retains its accent and reset while unknown is omitted',
+    () {
+      const fableId = 'allowance.claude.claude-seven-day-fable';
+      final reset = DateTime.utc(2026, 11, 8, 8);
+      for (final used in [100.0, null]) {
+        final account =
+            snapshot.primaryAccount!.toJson()
+              ..['accountId'] = 'claude-local'
+              ..['provider'] = 'claude'
+              ..['connection'] = ProviderConnections.claudePlan.storageKey
+              ..['allowances'] = [
+                {
+                  ..._allowance(
+                    'claude-seven-day-fable',
+                    'Fable weekly',
+                    100,
+                    resetsAt: reset,
+                  ),
+                  'usedPercent': used,
+                  'windowMinutes': 7 * 24 * 60,
+                  'status': used == null ? 'unknown' : 'rateLimited',
+                },
+                _allowance('claude-seven-day', 'Weekly plan', 60),
+              ];
+        final payload = buildPhoneWidgetPayload(
+          DashboardSnapshot.fromJson({
+            ...snapshot.toJson(),
+            'accounts': [account],
+          }),
+          const PhoneWidgetPreferences(
+            selectedIds: [fableId, 'allowance.claude.claude-seven-day'],
+          ),
+        );
+        expect(payload.rows.last.poolLabel, 'Weekly plan');
+        expect(payload.rows.last.accentArgb, 0xFFE8915A);
+        if (used == null) {
+          expect(payload.rows, hasLength(1));
+        } else {
+          expect(payload.rows, hasLength(2));
+          final fable = payload.rows.first;
+          expect(fable.poolLabel, 'Fable weekly');
+          expect(fable.remainingPercent, 0);
+          expect(fable.accentArgb, 0xFFFF603D);
+          expect(fable.resetsAt, reset);
+        }
+      }
+    },
+  );
+
+  test('Extra usage rows require a reported valid percent but no cap', () {
+    const preferences = PhoneWidgetPreferences(
+      selectedIds: ['allowance.claude.claude-extra-usage'],
+    );
+    for (final percent in [
+      0.0,
+      20.0,
+      100.0,
+      150.0,
+      null,
+      -1.0,
+      double.nan,
+      double.infinity,
+    ]) {
+      final input = DashboardSnapshot.fromJson({
+        ...DashboardSnapshot.empty().toJson(),
+        'accounts': [
+          {
+            'accountId': 'claude-local',
+            'provider': 'claude',
+            'connection': 'anthropic.plan',
+            'status': 'ok',
+            'credits': <Object>[],
+            'buckets': <Object>[],
+            'modelBreakdown': <Object>[],
+            for (final period in ['today', 'week', 'month'])
+              period: BudgetState.unknownPeriod(period).toJson(),
+            'allowances': [
+              {
+                'id': 'claude-extra-usage',
+                'status': 'ok',
+                'source': 'purchased',
+                'label': 'Extra usage',
+                'usedPercent': percent,
+                'limit': null,
+              },
+            ],
+          },
+        ],
+      });
+      final rows = buildPhoneWidgetPayload(input, preferences).rows;
+      if (percent == null || !percent.isFinite || percent < 0) {
+        expect(rows, isEmpty);
+      } else {
+        expect(rows, hasLength(1));
+        expect(
+          rows.single.remainingPercent,
+          (100 - percent).clamp(0, 100).round(),
+        );
+        expect(rows.single.poolLabel, 'Extra usage');
+        expect(rows.single.creditsSuffix, isNull);
+        expect(rows.single.resetsAt, isNull);
+      }
+    }
+  });
+
+  test(
+    'surface choices isolate plan and platform freshness after capacity',
+    () {
+      final plan = freshnessAccount(
+        'claude',
+        'anthropic.plan',
+        allowances: [freshnessAllowance('claude-five-hour', usedPercent: 80)],
+      );
+      final platform = freshnessAccount('claude', 'anthropic.platform');
+      final retained =
+          freshnessSnapshot([platform]).withStaleStatus().accounts.single;
+      final mixed = freshnessSnapshot([
+        plan,
+        retained,
+      ], overall: ProviderStatus.stale);
+      const planChoice = PhoneWidgetPreferences(
+        selectedIds: ['allowance.claude.claude-five-hour'],
+      );
+      const budgetChoice = PhoneWidgetPreferences(
+        selectedIds: ['budget.anthropic.platform.month'],
+      );
+      final watch = jsonDecode(
+        WatchDashboardSummaryPayload.fromSnapshot(
+          mixed,
+          const WatchRingPreferences(selectedIds: [claudePlanRingId]),
+        ).encode(),
+      );
+      expect(watch['isStale'], isFalse);
+      expect(buildPhoneWidgetPayload(mixed, planChoice).stale, isFalse);
+      final budget = buildPhoneWidgetPayload(mixed, budgetChoice);
+      expect(budget.rows.single.spent!.minorUnits, 2500);
+      expect(budget.rows.single.remainingPercent, 75);
+      expect(budget.stale, isTrue);
+      final limited = buildPhoneWidgetPayload(
+        mixed,
+        const PhoneWidgetPreferences(
+          selectedIds: [
+            'allowance.claude.claude-five-hour',
+            'budget.anthropic.platform.month',
+          ],
+        ),
+        maxSlots: 1,
+      );
+      expect(limited.rows.single.remainingPercent, 20);
+      expect(limited.stale, isFalse);
+      final reversed = freshnessSnapshot([
+        freshnessSnapshot([plan]).withStaleStatus().accounts.single,
+        platform,
+      ]);
+      expect(buildPhoneWidgetPayload(reversed, budgetChoice).stale, isFalse);
+      expect(
+        jsonDecode(
+          WatchDashboardSummaryPayload.fromSnapshot(
+            reversed,
+            const WatchRingPreferences(selectedIds: [claudePlanRingId]),
+          ).encode(),
+        )['isStale'],
+        isTrue,
+      );
+    },
+  );
+
+  test('widget freshness follows the displayed credit sum contributors', () {
+    final plan = freshnessAccount(
+      'claude',
+      'anthropic.plan',
+      allowances: [
+        freshnessAllowance('claude-five-hour'),
+        freshnessAllowance('credits', purchased: true, remaining: '5'),
+      ],
+    );
+    const choice = PhoneWidgetPreferences(
+      selectedIds: ['allowance.claude.claude-five-hour'],
+    );
+    ProviderSnapshot credit({
+      String unit = 'credits',
+      bool unlimited = false,
+    }) => freshnessAccount(
+      'claude',
+      'anthropic.platform',
+      status: ProviderStatus.stale,
+      allowances: [
+        freshnessAllowance(
+          'other',
+          purchased: true,
+          remaining: '0',
+          unit: unit,
+          unlimited: unlimited,
+        ),
+      ],
+    );
+    final summed = buildPhoneWidgetPayload(
+      freshnessSnapshot([plan, credit()]),
+      choice,
+    );
+    expect(summed.rows.single.creditsSuffix, '5 credits');
+    expect(summed.stale, isTrue); // Eligible zero participates in the sum.
+    final tokens = buildPhoneWidgetPayload(
+      freshnessSnapshot([
+        plan,
+        credit(unit: 'tokens'),
+      ], overall: ProviderStatus.stale),
+      choice,
+    );
+    expect(tokens.rows.single.creditsSuffix, '5 credits');
+    expect(tokens.stale, isFalse);
+    final unlimited = buildPhoneWidgetPayload(
+      freshnessSnapshot([
+        plan,
+        credit(unlimited: true),
+      ], overall: ProviderStatus.stale),
+      choice,
+    );
+    expect(unlimited.rows.single.creditsSuffix, isNull);
+    expect(
+      unlimited.stale,
+      isFalse,
+    ); // Suppressed sums supply no displayed data.
+  });
+
+  test('consumed stale metrics mark both surfaces despite a healthy owner', () {
+    final account = freshnessAccount(
+      'cursor',
+      'cursor.plan',
+      allowances: [
+        freshnessAllowance('cursor-plan-models', status: ProviderStatus.stale),
+      ],
+    );
+    final mixed = freshnessSnapshot([account]);
+    expect(account.status, ProviderStatus.ok);
+    expect(
+      buildPhoneWidgetPayload(
+        mixed,
+        const PhoneWidgetPreferences(selectedIds: [cursorOwnPoolId]),
+      ).stale,
+      isTrue,
+    );
+    expect(
+      jsonDecode(
+        WatchDashboardSummaryPayload.fromSnapshot(
+          mixed,
+          const WatchRingPreferences(selectedIds: [cursorOwnPoolId]),
+        ).encode(),
+      )['isStale'],
+      isTrue,
+    );
   });
 
   test('marks stale when overall status is stale', () {
@@ -44,9 +308,190 @@ void main() {
     expect(payload.rows, isEmpty);
   });
 
+  test('preserves exact window resets and complete pool labels', () {
+    final shortReset = DateTime.utc(2028, 2, 10, 9, 15);
+    final longReset = DateTime.utc(2028, 2, 17, 11, 45);
+    final otherProviderReset = DateTime.utc(2028, 2, 11, 14, 30);
+    const pool = 'Weekly pool · Complete name';
+    final account = snapshot.primaryAccount!.toJson();
+    final source = DashboardSnapshot.fromJson({
+      ...snapshot.toJson(),
+      'accounts': [
+        {
+          ...account,
+          'accountId': 'claude-local',
+          'provider': 'claude',
+          'allowances': [
+            _allowance('window.short', pool, 80, resetsAt: shortReset),
+            _allowance('window.long', pool, 60, resetsAt: longReset),
+          ],
+        },
+        {
+          ...account,
+          'accountId': 'codex-local',
+          'provider': 'codex',
+          'allowances': [
+            _allowance('window.short', pool, 40, resetsAt: otherProviderReset),
+            _allowance('window.no-reset', pool, 20),
+          ],
+        },
+      ],
+    });
+
+    final payload = buildPhoneWidgetPayload(
+      source,
+      const PhoneWidgetPreferences(
+        selectedIds: [
+          'allowance.claude.window.short',
+          'allowance.claude.window.long',
+          'allowance.codex.window.short',
+          'allowance.codex.window.no-reset',
+        ],
+      ),
+    );
+
+    expect(
+      payload.rows.map(
+        (row) => (
+          row.familyLabel,
+          row.poolLabel,
+          row.remainingPercent,
+          row.resetsAt,
+        ),
+      ),
+      [
+        ('Claude', pool, 20, shortReset),
+        ('Claude', pool, 40, longReset),
+        ('Codex', pool, 60, otherProviderReset),
+        ('Codex', pool, 80, null),
+      ],
+    );
+  });
+
+  test('budget identity retains its connection without an allowance reset', () {
+    final account = _asConnection(snapshot).primaryAccount!.toJson();
+    account['allowances'] = [
+      _allowance(
+        'window.short',
+        'Today',
+        50,
+        resetsAt: DateTime.utc(2028, 2, 10, 9, 15),
+      ),
+    ];
+    final source = DashboardSnapshot.fromJson({
+      ...snapshot.toJson(),
+      'accounts': [account],
+    });
+
+    final payload = buildPhoneWidgetPayload(
+      source,
+      const PhoneWidgetPreferences(
+        selectedIds: ['budget.anthropic.platform.today'],
+      ),
+    );
+
+    expect(payload.rows, hasLength(1));
+    final row = payload.rows.single;
+    expect(row.label, 'Anthropic platform · Today');
+    expect(row.familyLabel, 'Anthropic');
+    expect(row.poolLabel, 'Today');
+    expect(row.resetsAt, isNull);
+    expect(row.creditsSuffix, isNull);
+  });
+
+  test(
+    'budget states transfer actual Money without inventing percentages or resets',
+    () {
+      final account = _asConnection(snapshot).primaryAccount!.toJson();
+      const spent = Money(minorUnits: -9007199254740993, currency: 'EUR');
+      const mismatched = Money(minorUnits: 10000, currency: 'USD');
+      account['today'] = {
+        ...BudgetState.unknownPeriod('today').toJson(),
+        'spent': spent.toJson(),
+        'limit': mismatched.toJson(),
+        'usedPercent': 10.0,
+      };
+      final source = DashboardSnapshot.fromJson({
+        ...snapshot.toJson(),
+        'accounts': [account],
+      });
+      final row =
+          buildPhoneWidgetPayload(
+            source,
+            const PhoneWidgetPreferences(
+              selectedIds: ['budget.anthropic.platform.today'],
+            ),
+          ).rows.single;
+      expect(row.kind, PhoneWidgetRowKind.budget);
+      expect(row.spent!.minorUnits, spent.minorUnits);
+      expect(row.spent!.currency, 'EUR');
+      expect(row.cap!.currency, 'USD');
+      expect(row.remainingPercent, isNull);
+      expect(row.percentText, isEmpty);
+      expect(row.resetsAt, isNull);
+      expect(
+        phoneWidgetPayloadSubtitle(
+          source,
+          const PhoneWidgetPreferences(
+            selectedIds: ['budget.anthropic.platform.today'],
+          ),
+        ),
+        contains('Cap unavailable'),
+      );
+    },
+  );
+
+  test(
+    'Extra usage preserves independent used and cap quantities in reported units',
+    () {
+      final account =
+          _asConnection(snapshot).primaryAccount!.toJson()
+            ..['allowances'] = [
+              {
+                ..._allowance('claude-extra-usage', 'Extra usage', 20),
+                'source': 'purchased',
+                'used':
+                    const Quantity(
+                      value: '12.500000',
+                      unit: 'Credits',
+                    ).toJson(),
+                'limit': null,
+              },
+            ];
+      final source = DashboardSnapshot.fromJson({
+        ...snapshot.toJson(),
+        'accounts': [account],
+      });
+      final row =
+          buildPhoneWidgetPayload(
+            source,
+            const PhoneWidgetPreferences(
+              selectedIds: ['allowance.claude.claude-extra-usage'],
+            ),
+          ).rows.single;
+      expect(row.remainingPercent, 80);
+      expect(row.extraUsed!.value, '12.500000');
+      expect(row.extraUsed!.unit, 'Credits');
+      expect(row.extraCap, isNull);
+      expect(row.creditsSuffix, isNull);
+      expect(row.resetsAt, isNull);
+    },
+  );
+
   test('family accents follow the family named in the metric id', () {
     final claude = providerFamilyColor('claude').toARGB32();
     expect(phoneWidgetAccentArgb('allowance.claude.plan'), claude);
+    expect(
+      phoneWidgetAccentArgb('allowance.claude.claude-seven-day-fable'),
+      0xFFFF603D,
+    );
+    for (final id in [
+      'allowance.claude.claude-seven-day',
+      'allowance.claude.claude-seven-day-fable-other',
+      'budget.anthropic.platform.claude-seven-day-fable',
+    ]) {
+      expect(phoneWidgetAccentArgb(id), claude, reason: id);
+    }
     // A budget ring carries its connection, so it takes that family too.
     expect(phoneWidgetAccentArgb('budget.anthropic.platform.month'), claude);
     expect(
@@ -158,12 +603,17 @@ void main() {
       payload.rows.map((row) => row.label),
       containsAll(['Cursor Models', 'Cursor · Other Models']),
     );
-    expect(
-      payload.rows
-          .firstWhere((row) => row.label == 'Cursor Models')
-          .remainingPercent,
-      0,
+    final models = payload.rows.firstWhere(
+      (row) => row.label == 'Cursor Models',
     );
+    expect(models.remainingPercent, 0);
+    expect(models.familyLabel, 'Cursor');
+    expect(models.poolLabel, 'Models');
+    final otherModels = payload.rows.firstWhere(
+      (row) => row.label == 'Cursor · Other Models',
+    );
+    expect(otherModels.familyLabel, 'Cursor');
+    expect(otherModels.poolLabel, 'Other Models');
   });
 
   test('appends per-provider purchased credits like Wear Glance', () {
@@ -266,7 +716,110 @@ void main() {
       reason: 'purchased-meter rows are the credit pool; do not repeat credits',
     );
   });
+
+  test('keeps known-zero purchased credits distinct from absent balances', () {
+    for (final remaining in ['0.00', null]) {
+      final withCredits = DashboardSnapshot.fromJson({
+        ...DashboardSnapshot.empty(
+          generatedAt: DateTime.utc(2026, 11, 14),
+        ).toJson(),
+        'accounts': [
+          {
+            'accountId': 'claude-plan',
+            'provider': 'claude',
+            'connection': 'anthropic.plan',
+            'status': 'ok',
+            for (final period in ['today', 'week', 'month'])
+              period: BudgetState.unknownPeriod(period).toJson(),
+            'credits': <Object>[],
+            'buckets': <Object>[],
+            'modelBreakdown': <Object>[],
+            'allowances': [
+              {
+                'id': 'claude-five-hour',
+                'source': 'plan',
+                'label': '5h',
+                'usedPercent': 40.0,
+                'windowMinutes': 300,
+                'status': 'ok',
+              },
+              {
+                'id': 'claude-extra-usage',
+                'source': 'purchased',
+                'label': 'Extra usage',
+                'remaining':
+                    remaining == null
+                        ? null
+                        : {'value': remaining, 'unit': 'credits'},
+                'status': 'stale',
+              },
+            ],
+          },
+        ],
+      });
+      final payload = buildPhoneWidgetPayload(
+        withCredits,
+        const PhoneWidgetPreferences(
+          selectedIds: ['allowance.claude.claude-five-hour'],
+        ),
+      );
+      expect(payload.rows, hasLength(1));
+      final row = payload.rows.single;
+      expect(row.label, 'Claude · 5h');
+      expect(row.percentText, '60% left');
+      if (remaining == null) {
+        expect(row.creditsSuffix, isNull);
+        expect(row.line, '60% left · Claude · 5h');
+        expect(payload.stale, isFalse);
+      } else {
+        expect(row.creditsSuffix, '0 credits');
+        expect(row.line, '60% left · Claude · 5h · 0 credits');
+        expect(payload.stale, isTrue);
+      }
+    }
+  });
+
+  test('omits nonfinite purchased credit sums and their contributors', () {
+    final payload = buildPhoneWidgetPayload(
+      freshnessSnapshot([
+        freshnessAccount(
+          'claude',
+          'anthropic.plan',
+          allowances: [
+            freshnessAllowance('claude-five-hour'),
+            freshnessAllowance('credits', purchased: true, remaining: '1e308'),
+            freshnessAllowance(
+              'other',
+              purchased: true,
+              remaining: '1e308',
+              status: ProviderStatus.stale,
+            ),
+          ],
+        ),
+      ], overall: ProviderStatus.stale),
+      const PhoneWidgetPreferences(
+        selectedIds: ['allowance.claude.claude-five-hour'],
+      ),
+    );
+    expect(payload.rows.single.creditsSuffix, isNull);
+    expect(payload.stale, isFalse);
+  });
 }
+
+Map<String, Object?> _allowance(
+  String id,
+  String label,
+  double usedPercent, {
+  DateTime? resetsAt,
+}) => {
+  'id': id,
+  'source': 'plan',
+  'label': label,
+  'usedPercent': usedPercent,
+  'windowMinutes': 300,
+  'resetsAt': resetsAt?.toUtc().toIso8601String(),
+  'status': 'ok',
+};
 
 /// Mock fixture as a real connection: mock accounts hold no metric slots.
 DashboardSnapshot _asConnection(DashboardSnapshot snapshot) {

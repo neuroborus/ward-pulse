@@ -1,10 +1,45 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/sync/automatic_poll.dart';
 import 'package:ward_pulse_phone/sync/poll_cadence.dart';
 
 /// Rust owns the cadence, so these tests read the constants from its source.
 void main() {
+  test(
+    'automatic origins use provider floors and reset ignores the hourly preference',
+    () async {
+      final periodic = AutomaticPollContext(
+        readInterval: () async => Duration.zero,
+      );
+      expect(
+        await periodic.interval('anthropic.platform'),
+        const Duration(minutes: 1),
+      );
+      expect(
+        await periodic.interval('openai.platform'),
+        const Duration(minutes: 5),
+      );
+      final hourly = AutomaticPollContext(
+        readInterval: () async => const Duration(minutes: 60),
+      );
+      expect(
+        await hourly.interval('anthropic.platform'),
+        const Duration(minutes: 60),
+      );
+      final reset = AutomaticPollContext(
+        origin: AutomaticPollOrigin.resetWake,
+        readInterval:
+            () async =>
+                throw StateError('Reset must not wait for the preference'),
+      );
+      expect(
+        await reset.interval('anthropic.platform'),
+        const Duration(minutes: 5),
+      );
+      expect(await reset.interval('cursor.plan'), const Duration(minutes: 5));
+    },
+  );
   final rust =
       File('../../core/ward-pulse-providers/src/poll.rs').readAsStringSync();
 

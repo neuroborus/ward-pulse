@@ -36,6 +36,13 @@ Read completely before public authoring or review through [user-docs](../SKILL.m
   sticky bars. Record section URLs in existing internal review notes, not developer paths
   on public pages; app-link implementation is a separate code task.
 
+  Before freezing markup owners or metadata-only configuration limits for a permalink
+  change, inspect the actual guide route, Markdown import and transforms, including any
+  compatibility-alias whitelist and renderer. Determine whether the proposed alias markup
+  survives that path, and include necessary transform work in Runner's scope. For acceptance,
+  qualify both normal heading and legacy alias targets in the rendered page; literal spans
+  and a successful build do not establish served IDs.
+
 ## Accuracy and private review evidence
 
 Check prose against actual UI, capabilities and limitations using existing owning sources

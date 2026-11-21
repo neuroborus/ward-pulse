@@ -21,11 +21,13 @@ data class GlanceLegendRowModel(
     val colorArgb: Int,
     val secondaryArc: GlanceLegendArcModel? = null,
     val exhaustedPercentRanges: List<IntRange> = emptyList(),
+    val isFull: Boolean = false,
 )
 
 data class GlanceLegendArcModel(
     val remainingFraction: Float,
     val colorArgb: Int,
+    val isFull: Boolean = false,
 )
 
 /**
@@ -45,14 +47,13 @@ fun glanceRefreshChrome(
     // gray, disabled control, while stale and mock data have no channel but this line.
     val detail = when {
         summary.dataMode == WatchDataMode.MOCK -> "Mock data"
-        summary.isStale || summary.overallStatus == PulseStatus.STALE -> "Stale"
+        summary.isStale -> "Stale"
         rateLimited -> "Rate limited"
         summary.overallStatus == PulseStatus.AUTH_REQUIRED -> "Auth required"
         summary.overallStatus == PulseStatus.WARNING -> "Warning"
         summary.overallStatus == PulseStatus.ERROR -> "Error"
         summary.overallStatus == PulseStatus.UNKNOWN -> "Unknown"
-        summary.overallStatus == PulseStatus.OK -> null
-        else -> summary.overallStatus.label
+        else -> null
     }
 
     // Rate-limit blocks taps; phone cadence also blocks while pulse may stay OK.
@@ -82,13 +83,23 @@ fun glanceLegendRows(summary: WatchDashboardSummary): List<GlanceLegendRowModel>
                 val secondPercent = "${remainingPercent(split.usedPercent).roundToInt()}%"
                 val secondStart = firstPercent.length + " · ".length
                 inner.copy(
-                    title = "${glanceFamilyName(ring.id) ?: ring.label} plan",
+                    title = when {
+                        ring.id == "allowance.claude.plan" &&
+                            split.id == "allowance.claude.claude-seven-day-fable" -> "Claude / Fable"
+                        ring.id == "allowance.cursor.cursor-plan-models" &&
+                            split.id == "allowance.cursor.cursor-plan-other" -> "Cursor / Others"
+                        else -> "${glanceFamilyName(ring.id) ?: ring.label} plan"
+                    },
                     subtitle = glanceSubtitle(
                         summary,
                         ring.id,
                         "$firstPercent · $secondPercent left",
                     ),
-                    secondaryArc = GlanceLegendArcModel(outer.remainingFraction, outer.colorArgb),
+                    secondaryArc = GlanceLegendArcModel(
+                        remainingFraction = outer.remainingFraction,
+                        colorArgb = outer.colorArgb,
+                        isFull = outer.isFull,
+                    ),
                     exhaustedPercentRanges = buildList {
                         if (ring.usedPercent >= 100.0) add(0 until firstPercent.length)
                         if (split.usedPercent >= 100.0) add(secondStart until secondStart + secondPercent.length)
@@ -108,6 +119,8 @@ private fun glanceLegendRow(
     if (!usedPercent.isFinite() || usedPercent < 0.0) {
         return null
     }
+    // Subtraction and Float conversion can both round positive usage to full.
+    val isFull = usedPercent == 0.0
     val remaining = remainingPercent(usedPercent)
     return GlanceLegendRowModel(
         title = glancePrimaryLabel(ringId, label),
@@ -115,6 +128,7 @@ private fun glanceLegendRow(
         remainingFraction = (remaining / 100.0).toFloat(),
         colorArgb = RingFamily.colorArgb(ringId),
         exhaustedPercentRanges = if (usedPercent >= 100.0) listOf(0 until 2) else emptyList(),
+        isFull = isFull,
     )
 }
 

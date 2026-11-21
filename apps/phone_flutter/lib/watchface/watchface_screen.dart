@@ -13,11 +13,21 @@ class WatchfaceScreen extends StatefulWidget {
     required this.ringPreferences,
     required this.onRingPreferencesChanged,
     required this.onRefresh,
+    this.reportingOutcomes = const [],
+    this.saving = false,
+    this.localCapsAvailable = true,
   });
 
   final DashboardSnapshot? snapshot;
-  final WatchRingPreferences ringPreferences;
-  final Future<void> Function(WatchRingPreferences value)
+  final Iterable<ConnectionReportingOutcome> reportingOutcomes;
+  final WatchRingPreferences? ringPreferences;
+  final bool saving;
+  final bool localCapsAvailable;
+  final Future<void> Function(
+    WatchRingPreferences Function(WatchRingPreferences current) update, {
+    required String ringId,
+    required bool selected,
+  })
   onRingPreferencesChanged;
 
   /// Pull-to-refresh reload, shared with the app-bar action.
@@ -28,32 +38,34 @@ class WatchfaceScreen extends StatefulWidget {
 }
 
 class _WatchfaceScreenState extends State<WatchfaceScreen> {
-  /// Catalog ids, never resolved ones: a pair is one row here, and a checkbox
-  /// that looked for its pools would never find itself.
-  List<String> get _effectiveRingIds =>
-      watchRingSelectionIds(widget.snapshot, widget.ringPreferences);
-
-  Future<void> _toggleRing(WatchRingMetric metric, bool selected) async {
-    if (!metric.isAvailable) {
-      return;
-    }
-    final ids = [..._effectiveRingIds];
-    if (selected) {
-      if (ids.contains(metric.id) ||
-          watchRingSlotCost([...ids, metric.id]) > watchRingSlotCount) {
-        return;
-      }
-      ids.add(metric.id);
-    } else {
-      ids.remove(metric.id);
-    }
+  Future<void> _toggleRing(
+    WatchfaceScreen picker,
+    WatchRingMetric metric,
+    bool selected,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      await widget.onRingPreferencesChanged(
-        WatchRingPreferences(selectedIds: ids),
+      await picker.onRingPreferencesChanged(
+        (current) {
+          final ids = [...watchRingSelectionIds(picker.snapshot, current)];
+          if (selected) {
+            if (!metric.isAvailable ||
+                ids.contains(metric.id) ||
+                watchRingCapacityReason([...ids, metric.id]) != null) {
+              return current;
+            }
+            ids.add(metric.id);
+          } else if (!ids.remove(metric.id)) {
+            return current;
+          }
+          return WatchRingPreferences(selectedIds: ids);
+        },
+        ringId: metric.id,
+        selected: selected,
       );
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (messenger.mounted) {
+        messenger.showSnackBar(
           const SnackBar(content: Text('Could not update ring slots')),
         );
       }
@@ -62,16 +74,38 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final snapshot = widget.snapshot;
-    final selectedIds = _effectiveRingIds;
-    final catalog = watchRingCatalog(snapshot);
-    // Ticked rows, not stored ids: without a snapshot the card has no rows at
-    // all, and the stored selection would claim slots nothing on screen shows.
-    // Counted by band, so both Cursor pools together cost one.
-    final usedSlots = watchRingSlotCost([
-      for (final metric in catalog)
-        if (selectedIds.contains(metric.id)) metric.id,
-    ]);
+    final picker = widget;
+    final snapshot = picker.snapshot;
+    final preferences = picker.ringPreferences;
+    final defaultsUnavailable =
+        preferences?.usesDefaults == true &&
+        snapshot != null &&
+        !picker.localCapsAvailable;
+    final selectedIds =
+        preferences == null || defaultsUnavailable
+            ? const <String>[]
+            : watchRingSelectionIds(snapshot, preferences);
+    final reported = watchRingCatalog(
+      snapshot,
+      reportingOutcomes: picker.reportingOutcomes,
+      localCapsAvailable: picker.localCapsAvailable,
+    );
+    final reportedIds = reported.map((metric) => metric.id).toSet();
+    final catalog = [
+      ...reported,
+      for (final id in selectedIds)
+        if (!reportedIds.contains(id))
+          WatchRingMetric(
+            id: id,
+            label: 'Saved metric: $id',
+            usedPercent: null,
+            status: ProviderStatus.unknown,
+            unavailableReason:
+                'This saved metric is not currently reported. Deselect it to remove the choice.',
+          ),
+    ];
+    final capacityReason = watchRingCapacityReason(selectedIds);
+    final usedSlots = watchRingSlotCost(selectedIds);
 
     return PullToRefreshList(
       onRefresh: widget.onRefresh,
@@ -84,15 +118,31 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
               ListTile(
                 leading: const Icon(Icons.watch_outlined),
                 title: const Text('Wear & watch face'),
+                trailing: widget.saving ? const Text('Saving…') : null,
                 subtitle: Text(
                   // The count, not the cap: a full stack greys every unpicked
                   // row, and without it that reads as a fault rather than a
                   // slot to free.
-                  '$usedSlots of $watchRingSlotCount slots used · '
-                  'unavailable ones stay off the watch',
+                  preferences == null
+                      ? 'Ring preferences unavailable'
+                      : defaultsUnavailable
+                      ? 'Default ring choices unavailable'
+                      : '$usedSlots of $watchRingSlotCount slots used · '
+                          'unavailable ones stay off the watch',
                 ),
               ),
-              if (catalog.isEmpty) ...[
+              if (capacityReason != null) ...[
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.tune),
+                  title: const Text('Correct ring choices'),
+                  subtitle: Text(
+                    '$capacityReason\nWatch updates are paused until your choices fit. '
+                    'The last watch summary is kept; phone and widget updates continue.',
+                  ),
+                ),
+              ],
+              if (preferences != null && reported.isEmpty) ...[
                 const Divider(height: 1),
                 const ListTile(
                   title: Text('No metrics yet'),
@@ -102,19 +152,22 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
                   ),
                 ),
               ],
-              CatalogOutline(
-                catalog: catalog,
-                rowBuilder:
-                    (metric, title) => _WatchRingTile(
-                      metric: metric,
-                      title: title,
-                      selected: selectedIds.contains(metric.id),
-                      atCapacity:
-                          watchRingSlotCost([...selectedIds, metric.id]) >
-                          watchRingSlotCount,
-                      onChanged: (value) => _toggleRing(metric, value),
-                    ),
-              ),
+              if (preferences != null)
+                CatalogOutline(
+                  catalog: catalog,
+                  rowBuilder:
+                      (metric, title) => _WatchRingTile(
+                        metric: metric,
+                        title: title,
+                        selected: selectedIds.contains(metric.id),
+                        capacityReason: watchRingCapacityReason([
+                          ...selectedIds,
+                          metric.id,
+                        ]),
+                        onChanged:
+                            (value) => _toggleRing(picker, metric, value),
+                      ),
+                ),
             ],
           ),
         ),
@@ -126,7 +179,9 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
               leading: const Icon(Icons.preview_outlined),
               title: const Text('Next watch payload'),
               subtitle: Text(
-                watchRingPayloadSubtitle(snapshot, widget.ringPreferences),
+                preferences == null || !picker.localCapsAvailable
+                    ? 'Unavailable'
+                    : watchRingPayloadSubtitle(snapshot, preferences),
               ),
             ),
           ),
@@ -155,27 +210,33 @@ class _WatchRingTile extends StatelessWidget {
     required this.metric,
     required this.title,
     required this.selected,
-    required this.atCapacity,
+    required this.capacityReason,
     required this.onChanged,
   });
 
   final WatchRingMetric metric;
   final String title;
   final bool selected;
-  final bool atCapacity;
+  final String? capacityReason;
   final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final canToggle = metric.isAvailable && (selected || !atCapacity);
-    final reason = metric.unavailableReason;
+    final canToggle =
+        selected || (metric.isAvailable && capacityReason == null);
+    final reason =
+        metric.unavailableReason ?? (selected ? null : capacityReason);
     return CheckboxListTile(
       secondary:
           reason == null
               ? const Icon(Icons.data_usage_outlined)
               : Tooltip(message: reason, child: const Icon(Icons.help_outline)),
       title: Text(title),
-      subtitle: Text(metric.catalogSubtitle),
+      subtitle: Text(
+        metric.isAvailable && !selected && capacityReason != null
+            ? '${metric.catalogSubtitle}\n$capacityReason'
+            : metric.catalogSubtitle,
+      ),
       value: selected,
       onChanged: canToggle ? (value) => onChanged(value ?? false) : null,
     );

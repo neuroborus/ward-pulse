@@ -1,5 +1,6 @@
 import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 
+import '../providers/connection_lifecycle.dart';
 import '../providers/provider_connection.dart';
 import '../providers/provider_credential_store.dart';
 import '../sync/provider_reporting.dart';
@@ -30,11 +31,23 @@ final class CapturedDashboardLoad {
   final Object? _error;
   final StackTrace? _stackTrace;
 
-  List<ConnectionReportingOutcome> get reportingOutcomes {
+  DashboardSnapshot? get snapshot => _value;
+
+  DashboardLoadException? get loadException {
     final error = _error;
-    return _value?.reportingOutcomes ??
-        (error is DashboardLoadException ? error.reportingOutcomes : const []);
+    return error is DashboardLoadException ? error : null;
   }
+
+  Map<String, Map<String, String>> get connectionVersions =>
+      _value?.connectionVersions ??
+      loadException?.connectionVersions ??
+      const {};
+
+  List<ConnectionReportingOutcome> get reportingOutcomes =>
+      _value?.reportingOutcomes ?? loadException?.reportingOutcomes ?? const [];
+
+  Map<String, SnapshotOrdering> get snapshotOrdering =>
+      _value?.snapshotOrdering ?? loadException?.snapshotOrdering ?? const {};
 
   DashboardSnapshot get value {
     final value = _value;
@@ -71,9 +84,10 @@ DashboardLoadException mapReportingError(
   }
   if (error is ProviderReportingException) {
     logger.record(reportingSyncEvent(error.failure), details: error.details);
-    return DashboardLoadException(
+    return DashboardLoadException.withOutcomes(
       issue: reportingIssue(error.failure),
       details: error.details,
+      reportingOutcomes: [if (error.outcome case final outcome?) outcome],
     );
   }
   final details = loadFailureDetails(error);
@@ -89,9 +103,10 @@ Future<String?> readConnectionSecret({
   required ProviderCredentialStore store,
   required ProviderConnectionId id,
   required ProviderSyncLogger logger,
+  Future<String?> Function()? readSecret,
 }) async {
   try {
-    return await store.readSecret(id);
+    return await (readSecret == null ? store.readSecret(id) : readSecret());
   } catch (_) {
     logger.record(ProviderSyncEvent.unavailable);
     throw DashboardLoadException.withOutcomes(
@@ -101,6 +116,8 @@ Future<String?> readConnectionSecret({
           connection: id,
           category: ReportingOutcomeCategory.localReadFailure,
           source: ReportingOutcomeSource.local,
+          provisionalReadFailure:
+              !ConnectionReadObservation.hasManagedReadFailure(id.storageKey),
         ),
       ],
     );

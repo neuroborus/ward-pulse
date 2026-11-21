@@ -1,28 +1,36 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../dashboard/apply_alert_settings.dart';
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/dashboard_repository.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../dashboard/plan_recoveries.dart';
 import '../dashboard/provider_status_color.dart';
 import '../dashboard/provider_status_severity.dart';
 import '../providers/claude_account_service.dart';
 import '../providers/codex_account_service.dart';
 import '../providers/credential_dialog.dart';
+import '../providers/connection_rejection_notice.dart';
+import '../providers/connection_lifecycle.dart';
 import '../providers/provider_connection.dart';
 import '../providers/provider_credential_store.dart';
 import '../providers/providers_screen.dart';
+import '../settings/alert_notification_preferences.dart';
 import '../settings/alert_threshold_preferences.dart';
 import '../settings/settings_screen.dart';
 import '../settings/debug_data_preferences.dart';
 import '../settings/recovery_notification_preferences.dart';
 import '../settings/refresh_interval_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
+import '../sync/alert_notifications.dart';
+import '../sync/automatic_poll.dart';
 import '../sync/headless_provider_sync.dart';
 import '../sync/manual_refresh_window.dart';
+import '../sync/notification_coordinator.dart';
 import '../sync/provider_sync_scheduler.dart';
 import '../sync/recovery_notifications.dart';
 import '../sync/recovery_wake.dart';
@@ -53,13 +61,22 @@ class WardPulseApp extends StatelessWidget {
     this.alertThresholdStore = const DefaultAlertThresholdPreferenceStore(),
     this.applyAlertSettings = applyUserAlertSettings,
     this.syncScheduler = const DisabledProviderSyncScheduler(),
+    this.scheduleHeadlessSync = HeadlessProviderSync.schedule,
     this.debugDataAvailable = false,
     this.debugDataPreferenceStore = const DisabledDebugDataPreferenceStore(),
     this.recoveryWatchlistStore = const DisabledRecoveryWatchlistStore(),
     this.recoveryNotifier = const SilentRecoveryNotifier(),
     this.recoveryWake = const DisabledRecoveryWakeScheduler(),
+    this.readPlanRecoveries = planRecoveries,
+    this.readExhaustedWindows = exhaustedWindows,
     this.recoveryNotificationStore =
         const DefaultRecoveryNotificationPreferenceStore(),
+    this.alertNotificationStore =
+        const DefaultAlertNotificationPreferenceStore(),
+    this.alertConditionStore = const DisabledAlertConditionStore(),
+    this.alertNotifier = const SilentAlertNotifier(),
+    this.notificationCoordinator,
+    this.rejectionNotices = const EmptyConnectionRejectionNoticeStore(),
   });
 
   final DashboardRepository repository;
@@ -75,12 +92,20 @@ class WardPulseApp extends StatelessWidget {
   final AlertThresholdPreferenceStore alertThresholdStore;
   final ApplyAlertSettings applyAlertSettings;
   final ProviderSyncScheduler syncScheduler;
+  final Future<void> Function(Duration) scheduleHeadlessSync;
   final bool debugDataAvailable;
   final DebugDataPreferenceStore debugDataPreferenceStore;
   final RecoveryWatchlistStore recoveryWatchlistStore;
   final RecoveryNotifier recoveryNotifier;
   final RecoveryWakeScheduler recoveryWake;
+  final ReadPlanRecoveries readPlanRecoveries;
+  final ReadExhaustedWindows readExhaustedWindows;
   final RecoveryNotificationPreferenceStore recoveryNotificationStore;
+  final AlertNotificationPreferenceStore alertNotificationStore;
+  final AlertConditionStore alertConditionStore;
+  final AlertNotifier alertNotifier;
+  final PhoneNotificationCoordinator? notificationCoordinator;
+  final ConnectionRejectionNoticeStore rejectionNotices;
 
   @override
   Widget build(BuildContext context) {
@@ -103,12 +128,20 @@ class WardPulseApp extends StatelessWidget {
         alertThresholdStore: alertThresholdStore,
         applyAlertSettings: applyAlertSettings,
         syncScheduler: syncScheduler,
+        scheduleHeadlessSync: scheduleHeadlessSync,
         debugDataAvailable: debugDataAvailable,
         debugDataPreferenceStore: debugDataPreferenceStore,
         recoveryWatchlistStore: recoveryWatchlistStore,
         recoveryNotifier: recoveryNotifier,
         recoveryWake: recoveryWake,
+        readPlanRecoveries: readPlanRecoveries,
+        readExhaustedWindows: readExhaustedWindows,
         recoveryNotificationStore: recoveryNotificationStore,
+        alertNotificationStore: alertNotificationStore,
+        alertConditionStore: alertConditionStore,
+        alertNotifier: alertNotifier,
+        notificationCoordinator: notificationCoordinator,
+        rejectionNotices: rejectionNotices,
       ),
     );
   }
@@ -130,12 +163,20 @@ class DashboardHost extends StatefulWidget {
     required this.alertThresholdStore,
     required this.applyAlertSettings,
     required this.syncScheduler,
+    required this.scheduleHeadlessSync,
     required this.debugDataAvailable,
     required this.debugDataPreferenceStore,
     required this.recoveryWatchlistStore,
     required this.recoveryNotifier,
     required this.recoveryWake,
+    required this.readPlanRecoveries,
+    required this.readExhaustedWindows,
     required this.recoveryNotificationStore,
+    required this.alertNotificationStore,
+    required this.alertConditionStore,
+    required this.alertNotifier,
+    this.notificationCoordinator,
+    this.rejectionNotices = const EmptyConnectionRejectionNoticeStore(),
   });
 
   final DashboardRepository repository;
@@ -151,18 +192,54 @@ class DashboardHost extends StatefulWidget {
   final AlertThresholdPreferenceStore alertThresholdStore;
   final ApplyAlertSettings applyAlertSettings;
   final ProviderSyncScheduler syncScheduler;
+  final Future<void> Function(Duration) scheduleHeadlessSync;
   final bool debugDataAvailable;
   final DebugDataPreferenceStore debugDataPreferenceStore;
   final RecoveryNotificationPreferenceStore recoveryNotificationStore;
   final RecoveryWakeScheduler recoveryWake;
   final RecoveryNotifier recoveryNotifier;
   final RecoveryWatchlistStore recoveryWatchlistStore;
+  final ReadPlanRecoveries readPlanRecoveries;
+  final ReadExhaustedWindows readExhaustedWindows;
+
+  final AlertNotificationPreferenceStore alertNotificationStore;
+  final AlertConditionStore alertConditionStore;
+  final AlertNotifier alertNotifier;
+  final PhoneNotificationCoordinator? notificationCoordinator;
+  final ConnectionRejectionNoticeStore rejectionNotices;
 
   @override
   State<DashboardHost> createState() => _DashboardHostState();
 }
 
-class _DashboardHostState extends State<DashboardHost> {
+/// One accepted load or reevaluation, even when it reuses the snapshot object.
+final class _SnapshotAcceptance {
+  _SnapshotAcceptance({
+    required this.observationRevision,
+    required this.input,
+    required this.snapshot,
+    required this.rules,
+    required this.ruleGeneration,
+    required this.surfaceRevision,
+    required this.poll,
+  });
+
+  // Rule edits replace the acceptance while retaining the provider observation.
+  final int observationRevision;
+  final DashboardSnapshot input;
+  final DashboardSnapshot snapshot;
+  final AlertThresholdPreferences? rules;
+  final int ruleGeneration;
+  final int surfaceRevision;
+  final AutomaticPollContext? poll;
+}
+
+final class _RetiredDashboardLoad implements Exception {
+  const _RetiredDashboardLoad();
+}
+
+class _DashboardHostState extends State<DashboardHost>
+    with WidgetsBindingObserver {
   static const _dashboardIndex = 0;
   static const _watchfaceIndex = 1;
   static const _widgetIndex = 2;
@@ -171,10 +248,47 @@ class _DashboardHostState extends State<DashboardHost> {
 
   var _loadRevision = 0;
   var _surfaceRevision = 0;
-  late Future<DashboardSnapshot> _snapshot = _loadSnapshot();
-  DashboardSnapshot? _currentSnapshot;
+  late Future<DashboardSnapshot> _snapshot = _loadSnapshot(automatic: true);
+  _SnapshotAcceptance? _acceptance;
   final _reportingUpdates = <ProviderConnectionId, ConnectionReportingUpdate>{};
   ProviderConnectionId? _editReportingConnection;
+  ({ProviderConnectionId connection, int token})? _connectionReveal;
+  var _connectionRevealToken = 0;
+  var _noticeRevision = 0;
+  List<ConnectionRejectionNotice> _rejectionNotices = const [];
+
+  Future<void> _readRejectionNotices() async {
+    final revision = ++_noticeRevision;
+    try {
+      final notices = await widget.rejectionNotices.read();
+      if (mounted && revision == _noticeRevision)
+        setState(() => _rejectionNotices = notices);
+    } catch (_) {
+      // A failed read retains the last confirmed notice view.
+    }
+  }
+
+  Future<void> _dismissRejection(ConnectionRejectionNotice notice) async {
+    ++_noticeRevision;
+    try {
+      await widget.rejectionNotices.dismiss(notice);
+    } catch (_) {
+      return;
+    }
+    await _readRejectionNotices();
+  }
+
+  void _revealConnection(ProviderConnectionId connection) {
+    setState(() {
+      _editReportingConnection = null;
+      _connectionReveal = (
+        connection: connection,
+        token: ++_connectionRevealToken,
+      );
+      _selectedIndex = _providersIndex;
+    });
+  }
+
   final _reportingSaves = <ProviderConnectionId>{};
 
   /// Holds the Dashboard's card order for the run, so a poll that only moves
@@ -183,13 +297,34 @@ class _DashboardHostState extends State<DashboardHost> {
   final _dashboardOrder = FrozenOrder();
   RefreshIntervalPreference _refreshInterval =
       const RefreshIntervalPreference();
-  WatchRingPreferences _ringPreferences = const WatchRingPreferences();
-  PhoneWidgetPreferences _widgetPreferences = const PhoneWidgetPreferences();
-  AlertThresholdPreferences _alertThresholds =
-      const AlertThresholdPreferences();
-  Future<void> _alertThresholdWrite = Future<void>.value();
+  WatchRingPreferences? _ringPreferences;
+  PhoneWidgetPreferences? _widgetPreferences;
+  // Held exports survive a skipped poll that replaces their acceptance.
+  var _watchPublicationPending = false;
+  var _widgetPublicationPending = false;
+  var _widgetPublicationRevision = 0;
+  WatchRingPreferences? _pendingRingPreferences;
+  PhoneWidgetPreferences? _pendingWidgetPreferences;
+  Future<void> _ringPreferenceWork = Future<void>.value();
+  Future<void> _widgetPreferenceWork = Future<void>.value();
+  var _ringPreferenceRevision = 0;
+  var _widgetPreferenceRevision = 0;
+  AlertThresholdPreferences? _alertThresholds;
+  var _ruleGeneration = 0;
+  Future<void> _snapshotSettingsWork = Future<void>.value();
   bool _mockDataEnabled = false;
   bool _recoveryNotificationsEnabled = true;
+  bool _alertNotificationsEnabled = true;
+  var _alertNotificationRevision = 0;
+  var _recoveryNotificationRevision = 0;
+  var _notificationEligibilityRevision = 0;
+  var _notificationReads = 0;
+  var _notificationWrites = 0;
+  var _notificationFrameRevision = 0;
+  bool _notificationPreferencesResolved = false;
+  bool _notificationFrameReady = false;
+  bool? _androidNotificationsEnabled;
+  var _notificationStatusRevision = 0;
   int _selectedIndex = 0;
   bool _widgetNavigationPending = false;
   ({String provider, int token})? _reveal;
@@ -206,11 +341,152 @@ class _DashboardHostState extends State<DashboardHost> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_readRejectionNotices());
+    _initializeNotifications();
+    _queueNotificationFrame();
     _syncTicks = widget.syncScheduler.ticks.listen((_) {
       unawaited(_onScheduledSync());
     });
     widget.watchSyncService.bindWatchRefreshListener(_onWatchRefreshRequested);
     widget.phoneWidgetNavigationService.bind(_openDashboardFromWidget);
+  }
+
+  void _initializeNotifications() {
+    final coordinator = widget.notificationCoordinator;
+    if (coordinator != null) {
+      unawaited(coordinator.ensureReady().catchError((Object _) {}));
+    }
+  }
+
+  bool get _notificationForegroundReady =>
+      mounted &&
+      _notificationFrameReady &&
+      WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+
+  void _queueNotificationFrame() {
+    _notificationFrameReady = false;
+    final revision = ++_notificationFrameRevision;
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          revision != _notificationFrameRevision ||
+          WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+        return;
+      }
+      _notificationFrameReady = true;
+      _considerNotificationPermission();
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _queueNotificationFrame();
+    if (state == AppLifecycleState.resumed) unawaited(_readRejectionNotices());
+    if (state == AppLifecycleState.resumed &&
+        _selectedIndex == _settingsIndex) {
+      unawaited(_refreshNotificationStatus());
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant DashboardHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(
+      oldWidget.notificationCoordinator,
+      widget.notificationCoordinator,
+    )) {
+      _notificationStatusRevision++;
+      _androidNotificationsEnabled = null;
+      if (_selectedIndex == _settingsIndex) {
+        unawaited(_refreshNotificationStatus());
+      }
+    }
+    if (!identical(
+          oldWidget.notificationCoordinator,
+          widget.notificationCoordinator,
+        ) ||
+        !identical(
+          oldWidget.alertNotificationStore,
+          widget.alertNotificationStore,
+        ) ||
+        !identical(
+          oldWidget.recoveryNotificationStore,
+          widget.recoveryNotificationStore,
+        )) {
+      _alertNotificationRevision++;
+      _recoveryNotificationRevision++;
+      _invalidateNotificationEligibility();
+      _initializeNotifications();
+      unawaited(_readNotificationPreferences(_loadRevision));
+    }
+  }
+
+  void _invalidateNotificationEligibility() {
+    _notificationEligibilityRevision++;
+    _notificationPreferencesResolved = false;
+  }
+
+  void _considerNotificationPermission() {
+    final coordinator = widget.notificationCoordinator;
+    if (coordinator == null) return;
+    final revision = _notificationEligibilityRevision;
+    bool eligible() =>
+        _notificationForegroundReady &&
+        identical(coordinator, widget.notificationCoordinator) &&
+        revision == _notificationEligibilityRevision &&
+        _notificationPreferencesResolved &&
+        _notificationReads == 0 &&
+        _notificationWrites == 0 &&
+        (_alertNotificationsEnabled || _recoveryNotificationsEnabled);
+    if (eligible()) {
+      unawaited(
+        _requestNotificationPermission(
+          coordinator,
+          isEligible: eligible,
+          automatic: true,
+        ),
+      );
+    }
+  }
+
+  Future<bool?> _requestNotificationPermission(
+    PhoneNotificationCoordinator coordinator, {
+    required bool Function() isEligible,
+    bool automatic = false,
+  }) async {
+    final result = await coordinator.requestForeground(
+      isEligible: isEligible,
+      automatic: automatic,
+    );
+    if (result != null &&
+        mounted &&
+        identical(coordinator, widget.notificationCoordinator)) {
+      unawaited(_refreshNotificationStatus());
+    }
+    return result;
+  }
+
+  Future<void> _refreshNotificationStatus() async {
+    if (!mounted) return;
+    final coordinator = widget.notificationCoordinator;
+    final revision = ++_notificationStatusRevision;
+    setState(() => _androidNotificationsEnabled = null);
+    bool? enabled;
+    try {
+      enabled = await coordinator?.readAndroidNotificationStatus();
+    } catch (_) {
+      // Unsupported and failed reads leave the status unknown.
+    }
+    if (!mounted ||
+        revision != _notificationStatusRevision ||
+        !identical(coordinator, widget.notificationCoordinator)) {
+      return;
+    }
+    setState(() => _androidNotificationsEnabled = enabled);
   }
 
   void _openDashboardFromWidget() {
@@ -243,28 +519,32 @@ class _DashboardHostState extends State<DashboardHost> {
     if (!mounted) {
       return;
     }
-    final snapshot = _currentSnapshot;
-    if (snapshot == null) {
+    final acceptance = _acceptance;
+    if (acceptance == null) {
       // Load in flight / failed — reload; a later empty snapshot clears Wear.
       _reload();
       return;
     }
     final window = ManualRefreshWindow.fromLastSync(
-      lastSyncAt: _manualRefreshAnchorAt(snapshot),
+      lastSyncAt: _manualRefreshAnchorAt(acceptance.snapshot),
     );
     if (!window.allowed) {
       // Re-push flags so Wear chrome matches the phone floor without a wasted sync.
-      unawaited(_syncWatch(snapshot));
+      unawaited(_syncWatch(acceptance));
       return;
     }
     _wearRefreshAnchorAt = DateTime.now().toUtc();
     // Push disabled chrome immediately; the reload will push again with fresh data.
-    unawaited(_syncWatch(snapshot));
+    unawaited(_syncWatch(acceptance));
     _reload();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _notificationStatusRevision++;
+    _notificationFrameRevision++;
+    _invalidateNotificationEligibility();
     widget.watchSyncService.unbindWatchRefreshListener();
     widget.phoneWidgetNavigationService.unbind();
     unawaited(_syncTicks?.cancel());
@@ -280,39 +560,155 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
-  Future<void> _readRingPreferences() async {
-    try {
-      _ringPreferences = await widget.watchRingPreferenceStore.read();
-    } catch (_) {
-      _ringPreferences = const WatchRingPreferences();
-    }
+  Future<void> _readRingPreferences() {
+    if (!mounted || _pendingRingPreferences != null)
+      return Future<void>.value();
+    final revision = _ringPreferenceRevision;
+    return _ringPreferenceWork = _ringPreferenceWork.then((_) async {
+      if (!mounted || revision != _ringPreferenceRevision) return;
+      try {
+        final value = await widget.watchRingPreferenceStore.read();
+        final previous = _ringPreferences;
+        if (mounted &&
+            revision == _ringPreferenceRevision &&
+            (previous?.usesDefaults != value.usesDefaults ||
+                !listEquals(previous?.migratedIds, value.migratedIds))) {
+          setState(() {
+            _ringPreferences = value;
+            if (previous != null) _watchPublicationPending = true;
+          });
+        }
+      } catch (_) {
+        // Retain the last confirmed selection.
+        if (mounted && _ringPreferences == null) {
+          _watchPublicationPending = true;
+        }
+      }
+    });
   }
 
-  Future<void> _readWidgetPreferences() async {
-    try {
-      _widgetPreferences = await widget.phoneWidgetPreferenceStore.read();
-    } catch (_) {
-      _widgetPreferences = const PhoneWidgetPreferences();
-    }
+  Future<void> _readWidgetPreferences() {
+    if (!mounted || _pendingWidgetPreferences != null)
+      return Future<void>.value();
+    final revision = _widgetPreferenceRevision;
+    return _widgetPreferenceWork = _widgetPreferenceWork.then((_) async {
+      if (!mounted || revision != _widgetPreferenceRevision) return;
+      try {
+        final value = await widget.phoneWidgetPreferenceStore.read();
+        final previous = _widgetPreferences;
+        if (mounted &&
+            revision == _widgetPreferenceRevision &&
+            (previous?.usesDefaults != value.usesDefaults ||
+                !listEquals(previous?.migratedIds, value.migratedIds))) {
+          setState(() {
+            _widgetPreferences = value;
+            if (previous != null) _widgetPublicationPending = true;
+          });
+        }
+      } catch (_) {
+        // Retain the last confirmed selection.
+        if (mounted && _widgetPreferences == null) {
+          _widgetPublicationPending = true;
+        }
+      }
+    });
   }
 
   Future<void> _readAlertThresholds() async {
     try {
-      _alertThresholds = await widget.alertThresholdStore.read();
+      _confirmAlertThresholds(await widget.alertThresholdStore.read());
     } catch (_) {
-      _alertThresholds = const AlertThresholdPreferences();
+      // Retain the last confirmed rules.
+      if (mounted && _alertThresholds == null) {
+        _watchPublicationPending = true;
+        _widgetPublicationPending = true;
+      }
     }
   }
 
-  Future<void> _readRecoveryNotificationPreference() async {
+  void _confirmAlertThresholds(AlertThresholdPreferences value) {
+    final previous = _alertThresholds;
+    if (!mounted || previous?.sameSettings(value) == true) return;
+    setState(() {
+      _alertThresholds = value;
+      _ruleGeneration++;
+      // A later acceptance must replace publications made with the old rules.
+      if (previous != null) {
+        _watchPublicationPending = true;
+        _widgetPublicationPending = true;
+      }
+    });
+  }
+
+  Future<void> _readNotificationPreferences(int loadRevision) async {
+    if (!mounted || loadRevision != _loadRevision) return;
+    _invalidateNotificationEligibility();
+    final revision = _notificationEligibilityRevision;
+    _notificationReads++;
+    var resolved = true;
+    bool current() =>
+        mounted &&
+        loadRevision == _loadRevision &&
+        revision == _notificationEligibilityRevision &&
+        _notificationWrites == 0;
     try {
-      _recoveryNotificationsEnabled =
-          await widget.recoveryNotificationStore.read();
-    } catch (_) {
-      // A store that will not answer leaves the switch where it defaults, on:
-      // the feature exists to interrupt, and Android still gates the post.
-      _recoveryNotificationsEnabled = true;
+      try {
+        final enabled = await widget.recoveryNotificationStore.read();
+        if (current()) _recoveryNotificationsEnabled = enabled;
+      } catch (_) {
+        resolved = false;
+      }
+      try {
+        final enabled = await widget.alertNotificationStore.read();
+        if (current()) _alertNotificationsEnabled = enabled;
+      } catch (_) {
+        resolved = false;
+      }
+      // Failed reads keep the last known UI choice, but cannot authorize an ask.
+      if (current() && resolved) _notificationPreferencesResolved = true;
+    } finally {
+      _notificationReads--;
+      _considerNotificationPermission();
     }
+  }
+
+  Future<bool> _updateAlertNotifications(bool enabled) async {
+    final wasEnabled = _alertNotificationsEnabled;
+    final revision = ++_alertNotificationRevision;
+    _invalidateNotificationEligibility();
+    _notificationWrites++;
+    try {
+      await widget.alertNotificationStore.write(enabled);
+    } finally {
+      _notificationWrites--;
+      _invalidateNotificationEligibility();
+    }
+    if (revision == _alertNotificationRevision) {
+      // Invalidate reads that began while the write was awaiting storage too.
+      _alertNotificationRevision++;
+      if (mounted) setState(() => _alertNotificationsEnabled = enabled);
+    }
+    if (mounted && widget.notificationCoordinator != null) {
+      unawaited(_readNotificationPreferences(_loadRevision));
+    }
+    if (enabled &&
+        !wasEnabled &&
+        mounted &&
+        revision + 1 == _alertNotificationRevision) {
+      final coordinator = widget.notificationCoordinator;
+      if (coordinator == null) return widget.alertNotifier.requestPermission();
+      return await _requestNotificationPermission(
+            coordinator,
+            isEligible:
+                () =>
+                    _notificationForegroundReady &&
+                    identical(coordinator, widget.notificationCoordinator) &&
+                    revision + 1 == _alertNotificationRevision &&
+                    _alertNotificationsEnabled,
+          ) ??
+          true;
+    }
+    return true;
   }
 
   /// Writes the switch, and asks Android for the permission when it goes on.
@@ -322,27 +718,55 @@ class _DashboardHostState extends State<DashboardHost> {
   /// Answers whether a recovery may actually reach the reader now: the switch
   /// is the reader's wish, and Android has the last word on it.
   Future<bool> _updateRecoveryNotifications(bool enabled) async {
-    await widget.recoveryNotificationStore.write(enabled);
-    final granted =
-        enabled ? await widget.recoveryNotifier.requestPermission() : true;
-    if (mounted) {
-      setState(() {
-        _recoveryNotificationsEnabled = enabled;
-      });
+    final wasEnabled = _recoveryNotificationsEnabled;
+    final revision = ++_recoveryNotificationRevision;
+    _invalidateNotificationEligibility();
+    _notificationWrites++;
+    try {
+      await widget.recoveryNotificationStore.write(enabled);
+    } finally {
+      _notificationWrites--;
+      _invalidateNotificationEligibility();
     }
-    return granted;
+    if (revision == _recoveryNotificationRevision) {
+      _recoveryNotificationRevision++;
+      if (mounted) setState(() => _recoveryNotificationsEnabled = enabled);
+    }
+    if (mounted && widget.notificationCoordinator != null) {
+      unawaited(_readNotificationPreferences(_loadRevision));
+    }
+    if (enabled &&
+        !wasEnabled &&
+        mounted &&
+        revision + 1 == _recoveryNotificationRevision) {
+      final coordinator = widget.notificationCoordinator;
+      if (coordinator == null)
+        return widget.recoveryNotifier.requestPermission();
+      return await _requestNotificationPermission(
+            coordinator,
+            isEligible:
+                () =>
+                    _notificationForegroundReady &&
+                    identical(coordinator, widget.notificationCoordinator) &&
+                    revision + 1 == _recoveryNotificationRevision &&
+                    _recoveryNotificationsEnabled,
+          ) ??
+          true;
+    }
+    return true;
   }
 
-  Future<void> _readDebugDataPreference() async {
-    if (!widget.debugDataAvailable) {
-      _mockDataEnabled = false;
-      return;
+  Future<void> _readDebugDataPreference(int revision) async {
+    var enabled = false;
+    if (widget.debugDataAvailable) {
+      try {
+        enabled = await widget.debugDataPreferenceStore.readMockDataEnabled();
+      } catch (_) {
+        // Unavailable debug preferences leave live data enabled.
+      }
     }
-    try {
-      _mockDataEnabled =
-          await widget.debugDataPreferenceStore.readMockDataEnabled();
-    } catch (_) {
-      _mockDataEnabled = false;
+    if (mounted && revision == _loadRevision) {
+      _mockDataEnabled = enabled;
     }
   }
 
@@ -356,87 +780,210 @@ class _DashboardHostState extends State<DashboardHost> {
     await _scheduleAutoSync(value.interval);
   }
 
-  Future<void> _updateRingPreferences(WatchRingPreferences value) async {
-    await widget.watchRingPreferenceStore.write(value);
-    if (mounted) {
+  Future<void> _updateRingPreferences(
+    _SnapshotAcceptance? acceptance,
+    WatchRingPreferences Function(WatchRingPreferences current) update, {
+    required String ringId,
+    required bool selected,
+  }) async {
+    if (!mounted) return;
+    final current = _pendingRingPreferences ?? _ringPreferences;
+    final requiresCurrentRules =
+        current?.usesDefaults == true ||
+        (selected && ringId.startsWith('budget.'));
+    if (current == null ||
+        (requiresCurrentRules && !_hasCurrentRules(acceptance))) {
+      throw StateError('Ring preferences are unavailable.');
+    }
+    final value = update(current);
+    if (identical(value, current)) return;
+    final revision = ++_ringPreferenceRevision;
+    final store = widget.watchRingPreferenceStore;
+    setState(() => _pendingRingPreferences = value);
+    final work = _ringPreferenceWork.then((_) async {
+      try {
+        await store.write(value);
+      } catch (_) {
+        if (mounted && revision == _ringPreferenceRevision) {
+          setState(() => _pendingRingPreferences = null);
+        }
+        rethrow;
+      }
+      if (!mounted) return;
       setState(() {
         _ringPreferences = value;
+        _watchPublicationPending = true;
+        if (revision == _ringPreferenceRevision) _pendingRingPreferences = null;
       });
-    }
-    final snapshot = _currentSnapshot;
-    if (snapshot != null) {
-      unawaited(_syncWatch(snapshot));
-    }
+      final acceptance = _acceptance;
+      if (acceptance != null) unawaited(_syncWatch(acceptance));
+    });
+    // A failed save is reported to its picker but cannot poison later work.
+    _ringPreferenceWork = work.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return work;
   }
 
-  Future<void> _updateWidgetPreferences(PhoneWidgetPreferences value) async {
-    await widget.phoneWidgetPreferenceStore.write(value);
-    if (mounted) {
+  Future<void> _updateWidgetPreferences(
+    _SnapshotAcceptance? acceptance,
+    PhoneWidgetPreferences Function(PhoneWidgetPreferences current) update,
+  ) async {
+    if (!mounted) return;
+    final current = _pendingWidgetPreferences ?? _widgetPreferences;
+    if (current == null ||
+        (current.usesDefaults &&
+            (acceptance == null || !_isAccepted(acceptance)))) {
+      throw StateError('Widget preferences are unavailable.');
+    }
+    final value = update(current);
+    if (identical(value, current)) return;
+    final revision = ++_widgetPreferenceRevision;
+    final store = widget.phoneWidgetPreferenceStore;
+    setState(() => _pendingWidgetPreferences = value);
+    final work = _widgetPreferenceWork.then((_) async {
+      try {
+        await store.write(value);
+      } catch (_) {
+        if (mounted && revision == _widgetPreferenceRevision) {
+          setState(() => _pendingWidgetPreferences = null);
+        }
+        rethrow;
+      }
+      if (!mounted) return;
       setState(() {
         _widgetPreferences = value;
+        _widgetPublicationPending = true;
+        if (revision == _widgetPreferenceRevision)
+          _pendingWidgetPreferences = null;
       });
-    }
-    final snapshot = _currentSnapshot;
-    if (snapshot != null) {
-      unawaited(_syncPhoneWidget(snapshot));
+      final acceptance = _acceptance;
+      if (acceptance != null) unawaited(_syncPhoneWidget(acceptance));
+    });
+    _widgetPreferenceWork = work.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return work;
+  }
+
+  // Snapshot acceptance and preference transactions share one order. Provider
+  // loads stay outside the queue so they can fetch while a save is pending.
+  Future<T> _serializeSnapshotSettings<T>(
+    Future<T> Function() operation,
+  ) async {
+    final previous = _snapshotSettingsWork;
+    final done = Completer<void>();
+    _snapshotSettingsWork = done.future;
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      done.complete();
     }
   }
 
   Future<void> _updateAlertThresholds(
     AlertThresholdPreferences Function(AlertThresholdPreferences current)
     update,
-  ) async {
-    final previous = _alertThresholdWrite;
-    final done = Completer<void>();
-    _alertThresholdWrite = done.future;
-    await previous;
-    try {
-      final value = update(_alertThresholds);
-      final snapshot = _currentSnapshot;
-      final loadRevision = _loadRevision;
-      final surfaceRevision = _surfaceRevision;
-      // Evaluate before persisting so a core/FFI failure does not leave the
-      // store ahead of in-memory prefs / dashboard alerts.
-      final withAlerts =
-          snapshot == null ? null : widget.applyAlertSettings(snapshot, value);
-      await widget.alertThresholdStore.write(value);
-      var owned = withAlerts == null;
-      if (withAlerts != null) {
-        try {
-          owned = await widget.repository.isSnapshotCurrent(withAlerts);
-        } catch (_) {
-          /* Preferences are saved; unavailable ownership cannot replace dashboard data. */
-        }
-      }
-      final publish =
-          mounted &&
-          owned &&
-          loadRevision == _loadRevision &&
-          surfaceRevision == _surfaceRevision;
-      if (mounted) {
-        setState(() {
-          _alertThresholds = value;
-          if (publish && withAlerts != null) {
-            _currentSnapshot = withAlerts;
-            _snapshot = Future.value(withAlerts);
-          }
-        });
-      } else {
-        _alertThresholds = value;
-        if (publish && withAlerts != null) {
-          _currentSnapshot = withAlerts;
-        }
-      }
-      if (publish && withAlerts != null) {
-        unawaited(_syncWatch(withAlerts));
-      }
-    } finally {
-      done.complete();
+  ) => _serializeSnapshotSettings(() async {
+    final current = _alertThresholds;
+    if (!mounted || current == null) {
+      throw StateError('Alert thresholds are unavailable.');
     }
-  }
+    final value = update(current);
+    final previous = _acceptance;
+    final surfaceRevision = _surfaceRevision;
+    // Evaluate before persisting so a core/FFI failure does not leave the
+    // store ahead of in-memory prefs / dashboard alerts.
+    final withAlerts =
+        previous == null
+            ? null
+            : widget.applyAlertSettings(previous.input, value);
+    await widget.alertThresholdStore.write(value);
+    if (!mounted) return;
+    _confirmAlertThresholds(value);
+    if (previous == null || withAlerts == null) return;
+    try {
+      if (!await widget.repository.isSnapshotCurrent(withAlerts)) return;
+    } catch (_) {
+      // The write is saved even if ownership cannot be confirmed.
+      return;
+    }
+    // A new load request may retain this accepted input as its owned fallback.
+    if (!mounted ||
+        surfaceRevision != _surfaceRevision ||
+        !identical(previous, _acceptance)) {
+      return;
+    }
+    final acceptance = _SnapshotAcceptance(
+      observationRevision: previous.observationRevision,
+      input: previous.input,
+      snapshot: withAlerts,
+      rules: _alertThresholds,
+      ruleGeneration: _ruleGeneration,
+      surfaceRevision: surfaceRevision,
+      poll: previous.poll,
+    );
+    setState(() => _acceptance = acceptance);
+    unawaited(_syncWatch(acceptance));
+    unawaited(_syncPhoneWidget(acceptance));
+    unawaited(_syncAlerts(acceptance));
+  });
 
-  Future<DashboardSnapshot> _loadSnapshot() {
-    final load = _loadForegroundSnapshot();
+  Future<_SnapshotAcceptance> _acceptSnapshot(
+    DashboardSnapshot repositorySnapshot,
+    int revision,
+    AutomaticPollContext? poll,
+    Set<ProviderConnectionId> retiredUpdates,
+  ) => _serializeSnapshotSettings(() async {
+    if (!mounted || revision != _loadRevision) {
+      throw const _RetiredDashboardLoad();
+    }
+    final rules = _alertThresholds;
+    final snapshot =
+        rules == null
+            ? repositorySnapshot
+            : widget.applyAlertSettings(repositorySnapshot, rules);
+    final current = await _ownsLoad(
+      revision,
+      () => widget.repository.isSnapshotCurrent(snapshot),
+    );
+    if (!current || !mounted || revision != _loadRevision) {
+      throw const _RetiredDashboardLoad();
+    }
+    final acceptance = _SnapshotAcceptance(
+      observationRevision: revision,
+      input: repositorySnapshot,
+      snapshot: snapshot,
+      rules: rules,
+      ruleGeneration: _ruleGeneration,
+      surfaceRevision: _surfaceRevision,
+      poll: poll,
+    );
+    setState(() {
+      _acceptance = acceptance;
+      _reportingUpdates.removeWhere((id, _) => retiredUpdates.contains(id));
+      for (final outcome in repositorySnapshot.reportingOutcomes) {
+        final key = outcome.connection.storageKey;
+        _reportingUpdates[outcome
+            .connection] = ConnectionReportingUpdate.completed(
+          outcome,
+          repositorySnapshot.snapshotOrdering[key],
+        );
+      }
+      // Either surface may have to wait while a newer load takes over.
+      if (poll?.whollySkipped != true) {
+        _watchPublicationPending = true;
+        _widgetPublicationPending = true;
+      }
+    });
+    return acceptance;
+  });
+
+  Future<DashboardSnapshot> _loadSnapshot({bool automatic = false}) {
+    final load = _loadForegroundSnapshot(automatic: automatic);
     // FutureBuilder subscribes on the next build. Observe classified failures
     // immediately while preserving the original future for its error UI.
     unawaited(
@@ -445,109 +992,187 @@ class _DashboardHostState extends State<DashboardHost> {
     return load;
   }
 
-  Future<DashboardSnapshot> _loadForegroundSnapshot() async {
+  AutomaticPollContext _automaticPoll() => AutomaticPollContext(
+    readInterval:
+        () async => (await widget.refreshIntervalStore.read()).interval,
+  );
+
+  Future<DashboardSnapshot> _loadForegroundSnapshot({
+    bool automatic = false,
+  }) async {
     final revision = ++_loadRevision;
+    final poll = automatic ? _automaticPoll() : null;
+    _invalidateNotificationEligibility();
     try {
       await _readRefreshInterval();
       await _readRingPreferences();
       await _readWidgetPreferences();
-      await _readAlertThresholds();
-      await _readDebugDataPreference();
-      await _readRecoveryNotificationPreference();
-      // Rescheduling before the load keeps the next tick a full interval away, so
-      // no connection is polled faster than its floor, and a failed load still
-      // retries on the next tick. Headless WorkManager uses ≥15 minutes.
+      await _serializeSnapshotSettings(_readAlertThresholds);
+      await _readDebugDataPreference(revision);
+      await _readNotificationPreferences(revision);
+      // Keep both schedulers registered; native admission enforces spacing
+      // across their starts. Headless WorkManager uses ≥15 minutes.
       unawaited(_scheduleAutoSync(_refreshInterval.interval));
-      final snapshot = widget.applyAlertSettings(
-        await _observedLoad(revision),
-        _alertThresholds,
-      );
-      final current = await widget.repository.isSnapshotCurrent(snapshot);
-      if (!mounted || revision != _loadRevision || !current) {
+      final acceptance =
+          await (poll == null
+              ? _observedLoad(revision)
+              : poll.run(() => _observedLoad(revision)));
+      unawaited(_syncRecoveries(acceptance));
+      if (_watchPublicationPending) {
+        unawaited(_syncWatch(acceptance));
+      }
+      if (_widgetPublicationPending) {
+        unawaited(_syncPhoneWidget(acceptance));
+      }
+      if (poll?.whollySkipped != true) unawaited(_syncAlerts(acceptance));
+      return acceptance.snapshot;
+    } catch (error) {
+      // A failed foreground load leaves an error-only Dashboard. Successful
+      // fallback loads return normally and retain their usable data.
+      if (mounted && revision == _loadRevision) {
+        _acceptance = null;
+      }
+      if (error is _RetiredDashboardLoad) {
         throw const DashboardLoadException(
           details: 'Connection changed during refresh.',
         );
       }
-      _currentSnapshot = snapshot;
-      unawaited(_syncRecoveries(snapshot));
-      unawaited(_syncWatch(snapshot));
-      unawaited(_syncPhoneWidget(snapshot));
-      return snapshot;
-    } catch (_) {
-      // A failed foreground load leaves an error-only Dashboard. Successful
-      // fallback loads return normally and retain their usable data.
-      if (mounted && revision == _loadRevision) _currentSnapshot = null;
       rethrow;
+    } finally {
+      await _readRejectionNotices();
     }
   }
 
-  Future<DashboardSnapshot> _observedLoad(int revision) async {
+  Future<bool> _ownsLoad(int revision, Future<bool> Function() validate) async {
+    if (!mounted || revision != _loadRevision) return false;
+    try {
+      return await validate() && mounted && revision == _loadRevision;
+    } catch (_) {
+      // Unavailable proof cannot authorize publication.
+      return false;
+    }
+  }
+
+  Future<_SnapshotAcceptance> _observedLoad(int revision) async {
+    final poll = AutomaticPollContext.current;
     if (!mounted || revision != _loadRevision) {
-      throw const DashboardLoadException(details: 'Refresh superseded.');
+      throw const _RetiredDashboardLoad();
     }
     // A superseded request cannot leave a row spinning without active work.
     _reportingUpdates.removeWhere((_, update) => update.checking);
-    final observed = <ProviderConnectionId>{};
-    void forgetObserved() {
+    final observed = <ProviderConnectionId, ConnectionReportingUpdate?>{};
+    Future<void> reconcileObserved() async {
+      Future<bool> current(DashboardSnapshot proof) =>
+          _ownsLoad(revision, () => widget.repository.isSnapshotCurrent(proof));
+
+      // A connection can retire even if the rejected load never observed it.
+      final retained = {
+        for (final entry in _reportingUpdates.entries)
+          if (!observed.containsKey(entry.key) &&
+              !entry.value.checking &&
+              entry.value.credentialVersion != null)
+            entry.key: entry.value,
+      };
+      for (final MapEntry(key: id, value: previous) in observed.entries) {
+        // A completed row can still be current when a sibling retires the
+        // aggregate. Unfinished work can only fall back to verified feedback.
+        for (final update in [_reportingUpdates[id], previous]) {
+          if (update == null ||
+              update.checking ||
+              update.credentialVersion == null) {
+            continue;
+          }
+          if (await current(reportingUpdatesProof([update]))) {
+            retained[id] = update;
+            break;
+          }
+        }
+      }
+      await pruneUnverifiedReportingUpdates(retained, current);
       if (mounted && revision == _loadRevision) {
         setState(() {
-          for (final id in observed) {
-            _reportingUpdates.remove(id);
-          }
+          _reportingUpdates.removeWhere(
+            (id, update) =>
+                observed.containsKey(id) || update.credentialVersion != null,
+          );
+          _reportingUpdates.addAll(retained);
         });
       }
     }
 
     try {
-      final snapshot = await widget.repository.loadObserved((update) {
-        if (!mounted || revision != _loadRevision) return;
-        observed.add(update.connection);
-        setState(() => _reportingUpdates[update.connection] = update);
-      });
-      if (!await widget.repository.isSnapshotCurrent(snapshot) ||
-          !mounted ||
-          revision != _loadRevision) {
-        forgetObserved();
-        throw const DashboardLoadException(
-          details: 'Connection changed during refresh.',
+      final DashboardSnapshot snapshot;
+      try {
+        snapshot = await widget.repository.loadObserved((update) {
+          if (!mounted || revision != _loadRevision) return;
+          final id = update.connection;
+          observed.putIfAbsent(id, () => _reportingUpdates[id]);
+          setState(() => _reportingUpdates[id] = update);
+        });
+      } on DashboardLoadException catch (failure) {
+        final current = await _ownsLoad(
+          revision,
+          () => widget.repository.isFailureCurrent(failure),
         );
-      }
-      setState(() {
-        // A completed, current load is authoritative, including omissions for
-        // removed connections. Its outcomes retain the current sibling facts.
-        _reportingUpdates.clear();
-        for (final outcome in snapshot.reportingOutcomes) {
-          _reportingUpdates[outcome.connection] = ConnectionReportingUpdate(
-            connection: outcome.connection,
-            credentialVersion: outcome.credentialVersion,
-            outcome: outcome,
-          );
+        if (!current || !mounted || revision != _loadRevision) {
+          throw const _RetiredDashboardLoad();
         }
-      });
-      return snapshot;
-    } on DashboardLoadException catch (failure) {
-      if (!await widget.repository.isFailureCurrent(failure) ||
-          !mounted ||
-          revision != _loadRevision) {
-        forgetObserved();
-        throw const DashboardLoadException(
-          details: 'Connection changed during refresh.',
-        );
+        setState(() {
+          _reportingUpdates.clear();
+          for (final outcome in failure.reportingOutcomes) {
+            _reportingUpdates[outcome
+                .connection] = ConnectionReportingUpdate.completed(
+              outcome,
+              failure.snapshotOrdering[outcome.connection.storageKey],
+            );
+          }
+        });
+        rethrow;
+      } catch (_) {
+        await reconcileObserved();
+        throw const DashboardLoadException();
       }
-      setState(() {
-        _reportingUpdates.clear();
-        for (final outcome in failure.reportingOutcomes) {
-          _reportingUpdates[outcome.connection] = ConnectionReportingUpdate(
-            connection: outcome.connection,
-            credentialVersion: outcome.credentialVersion,
-            outcome: outcome,
-          );
+      final retired = <ProviderConnectionId>{};
+      for (final entry in _reportingUpdates.entries.toList()) {
+        final id = entry.key;
+        final update = entry.value;
+        final key = id.storageKey;
+        final stamp = snapshot.connectionVersions[key];
+        if (poll?.observes(key) != false ||
+            stamp == null ||
+            update.credentialVersion?.sameCache(CredentialVersion(stamp)) !=
+                true) {
+          retired.add(id);
+          continue;
         }
-      });
+        if (!snapshot.snapshotOrdering.containsKey(key)) continue;
+        // The repository supplies any failure feedback that survives a checked
+        // skip. A prior live success keeps its original verification proof.
+        final outcome = update.outcome;
+        if (!observed.containsKey(id) &&
+            outcome?.category == ReportingOutcomeCategory.success &&
+            outcome?.source == ReportingOutcomeSource.live &&
+            outcome?.freshness == ReportingOutcomeFreshness.current &&
+            await _ownsLoad(
+              revision,
+              () => widget.repository.isSnapshotCurrent(
+                reportingUpdatesProof([update]),
+              ),
+            )) {
+          continue;
+        }
+        retired.add(id);
+      }
+      if (!await _ownsLoad(
+        revision,
+        () => widget.repository.isSnapshotCurrent(snapshot),
+      )) {
+        throw const _RetiredDashboardLoad();
+      }
+      return await _acceptSnapshot(snapshot, revision, poll, retired);
+    } on _RetiredDashboardLoad {
+      await reconcileObserved();
       rethrow;
-    } catch (_) {
-      forgetObserved();
-      throw const DashboardLoadException();
     } finally {
       if (mounted && revision == _loadRevision) {
         setState(
@@ -557,28 +1182,78 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
-  Future<void> _syncRecoveries(DashboardSnapshot snapshot) async {
+  bool _isAccepted(_SnapshotAcceptance acceptance) =>
+      mounted &&
+      acceptance.surfaceRevision == _surfaceRevision &&
+      identical(acceptance, _acceptance);
+
+  bool _hasCurrentRules(_SnapshotAcceptance? acceptance) =>
+      acceptance != null &&
+      acceptance.rules != null &&
+      acceptance.ruleGeneration == _ruleGeneration &&
+      _isAccepted(acceptance);
+
+  Future<void> _syncRecoveries(_SnapshotAcceptance acceptance) async {
+    final snapshot = acceptance.snapshot;
+    bool observesCurrentInput() =>
+        mounted &&
+        acceptance.surfaceRevision == _surfaceRevision &&
+        acceptance.observationRevision == _acceptance?.observationRevision;
+    Future<bool> isCurrent() async =>
+        observesCurrentInput() &&
+        await widget.repository.isSnapshotCurrent(snapshot) &&
+        observesCurrentInput();
     try {
-      final revision = _surfaceRevision;
-      if (!await widget.repository.isSnapshotCurrent(snapshot) ||
-          revision != _surfaceRevision)
-        return;
+      var notifications = false;
+      try {
+        notifications = await widget.recoveryNotificationStore.read();
+      } catch (_) {
+        // Preference failure mutes posting, not tracking or wake scheduling.
+      }
+      if (!await isCurrent()) return;
       await syncPlanRecoveries(
         snapshot,
         widget.recoveryWatchlistStore,
         widget.recoveryNotifier,
         widget.recoveryWake,
         mockData: _mockDataEnabled,
-        notifications: _recoveryNotificationsEnabled,
+        notifications: notifications && _recoveryNotificationsEnabled,
+        readRecoveries: widget.readPlanRecoveries,
+        readWindows: widget.readExhaustedWindows,
+        poll: acceptance.poll,
+        isCurrent: isCurrent,
       );
     } catch (_) {
       // Recovery bookkeeping cannot publish retired data or block the dashboard.
     }
   }
 
+  Future<void> _syncAlerts(_SnapshotAcceptance acceptance) async {
+    final snapshot = acceptance.snapshot;
+    bool accepted() => _hasCurrentRules(acceptance) && !_mockDataEnabled;
+    if (!accepted()) return;
+    await AlertNotificationDelivery(
+      preferences: widget.alertNotificationStore,
+      conditions: widget.alertConditionStore,
+      notifier: widget.alertNotifier,
+    ).sync(
+      snapshot,
+      poll: acceptance.poll,
+      mockData: _mockDataEnabled,
+      isAccepted: accepted,
+      alertThresholds: acceptance.rules,
+      isDeliveryEnabled: () => _alertNotificationsEnabled,
+      isCurrent: () async {
+        if (!accepted()) return false;
+        final current = await widget.repository.isSnapshotCurrent(snapshot);
+        return current && accepted();
+      },
+    );
+  }
+
   Future<void> _scheduleAutoSync(Duration interval) async {
     await widget.syncScheduler.schedule(interval);
-    await HeadlessProviderSync.schedule(interval);
+    await widget.scheduleHeadlessSync(interval);
   }
 
   Future<void> _onScheduledSync() async {
@@ -587,28 +1262,38 @@ class _DashboardHostState extends State<DashboardHost> {
     }
     _autoSyncInFlight = true;
     final revision = ++_loadRevision;
+    final poll = _automaticPoll();
     try {
-      // Do not invalidate: load() already refetches, and clearing caches would
-      // drop stale-with-issue recovery on a failed automatic tick.
-      final snapshot = widget.applyAlertSettings(
-        await _observedLoad(revision),
-        _alertThresholds,
-      );
-      final current = await widget.repository.isSnapshotCurrent(snapshot);
-      if (!mounted || revision != _loadRevision || !current) return;
-      _currentSnapshot = snapshot;
-      if (mounted) {
-        setState(() {
-          _snapshot = Future.value(snapshot);
+      if (_ringPreferences == null) await _readRingPreferences();
+      if (_widgetPreferences == null) await _readWidgetPreferences();
+      if (_alertThresholds == null) {
+        await _serializeSnapshotSettings(() async {
+          if (_alertThresholds == null) await _readAlertThresholds();
         });
       }
-      await _syncWatch(snapshot);
-      await _syncPhoneWidget(snapshot);
+      // Do not invalidate: load() already refetches, and clearing caches would
+      // drop stale-with-issue recovery on a failed automatic tick.
+      final acceptance = await poll.run(() => _observedLoad(revision));
+      if (mounted && revision == _loadRevision) {
+        setState(() {
+          _snapshot = Future.value(acceptance.snapshot);
+        });
+      }
+      if (_watchPublicationPending) {
+        await _syncWatch(acceptance);
+      }
+      if (_widgetPublicationPending) {
+        await _syncPhoneWidget(acceptance);
+      }
+      await _syncRecoveries(acceptance);
+      if (!poll.whollySkipped) await _syncAlerts(acceptance);
+    } on _RetiredDashboardLoad {
+      // A rejected selection cannot replace the last accepted Dashboard.
     } on DashboardLoadException catch (failure) {
       // Keep successful data, but an error-only dashboard must follow the most
       // recent guarded result rather than the exception from its first load.
       try {
-        final previous = _currentSnapshot;
+        final previous = _acceptance?.snapshot;
         if (previous != null &&
             await widget.repository.isSnapshotCurrent(previous))
           return;
@@ -619,7 +1304,7 @@ class _DashboardHostState extends State<DashboardHost> {
           // FutureBuilder attaches on the next build; observe errors meanwhile.
           failed.ignore();
           setState(() {
-            _currentSnapshot = null;
+            _acceptance = null;
             _snapshot = failed;
           });
         }
@@ -633,37 +1318,100 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
-  Future<void> _updateMockDataEnabled(bool value) async {
-    _loadRevision++;
-    _surfaceRevision++;
-    await widget.repository.clearPersistentSnapshots();
-    await widget.debugDataPreferenceStore.writeMockDataEnabled(value);
+  Future<void> _updateMockDataEnabled(
+    bool value,
+  ) => _serializeSnapshotSettings(() async {
+    final revision = ++_loadRevision;
+    final surfaceRevision = ++_surfaceRevision;
+    try {
+      await widget.repository.clearPersistentSnapshots();
+      await widget.debugDataPreferenceStore.writeMockDataEnabled(value);
+    } catch (_) {
+      final previous = _acceptance;
+      var owned = false;
+      try {
+        owned =
+            previous != null &&
+            await widget.repository.isSnapshotCurrent(previous.input);
+      } catch (_) {
+        // Unavailable ownership cannot restore reader-visible data.
+      }
+      if (mounted &&
+          revision == _loadRevision &&
+          surfaceRevision == _surfaceRevision) {
+        setState(() {
+          if (owned && previous != null) {
+            _acceptance = _SnapshotAcceptance(
+              observationRevision: previous.observationRevision,
+              input: previous.input,
+              snapshot: previous.snapshot,
+              rules: previous.rules,
+              ruleGeneration: previous.ruleGeneration,
+              surfaceRevision: surfaceRevision,
+              poll: previous.poll,
+            );
+            _snapshot = Future.value(previous.snapshot);
+          } else {
+            _acceptance = null;
+            final failed = Future<DashboardSnapshot>.error(
+              const DashboardLoadException(),
+            );
+            failed.ignore();
+            _snapshot = failed;
+          }
+        });
+      }
+      rethrow;
+    }
     if (!mounted) {
       return;
     }
+    // A completed mode write is authoritative even if a refresh started during
+    // it. Retire that refresh and reload with current credentials and mode.
+    _surfaceRevision++;
     widget.repository.invalidate();
     setState(() {
+      _acceptance = null;
       _mockDataEnabled = value;
       _snapshot = _loadSnapshot();
     });
-  }
+  });
 
-  Future<void> _syncWatch(DashboardSnapshot snapshot) async {
+  Future<void> _syncWatch(_SnapshotAcceptance acceptance) async {
+    if (!_isAccepted(acceptance)) return;
+    _watchPublicationPending = true;
     try {
-      await _queueWatchSummary(snapshot);
+      await _queueWatchSummary(acceptance);
     } catch (_) {
       // Watch availability must not block the phone dashboard.
     }
   }
 
-  Future<void> _syncPhoneWidget(DashboardSnapshot snapshot) async {
-    final revision = _surfaceRevision;
+  Future<void> _syncPhoneWidget(_SnapshotAcceptance acceptance) async {
+    if (!_isAccepted(acceptance)) return;
+    _widgetPublicationPending = true;
+    final publicationRevision = ++_widgetPublicationRevision;
+    final preferences = _widgetPreferences;
+    if (preferences == null) return;
+    final snapshot = acceptance.snapshot;
+    bool accepted() =>
+        publicationRevision == _widgetPublicationRevision &&
+        _hasCurrentRules(acceptance) &&
+        identical(preferences, _widgetPreferences);
+    Future<bool> isCurrent() async =>
+        accepted() &&
+        await widget.repository.isSnapshotCurrent(snapshot) &&
+        accepted();
     try {
-      if (!await widget.repository.isSnapshotCurrent(snapshot) ||
-          revision != _surfaceRevision)
-        return;
-      await widget.phoneWidgetSyncService.sync(snapshot, _widgetPreferences);
-    } catch (error) {
+      if (!await isCurrent() || !accepted()) return;
+      var dispatchAllowed = false;
+      await widget.phoneWidgetSyncService.sync(
+        snapshot,
+        preferences,
+        isCurrent: () async => dispatchAllowed = await isCurrent(),
+      );
+      if (dispatchAllowed && accepted()) _widgetPublicationPending = false;
+    } catch (_) {
       // Launcher widget updates must not block the phone dashboard.
       developer.log(
         'Dashboard refresh could not update the widget.',
@@ -672,25 +1420,33 @@ class _DashboardHostState extends State<DashboardHost> {
     }
   }
 
-  Future<void> _queueWatchSummary(DashboardSnapshot snapshot) async {
-    final revision = _surfaceRevision;
-    if (!await widget.repository.isSnapshotCurrent(snapshot) ||
-        revision != _surfaceRevision)
-      return;
+  Future<bool> _queueWatchSummary(_SnapshotAcceptance acceptance) async {
+    final preferences = _ringPreferences;
+    if (preferences == null) return false;
+    final snapshot = acceptance.snapshot;
+    bool accepted() =>
+        _hasCurrentRules(acceptance) &&
+        identical(preferences, _ringPreferences);
+    if (!accepted() ||
+        !await widget.repository.isSnapshotCurrent(snapshot) ||
+        !accepted()) {
+      return false;
+    }
     await widget.watchSyncService.sync(
       snapshot,
-      _ringPreferences,
+      preferences,
       manualRefreshAnchorAt: _manualRefreshAnchorAt(snapshot),
       mockDataMode: _mockDataEnabled,
     );
+    if (accepted()) _watchPublicationPending = false;
+    return true;
   }
 
   Future<void> _onSettingsSyncWatch() async {
-    final snapshot = _currentSnapshot;
-    if (snapshot == null) {
-      return;
+    final acceptance = _acceptance;
+    if (acceptance == null || !await _queueWatchSummary(acceptance)) {
+      throw StateError('Watch sync unavailable');
     }
-    await _queueWatchSummary(snapshot);
   }
 
   /// Pull-to-refresh runs the same reload the app-bar action does; the gesture
@@ -742,6 +1498,7 @@ class _DashboardHostState extends State<DashboardHost> {
   void _editReportingKey(ProviderConnectionId connection) {
     setState(() {
       _editReportingConnection = connection;
+      _connectionReveal = null;
       _selectedIndex = _providersIndex;
     });
   }
@@ -822,7 +1579,7 @@ class _DashboardHostState extends State<DashboardHost> {
   void _onCredentialsChanged() {
     _loadRevision++;
     _surfaceRevision++;
-    _currentSnapshot = null;
+    _acceptance = null;
     widget.repository.invalidate();
     _reload(forCredentialChange: true);
   }
@@ -853,7 +1610,10 @@ class _DashboardHostState extends State<DashboardHost> {
       builder: (context, state) {
         // Credential changes retire visible data immediately while preserving
         // the active tab, its scroll position and any app-owned save operation.
-        final data = _currentSnapshot == null ? null : state.data;
+        final acceptance = _acceptance;
+        final data = acceptance?.snapshot;
+        final acceptedRules = acceptance?.rules;
+        final rulesCurrent = _hasCurrentRules(acceptance);
         final snapshot =
             data == null || _mockDataEnabled
                 ? data
@@ -866,6 +1626,12 @@ class _DashboardHostState extends State<DashboardHost> {
                         update.connection: update.outcome!,
                   }.values,
                 );
+
+        final reportingOutcomes = <ConnectionReportingOutcome>[
+          if (!_mockDataEnabled)
+            for (final update in _reportingUpdates.values)
+              if (update.outcome != null) update.outcome!,
+        ];
 
         return Scaffold(
           appBar: AppBar(
@@ -897,15 +1663,29 @@ class _DashboardHostState extends State<DashboardHost> {
                 key: const ValueKey('watchface'),
                 onRefresh: _pullToRefresh,
                 snapshot: snapshot,
-                ringPreferences: _ringPreferences,
-                onRingPreferencesChanged: _updateRingPreferences,
+                reportingOutcomes: reportingOutcomes,
+                ringPreferences: _pendingRingPreferences ?? _ringPreferences,
+                saving: _pendingRingPreferences != null,
+                localCapsAvailable: rulesCurrent,
+                onRingPreferencesChanged:
+                    (update, {required ringId, required selected}) =>
+                        _updateRingPreferences(
+                          acceptance,
+                          update,
+                          ringId: ringId,
+                          selected: selected,
+                        ),
               ),
               _ when _selectedIndex == _widgetIndex => WidgetScreen(
                 key: const ValueKey('widget'),
                 onRefresh: _pullToRefresh,
                 snapshot: snapshot,
-                preferences: _widgetPreferences,
-                onPreferencesChanged: _updateWidgetPreferences,
+                reportingOutcomes: reportingOutcomes,
+                preferences: _pendingWidgetPreferences ?? _widgetPreferences,
+                saving: _pendingWidgetPreferences != null,
+                localCapsAvailable: rulesCurrent,
+                onPreferencesChanged:
+                    (update) => _updateWidgetPreferences(acceptance, update),
               ),
               _ when _selectedIndex == _providersIndex => ProvidersScreen(
                 key: const ValueKey('providers'),
@@ -920,9 +1700,16 @@ class _DashboardHostState extends State<DashboardHost> {
                 savingConnections: Set.unmodifiable(_reportingSaves),
                 mockDataEnabled: _mockDataEnabled,
                 editConnection: _editReportingConnection,
+                revealConnection: _connectionReveal,
+                onConnectionRevealed: (token) {
+                  if (_connectionReveal?.token == token)
+                    _connectionReveal = null;
+                },
                 onEditConnectionOpened: () => _editReportingConnection = null,
                 alertThresholds: _alertThresholds,
                 onAlertThresholdsChanged: _updateAlertThresholds,
+                snapshot: snapshot,
+                alertContextRevision: _surfaceRevision,
                 statuses: _providerStatuses(snapshot),
               ),
               _ when _selectedIndex == _settingsIndex => SettingsScreen(
@@ -931,10 +1718,18 @@ class _DashboardHostState extends State<DashboardHost> {
                 snapshot: snapshot,
                 refreshInterval: _refreshInterval,
                 onRefreshIntervalChanged: _updateRefreshInterval,
-                ringPreferences: _ringPreferences,
+                ringPreferences: rulesCurrent ? _ringPreferences : null,
+                widgetPreferences: rulesCurrent ? _widgetPreferences : null,
                 onSyncWatch: _onSettingsSyncWatch,
                 recoveryNotificationsEnabled: _recoveryNotificationsEnabled,
                 onRecoveryNotificationsChanged: _updateRecoveryNotifications,
+                alertNotificationsEnabled: _alertNotificationsEnabled,
+                onAlertNotificationsChanged: _updateAlertNotifications,
+                androidNotificationsEnabled: _androidNotificationsEnabled,
+                onOpenNotificationSettings:
+                    () async =>
+                        await widget.notificationCoordinator
+                            ?.openAndroidNotificationSettings(),
                 debugDataAvailable: widget.debugDataAvailable,
                 mockDataEnabled: _mockDataEnabled,
                 onMockDataEnabledChanged: _updateMockDataEnabled,
@@ -942,24 +1737,59 @@ class _DashboardHostState extends State<DashboardHost> {
               // Only the very first load has nothing to show; a reload keeps
               // the dashboard up rather than blanking it.
               ConnectionState.waiting when snapshot == null =>
-                const _LoadingView(),
+                _rejectionNotices.any((notice) => !notice.dismissed)
+                    ? SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        children: [
+                          ConnectionFeedback(
+                            notices: _rejectionNotices,
+                            onRevealConnection: _revealConnection,
+                            onDismiss: _dismissRejection,
+                          ),
+                          const SizedBox(height: 16),
+                          const _LoadingView(),
+                        ],
+                      ),
+                    )
+                    : const _LoadingView(),
               _ when state.hasError => _ErrorView(
                 failure: _dashboardFailure(state.error),
                 onRetry: _reload,
                 onOpenProviders: _openProviders,
                 onEditReportingKey: _editReportingKey,
+                rejectionNotices: _rejectionNotices,
+                onRevealConnection: _revealConnection,
+                onDismissRejection: _dismissRejection,
               ),
               _ when snapshot != null => DashboardScreen(
                 onRefresh: _pullToRefresh,
                 snapshot: snapshot,
+                configuredBudgetPeriods:
+                    acceptedRules == null
+                        ? null
+                        : {
+                          for (final entry in acceptedRules.connections.entries)
+                            entry.key: {
+                              if ((entry.value.budget.today ?? 0) > 0) 'today',
+                              if ((entry.value.budget.week ?? 0) > 0) 'week',
+                              if ((entry.value.budget.month ?? 0) > 0) 'month',
+                            },
+                        },
                 onOpenProviders: _openProviders,
                 onEditReportingKey: _editReportingKey,
+                rejectionNotices: _rejectionNotices,
+                onRevealConnection: _revealConnection,
+                onDismissRejection: _dismissRejection,
                 reveal: _reveal,
                 order: _dashboardOrder,
               ),
               _ => _ErrorView(
                 failure: const DashboardLoadException(),
                 onRetry: _reload,
+                rejectionNotices: _rejectionNotices,
+                onRevealConnection: _revealConnection,
+                onDismissRejection: _dismissRejection,
               ),
             },
           ),
@@ -1045,9 +1875,17 @@ class _DashboardHostState extends State<DashboardHost> {
               final navigationBar = NavigationBar(
                 selectedIndex: _selectedIndex,
                 onDestinationSelected: (index) {
+                  final enteringSettings =
+                      index == _settingsIndex && index != _selectedIndex;
                   setState(() {
                     _selectedIndex = index;
+                    if (index != _providersIndex) _connectionReveal = null;
                   });
+                  if (index == _dashboardIndex)
+                    unawaited(_readRejectionNotices());
+                  if (enteringSettings) {
+                    unawaited(_refreshNotificationStatus());
+                  }
                 },
                 destinations: destinations,
               );
@@ -1091,21 +1929,32 @@ class _ErrorView extends StatelessWidget {
     required this.onRetry,
     this.onOpenProviders,
     this.onEditReportingKey,
+    this.rejectionNotices = const [],
+    this.onRevealConnection,
+    this.onDismissRejection,
   });
 
   final DashboardLoadException failure;
   final VoidCallback onRetry;
   final VoidCallback? onOpenProviders;
   final void Function(ProviderConnectionId)? onEditReportingKey;
+  final List<ConnectionRejectionNotice> rejectionNotices;
+  final void Function(ProviderConnectionId)? onRevealConnection;
+  final void Function(ConnectionRejectionNotice)? onDismissRejection;
 
   @override
   Widget build(BuildContext context) {
     if (failure.issue == DashboardSyncIssue.noProviders &&
-        failure.reportingOutcomes.isEmpty) {
+        failure.reportingOutcomes.isEmpty &&
+        rejectionNotices.every((notice) => notice.dismissed)) {
       return ConnectProviderPrompt(onOpenProviders: onOpenProviders);
     }
 
     final colors = Theme.of(context).colorScheme;
+    final issueIcon = Icon(Icons.error_outline, color: colors.error, size: 36);
+    final matchedRejection = rejectionNotices.any(
+      (notice) => notice.matches(failure.syncRejection),
+    );
 
     return Center(
       child: SingleChildScrollView(
@@ -1114,25 +1963,26 @@ class _ErrorView extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Tooltip(
-                message: failure.issue.message,
-                child: Icon(Icons.error_outline, color: colors.error, size: 36),
-              ),
+              if (!matchedRejection)
+                Tooltip(message: failure.issue.message, child: issueIcon)
+              else
+                issueIcon,
               const SizedBox(height: 12),
               Text(
                 'Dashboard unavailable',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
-              if (failure.reportingOutcomes.isEmpty)
-                Text(
-                  failure.issue.message,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: colors.onSurfaceVariant),
-                ),
-              ReportingFailures(
+              ConnectionFeedback(
                 outcomes: failure.reportingOutcomes,
+                issue: failure.issue,
+                details: failure.details,
+                showIssueTooltip: false,
+                rejection: failure.syncRejection,
+                notices: rejectionNotices,
                 onEditKey: onEditReportingKey,
+                onRevealConnection: onRevealConnection,
+                onDismiss: onDismissRejection,
               ),
               const SizedBox(height: 16),
               Wrap(

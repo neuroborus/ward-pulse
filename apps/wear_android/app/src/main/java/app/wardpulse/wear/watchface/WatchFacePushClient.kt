@@ -10,6 +10,7 @@ import app.wardpulse.wear.R
 import java.io.File
 
 internal const val PUSH_FACE_PACKAGE = "app.wardpulse.watchfacepush.main"
+internal const val SEPARATE_FACE_PACKAGE = "app.wardpulse.watchface"
 internal const val WATCH_FACE_ACTIVATION_PERMISSION =
     "com.google.wear.permission.SET_PUSHED_WATCH_FACE_AS_ACTIVE"
 
@@ -25,6 +26,7 @@ data class WatchFaceInventory(val faces: List<InstalledWatchFace>, val remaining
 interface WatchFacePushClient {
     val sdkInt: Int
     fun isSupported(): Boolean
+    fun isSeparateFaceInstalled(): Boolean
     fun openBundle(): WatchFaceBundle
     suspend fun list(): WatchFaceInventory
     suspend fun isActive(packageName: String): Boolean
@@ -39,6 +41,13 @@ class AndroidWatchFacePushClient(context: Context) : WatchFacePushClient {
     override val sdkInt: Int get() = Build.VERSION.SDK_INT
 
     override fun isSupported(): Boolean = WatchFacePushManagerFactory.isSupported()
+
+    override fun isSeparateFaceInstalled(): Boolean = try {
+        context.packageManager.getPackageInfo(SEPARATE_FACE_PACKAGE, 0)
+        true
+    } catch (_: PackageManager.NameNotFoundException) {
+        false
+    }
 
     private fun manager(): WatchFacePushManager {
         check(isSupported())

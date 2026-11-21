@@ -1,0 +1,85 @@
+{
+  "generatedAt": "2026-07-19T12:00:00.000Z",
+  "rateLimits": {
+    "rateLimits": {
+      "limitId": "codex",
+      "limitName": null,
+      "primary": {
+        "usedPercent": 100,
+        "windowDurationMins": 300,
+        "resetsAt": 1784480400
+      },
+      "secondary": {
+        "usedPercent": 20,
+        "windowDurationMins": 10080,
+        "resetsAt": 1784980800
+      },
+      "evidence": {
+        "bucketId": "codex",
+        "allowed": true,
+        "limitReached": false,
+        "primary": "valid",
+        "secondary": "valid",
+        "collision": false,
+        "loss": false
+      },
+      "credits": null,
+      "planType": "plus",
+      "rateLimitReachedType": null
+    },
+    "rateLimitsByLimitId": {
+      "codex": {
+        "limitId": "codex",
+        "limitName": null,
+        "primary": {
+          "usedPercent": 100,
+          "windowDurationMins": 300,
+          "resetsAt": 1784480400
+        },
+        "secondary": {
+          "usedPercent": 20,
+          "windowDurationMins": 10080,
+          "resetsAt": 1784980800
+        },
+        "evidence": {
+          "bucketId": "codex",
+          "allowed": true,
+          "limitReached": false,
+          "primary": "valid",
+          "secondary": "valid",
+          "collision": false,
+          "loss": false
+        },
+        "planType": "plus",
+        "rateLimitReachedType": null
+      },
+      "spark": {
+        "limitId": "spark",
+        "limitName": "Spark",
+        "primary": {
+          "usedPercent": 10,
+          "windowDurationMins": 300,
+          "resetsAt": 1784480400
+        },
+        "secondary": {
+          "usedPercent": 100,
+          "windowDurationMins": 10080,
+          "resetsAt": 1784980800
+        },
+        "evidence": {
+          "bucketId": "codex_bengalfox",
+          "allowed": true,
+          "limitReached": false,
+          "primary": "valid",
+          "secondary": "valid",
+          "collision": false,
+          "loss": false
+        }
+      }
+    },
+    "unknownFeatures": true
+  },
+  "usage": {
+    "dailyUsageBuckets": []
+  }
+}

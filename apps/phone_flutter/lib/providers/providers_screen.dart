@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../app/pull_to_refresh_list.dart';
 import '../app/surface_order.dart';
@@ -32,8 +33,12 @@ class ProvidersScreen extends StatefulWidget {
     this.savingConnections = const {},
     this.mockDataEnabled = false,
     this.editConnection,
+    this.revealConnection,
+    this.onConnectionRevealed,
     this.onEditConnectionOpened,
     this.statuses = const {},
+    this.snapshot,
+    this.alertContextRevision = 0,
     required this.onRefresh,
   });
 
@@ -47,11 +52,13 @@ class ProvidersScreen extends StatefulWidget {
   final bool mockDataEnabled;
   final Set<ProviderConnectionId> savingConnections;
   final ProviderConnectionId? editConnection;
+  final ({ProviderConnectionId connection, int token})? revealConnection;
+  final void Function(int token)? onConnectionRevealed;
   final VoidCallback? onEditConnectionOpened;
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
   final VoidCallback onCredentialsChanged;
-  final AlertThresholdPreferences alertThresholds;
+  final AlertThresholdPreferences? alertThresholds;
   final Future<void> Function(
     AlertThresholdPreferences Function(AlertThresholdPreferences current)
     update,
@@ -66,6 +73,11 @@ class ProvidersScreen extends StatefulWidget {
   /// managed. Empty until a snapshot lands.
   final Map<ProviderFamily, ProviderStatus> statuses;
 
+  /// Usable, owned repository data; family status and watch selection cannot
+  /// supply the connection's complete normalized Plan catalogue.
+  final DashboardSnapshot? snapshot;
+  final int alertContextRevision;
+
   /// Pull-to-refresh reload, shared with the app-bar action.
   final Future<void> Function() onRefresh;
 
@@ -75,12 +87,165 @@ class ProvidersScreen extends StatefulWidget {
 
 class _ProvidersScreenState extends State<ProvidersScreen> {
   final Map<String, bool> _hasSecret = {};
+  final _rowKeys = <ProviderConnectionId, GlobalKey>{};
+  final _rowFocus = <ProviderConnectionId, FocusNode>{};
+  final _initialRowReads = <Object>{};
+  ({ProviderConnectionId connection, int token})? _pendingReveal;
+  var _revealGeneration = 0;
+  var _layoutRevision = 0;
+  var _credentialsReady = false;
+  var _revealQueued = false;
+  int? _runningReveal;
+  var _discoveryFromStart = true;
+
+  @override
+  void dispose() {
+    ++_revealGeneration;
+    _pendingReveal = null;
+    _initialRowReads.clear();
+    for (final node in _rowFocus.values) {
+      node.dispose();
+    }
+    super.dispose();
+  }
+
+  void _scheduleReveal() {
+    ++_revealGeneration;
+    _pendingReveal = widget.revealConnection;
+    _discoveryFromStart = true;
+    _queueReveal();
+  }
+
+  // Rows register only their existing initial local read. Disposal retires the
+  // same owner as completion, so a late result cannot wake a newer row instance.
+  VoidCallback _registerInitialRowRead() {
+    final owner = Object();
+    _initialRowReads.add(owner);
+    ++_layoutRevision;
+    _queueReveal();
+    return () {
+      if (!mounted || !_initialRowReads.remove(owner)) return;
+      ++_layoutRevision;
+      _queueReveal();
+    };
+  }
+
+  void _queueReveal() {
+    if (!mounted || _pendingReveal == null || _revealQueued) return;
+    _revealQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _revealQueued = false;
+      if (mounted) _settleReveal();
+    });
+    WidgetsBinding.instance.scheduleFrame();
+  }
+
+  Future<void> _revealLayout() {
+    WidgetsBinding.instance.scheduleFrame();
+    return WidgetsBinding.instance.endOfFrame;
+  }
+
+  Future<void> _settleReveal() async {
+    final request = _pendingReveal;
+    final generation = _revealGeneration;
+    if (request == null || _runningReveal == generation) return;
+    bool owned() =>
+        mounted &&
+        generation == _revealGeneration &&
+        _pendingReveal == request &&
+        widget.revealConnection == request;
+    _runningReveal = generation;
+    final startedRevision = _layoutRevision;
+    try {
+      // Screen publication can reorder families. Discover in that published
+      // order before waiting for row-local reads, never for unbuilt rows.
+      if (!_credentialsReady) return;
+      var target = _rowKeys[request.connection]?.currentContext;
+      while (owned() && target == null) {
+        final controller = PrimaryScrollController.maybeOf(context);
+        if (controller == null || controller.positions.length != 1) return;
+        final position = controller.position;
+        final offset =
+            _discoveryFromStart
+                ? position.minScrollExtent
+                : (position.pixels + position.viewportDimension)
+                    .clamp(position.minScrollExtent, position.maxScrollExtent)
+                    .toDouble();
+        if (!_discoveryFromStart && offset <= position.pixels) return;
+        _discoveryFromStart = false;
+        position.jumpTo(offset);
+        await _revealLayout();
+        if (!owned() ||
+            !_credentialsReady ||
+            startedRevision != _layoutRevision)
+          return;
+        target = _rowKeys[request.connection]?.currentContext;
+      }
+      if (!owned() || target == null || _initialRowReads.isNotEmpty) return;
+      final revision = _layoutRevision;
+      bool settled() =>
+          owned() &&
+          _credentialsReady &&
+          revision == _layoutRevision &&
+          _initialRowReads.isEmpty &&
+          identical(target, _rowKeys[request.connection]?.currentContext);
+      await Scrollable.ensureVisible(
+        target,
+        alignment: 0,
+        duration: const Duration(milliseconds: 250),
+      );
+      await _revealLayout();
+      if (!settled()) return;
+      final row = target.findRenderObject();
+      if (row is! RenderBox || !row.attached) return;
+      final abstractViewport = RenderAbstractViewport.of(row);
+      if (abstractViewport is! RenderBox) return;
+      final viewport = abstractViewport as RenderBox;
+      final position = Scrollable.of(target).position;
+      Rect bounds() =>
+          row.localToGlobal(Offset.zero, ancestor: viewport) & row.size;
+      final before = bounds();
+      final height = viewport.size.height;
+      final oversized = before.height > height;
+      final delta =
+          oversized || before.top < 0
+              ? before.top
+              : before.bottom > height
+              ? before.bottom - height
+              : 0.0;
+      if (delta.abs() > 0.5) {
+        position.jumpTo(
+          (position.pixels + delta)
+              .clamp(position.minScrollExtent, position.maxScrollExtent)
+              .toDouble(),
+        );
+      }
+      await _revealLayout();
+      if (!settled() || !row.attached || !viewport.attached) return;
+      final after = bounds();
+      if (oversized
+          ? after.top.abs() > 0.5
+          : after.top < -0.5 || after.bottom > viewport.size.height + 0.5) {
+        return;
+      }
+      _pendingReveal = null;
+      _rowFocus[request.connection]?.requestFocus();
+      widget.onConnectionRevealed?.call(request.token);
+    } finally {
+      if (_runningReveal == generation) _runningReveal = null;
+      // Only a real read/layout publication resumes unfinished work.
+      if (owned() && startedRevision != _layoutRevision) _queueReveal();
+    }
+  }
+
   final Map<String, String?> _labels = {};
   final _readFailures = <String>{};
   final _currentUpdates = <ProviderConnectionId, ConnectionReportingUpdate>{};
   var _readRevision = 0;
   ProviderConnectionId? _openingConnection;
   final _saving = <ProviderConnectionId>{};
+  ProviderConnectionId? _alertConnection;
+  ValueNotifier<List<AllowanceState>>? _alertWindows;
 
   /// Connections authorized by a pasted secret, in catalog order.
   static final _secretConnections = providerConnectionCatalog()
@@ -92,17 +257,35 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
   void initState() {
     super.initState();
     _loadCredentialState();
+    _scheduleReveal();
   }
 
   @override
   void didUpdateWidget(ProvidersScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (_alertConnection case final connection?) {
+      final windows = _alertWindows;
+      final catalogue = _planWindows(connection);
+      // The modal is a separate route; notify after the host's build completes.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && identical(windows, _alertWindows)) {
+          windows?.value = catalogue;
+        }
+      });
+    }
     if (!identical(oldWidget.reportingUpdates, widget.reportingUpdates) ||
         oldWidget.credentialStore != widget.credentialStore) {
       _currentUpdates.removeWhere(
         (id, update) => !identical(widget.reportingUpdates[id], update),
       );
       _loadCredentialState();
+    }
+    if (oldWidget.revealConnection != widget.revealConnection) {
+      _scheduleReveal();
+    } else if (_pendingReveal != null) {
+      _discoveryFromStart = true;
+      ++_layoutRevision;
+      _queueReveal();
     }
     if (oldWidget.editConnection != widget.editConnection) {
       _openingConnection = null;
@@ -112,6 +295,8 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
 
   Future<void> _loadCredentialState() async {
     final revision = ++_readRevision;
+    _credentialsReady = false;
+    ++_layoutRevision;
     final secrets = <String, bool>{};
     final labels = <String, String?>{};
     final failures = <String>{};
@@ -147,39 +332,18 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
         labels[id.storageKey] = _labels[id.storageKey];
       }
     }
-    Future<bool> current(Iterable<ConnectionReportingUpdate> candidates) async {
-      final proof = DashboardSnapshot.empty()
-          .withConnectionVersions({
-            for (final update in candidates)
-              update.connection.storageKey: update.credentialVersion!.values,
-          })
-          .withReportingOutcomes([
-            for (final update in candidates)
-              if (update.outcome != null) update.outcome!,
-          ]);
-      try {
-        return await widget.isSnapshotCurrent?.call(proof) == true;
-      } catch (_) {
-        return false;
-      }
-    }
-
-    while (updates.isNotEmpty && !await current(updates.values)) {
-      final obsolete = <ProviderConnectionId>[];
-      for (final entry in updates.entries) {
-        if (!await current([entry.value])) obsolete.add(entry.key);
-      }
-      if (obsolete.isEmpty) {
-        // Individual checks cannot replace the complete publication gate.
-        if (!await current(updates.values)) updates.clear();
-        break;
-      }
-      for (final id in obsolete) updates.remove(id);
-      // Removing a retired connection must preserve current sibling feedback,
-      // including progress. Revalidate the retained set after every probe.
-    }
+    await pruneUnverifiedReportingUpdates(
+      updates,
+      (proof) async => await widget.isSnapshotCurrent?.call(proof) == true,
+    );
     if (!mounted || revision != _readRevision) return;
     setState(() {
+      _credentialsReady = true;
+      // A newer catalogue publication replaces an unfinished traversal: its
+      // target may now be behind the previous offset. Row-local completion
+      // alone never restarts the bounded start-to-end search.
+      _discoveryFromStart = true;
+      ++_layoutRevision;
       _hasSecret
         ..clear()
         ..addAll(secrets);
@@ -193,6 +357,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
         ..clear()
         ..addAll(updates);
     });
+    _queueReveal();
     _scheduleEditor();
   }
 
@@ -235,6 +400,15 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
             hasCredential:
                 (_hasSecret[key] ?? false) || _readFailures.contains(key),
             initialLabel: _labels[key],
+            guidance:
+                id == ProviderConnections.anthropicPlatform
+                    ? '$anthropicReportingKeyGuidance '
+                        'The key is encrypted on this phone and sent only to Anthropic.'
+                    : null,
+            valueValidator:
+                id == ProviderConnections.anthropicPlatform
+                    ? validateAnthropicReportingKey
+                    : null,
           ),
     );
     if (change == null) {
@@ -288,41 +462,136 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
   }
 
   Future<void> _editConnectionAlerts(ProviderConnection connection) async {
-    final saved = await showDialog<ConnectionAlertThresholds>(
-      context: context,
-      builder:
-          (context) => ConnectionAlertsDialog(
-            connectionTitle: connection.listTitle,
-            kind: connection.id.kind,
-            thresholds: widget.alertThresholds.forConnection(connection.id),
-          ),
-    );
+    final revision = widget.alertContextRevision;
+    final store = widget.credentialStore;
+    final snapshot = widget.snapshot;
+    final thresholds = widget.alertThresholds?.forConnection(connection.id);
+    if (thresholds == null) {
+      _showMessage('Could not update alert thresholds');
+      return;
+    }
+    final windows = ValueNotifier(_planWindows(connection.id));
+    _alertConnection = connection.id;
+    _alertWindows = windows;
+    ConnectionAlertThresholds? saved;
+    try {
+      saved = await showDialog<ConnectionAlertThresholds>(
+        context: context,
+        builder:
+            (context) => ValueListenableBuilder<List<AllowanceState>>(
+              valueListenable: windows,
+              builder:
+                  (_, catalogue, _) => ConnectionAlertsDialog(
+                    connectionTitle: connection.sourceTitle,
+                    connection: connection.id,
+                    thresholds: thresholds,
+                    planWindows: catalogue,
+                  ),
+            ),
+      );
+    } finally {
+      _alertConnection = null;
+      _alertWindows = null;
+      windows.dispose();
+    }
     if (saved == null || !mounted) {
       return;
     }
-    await _saveAlertThresholds(
-      (current) => current.withConnection(connection.id, saved),
-    );
+    final result = saved;
+    if (snapshot != null && widget.isSnapshotCurrent != null) {
+      try {
+        if (!await widget.isSnapshotCurrent!(snapshot)) {
+          if (mounted)
+            _showMessage('Connection changed. Reopen alert thresholds.');
+          return;
+        }
+      } catch (_) {
+        if (mounted) _showMessage('Could not update alert thresholds');
+        return;
+      }
+    }
+    if (!mounted) return;
+    await _saveAlertThresholds((current) {
+      if (!mounted ||
+          revision != widget.alertContextRevision ||
+          !identical(store, widget.credentialStore)) {
+        throw StateError('Connection changed during alert editing');
+      }
+      final latest = current.forConnection(connection.id);
+      final ConnectionAlertThresholds next;
+      if (connection.id.kind == ConnectionKind.plan) {
+        if (!latest.samePlanAlerts(thresholds)) {
+          throw StateError('Plan alerts changed during editing');
+        }
+        next = latest.copyWith(
+          plan: result.plan,
+          planWindows: result.planWindows,
+          purchased: result.purchased,
+        );
+      } else {
+        if (!latest.sameBudgetAlerts(thresholds)) {
+          throw StateError('Budget alerts changed during editing');
+        }
+        next = latest.copyWith(
+          today: result.today,
+          week: result.week,
+          month: result.month,
+        );
+      }
+      return current.withConnection(connection.id, next);
+    });
   }
 
+  List<AllowanceState> _planWindows(ProviderConnectionId connection) => [
+    for (final account in widget.snapshot?.accounts ?? <ProviderSnapshot>[])
+      if (_connectionKey(account) == connection.storageKey)
+        for (final allowance in account.allowances)
+          if (allowance.source == AllowanceSource.plan) allowance,
+  ];
+
+  // Match core alerts::connection_key: fallback only when identity is absent.
+  String? _connectionKey(ProviderSnapshot account) =>
+      account.connection ??
+      switch (account.provider) {
+        'codex' => ProviderConnections.codexPlan.storageKey,
+        'openai' => ProviderConnections.openAiPlatform.storageKey,
+        'claude' => ProviderConnections.claudePlan.storageKey,
+        'cursor' => ProviderConnections.cursorPlan.storageKey,
+        _ => null,
+      };
+
   Future<void> _editConnectionBudget(ProviderConnection connection) async {
+    final revision = widget.alertContextRevision;
+    final store = widget.credentialStore;
+    final budget = widget.alertThresholds?.forConnection(connection.id).budget;
+    if (budget == null) {
+      _showMessage('Could not update alert thresholds');
+      return;
+    }
     final saved = await showDialog<ConnectionBudget>(
       context: context,
       builder:
           (context) => ConnectionBudgetDialog(
-            connectionTitle: connection.listTitle,
-            budget: widget.alertThresholds.forConnection(connection.id).budget,
+            connectionTitle: connection.sourceTitle,
+            budget: budget,
           ),
     );
     if (saved == null || !mounted) {
       return;
     }
-    await _saveAlertThresholds(
-      (current) => current.withConnection(
+    await _saveAlertThresholds((current) {
+      final latest = current.forConnection(connection.id);
+      if (!mounted ||
+          revision != widget.alertContextRevision ||
+          !identical(store, widget.credentialStore) ||
+          !latest.budget.sameLimits(budget)) {
+        throw StateError('Budget limits changed during editing');
+      }
+      return current.withConnection(
         connection.id,
-        current.forConnection(connection.id).copyWith(budget: saved),
-      ),
-    );
+        latest.copyWith(budget: saved),
+      );
+    });
   }
 
   Future<void> _saveAlertThresholds(
@@ -350,7 +619,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     required Widget status,
     List<Widget> leading = const [],
   }) {
-    final settings = widget.alertThresholds.forConnection(connection.id);
+    final settings = widget.alertThresholds?.forConnection(connection.id);
     // Only a connection that reports spend can be held to a limit.
     final offersBudget = connection.id.kind == ConnectionKind.platform;
 
@@ -362,14 +631,16 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
             tooltip: 'Budget limits',
             onPressed: () => _editConnectionBudget(connection),
             icon: Icon(
-              settings.budget.isEmpty ? Icons.savings_outlined : Icons.savings,
+              settings?.budget.isEmpty == false
+                  ? Icons.savings
+                  : Icons.savings_outlined,
             ),
           ),
         IconButton(
           tooltip: 'Alert thresholds',
           onPressed: () => _editConnectionAlerts(connection),
           icon: Icon(
-            settings.hasAlertRules
+            settings?.hasAlertRules == true
                 ? Icons.notifications_active_outlined
                 : Icons.notifications_none_outlined,
           ),
@@ -382,6 +653,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
   Widget _connectionRow(ProviderConnection connection) {
     if (connection.id == ProviderConnections.codexPlan) {
       return CodexAccountRow(
+        onInitialRead: _registerInitialRowRead,
         connection: connection,
         accountService: widget.codexAccountService,
         onCredentialsChanged: widget.onCredentialsChanged,
@@ -390,6 +662,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     }
     if (connection.id == ProviderConnections.claudePlan) {
       return ClaudeAccountRow(
+        onInitialRead: _registerInitialRowRead,
         connection: connection,
         accountService: widget.claudeAccountService,
         credentialStore: widget.credentialStore,
@@ -403,6 +676,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     }
     if (connection.id == ProviderConnections.cursorPlan) {
       return CursorPlanRow(
+        onInitialRead: _registerInitialRowRead,
         connection: connection,
         credentialStore: widget.credentialStore,
         onCredentialsChanged: widget.onCredentialsChanged,
@@ -431,8 +705,13 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
             : hasSecret != true
             ? 'Not connected'
             : outcome != null &&
-                outcome.source == ReportingOutcomeSource.live &&
-                outcome.freshness == ReportingOutcomeFreshness.current
+                outcome.freshness == ReportingOutcomeFreshness.current &&
+                (outcome.source == ReportingOutcomeSource.live ||
+                    (outcome.connection ==
+                            ProviderConnections.anthropicPlatform &&
+                        outcome.source == ReportingOutcomeSource.local &&
+                        outcome.category ==
+                            ReportingOutcomeCategory.authenticationRejected))
             ? outcome.label
             : 'Not verified';
     final supporting =
@@ -533,6 +812,13 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     return PullToRefreshList(
       onRefresh: widget.onRefresh,
       children: [
+        if (widget.alertThresholds == null)
+          const Card(
+            child: ListTile(
+              leading: Icon(Icons.info_outline),
+              title: Text('Alert thresholds and budget limits unavailable'),
+            ),
+          ),
         for (final provider in families) ...[
           Card(
             child: Column(
@@ -544,7 +830,14 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
                 )) ...[
                   if (connection.id.kind == ConnectionKind.platform)
                     const Divider(height: 1),
-                  _connectionRow(connection),
+                  Focus(
+                    key: _rowKeys.putIfAbsent(connection.id, GlobalKey.new),
+                    focusNode: _rowFocus.putIfAbsent(
+                      connection.id,
+                      FocusNode.new,
+                    ),
+                    child: _connectionRow(connection),
+                  ),
                 ],
               ],
             ),

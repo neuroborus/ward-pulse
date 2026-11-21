@@ -9,14 +9,37 @@ home-widget metrics are on **Widget**.
 | Section | What it shows or changes |
 | --- | --- |
 | Refresh | Refresh interval while open and approximate background cadence. |
-| Notifications | Plan recovery notifications for an exhausted window becoming usable. |
-| Diagnostics | Sync timestamp/status and the next Watch summary, when a summary is available. |
+| Notifications | Independent Alert notifications and Plan recovery switches, plus an Android settings action when notifications are blocked. |
+| Diagnostics | Sync timestamp/status and the next Watch and Widget summaries, when phone data is available. |
 | Help | User guide in your external browser. |
 | Legal | Independent product information. |
 
 Follow [Sync and notifications](/guide/sync) to set the cadence or notification permission.
-Diagnostics helps you compare the phone's displayed data and watch summary. It does not
-guarantee that the watch has already received an update.
+Both notification switches start on and preserve your saved choice. They share Android's
+notification permission, with one automatic attempt on eligible foreground use and explicit
+off-to-on retry. Saving both off suppresses that automatic attempt. Alert rules remain on
+Providers; turning delivery off does not remove those rules or the in-app alerts.
+
+On Android 8.0 and newer, newly created notification categories use WardPulse's shared
+click by default for Alert notifications and Plan recovery. Existing categories keep their
+previous default sound, custom sound or silence; updating WardPulse does not replace them.
+Older supported Android versions use the same click for both notification types. Sound
+still follows Android notification permission, notification volume and Do Not Disturb,
+and your saved notification switches still apply.
+
+If **Notifications are blocked** appears, choose **Enable notifications** to open WardPulse's
+Android settings. If Android opens the app information page, choose its notification controls.
+Return to WardPulse to recheck the warning.
+Opening those controls does not enable notifications or change either saved switch; returning
+without allowing notifications leaves the warning. The warning can appear even with both
+switches off. Android channel settings and Do Not Disturb can still limit delivery when the
+warning is absent.
+
+Diagnostics helps you compare the phone's displayed data and watch summary. **Widget summary**
+describes your configured metric choices and their current results, including unavailable
+choices or an empty selection. The existing Sync status still identifies retained Stale data.
+These summaries do not confirm that the watch received an update, that widget publication
+succeeded, or how many rows and details fit your launcher's allocation.
 
 Choose **Settings → Help** to open the user guide in your external browser.
 
@@ -26,6 +49,7 @@ WardPulse stores credentials encrypted in secure phone storage and uses them to 
 requests directly to the matching provider. A saved secret is not shown back in the credential
 field. The app also keeps each connection's last successful usage data for recovery; those
 records contain no credentials, prompts or raw provider responses.
+Notification choices and remembered threshold crossings also stay in secure phone storage.
 
 WardPulse does not operate an application server or send usage telemetry to its developer.
 The watch receives compact summaries, not your credentials or raw reports. Google Play services
@@ -40,10 +64,11 @@ to a new installation or device; do not rely on a backup restoring encrypted cre
 For one connection, use **Disconnect** or **Remove** on **Providers**, as described in
 [Connect providers](/guide/providers#reconnect-change-or-remove-a-connection). Removing it
 also prevents obsolete stored data for that connection from being reused. Revoking an API
-key at the provider is a separate action.
+key at the provider is a separate action. Historical saved-rejection warnings remain on
+Dashboard after Disconnect or Remove; dismiss each with its **X**.
 
 For a complete phone reset, use Android's application storage controls for WardPulse. Clearing
-app storage removes local credentials, stored data and preferences; you will need to reconnect
+app storage removes local credentials, stored data, preferences and saved rejection warnings; you will need to reconnect
 and configure the app again. Android's names and path vary by device. There is no WardPulse
 **Delete all** button in Settings.
 

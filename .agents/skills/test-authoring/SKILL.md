@@ -19,6 +19,12 @@ and `justfile`; do not add a framework or dependency for this workflow.
 - Inputs, fixtures and assertions MUST be self-contained. Use minimal, neutral synthetic
   values. Never use names, paths, identifiers or contextual details from unrelated projects,
   including as deny-list entries or regression fixtures. Keep fixtures sanitized.
+  For downstream-behavior tests that parse nested synthetic maps with `fromJson`, satisfy
+  the actual nested parsers' required fields; an enclosing object's fields do not supply them.
+  Correct malformed fixtures rather than loosening production parsing. Intentional
+  malformed-input parser-rejection tests remain valid.
+  For isolated notification-plugin fixtures, perform supported platform registration before reading
+  a late singleton; restore owned singleton/channel state through failure-safe teardown.
 - Add regressions for reproduced defects and known fragile boundaries; retain RED→GREEN
   evidence proving the failure and fix. Elsewhere, test only an important uncovered contract.
   A change alone does not justify another test.
@@ -28,13 +34,36 @@ and `justfile`; do not add a framework or dependency for this workflow.
 - Tests MUST be deterministic. Synchronize with events, awaited operations or controlled
   clocks. Artificial sleeps, timing-based ordering, retry-until-green and unnecessary polling
   are prohibited. Await teardown of every owned resource.
+  For injected widget-effect callbacks that may execute under another guarded tester scope, record/signal actual observations there.
+  Keep the assertions in the awaited test body outside the conflicting guard, preserving callback arguments and entry/hold ordering.
+  Keep normal guarded calls and failure-safe teardown; never suppress guard errors, weaken assertions or replace synchronization with sleeps.
+  When a widget test mixes fake async with real I/O, qualify which zone owns readiness-future
+  creation and queued completion; awaiting real I/O must not withhold required fake-zone progress.
+  Use bounded framework pumping where needed, preserve event-based readiness and the original
+  error/stack, and propagate failed/null async results without masking them or extending timeouts.
+- Prefer framework-owned default resources, such as enabled `testWidgets` semantics,
+  when they already provide the required coverage. Before adding a manual handle,
+  check the framework's actual verification lifetime: generic teardown may run after
+  its end-of-test invariants. Dispose manually owned resources with failure-safe
+  cleanup before the boundary that requires release; do not disable semantics,
+  invariants or assertions to accommodate late cleanup.
 - Preserve distinct safety, recovery and failure-path guarantees. Before deleting a redundant
   test, name its retained replacement. Never weaken assertions, skip or disable failures,
   or lower concurrency to hide a race.
+  After catalogue changes, trace affected app integration callers beyond edited files,
+  including shared helper default identities and positional row/action selectors; preserve
+  their distinct guarantees rather than blindly rewriting expectations.
+  For typed widget reads, confirm the actual target type; tooltip finders may resolve a framework wrapper.
+  After such a cast failure, trace equivalent typed selectors across affected tests while preserving their distinct state/callback assertions.
 - Affected ordinary host test execution with warm dependencies has a 60-second development
   budget. Measure it and remove avoidable cost; report build, toolchain and emulator setup
   separately. This is not a budget for `just test-all` or a reason to omit required gates.
   Do not enforce it with a flaky wall-clock assertion in a unit test.
+  Before starting a bounded Flutter widget diagnostic, inspect its effective `testWidgets`
+  timeout (explicit override or binding default); the CLI default alone is insufficient.
+  Before launch, qualify a framework deadline or owned controller stop that enforces the
+  stated bound, with a process identity and retirement procedure; verify retirement after interruption.
+  An interrupted run remains interrupted even if its controller or tool exits zero.
 - Keep an expensive test only when its necessary guarantee cannot be proved cheaply. Classify
   it as slow, integration or device where appropriate; document its guarantee, owner and
   explicit invocation in existing owning component or command documentation. Finalization

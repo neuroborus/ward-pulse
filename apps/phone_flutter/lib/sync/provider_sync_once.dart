@@ -1,24 +1,92 @@
 import 'dart:developer' as developer;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../dashboard/apply_alert_settings.dart';
+import '../dashboard/dashboard_models.dart';
+import '../dashboard/dashboard_repository.dart';
 import '../dashboard/phone_live_bindings.dart';
+import '../dashboard/plan_recoveries.dart';
+import '../providers/connection_lifecycle.dart';
+import '../settings/alert_notification_preferences.dart';
 import '../settings/alert_threshold_preferences.dart';
+import '../settings/debug_data_preferences.dart';
 import '../settings/recovery_notification_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
 import '../widget/phone_widget_preferences.dart';
 import '../widget/phone_widget_sync.dart';
+import 'alert_notifications.dart';
 import 'recovery_notifications.dart';
 import 'recovery_wake.dart';
 import 'recovery_watchlist.dart';
 import 'watch_sync_service.dart';
+import 'automatic_poll.dart';
 
 Future<bool> _alwaysCurrent() async => true;
+Future<void> _noAlertDelivery() async {}
 
-typedef ProviderSyncWorkLoader = Future<ProviderSyncWork> Function();
+/// Loads work owned by [owner], or `null` once that owner has retired.
+typedef ProviderSyncWorkLoader =
+    Future<ProviderSyncWork?> Function(HeadlessLiveOwner owner);
 typedef ProviderSyncFailureLogger =
     void Function(String step, Object error, StackTrace stackTrace);
+typedef ProviderSyncStaleMarker =
+    Future<void> Function({required PhoneWidgetSyncGuard isCurrent});
+
+/// Whether one headless invocation still owns Live publications.
+///
+/// Debug Mock data belongs to the foreground app. A saved Mock choice, or one
+/// that cannot be read, retires the invocation for good. Release builds never
+/// read the debug preference. Failed validation of bound credential/snapshot
+/// provenance also retires the invocation. The next invocation checks again.
+final class HeadlessLiveOwner {
+  HeadlessLiveOwner({
+    bool debugBuild = kDebugMode,
+    DebugDataPreferenceStore? debugData,
+  }) : _debugData =
+           debugBuild ? debugData ?? SecureDebugDataPreferenceStore() : null;
+
+  final DebugDataPreferenceStore? _debugData;
+  var _retired = false;
+  Future<bool> Function()? _provenance;
+
+  /// Binds later currentness to the repository result now being handled.
+  void bindProvenance(Future<bool> Function() provenance) {
+    _provenance = provenance;
+  }
+
+  /// Mode first: the bound provenance stays the final validation.
+  Future<bool> isCurrent() async =>
+      await isLive() && await _isProvenanceCurrent();
+
+  Future<bool> _isProvenanceCurrent() async {
+    if (_retired) return false;
+    final provenance = _provenance;
+    if (provenance == null) return true;
+    try {
+      if (await provenance()) return !_retired;
+    } catch (_) {
+      _retired = true;
+      rethrow;
+    }
+    _retired = true;
+    return false;
+  }
+
+  Future<bool> isLive() async {
+    final debugData = _debugData;
+    if (_retired) return false;
+    if (debugData == null) return true;
+    try {
+      if (!await debugData.readMockDataEnabled()) return !_retired;
+    } catch (_) {
+      // An unreadable choice may be Mock: never publish Live data over it.
+    }
+    _retired = true;
+    return false;
+  }
+}
 
 /// Work that can proceed independently once a provider snapshot is available.
 final class ProviderSyncWork {
@@ -26,35 +94,50 @@ final class ProviderSyncWork {
     required this.syncWatch,
     required this.syncWidget,
     required this.syncRecoveries,
+    this.syncAlerts = _noAlertDelivery,
     this.isCurrent = _alwaysCurrent,
   });
 
   final Future<void> Function() syncWatch;
   final Future<void> Function() syncWidget;
   final Future<void> Function() syncRecoveries;
+  final Future<void> Function() syncAlerts;
   final Future<bool> Function() isCurrent;
 }
 
 /// One provider sync + watch push with no UI (headless WorkManager tick).
 ///
 /// Setup and delivery failures are recorded but swallowed so one surface never
-/// prevents another from receiving the newest snapshot.
+/// prevents another from receiving the newest snapshot. A retired invocation
+/// leaves every surface, including STALE, untouched.
 Future<void> providerSyncOnce({
-  ProviderSyncWorkLoader load = _loadProviderSyncWork,
+  ProviderSyncWorkLoader load = loadProviderSyncWork,
   ProviderSyncFailureLogger logFailure = _logProviderSyncFailure,
-  Future<void> Function() markWidgetStale =
+  ProviderSyncStaleMarker markWidgetStale =
       HomeWidgetPhoneWidgetSyncService.markExistingRowsStale,
+  bool debugBuild = kDebugMode,
+  DebugDataPreferenceStore? debugData,
 }) async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final ProviderSyncWork work;
+  final owner = HeadlessLiveOwner(debugBuild: debugBuild, debugData: debugData);
+  final poll = AutomaticPollContext.current ?? AutomaticPollContext();
+  final ProviderSyncWork? loaded;
   try {
-    work = await load();
+    loaded = await poll.run(() => load(owner));
   } catch (error, stackTrace) {
     logFailure('setup', error, stackTrace);
-    await _attemptProviderSyncStep('widget', markWidgetStale, logFailure);
+    // Obsolete failures and rejected snapshots cannot mark newer rows STALE.
+    if (!poll.whollySkipped)
+      await _attemptProviderSyncStep('widget', () async {
+        if (await owner.isCurrent())
+          await markWidgetStale(isCurrent: owner.isCurrent);
+      }, logFailure);
     return;
   }
+  if (loaded == null) return;
+  // Effect closures lose the deferred local's promotion: capture non-null work.
+  final work = loaded;
 
   await _attemptProviderSyncStep('watch', () async {
     if (await work.isCurrent()) await work.syncWatch();
@@ -67,42 +150,119 @@ Future<void> providerSyncOnce({
   await _attemptProviderSyncStep('recovery', () async {
     if (await work.isCurrent()) await work.syncRecoveries();
   }, logFailure);
+  await _attemptProviderSyncStep('alerts', () async {
+    if (await work.isCurrent()) await work.syncAlerts();
+  }, logFailure);
 }
 
-Future<ProviderSyncWork> _loadProviderSyncWork() async {
-  final live = PhoneLiveBindings.create();
-  final ringPreferences = await SecureWatchRingPreferenceStore().read();
-  final widgetPreferences = await SecurePhoneWidgetPreferenceStore().read();
+/// Asks [owner] before Live bindings exist and again after each awaited stage.
+Future<ProviderSyncWork?> loadProviderSyncWork(
+  HeadlessLiveOwner owner, {
+  PhoneLiveBindings Function()? createLive,
+  WatchRingPreferenceStore? watchRingStore,
+  PhoneWidgetPreferenceStore? widgetStore,
+  ReadExhaustedWindows readWindows = exhaustedWindows,
+}) async {
+  if (!await owner.isLive()) return null;
+  final live = (createLive ?? PhoneLiveBindings.create)();
+  final poll = AutomaticPollContext.current ?? AutomaticPollContext();
   final alertThresholds = await SecureAlertThresholdPreferenceStore().read();
-  final notifyOnRecovery =
-      await SecureRecoveryNotificationPreferenceStore().read();
-  final snapshot = applyUserAlertSettings(
-    await live.repository.load(),
-    alertThresholds,
-  );
+  if (!await owner.isLive()) return null;
+  final DashboardSnapshot loaded;
+  try {
+    loaded = await poll.run(live.repository.load);
+  } catch (error) {
+    // Keep rejected-load absence evidence alongside every admitted credential.
+    final failure = DashboardSnapshot.empty()
+        .withReportingOutcomes(
+          error is DashboardLoadException ? error.reportingOutcomes : const [],
+        )
+        .withConnectionVersions(
+          mergeConnectionVersions([
+            if (error is DashboardLoadException) error.connectionVersions,
+            {
+              for (final MapEntry(:key, :value)
+                  in poll.admittedVersions.entries)
+                key: value.values,
+            },
+          ]),
+          snapshotOrdering:
+              error is DashboardLoadException ? error.snapshotOrdering : null,
+        );
+    owner.bindProvenance(() => live.repository.isSnapshotCurrent(failure));
+    // A load that ends after Mock took over is retired, not a Live failure.
+    if (!await owner.isLive()) return null;
+    rethrow;
+  }
+  final snapshot = applyUserAlertSettings(loaded, alertThresholds);
+  owner.bindProvenance(() => live.repository.isSnapshotCurrent(snapshot));
+  final isCurrent = owner.isCurrent;
 
-  if (!await live.repository.isSnapshotCurrent(snapshot))
+  if (!await owner.isLive()) return null;
+  if (!await owner._isProvenanceCurrent()) {
     throw StateError('Connection changed during refresh.');
+  }
   return ProviderSyncWork(
-    isCurrent: () => live.repository.isSnapshotCurrent(snapshot),
-    syncWatch:
-        () => const MethodChannelWatchSyncService().sync(
+    isCurrent: isCurrent,
+    syncWatch: () async {
+      if (poll.whollySkipped) return;
+      final ringPreferences =
+          await (watchRingStore ?? SecureWatchRingPreferenceStore()).read();
+      if (!await isCurrent()) return;
+      await const MethodChannelWatchSyncService().sync(
+        snapshot,
+        ringPreferences,
+      );
+    },
+    syncWidget: () async {
+      if (poll.whollySkipped) return;
+      final widgetPreferences =
+          await (widgetStore ?? SecurePhoneWidgetPreferenceStore()).read();
+      if (!await isCurrent()) return;
+      await HomeWidgetPhoneWidgetSyncService().sync(
+        snapshot,
+        widgetPreferences,
+        isCurrent: isCurrent,
+      );
+    },
+    syncRecoveries: () async {
+      var notifications = false;
+      try {
+        notifications =
+            await SecureRecoveryNotificationPreferenceStore().read();
+      } catch (_) {
+        // Delivery preferences cannot block publication or recovery tracking.
+      }
+      if (!await isCurrent()) return;
+      await syncPlanRecoveries(
+        snapshot,
+        SecureRecoveryWatchlistStore(),
+        LocalRecoveryNotifier(),
+        const WorkmanagerRecoveryWakeScheduler(),
+        notifications: notifications,
+        readWindows: readWindows,
+        rethrowFailures: true,
+        poll: poll,
+        isCurrent: isCurrent,
+      );
+    },
+    syncAlerts:
+        () => AlertNotificationDelivery(
+          preferences: SecureAlertNotificationPreferenceStore(),
+          conditions: SecureAlertConditionStore(),
+          notifier: LocalAlertNotifier(),
+        ).sync(
           snapshot,
-          ringPreferences,
-        ),
-    syncWidget:
-        () => HomeWidgetPhoneWidgetSyncService().sync(
-          snapshot,
-          widgetPreferences,
-        ),
-    syncRecoveries:
-        () => syncPlanRecoveries(
-          snapshot,
-          SecureRecoveryWatchlistStore(),
-          LocalRecoveryNotifier(),
-          const WorkmanagerRecoveryWakeScheduler(),
-          notifications: notifyOnRecovery,
-          rethrowFailures: true,
+          poll: poll,
+          alertThresholds: alertThresholds,
+          isCurrent: () async {
+            // Rules can change while a headless load or bookkeeping is awaiting.
+            // Defer this observation until work captures the new effective rules.
+            final currentRules =
+                await SecureAlertThresholdPreferenceStore().read();
+            if (currentRules.encode() != alertThresholds.encode()) return false;
+            return isCurrent();
+          },
         ),
   );
 }

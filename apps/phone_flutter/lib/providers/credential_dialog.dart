@@ -12,6 +12,7 @@ class CredentialDialog extends StatefulWidget {
     required this.allowLabel,
     this.initialLabel,
     this.guidance,
+    this.valueValidator,
     this.autofocus = true,
   });
 
@@ -21,6 +22,7 @@ class CredentialDialog extends StatefulWidget {
   final bool allowLabel;
   final String? initialLabel;
   final String? guidance;
+  final String? Function(String value)? valueValidator;
   final bool autofocus;
 
   @override
@@ -123,13 +125,20 @@ class _CredentialDialogState extends State<CredentialDialog> {
                       ? TextInputAction.next
                       : TextInputAction.done,
               onFieldSubmitted: widget.allowLabel ? null : (_) => _save(),
+              errorBuilder:
+                  widget.valueValidator == null
+                      ? null
+                      : (context, error) => Text(
+                        error,
+                        softWrap: true,
+                        overflow: TextOverflow.visible,
+                      ),
               validator: (value) {
-                if (widget.hasCredential) {
-                  return null;
+                final candidate = value?.trim() ?? '';
+                if (candidate.isEmpty) {
+                  return widget.hasCredential ? null : 'Enter a value';
                 }
-                return value == null || value.trim().isEmpty
-                    ? 'Enter a value'
-                    : null;
+                return widget.valueValidator?.call(candidate);
               },
             ),
             if (widget.allowLabel) ...[

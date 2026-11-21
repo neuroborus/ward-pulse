@@ -37,6 +37,7 @@ bindings/dart/pubspec.lock
 # Android / Gradle
 .gradle/
 **/build/
+!/apps/wear_android/app/src/debug/
 local.properties
 captures/
 *.apk

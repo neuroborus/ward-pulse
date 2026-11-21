@@ -7,6 +7,7 @@ import 'package:ward_pulse_watch_sync/ward_pulse_watch_sync.dart';
 import '../dashboard/dashboard_models.dart';
 import '../settings/watch_ring_preferences.dart';
 import 'manual_refresh_window.dart';
+import 'selected_data_freshness.dart';
 import 'watch_credits_glance.dart';
 
 abstract interface class WatchSyncService {
@@ -38,8 +39,15 @@ class MethodChannelWatchSyncService implements WatchSyncService {
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,
-  }) {
-    return WardPulseWatchSync.syncSummary(
+  }) async {
+    // Keep the last valid publication while the owner corrects saved choices.
+    if (watchRingCapacityReason(
+          watchRingSelectionIds(snapshot, ringPreferences),
+        ) !=
+        null) {
+      return;
+    }
+    await WardPulseWatchSync.syncSummary(
       WatchDashboardSummaryPayload.fromSnapshot(
         snapshot,
         ringPreferences,
@@ -82,11 +90,19 @@ class WatchDashboardSummaryPayload {
     DateTime? clock,
     bool mockDataMode = false,
   }) {
+    final selectionIds = watchRingSelectionIds(snapshot, ringPreferences);
+    final capacityReason = watchRingCapacityReason(selectionIds);
+    if (capacityReason != null) {
+      throw StateError(capacityReason);
+    }
     final rings = orderWatchRingsForSurface(
       resolveWatchRings(snapshot, ringPreferences),
       snapshot: snapshot,
     );
-    final creditsGlance = resolveWatchCreditsGlance(snapshot);
+    final creditsGlance =
+        ringPreferences.selectedIds?.isEmpty == true
+            ? null
+            : resolveWatchCreditsGlance(snapshot);
     final window = ManualRefreshWindow.fromLastSync(
       lastSyncAt: manualRefreshAnchorAt ?? snapshot.generatedAt,
       now: clock,
@@ -115,6 +131,10 @@ class WatchDashboardSummaryPayload {
             'split': split == null ? null : _splitToJson(split),
           },
       ],
+      // Rings were chosen but none has a usable percentage; Wear says so
+      // instead of asking the owner to choose rings again.
+      if (selectionIds.isNotEmpty && rings.isEmpty)
+        'selectedRingDataUnavailable': true,
       'creditsGlance': creditsGlance?.toJson(),
       'today': _budgetToJson(snapshot.todayTotal),
       'week': _budgetToJson(snapshot.weekTotal),
@@ -144,7 +164,16 @@ class WatchDashboardSummaryPayload {
         for (final alert in snapshot.alerts)
           {'severity': alert.severity, 'message': alert.message},
       ],
-      'isStale': snapshot.overallStatus == ProviderStatus.stale,
+      'isStale': selectedDataIsStale(snapshot, [
+        for (final ring in rings) ...[
+          if (ring.contributor case final contributor?) contributor,
+          if (providerFromRingId(ring.id) case final provider?)
+            if (watchRingCreditContributor(snapshot, provider)
+                case final contributor?)
+              contributor,
+        ],
+        if (rings.isEmpty) ...?creditsGlance?.contributors,
+      ]),
     });
   }
 
@@ -177,10 +206,13 @@ Map<String, Object?> _splitToJson(WatchRingMetric ring) {
   };
 }
 
-/// Trim ordinary float noise without rounding a positive remainder to zero.
+/// Trim ordinary float noise without rounding a positive remainder to zero
+/// or positive usage to none: Wear reads exact zero as a full ring.
 double _watchUsedPercent(double used) {
   final rounded = double.parse(used.toStringAsFixed(1));
-  return used < 100 && rounded >= 100 ? used : rounded;
+  if (used < 100 && rounded >= 100) return used;
+  if (used > 0 && rounded <= 0) return used;
+  return rounded;
 }
 
 String _ringLabel(WatchRingMetric ring) {

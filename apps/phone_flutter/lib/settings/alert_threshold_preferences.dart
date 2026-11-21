@@ -6,8 +6,8 @@ import '../providers/provider_connection.dart';
 
 /// Discrete remaining-% stops shown in the UI (null = off).
 ///
-/// Maps to used% for storage/Rust: `100 - remaining` → 50/70/80/90/100.
-const alertRemainingStops = <int?>[null, 50, 30, 20, 10, 0];
+/// Custom input also accepts every whole percentage between the endpoints.
+const alertRemainingStops = <int?>[null, 100, 50, 30, 20, 10, 0];
 
 /// UI remaining → stored used percent.
 int? alertRemainingToUsed(int? remainingLeft) {
@@ -17,13 +17,12 @@ int? alertRemainingToUsed(int? remainingLeft) {
   return 100 - remainingLeft;
 }
 
-/// Stored used percent → UI remaining (null if not a known stop).
+/// Stored used percent → UI remaining, including custom values.
 int? alertUsedToRemaining(int? used) {
   if (used == null) {
     return null;
   }
-  final remaining = 100 - used;
-  return alertRemainingStops.contains(remaining) ? remaining : null;
+  return 100 - used;
 }
 
 /// Opt-in used-% threshold for Rust. Null = off.
@@ -60,17 +59,24 @@ final class ConnectionBudget {
 
   bool get isEmpty => today == null && week == null && month == null;
 
+  bool sameLimits(ConnectionBudget other) =>
+      (today, week, month) == (other.today, other.week, other.month);
+
   Map<String, Object?> toJson() => {
     if (today != null) 'today': today,
     if (week != null) 'week': week,
     if (month != null) 'month': month,
   };
 
-  static ConnectionBudget fromJson(Object? json) {
+  static ConnectionBudget fromJson(
+    Object? json, {
+    bool preserveIntegers = false,
+  }) {
     if (json is! Map) {
       return const ConnectionBudget();
     }
-    int? read(Object? value) => value is int && value > 0 ? value : null;
+    int? read(Object? value) =>
+        value is int && (preserveIntegers || value > 0) ? value : null;
     return ConnectionBudget(
       today: read(json['today']),
       week: read(json['week']),
@@ -86,6 +92,7 @@ final class ConnectionBudget {
 final class ConnectionAlertThresholds {
   const ConnectionAlertThresholds({
     this.plan = const AlertPercentThreshold(),
+    this.planWindows = const {},
     this.purchased = const AlertPercentThreshold(),
     this.today = const AlertPercentThreshold(),
     this.week = const AlertPercentThreshold(),
@@ -94,6 +101,9 @@ final class ConnectionAlertThresholds {
   });
 
   final AlertPercentThreshold plan;
+
+  /// Absent IDs inherit Plan; a present disabled threshold explicitly means Off.
+  final Map<String, AlertPercentThreshold> planWindows;
   final AlertPercentThreshold purchased;
   final AlertPercentThreshold today;
   final AlertPercentThreshold week;
@@ -103,16 +113,35 @@ final class ConnectionAlertThresholds {
   /// True when a percent rule can fire. A budget alone is a ceiling, not a rule.
   bool get hasAlertRules =>
       plan.isEnabled ||
+      planWindows.values.any((value) => value.isEnabled) ||
       purchased.isEnabled ||
       today.isEnabled ||
       week.isEnabled ||
       month.isEnabled;
 
-  /// Worth storing: a bare budget still reaches Rust and shapes the dashboard.
+  /// A bare budget also reaches Rust and shapes the dashboard.
   bool get isEnabled => hasAlertRules || !budget.isEmpty;
+
+  /// Explicit Off overrides must survive even when nothing needs evaluation.
+  bool get hasStoredSettings => isEnabled || planWindows.isNotEmpty;
+
+  bool samePlanAlerts(ConnectionAlertThresholds other) =>
+      plan.at == other.plan.at &&
+      purchased.at == other.purchased.at &&
+      planWindows.length == other.planWindows.length &&
+      planWindows.entries.every(
+        (entry) =>
+            other.planWindows.containsKey(entry.key) &&
+            other.planWindows[entry.key]?.at == entry.value.at,
+      );
+
+  bool sameBudgetAlerts(ConnectionAlertThresholds other) =>
+      (today.at, week.at, month.at) ==
+      (other.today.at, other.week.at, other.month.at);
 
   ConnectionAlertThresholds copyWith({
     AlertPercentThreshold? plan,
+    Map<String, AlertPercentThreshold>? planWindows,
     AlertPercentThreshold? purchased,
     AlertPercentThreshold? today,
     AlertPercentThreshold? week,
@@ -121,6 +150,7 @@ final class ConnectionAlertThresholds {
   }) {
     return ConnectionAlertThresholds(
       plan: plan ?? this.plan,
+      planWindows: planWindows ?? this.planWindows,
       purchased: purchased ?? this.purchased,
       today: today ?? this.today,
       week: week ?? this.week,
@@ -131,6 +161,11 @@ final class ConnectionAlertThresholds {
 
   Map<String, Object?> toJson() => {
     'plan': plan.toJson(),
+    if (planWindows.isNotEmpty)
+      'planWindows': {
+        for (final entry in planWindows.entries)
+          entry.key: entry.value.toJson(),
+      },
     'purchased': purchased.toJson(),
     'today': today.toJson(),
     'week': week.toJson(),
@@ -138,17 +173,29 @@ final class ConnectionAlertThresholds {
     'budget': budget.toJson(),
   };
 
-  static ConnectionAlertThresholds fromJson(Object? json) {
+  static ConnectionAlertThresholds fromJson(
+    Object? json, {
+    bool preserveBudgetIntegers = false,
+  }) {
     if (json is! Map) {
       return const ConnectionAlertThresholds();
     }
     return ConnectionAlertThresholds(
       plan: AlertPercentThreshold.fromJson(json['plan']),
+      planWindows: Map.unmodifiable({
+        if (json['planWindows'] case final Map windows)
+          for (final entry in windows.entries)
+            if (entry.key is String)
+              entry.key as String: AlertPercentThreshold.fromJson(entry.value),
+      }),
       purchased: AlertPercentThreshold.fromJson(json['purchased']),
       today: AlertPercentThreshold.fromJson(json['today']),
       week: AlertPercentThreshold.fromJson(json['week']),
       month: AlertPercentThreshold.fromJson(json['month']),
-      budget: ConnectionBudget.fromJson(json['budget']),
+      budget: ConnectionBudget.fromJson(
+        json['budget'],
+        preserveIntegers: preserveBudgetIntegers,
+      ),
     );
   }
 }
@@ -165,6 +212,23 @@ final class AlertThresholdPreferences {
   bool get hasEnabledRules =>
       connections.values.any((value) => value.isEnabled);
 
+  bool sameSettings(AlertThresholdPreferences other) {
+    final saved = connections.values.where((value) => value.hasStoredSettings);
+    return saved.length ==
+            other.connections.values
+                .where((value) => value.hasStoredSettings)
+                .length &&
+        connections.entries.every((entry) {
+          final rules = entry.value;
+          if (!rules.hasStoredSettings) return true;
+          final previous = other.connections[entry.key];
+          return previous != null &&
+              rules.samePlanAlerts(previous) &&
+              rules.sameBudgetAlerts(previous) &&
+              rules.budget.sameLimits(previous.budget);
+        });
+  }
+
   ConnectionAlertThresholds forConnection(ProviderConnectionId id) {
     return connections[id.storageKey] ?? const ConnectionAlertThresholds();
   }
@@ -174,7 +238,7 @@ final class AlertThresholdPreferences {
     ConnectionAlertThresholds value,
   ) {
     final next = Map<String, ConnectionAlertThresholds>.of(connections);
-    if (value.isEnabled) {
+    if (value.hasStoredSettings) {
       next[id.storageKey] = value;
     } else {
       next.remove(id.storageKey);
@@ -193,7 +257,7 @@ final class AlertThresholdPreferences {
   Map<String, Object?> toJson() => {
     'connections': {
       for (final entry in connections.entries)
-        if (entry.value.isEnabled) entry.key: entry.value.toJson(),
+        if (entry.value.hasStoredSettings) entry.key: entry.value.toJson(),
     },
   };
 
@@ -209,8 +273,12 @@ final class AlertThresholdPreferences {
         if (key is! String) {
           continue;
         }
-        final value = ConnectionAlertThresholds.fromJson(entry.value);
-        if (value.isEnabled) {
+        final value = ConnectionAlertThresholds.fromJson(
+          entry.value,
+          preserveBudgetIntegers:
+              key == ProviderConnections.cursorPlatform.storageKey,
+        );
+        if (value.hasStoredSettings) {
           connections[key] = value;
         }
       }
@@ -285,7 +353,7 @@ int? _clampPercent(Object? value) {
   if (parsed == null) {
     return null;
   }
-  if (parsed < 1 || parsed > 100) {
+  if (parsed < 0 || parsed > 100) {
     return null;
   }
   return parsed;

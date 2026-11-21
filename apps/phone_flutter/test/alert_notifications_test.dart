@@ -1,0 +1,950 @@
+import 'dart:async';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/dashboard/apply_alert_settings.dart';
+import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
+import 'package:ward_pulse_phone/settings/alert_notification_preferences.dart';
+import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
+import 'package:ward_pulse_phone/settings/recovery_notification_preferences.dart';
+import 'package:ward_pulse_phone/settings/notification_permission_preferences.dart';
+import 'package:ward_pulse_phone/sync/alert_notifications.dart';
+import 'package:ward_pulse_phone/sync/notification_coordinator.dart';
+import 'package:ward_pulse_phone/sync/automatic_poll.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
+
+import 'connection_cache_test_support.dart';
+
+const _key = AlertConditionKey(
+  provider: 'claude',
+  accountId: 'private-account-a',
+  connection: 'anthropic.plan',
+  target: AllowanceAlertTarget(source: AllowanceSource.plan, id: 'window-a'),
+);
+const _other = AlertConditionKey(
+  provider: 'claude',
+  accountId: 'private-account-a',
+  connection: 'anthropic.plan',
+  target: BudgetAlertTarget(period: AlertBudgetPeriod.today),
+);
+const _crossed = AlertCondition.crossed(
+  key: _key,
+  alert: AlertSummary(severity: 'warning', message: 'Raw error/spend copy'),
+);
+const _clear = AlertCondition.clear(key: _key);
+const _unknown = AlertCondition.unknown(key: _key);
+
+DashboardSnapshot _snapshot(
+  List<AlertCondition> conditions,
+) => DashboardSnapshot.fromJson({
+  ...DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 2)).toJson(),
+  'alertConditions': conditions.map((condition) => condition.toJson()).toList(),
+});
+
+AlertThresholdPreferences _planRules(int? at) => AlertThresholdPreferences(
+  connections: {
+    _key.connection: ConnectionAlertThresholds(
+      plan: AlertPercentThreshold(at: at),
+    ),
+  },
+);
+
+void main() {
+  test(
+    'a partially skipped connection neither consumes nor clears alert markers',
+    () async {
+      final conditions = _Conditions()..values[_key] = true;
+      final notifier = _Notifier();
+      final delivery = AlertNotificationDelivery(
+        preferences: _Preferences(),
+        conditions: conditions,
+        notifier: notifier,
+      );
+      final poll = AutomaticPollContext()..attempted.add('openai.platform');
+      poll.skipped[_key.connection] = AutomaticPollSkipped(
+        _key.connection,
+        CredentialVersion({}),
+        DateTime.utc(2026, 11, 6),
+      );
+      await delivery.sync(_snapshot([_clear]), poll: poll);
+      expect(conditions.values[_key], isTrue);
+      conditions.values.clear();
+      await delivery.sync(_snapshot([_crossed]), poll: poll);
+      expect(conditions.writes, 0);
+      expect(notifier.posts, isEmpty);
+      const fresh = AlertConditionKey(
+        provider: 'openai',
+        accountId: 'fresh-account',
+        connection: 'openai.platform',
+        target: BudgetAlertTarget(period: AlertBudgetPeriod.today),
+      );
+      await delivery.sync(
+        _snapshot([
+          _crossed,
+          const AlertCondition.crossed(
+            key: fresh,
+            alert: AlertSummary(
+              severity: 'warning',
+              message: 'Fresh observation',
+            ),
+          ),
+        ]),
+        poll: poll,
+      );
+      expect(notifier.posts, [fresh]);
+      expect(conditions.values.containsKey(_key), isFalse);
+      await delivery.sync(_snapshot([_crossed]));
+      expect(conditions.values[_key], isTrue);
+      expect(notifier.posts, [fresh, _key]);
+    },
+  );
+  test(
+    'readiness retains initialization failure and stack, then retries once',
+    () async {
+      final failure = StateError('Initialization unavailable.');
+      final stack = StackTrace.current;
+      final failed = Completer<void>();
+      final successful = Completer<void>();
+      var initializations = 0;
+      final coordinator = PhoneNotificationCoordinator(
+        initialize:
+            () => ++initializations == 1 ? failed.future : successful.future,
+      );
+      final first = coordinator.ensureReady();
+      expect(coordinator.ensureReady(), same(first));
+      final observed = first.then<void>(
+        (_) => fail('Initialization must retain its failure.'),
+        onError: (Object error, StackTrace trace) {
+          expect(error, same(failure));
+          expect(trace.toString(), stack.toString());
+        },
+      );
+      failed.completeError(failure, stack);
+      await observed;
+      final retry = coordinator.ensureReady();
+      expect(retry, isNot(same(first)));
+      expect(coordinator.ensureReady(), same(retry));
+      successful.complete();
+      await retry;
+      expect(coordinator.ensureReady(), same(retry));
+      expect(initializations, 2);
+    },
+  );
+
+  for (final granted in [false, true]) {
+    test('shared foreground request persists handling ($granted)', () async {
+      final storage = FakeSecureStorage();
+      final attempts = SecureNotificationPermissionAttemptStore(
+        storage: storage,
+      );
+      final dispatched = Completer<void>();
+      final answer = Completer<bool>();
+      var requests = 0;
+      PhoneNotificationCoordinator coordinator() =>
+          PhoneNotificationCoordinator(
+            attempts: SecureNotificationPermissionAttemptStore(
+              storage: storage,
+            ),
+            initialize: () async {},
+            requestPermission: () {
+              requests++;
+              if (!dispatched.isCompleted) dispatched.complete();
+              return answer.future;
+            },
+          );
+      final current = coordinator();
+      final automatic = current.requestForeground(
+        isEligible: () => true,
+        automatic: true,
+      );
+      await dispatched.future;
+      expect(await attempts.read(), isTrue);
+      final explicit = current.requestForeground(isEligible: () => true);
+      final repeated = current.requestForeground(
+        isEligible: () => true,
+        automatic: true,
+      );
+      answer.complete(granted);
+      expect(await Future.wait([automatic, explicit, repeated]), [
+        granted,
+        granted,
+        granted,
+      ]);
+      expect(
+        await coordinator().requestForeground(
+          isEligible: () => true,
+          automatic: true,
+        ),
+        isNull,
+      );
+      expect(requests, 1);
+      expect(await current.requestForeground(isEligible: () => true), granted);
+      expect(requests, 2); // Explicit retries bypass handled suppression.
+    });
+  }
+
+  for (final stage in ['initialize', 'read', 'claim']) {
+    test(
+      'invalidated $stage preparation releases only its undispatched claim',
+      () async {
+        final entered = Completer<void>();
+        final release = Completer<void>();
+        var eligible = true;
+        var requests = 0;
+        Future<void> hold() async {
+          if (!entered.isCompleted) entered.complete();
+          await release.future;
+        }
+
+        final attempts =
+            _PermissionAttempts()
+              ..beforeRead = stage == 'read' ? hold : null
+              ..beforeClaim = stage == 'claim' ? hold : null;
+        final coordinator = PhoneNotificationCoordinator(
+          attempts: attempts,
+          initialize: stage == 'initialize' ? hold : () async {},
+          requestPermission: () async {
+            requests++;
+            return false;
+          },
+        );
+        final automatic = coordinator.requestForeground(
+          isEligible: () => eligible,
+          automatic: true,
+        );
+        await entered.future;
+        eligible = false;
+        final explicit = coordinator.requestForeground(isEligible: () => true);
+        release.complete();
+        expect(await automatic, isNull);
+        expect(await explicit, isFalse);
+        expect(
+          requests,
+          1,
+        ); // Aborted preparation did not consume explicit retry.
+        expect(attempts.handled, isTrue);
+      },
+    );
+  }
+
+  for (final failure in ['read', 'write', 'request']) {
+    test(
+      'permission $failure failures cannot repeat automatic dispatch',
+      () async {
+        final storage =
+            FakeSecureStorage()
+              ..failRead = failure == 'read'
+              ..failWrite = failure == 'write';
+        var requests = 0;
+        final coordinator = PhoneNotificationCoordinator(
+          attempts: SecureNotificationPermissionAttemptStore(storage: storage),
+          initialize: () async {},
+          requestPermission: () {
+            requests++;
+            throw StateError('Permission unavailable.');
+          },
+        );
+        await coordinator.requestForeground(
+          isEligible: () => true,
+          automatic: true,
+        );
+        await coordinator.requestForeground(
+          isEligible: () => true,
+          automatic: true,
+        );
+        expect(requests, failure == 'request' ? 1 : 0);
+        expect(
+          await coordinator.requestForeground(isEligible: () => true),
+          isFalse,
+        );
+        expect(requests, failure == 'request' ? 2 : 1);
+        await coordinator.requestForeground(
+          isEligible: () => true,
+          automatic: true,
+        );
+        expect(requests, failure == 'request' ? 2 : 1);
+      },
+    );
+  }
+
+  test(
+    'secure choices and per-condition consumed markers survive new adapters',
+    () async {
+      final storage = FakeSecureStorage();
+      final preference = SecureAlertNotificationPreferenceStore(
+        storage: storage,
+      );
+      final recovery = SecureRecoveryNotificationPreferenceStore(
+        storage: storage,
+      );
+      expect(await preference.read(), isTrue);
+      await recovery.write(false);
+      await preference.write(false);
+      expect(
+        await SecureAlertNotificationPreferenceStore(storage: storage).read(),
+        isFalse,
+      );
+      await preference.write(true);
+      expect(await recovery.read(), isFalse);
+      final markers = SecureAlertConditionStore(storage: storage);
+      await markers.write(_key, true);
+      await markers.write(_other, true);
+      final restarted = SecureAlertConditionStore(storage: storage);
+      expect(await restarted.read(_key), isTrue);
+      await restarted.write(_key, false);
+      expect(await markers.read(_key), isFalse);
+      expect(await markers.read(_other), isTrue);
+      expect(storage.values.keys.join(), isNot(contains(_key.accountId)));
+      final saved = Map.of(storage.values);
+      storage.failRead = true;
+      await expectLater(preference.read(), throwsStateError);
+      expect(storage.values, saved);
+    },
+  );
+
+  test(
+    'unchanged crossings suppress callbacks; only positive clear rearms',
+    () async {
+      final store = _Conditions();
+      final notifier = _Notifier();
+      final preferences = _Preferences();
+      AlertNotificationDelivery delivery() => AlertNotificationDelivery(
+        preferences: preferences,
+        conditions: store,
+        notifier: notifier,
+      );
+      await delivery().sync(_snapshot([_clear]));
+      await delivery().sync(_snapshot([_crossed]));
+      await delivery().sync(_snapshot([_crossed, _unknown]));
+      await delivery().sync(
+        _snapshot([]),
+      ); // Disabled/missing observations retain history.
+      await delivery().sync(
+        _snapshot([
+          const AlertCondition.crossed(
+            key: _key,
+            alert: AlertSummary(severity: 'warning', message: 'Renamed window'),
+          ),
+        ]),
+      ); // Rule/label edits retain the same structural identity.
+      expect(notifier.posts, [_key]);
+      await delivery().sync(_snapshot([_clear]));
+      await delivery().sync(_snapshot([_crossed]));
+      expect(notifier.posts, [_key, _key]);
+      expect(notifier.titles, everyElement('Claude · Plan window'));
+      expect(notifier.bodies, everyElement(alertNotificationBody));
+      expect(notifier.titles.join(), isNot(contains(_key.accountId)));
+      expect(notifier.titles.join(), isNot(contains(_crossed.alert!.message)));
+      expect(
+        alertNotificationTag(_key),
+        alertNotificationTag(AlertConditionKey.fromJson(_key.toJson())),
+      );
+      expect(alertNotificationTag(_key), isNot(alertNotificationTag(_other)));
+      expect(alertNotificationBody, 'Reached your alert threshold.');
+      expect(
+        alertNotificationTag(_key),
+        'wardpulse.alert.6734e09933085fe53344ed7272cadde9adb0682d3fd8d9c19b039d3e7cd85a5c',
+      );
+    },
+  );
+
+  test(
+    'provider status and displayed errors alone never create posts',
+    () async {
+      final store = _Conditions();
+      final notifier = _Notifier();
+      await AlertNotificationDelivery(
+        preferences: _Preferences(),
+        conditions: store,
+        notifier: notifier,
+      ).sync(
+        DashboardSnapshot.fromJson({
+          ...DashboardSnapshot.empty().toJson(),
+          'overallStatus': 'error',
+          'alerts': [
+            {'severity': 'error', 'message': 'Provider unavailable'},
+          ],
+        }),
+      );
+      expect(store.reads, 0);
+      expect(store.writes, 0);
+      expect(notifier.posts, isEmpty);
+    },
+  );
+
+  test('body copy maps exact windows, sources and budget periods', () {
+    const settings = AlertThresholdPreferences(
+      connections: {
+        'anthropic.plan': ConnectionAlertThresholds(
+          plan: AlertPercentThreshold(at: 80),
+          planWindows: {
+            'window-a': AlertPercentThreshold(at: 73),
+            'off': AlertPercentThreshold(),
+            'invalid': AlertPercentThreshold(at: 101),
+          },
+          purchased: AlertPercentThreshold(at: 60),
+          today: AlertPercentThreshold(at: 90),
+          week: AlertPercentThreshold(at: 50),
+          month: AlertPercentThreshold(at: 100),
+        ),
+      },
+    );
+    for (final (target, expected) in <(AlertConditionTarget, String)>[
+      (_key.target, 'Reached your alert threshold: 27% left.'),
+      (
+        const AllowanceAlertTarget(source: AllowanceSource.plan, id: 'other'),
+        'Reached your alert threshold: 20% left.',
+      ),
+      (
+        const AllowanceAlertTarget(source: AllowanceSource.plan, id: 'off'),
+        alertNotificationBody,
+      ),
+      (
+        const AllowanceAlertTarget(source: AllowanceSource.plan, id: 'invalid'),
+        alertNotificationBody,
+      ),
+      (
+        const AllowanceAlertTarget(
+          source: AllowanceSource.purchased,
+          id: 'window-a',
+        ),
+        'Reached your alert threshold: 40% left.',
+      ),
+      (
+        const BudgetAlertTarget(period: AlertBudgetPeriod.today),
+        'Reached your alert threshold: 10% left.',
+      ),
+      (
+        const BudgetAlertTarget(period: AlertBudgetPeriod.week),
+        'Reached your alert threshold: 50% left.',
+      ),
+      (
+        const BudgetAlertTarget(period: AlertBudgetPeriod.month),
+        'Reached your alert threshold: 0% left.',
+      ),
+    ]) {
+      final key = AlertConditionKey(
+        provider: _key.provider,
+        accountId: _key.accountId,
+        connection: _key.connection,
+        target: target,
+      );
+      expect(alertNotificationBodyFor(key, settings), expected);
+    }
+  });
+
+  test('body copy keeps custom values, endpoints and fallback', () {
+    for (final (at, expected) in <(int?, String)>[
+      (0, 'Reached your alert threshold: 100% left.'),
+      (73, 'Reached your alert threshold: 27% left.'),
+      (100, 'Reached your alert threshold: 0% left.'),
+      (null, alertNotificationBody),
+      (-1, alertNotificationBody),
+      (101, alertNotificationBody),
+    ]) {
+      expect(alertNotificationBodyFor(_key, _planRules(at)), expected);
+    }
+    expect(alertNotificationBodyFor(_key, null), alertNotificationBody);
+    expect(
+      alertNotificationBodyFor(_key, const AlertThresholdPreferences()),
+      alertNotificationBody,
+    );
+  });
+
+  test('delivery uses the captured settings for copy', () async {
+    var rules = _planRules(80);
+    final preferences = _Preferences();
+    preferences.beforeRead = () async {
+      rules = _planRules(90);
+    };
+    final notifier = _Notifier();
+    await AlertNotificationDelivery(
+      preferences: preferences,
+      conditions: _Conditions(),
+      notifier: notifier,
+    ).sync(_snapshot([_crossed]), alertThresholds: rules);
+    expect(rules.connections[_key.connection]!.plan.at, 90);
+    expect(notifier.bodies, ['Reached your alert threshold: 20% left.']);
+  });
+
+  test('copy prefers the resolved connection over a legacy sibling', () {
+    final empty = DashboardSnapshot.empty();
+    ProviderSnapshot account(String? connection, String label) =>
+        ProviderSnapshot(
+          accountId: _key.accountId,
+          provider: _key.provider,
+          connection: connection,
+          status: ProviderStatus.ok,
+          today: empty.todayTotal,
+          week: empty.weekTotal,
+          month: empty.monthTotal,
+          credits: const [],
+          buckets: const [],
+          modelBreakdown: const [],
+          lastSuccessfulSyncAt: null,
+          allowances: [
+            AllowanceState(
+              id: 'window-a',
+              source: AllowanceSource.plan,
+              label: label,
+              usedPercent: 80,
+              used: null,
+              limit: null,
+              remaining: null,
+              windowMinutes: null,
+              resetsAt: null,
+              status: ProviderStatus.warning,
+            ),
+          ],
+        );
+    final exact = account('other-connection', 'Weekly plan');
+    final legacy = account(null, 'Legacy window');
+    final snapshot = DashboardSnapshot.fromJson({
+      ...empty.toJson(),
+      'accounts': [exact.toJson(), legacy.toJson()],
+    });
+    final exactKey = AlertConditionKey(
+      provider: _key.provider,
+      accountId: _key.accountId,
+      connection: 'other-connection',
+      target: _key.target,
+    );
+    expect(alertNotificationTitle(snapshot, exactKey), 'Claude · Weekly plan');
+    expect(alertNotificationTitle(snapshot, _key), 'Claude · Legacy window');
+    final rules = AlertThresholdPreferences(
+      connections: {
+        ..._planRules(80).connections,
+        'other-connection': const ConnectionAlertThresholds(
+          plan: AlertPercentThreshold(at: 30),
+        ),
+      },
+    );
+    expect(
+      alertNotificationBodyFor(exactKey, rules),
+      'Reached your alert threshold: 70% left.',
+    );
+    expect(
+      alertNotificationBodyFor(_key, rules),
+      'Reached your alert threshold: 20% left.',
+    );
+    expect(
+      alertNotificationBodyFor(exactKey, _planRules(80)),
+      alertNotificationBody,
+    );
+  });
+
+  test('a canonical platform budget title names its family', () async {
+    final empty = DashboardSnapshot.empty(
+      generatedAt: DateTime.utc(2026, 11, 2),
+    );
+    final account = ProviderSnapshot(
+      accountId: 'reporting-account-a',
+      provider: 'claude',
+      connection: 'anthropic.platform',
+      status: ProviderStatus.ok,
+      today: empty.todayTotal,
+      week: empty.weekTotal,
+      month: const BudgetState(
+        period: 'month',
+        spent: Money(minorUnits: 124, currency: 'USD'),
+        limit: null,
+        remaining: null,
+        usedPercent: null,
+        projectedTotal: null,
+        status: ProviderStatus.unknown,
+      ),
+      credits: const [],
+      allowances: const [],
+      buckets: const [],
+      modelBreakdown: const [],
+      lastSuccessfulSyncAt: null,
+    );
+    DashboardSnapshot withAccount(Map<String, dynamic> changes) {
+      return DashboardSnapshot.fromJson({
+        ...empty.toJson(),
+        'accounts': [
+          {...account.toJson(), ...changes},
+        ],
+      });
+    }
+
+    const rules = AlertThresholdPreferences(
+      connections: {
+        'anthropic.platform': ConnectionAlertThresholds(
+          month: AlertPercentThreshold(at: 80),
+          budget: ConnectionBudget(month: 124),
+        ),
+      },
+    );
+    final applied = applyUserAlertSettings(withAccount(const {}), rules);
+    final notifier = _Notifier();
+    await AlertNotificationDelivery(
+      preferences: _Preferences(),
+      conditions: _Conditions(),
+      notifier: notifier,
+    ).sync(applied, alertThresholds: rules);
+    expect(notifier.titles, ['Anthropic · Monthly budget']);
+
+    // A legacy sibling is no explicit owner of a platform budget.
+    final key = notifier.posts.single;
+    expect(
+      alertNotificationTitle(withAccount(const {'connection': null}), key),
+      'Claude · Monthly budget',
+    );
+    // A platform key with a mismatched same-family token proves no source.
+    const mismatch = {'provider': 'codex', 'connection': 'openai.platform'};
+    final mismatchedKey = AlertConditionKey(
+      provider: 'codex',
+      accountId: key.accountId,
+      connection: 'openai.platform',
+      target: key.target,
+    );
+    expect(
+      alertNotificationTitle(withAccount(mismatch), mismatchedKey),
+      'Codex · Monthly budget',
+    );
+  });
+
+  for (final mode in ['muted', 'denied', 'preference failure']) {
+    test('$mode consumes a crossing without later backlog', () async {
+      final preferences =
+          _Preferences()
+            ..enabled = mode != 'muted'
+            ..failRead = mode == 'preference failure';
+      final notifier = _Notifier()..allowed = mode != 'denied';
+      final delivery = AlertNotificationDelivery(
+        preferences: preferences,
+        conditions: _Conditions(),
+        notifier: notifier,
+      );
+      await delivery.sync(_snapshot([_crossed]));
+      expect(notifier.posts, isEmpty);
+      preferences
+        ..enabled = true
+        ..failRead = false;
+      notifier.allowed = true;
+      await delivery.sync(_snapshot([_crossed]));
+      expect(notifier.posts, isEmpty);
+      await delivery.sync(_snapshot([_clear]));
+      await delivery.sync(_snapshot([_crossed]));
+      expect(notifier.posts, [_key]);
+      expect(notifier.asked, 0);
+    });
+  }
+
+  for (final failRead in [true, false]) {
+    test(
+      'failed ${failRead ? 'read' : 'claim'} isolates one condition and can retry',
+      () async {
+        final store = _Conditions();
+        (failRead ? store.failReads : store.failWrites).add(_key);
+        final notifier = _Notifier();
+        final delivery = AlertNotificationDelivery(
+          preferences: _Preferences(),
+          conditions: store,
+          notifier: notifier,
+        );
+        const second = AlertCondition.crossed(
+          key: _other,
+          alert: AlertSummary(severity: 'warning', message: 'Same copy'),
+        );
+        await delivery.sync(_snapshot([_crossed, second]));
+        expect(notifier.posts, [_other]);
+        store.failReads.clear();
+        store.failWrites.clear();
+        await delivery.sync(_snapshot([_crossed, second]));
+        expect(notifier.posts, [_other, _key]);
+      },
+    );
+  }
+
+  test('a plugin failure after claim is not retried until clear', () async {
+    final notifier = _Notifier()..failPost = true;
+    final delivery = AlertNotificationDelivery(
+      preferences: _Preferences(),
+      conditions: _Conditions(),
+      notifier: notifier,
+    );
+    await delivery.sync(_snapshot([_crossed]));
+    notifier.failPost = false;
+    await delivery.sync(_snapshot([_crossed]));
+    expect(notifier.posts, isEmpty);
+    await delivery.sync(_snapshot([_clear]));
+    await delivery.sync(_snapshot([_crossed]));
+    expect(notifier.posts, [_key]);
+  });
+
+  test('mock data never reads or changes production markers', () async {
+    final store = _Conditions()..values[_key] = true;
+    final notifier = _Notifier();
+    final delivery = AlertNotificationDelivery(
+      preferences: _Preferences(),
+      conditions: store,
+      notifier: notifier,
+    );
+    await delivery.sync(_snapshot([_clear]), mockData: true);
+    await delivery.sync(_snapshot([_crossed]), mockData: true);
+    expect(store.reads, 0);
+    expect(store.writes, 0);
+    expect(store.values, {_key: true});
+    expect(notifier.posts, isEmpty);
+  });
+
+  test(
+    'retired rules or ownership after a read cannot consume the crossing',
+    () async {
+      var current = true;
+      final store = _Conditions()..afterRead = () => current = false;
+      final notifier = _Notifier();
+      await AlertNotificationDelivery(
+        preferences: _Preferences(),
+        conditions: store,
+        notifier: notifier,
+      ).sync(_snapshot([_crossed]), isCurrent: () async => current);
+      expect(store.values, isEmpty);
+      expect(notifier.posts, isEmpty);
+    },
+  );
+
+  test(
+    'ownership and delivery choice are checked again after bookkeeping',
+    () async {
+      for (final retire in [false, true]) {
+        var current = true;
+        final preferences = _Preferences();
+        final store =
+            _Conditions()
+              ..beforeWrite = (_, _) async {
+                if (retire) {
+                  current = false;
+                } else {
+                  preferences.enabled = false;
+                }
+              };
+        final notifier = _Notifier();
+        await AlertNotificationDelivery(
+          preferences: preferences,
+          conditions: store,
+          notifier: notifier,
+        ).sync(_snapshot([_crossed]), isCurrent: () async => current);
+        expect(store.values[_key], isTrue);
+        expect(notifier.posts, isEmpty);
+      }
+    },
+  );
+
+  test(
+    'retirement during the final preference read suppresses headless posting',
+    () async {
+      final entered = Completer<void>();
+      final release = Completer<void>();
+      var current = true;
+      final preferences =
+          _Preferences()
+            ..beforeRead = () async {
+              entered.complete();
+              await release.future;
+            };
+      final store = _Conditions();
+      final notifier = _Notifier();
+      final syncing = AlertNotificationDelivery(
+        preferences: preferences,
+        conditions: store,
+        notifier: notifier,
+      ).sync(_snapshot([_crossed]), isCurrent: () async => current);
+      try {
+        await entered.future;
+        current = false;
+      } finally {
+        release.complete();
+        await syncing;
+      }
+      expect(store.values[_key], isTrue);
+      expect(notifier.posts, isEmpty);
+    },
+  );
+
+  test('separate service instances serialize within one isolate', () async {
+    final entered = Completer<void>();
+    final release = Completer<void>();
+    final store =
+        _Conditions()
+          ..beforeWrite = (_, _) async {
+            if (!entered.isCompleted) entered.complete();
+            await release.future;
+          };
+    final notifier = _Notifier();
+    AlertNotificationDelivery delivery() => AlertNotificationDelivery(
+      preferences: _Preferences(),
+      conditions: store,
+      notifier: notifier,
+    );
+    final first = delivery().sync(_snapshot([_crossed]));
+    await entered.future;
+    final second = delivery().sync(_snapshot([_crossed]));
+    release.complete();
+    await Future.wait([first, second]);
+    expect(notifier.posts, [_key]);
+  });
+
+  test('a completed predecessor preserves the newer active tail', () async {
+    final crossingEntered = Completer<void>();
+    final releaseCrossing = Completer<void>();
+    final clearEntered = Completer<void>();
+    final releaseClear = Completer<void>();
+    final store =
+        _Conditions()
+          ..beforeWrite = (_, consumed) async {
+            if (consumed && !crossingEntered.isCompleted) {
+              crossingEntered.complete();
+              await releaseCrossing.future;
+            } else if (!consumed) {
+              clearEntered.complete();
+              await releaseClear.future;
+            }
+          };
+    final notifier = _Notifier();
+    AlertNotificationDelivery delivery() => AlertNotificationDelivery(
+      preferences: _Preferences(),
+      conditions: store,
+      notifier: notifier,
+    );
+    final first = delivery().sync(_snapshot([_crossed]));
+    Future<void>? second;
+    Future<void>? third;
+    var thirdStarted = false;
+    try {
+      await crossingEntered.future;
+      second = delivery().sync(_snapshot([_clear]));
+      releaseCrossing.complete();
+      await first;
+      await clearEntered.future;
+      third = delivery().sync(
+        _snapshot([_crossed]),
+        isAccepted: () {
+          thirdStarted = true;
+          return true;
+        },
+      );
+      expect(thirdStarted, isFalse);
+    } finally {
+      if (!releaseCrossing.isCompleted) releaseCrossing.complete();
+      if (!releaseClear.isCompleted) releaseClear.complete();
+      await Future.wait([
+        first,
+        if (second != null) second,
+        if (third != null) third,
+      ]);
+    }
+    expect(thirdStarted, isTrue);
+    expect(notifier.posts, [_key, _key]);
+    expect(store.values[_key], isTrue);
+  });
+
+  test(
+    'accepted identity is checked after the final preference await',
+    () async {
+      var accepted = true;
+      final preferences =
+          _Preferences()
+            ..beforeRead = () async {
+              accepted = false;
+            };
+      final notifier = _Notifier();
+      await AlertNotificationDelivery(
+        preferences: preferences,
+        conditions: _Conditions(),
+        notifier: notifier,
+      ).sync(_snapshot([_crossed]), isAccepted: () => accepted);
+      expect(notifier.posts, isEmpty);
+    },
+  );
+}
+
+final class _PermissionAttempts implements NotificationPermissionAttemptStore {
+  bool handled = false;
+  Future<void> Function()? beforeRead;
+  Future<void> Function()? beforeClaim;
+  @override
+  Future<bool> read() async {
+    await beforeRead?.call();
+    return handled;
+  }
+
+  @override
+  Future<void> write(bool value) async {
+    if (value) await beforeClaim?.call();
+    handled = value;
+  }
+}
+
+class _Preferences implements AlertNotificationPreferenceStore {
+  bool enabled = true;
+  bool failRead = false;
+  Future<void> Function()? beforeRead;
+  @override
+  Future<bool> read() async {
+    await beforeRead?.call();
+    if (failRead) throw StateError('Preference unavailable.');
+    return enabled;
+  }
+
+  @override
+  Future<void> write(bool value) async => enabled = value;
+}
+
+class _Conditions implements AlertConditionStore {
+  final values = <AlertConditionKey, bool>{};
+  final failReads = <AlertConditionKey>{};
+  final failWrites = <AlertConditionKey>{};
+  void Function()? afterRead;
+  Future<void> Function(AlertConditionKey, bool)? beforeWrite;
+  var reads = 0;
+  var writes = 0;
+  @override
+  Future<bool> read(AlertConditionKey key) async {
+    reads++;
+    if (failReads.contains(key)) throw StateError('Read unavailable.');
+    afterRead?.call();
+    return values[key] ?? false;
+  }
+
+  @override
+  Future<void> write(AlertConditionKey key, bool consumed) async {
+    writes++;
+    await beforeWrite?.call(key, consumed);
+    if (failWrites.contains(key)) throw StateError('Write unavailable.');
+    if (consumed) {
+      values[key] = true;
+    } else {
+      values.remove(key);
+    }
+  }
+}
+
+class _Notifier implements AlertNotifier {
+  bool allowed = true;
+  bool failPost = false;
+  int asked = 0;
+  final posts = <AlertConditionKey>[];
+  final titles = <String>[];
+  final bodies = <String>[];
+  @override
+  Future<bool> canPost() async => allowed;
+  @override
+  Future<bool> requestPermission() async {
+    asked++;
+    return allowed;
+  }
+
+  @override
+  Future<void> notify(
+    AlertConditionKey key, {
+    required String title,
+    required String body,
+  }) async {
+    if (failPost) throw StateError('Plugin unavailable.');
+    posts.add(key);
+    titles.add(title);
+    bodies.add(body);
+  }
+}

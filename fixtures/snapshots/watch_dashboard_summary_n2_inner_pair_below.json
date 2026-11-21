@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 9,
+  "dataMode": "mock",
+  "generatedAt": "2026-06-27T18:42:00.000Z",
+  "overallStatus": "ok",
+  "manualRefreshAllowed": true,
+  "manualRefreshAvailableAt": null,
+  "rings": [
+    {
+      "id": "allowance.codex.plan",
+      "label": "Codex plan",
+      "usedPercent": 98.20505702495575,
+      "status": "ok",
+      "spent": null,
+      "limit": null,
+      "split": {
+        "id": "allowance.codex.spark",
+        "label": "Spark",
+        "usedPercent": 98.38844132423401,
+        "status": "ok"
+      }
+    },
+    {
+      "id": "allowance.claude.plan",
+      "label": "Claude plan",
+      "usedPercent": 97.26035022735596,
+      "status": "ok",
+      "spent": null,
+      "limit": null,
+      "split": null
+    }
+  ],
+  "creditsGlance": null,
+  "today": {
+    "period": "today",
+    "spent": null,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
+    "projectedTotal": null,
+    "status": "unknown"
+  },
+  "week": {
+    "period": "week",
+    "spent": null,
+    "limit": null,
+    "remaining": null,
+    "usedPercent": null,
+    "projectedTotal": null,
+    "status": "unknown"
+  },
+  "allowances": [],
+  "providers": [
+    {
+      "provider": "claude",
+      "status": "ok",
+      "todaySpent": null
+    },
+    {
+      "provider": "codex",
+      "status": "ok",
+      "todaySpent": null
+    }
+  ],
+  "alerts": [],
+  "isStale": false
+}

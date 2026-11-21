@@ -1,0 +1,14 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- AGP applies the configured runner to the first instrumentation element. -->
+    <instrumentation
+        android:name="app.wardpulse.wear.IsolatedWearRunner"
+        android:targetPackage="app.wardpulse"
+        android:functionalTest="false"
+        android:handleProfiling="false" />
+    <!-- Explicit class selection only. This entry never substitutes the target Application. -->
+    <instrumentation
+        android:name="androidx.test.runner.AndroidJUnitRunner"
+        android:targetPackage="app.wardpulse"
+        android:functionalTest="false"
+        android:handleProfiling="false" />
+</manifest>

@@ -7,20 +7,22 @@ use ward_pulse_core::model::{DashboardSnapshot, ProviderSnapshot};
 use ward_pulse_core::time::DateTimeUtc;
 use ward_pulse_core::{
     apply_alert_settings, build_dashboard_snapshot, exhausted_windows, plan_recoveries,
-    AlertSettings, WindowKey,
+    reconcile_plan_recoveries, AlertSettings, PendingRecovery, WindowKey,
 };
-use ward_pulse_providers::claude::{
+use ward_pulse_providers::anthropic::{
     anthropic_provider_snapshot_from_report_json, claude_provider_snapshot_from_report_json,
     AnthropicReportError, ClaudeReportError,
 };
-use ward_pulse_providers::codex::{codex_provider_snapshot_from_report_json, CodexReportError};
 use ward_pulse_providers::cursor::{
     cursor_plan_snapshot_from_report_json, cursor_platform_snapshot_from_report_json,
     CursorPlanReportError, CursorPlatformReportError,
 };
 use ward_pulse_providers::mock::{
-    debug_multi_provider_dashboard_json, mock_provider_snapshot_from_usage_fixture,
-    DebugDemoDashboardError, MockUsageFixtureError,
+    debug_multi_provider_dashboard_json, debug_multi_provider_dashboard_json_at,
+    mock_provider_snapshot_from_usage_fixture, DebugDemoDashboardError, MockUsageFixtureError,
+};
+use ward_pulse_providers::openai::plan::{
+    codex_provider_snapshot_from_report_json, CodexReportError,
 };
 use ward_pulse_providers::openai::{openai_provider_snapshot_from_report_json, OpenAiReportError};
 
@@ -186,7 +188,7 @@ fn merge_dashboard_snapshots_json(
     let generated_at = snapshots
         .iter()
         .map(|snapshot| &snapshot.generated_at)
-        .max_by(|left, right| left.as_str().cmp(right.as_str()))
+        .max()
         .cloned()
         .ok_or(DashboardSnapshotJsonError::EmptySnapshots)?;
     let accounts = snapshots
@@ -247,6 +249,29 @@ fn plan_recoveries_json(request_json: &str) -> Result<String, DashboardSnapshotJ
         .map_err(DashboardSnapshotJsonError::Serialize)
 }
 
+fn reconcile_plan_recoveries_json(
+    request_json: &str,
+) -> Result<String, DashboardSnapshotJsonError> {
+    let value: serde_json::Value =
+        serde_json::from_str(request_json).map_err(DashboardSnapshotJsonError::PlanRecovery)?;
+    let snapshot: DashboardSnapshot = serde_json::from_value(
+        value
+            .get("snapshot")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+    )
+    .map_err(DashboardSnapshotJsonError::PlanRecovery)?;
+    let pending: Vec<PendingRecovery> = serde_json::from_value(
+        value
+            .get("pending")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null),
+    )
+    .map_err(DashboardSnapshotJsonError::PlanRecovery)?;
+    serde_json::to_string(&reconcile_plan_recoveries(&snapshot, &pending))
+        .map_err(DashboardSnapshotJsonError::Serialize)
+}
+
 fn snapshot_result_json(result: Result<String, DashboardSnapshotJsonError>) -> Option<String> {
     result_json("dashboardJson", result)
 }
@@ -280,6 +305,28 @@ pub extern "C" fn ward_pulse_dashboard_snapshot_result_json() -> *mut c_char {
 #[no_mangle]
 pub extern "C" fn ward_pulse_debug_dashboard_snapshot_result_json(seed: u64) -> *mut c_char {
     result_json_into_raw(move || debug_dashboard_snapshot_json(seed))
+}
+
+/// Builds a seeded debug dashboard at an explicit `YYYY-MM-DDTHH:MM:SSZ` UTC anchor.
+/// Invalid dates return an error envelope, never an undated fallback. Free every
+/// non-null result with [`ward_pulse_string_free`]; the caller retains the input.
+/// The original seed-only entry point and its output are unchanged.
+///
+/// # Safety
+///
+/// Non-null `capture_anchor` must point to a valid null-terminated byte string.
+/// Null and non-UTF-8 inputs return null.
+#[no_mangle]
+pub unsafe extern "C" fn ward_pulse_debug_dashboard_snapshot_at_result_json(
+    seed: u64,
+    capture_anchor: *const c_char,
+) -> *mut c_char {
+    transform_report_json(capture_anchor, |anchor| {
+        snapshot_result_json(
+            debug_multi_provider_dashboard_json_at(seed, Some(anchor))
+                .map_err(DashboardSnapshotJsonError::DebugDemo),
+        )
+    })
 }
 
 /// Wraps a snapshot build in the shared result envelope and hands the string
@@ -411,9 +458,23 @@ pub unsafe extern "C" fn ward_pulse_plan_recoveries_result_json(
     })
 }
 
+/// Reconciles pending Plan targets and returns `reconciliationJson` in the result envelope.
+///
+/// # Safety
+///
+/// `request_json` must be a non-null pointer to a valid, null-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn ward_pulse_reconcile_plan_recoveries_result_json(
+    request_json: *const c_char,
+) -> *mut c_char {
+    transform_report_json(request_json, |json| {
+        result_json("reconciliationJson", reconcile_plan_recoveries_json(json))
+    })
+}
+
 unsafe fn transform_report_json(
     report_json: *const c_char,
-    transform: fn(&str) -> Option<String>,
+    transform: impl FnOnce(&str) -> Option<String> + std::panic::UnwindSafe,
 ) -> *mut c_char {
     if report_json.is_null() {
         return ptr::null_mut();
@@ -478,6 +539,156 @@ mod tests {
     use super::*;
 
     #[test]
+    fn six_source_c_api_round_trips_preserve_order_and_private_ownership() {
+        use serde_json::{json, Value};
+        use ward_pulse_core::model::{ProviderConnectionId, SourceOrigin};
+
+        type Normalizer = unsafe extern "C" fn(*const c_char) -> *mut c_char;
+        let cases: [(ProviderConnectionId, &str, &str, Normalizer, Value); 6] = [
+            (
+                ProviderConnectionId::OPENAI_PLAN,
+                "codex",
+                "codex-local",
+                ward_pulse_codex_dashboard_snapshot_result_json,
+                serde_json::from_str(include_str!(
+                    "../../../fixtures/providers/codex/report.json"
+                ))
+                .unwrap(),
+            ),
+            (
+                ProviderConnectionId::OPENAI_PLATFORM,
+                "openai",
+                "openai-local",
+                ward_pulse_openai_dashboard_snapshot_result_json,
+                json!({
+                    "accountId": "openai-local", "generatedAt": "2026-07-19T12:00:00Z",
+                    "todayStart": 1_784_419_200_i64, "weekStart": 1_783_900_800_i64, "monthStart": 1_782_864_000_i64,
+                    "usagePages": [include_str!("../../../fixtures/providers/openai/usage_completions.json")],
+                    "costPages": [include_str!("../../../fixtures/providers/openai/costs.json")]
+                }),
+            ),
+            (
+                ProviderConnectionId::ANTHROPIC_PLAN,
+                "claude",
+                "claude-local",
+                ward_pulse_claude_dashboard_snapshot_result_json,
+                serde_json::from_str(include_str!(
+                    "../../../fixtures/providers/claude/oauth_usage.json"
+                ))
+                .unwrap(),
+            ),
+            (
+                ProviderConnectionId::ANTHROPIC_PLATFORM,
+                "claude",
+                "anthropic-local",
+                ward_pulse_anthropic_dashboard_snapshot_result_json,
+                json!({
+                    "accountId": "anthropic-local", "generatedAt": "2026-07-19T12:00:00Z", "capturedEndMicros": 1_784_462_400_000_000_i64,
+                    "todayStart": "2026-07-19T00:00:00Z", "weekStart": "2026-07-13T00:00:00Z", "monthStart": "2026-07-01T00:00:00Z",
+                    "usagePages": [include_str!("../../../fixtures/providers/claude/usage_report.json")],
+                    "costPages": [include_str!("../../../fixtures/providers/claude/cost_report.json")]
+                }),
+            ),
+            (
+                ProviderConnectionId::CURSOR_PLAN,
+                "cursor",
+                "cursor-local",
+                ward_pulse_cursor_plan_dashboard_snapshot_result_json,
+                serde_json::from_str(include_str!(
+                    "../../../fixtures/providers/cursor/usage_summary.json"
+                ))
+                .unwrap(),
+            ),
+            (
+                ProviderConnectionId::CURSOR_PLATFORM,
+                "cursor",
+                "cursor-team-local",
+                ward_pulse_cursor_platform_dashboard_snapshot_result_json,
+                json!({
+                    "accountId": "cursor-team-local", "generatedAt": "2026-07-19T12:00:00Z",
+                    "requestStartMs": 1_782_864_000_000_i64, "endExclusiveMs": 1_784_462_400_000_i64,
+                    "todayStartMs": 1_784_419_200_000_i64, "weekStartMs": 1_783_900_800_000_i64, "monthStartMs": 1_782_864_000_000_i64,
+                    "dailyUsagePages": [include_str!("../../../fixtures/providers/cursor/daily_usage.json")],
+                    "usageEventPages": [include_str!("../../../fixtures/providers/cursor/usage_events.json")]
+                }),
+            ),
+        ];
+        let mut snapshots = Vec::new();
+        let mut expected_accounts = Vec::new();
+        for (id, tag, account_id, normalize, report) in cases {
+            let request = CString::new(report.to_string()).unwrap();
+            let pointer = unsafe { normalize(request.as_ptr()) };
+            assert!(!pointer.is_null());
+            let result: Value =
+                serde_json::from_str(unsafe { CStr::from_ptr(pointer) }.to_str().unwrap()).unwrap();
+            unsafe { ward_pulse_string_free(pointer) };
+            assert_eq!(
+                result
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>(),
+                ["dashboardJson", "status"]
+            );
+            assert_eq!(result["status"], "success");
+            let mut snapshot: Value =
+                serde_json::from_str(result["dashboardJson"].as_str().unwrap()).unwrap();
+            let account = &mut snapshot["accounts"][0];
+            assert_eq!(account["accountId"], account_id);
+            assert_eq!(account["provider"], tag);
+            assert_eq!(account["connection"], id.storage_key());
+            let expected_allowances: &[&str] = match id {
+                ProviderConnectionId::OPENAI_PLAN => &["codex-primary", "codex-purchased-credits"],
+                ProviderConnectionId::ANTHROPIC_PLAN => &[
+                    "claude-five-hour",
+                    "claude-seven-day",
+                    "claude-seven-day-opus",
+                    "claude-extra-usage",
+                ],
+                ProviderConnectionId::CURSOR_PLAN => &[
+                    "cursor-plan-models",
+                    "cursor-plan-other",
+                    "cursor-on-demand",
+                ],
+                _ => &[],
+            };
+            let allowances = account
+                .get("allowances")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .map(|allowance| allowance["id"].as_str().unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(allowances, expected_allowances, "{}", id.storage_key());
+            // Shell-bound ownership must survive normalization's serialized boundary,
+            // core reparsing and merge without granting sibling access.
+            account["historyOwner"] = json!({"connection": id.storage_key(), "identity": format!("owner-{}", id.storage_key())});
+            expected_accounts.push(account.clone());
+            let parsed: DashboardSnapshot = serde_json::from_value(snapshot.clone()).unwrap();
+            assert_eq!(
+                parsed.accounts[0].source.origin(),
+                SourceOrigin::Connection(id)
+            );
+            assert_eq!(serde_json::to_value(parsed).unwrap(), snapshot);
+            snapshots.push(snapshot);
+        }
+        let request = CString::new(serde_json::to_string(&snapshots).unwrap()).unwrap();
+        let pointer = unsafe { ward_pulse_merge_dashboard_snapshots_result_json(request.as_ptr()) };
+        assert!(!pointer.is_null());
+        let result: Value =
+            serde_json::from_str(unsafe { CStr::from_ptr(pointer) }.to_str().unwrap()).unwrap();
+        unsafe { ward_pulse_string_free(pointer) };
+        assert_eq!(result["status"], "success");
+        let merged: Value =
+            serde_json::from_str(result["dashboardJson"].as_str().unwrap()).unwrap();
+        assert_eq!(merged["accounts"], json!(expected_accounts));
+        let reparsed: DashboardSnapshot = serde_json::from_value(merged.clone()).unwrap();
+        assert_eq!(reparsed.accounts.len(), 6);
+        assert_eq!(serde_json::to_value(reparsed).unwrap(), merged);
+    }
+
+    #[test]
     fn snapshot_json_matches_golden_fixture() {
         let actual: serde_json::Value =
             serde_json::from_str(&dashboard_snapshot_json().expect("serialize dashboard snapshot"))
@@ -488,6 +699,63 @@ mod tests {
         .expect("parse golden dashboard snapshot");
 
         assert_eq!(actual, expected);
+        let legacy: DashboardSnapshot = serde_json::from_value(expected).unwrap();
+        assert!(legacy.alert_conditions.is_empty());
+        assert!(serde_json::to_value(legacy)
+            .unwrap()
+            .get("alertConditions")
+            .is_none());
+    }
+
+    /// Real budget and snapshot production for USD 0.04 spent of USD 100.00:
+    /// 0.04% used, which the phone must not publish to Wear as zero.
+    ///
+    /// With `WARDPULSE_WATCH_WITNESS_DIR` set, the produced bytes are first
+    /// written to a new file there for the phone regression to read.
+    #[test]
+    fn fractional_watch_snapshot_matches_fixture() {
+        use ward_pulse_core::budget::calculate_budget_state;
+        use ward_pulse_core::model::{BudgetPeriod, Money, ProviderConnectionId, ProviderSource};
+
+        let generated_at = DateTimeUtc::new("2026-06-27T18:42:00Z");
+        let usd = |minor_units| Some(Money::minor_units(minor_units, "USD"));
+        let today = calculate_budget_state(BudgetPeriod::Today, usd(4), usd(10_000), None);
+        let account = ProviderSnapshot {
+            account_id: "openai-platform-local".to_owned(),
+            source: ProviderSource::connection(ProviderConnectionId::OPENAI_PLATFORM),
+            history_owner: None,
+            status: today.status,
+            today,
+            week: calculate_budget_state(BudgetPeriod::Week, None, None, None),
+            month: calculate_budget_state(BudgetPeriod::Month, None, None, None),
+            credits: Vec::new(),
+            allowances: Vec::new(),
+            buckets: Vec::new(),
+            model_breakdown: Vec::new(),
+            last_successful_sync_at: Some(generated_at.clone()),
+            last_error: None,
+        };
+        let produced = dashboard_json(generated_at, vec![account]).expect("serialize snapshot");
+
+        if let Some(dir) = std::env::var_os("WARDPULSE_WATCH_WITNESS_DIR") {
+            use std::io::Write;
+            // `create_new` refuses a file left by an earlier run.
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(std::path::PathBuf::from(dir).join("dashboard_watch_fractional.json"))
+                .and_then(|mut file| file.write_all(produced.as_bytes()))
+                .expect("export a fresh producer witness");
+        }
+
+        let actual: serde_json::Value =
+            serde_json::from_str(&produced).expect("parse produced snapshot");
+        let expected: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../fixtures/snapshots/dashboard_watch_fractional.json"
+        ))
+        .expect("parse fractional snapshot fixture");
+        assert_eq!(actual, expected);
+        assert_eq!(actual["accounts"][0]["today"]["usedPercent"], 0.04);
     }
 
     /// The golden both sides read: this crate builds it, and the phone parses
@@ -521,6 +789,36 @@ mod tests {
     }
 
     #[test]
+    fn reconciliation_envelope_preserves_requirements_through_merge_and_settings() {
+        let normalized = codex_dashboard_snapshot_json(include_str!(
+            "../../../fixtures/providers/codex/recovery_report.json"
+        ))
+        .unwrap();
+        let snapshot: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+        let merged =
+            merge_dashboard_snapshots_json(&serde_json::json!([snapshot]).to_string()).unwrap();
+        let applied = apply_alert_settings_json(&serde_json::json!({
+            "snapshot": serde_json::from_str::<serde_json::Value>(&merged).unwrap(), "settings": {}
+        }).to_string()).unwrap();
+        let request = serde_json::json!({"snapshot": serde_json::from_str::<serde_json::Value>(&applied).unwrap(), "pending": []});
+        let encoded = result_json(
+            "reconciliationJson",
+            reconcile_plan_recoveries_json(&request.to_string()),
+        )
+        .unwrap();
+        let envelope: serde_json::Value = serde_json::from_str(&encoded).unwrap();
+        let result: serde_json::Value =
+            serde_json::from_str(envelope["reconciliationJson"].as_str().unwrap()).unwrap();
+        assert_eq!(result["pending"][0]["accountId"], "codex-local");
+        assert_eq!(result["pending"][0]["requirements"]["complete"], true);
+        assert_eq!(
+            result["pending"][0]["requirements"]["allowanceIds"],
+            serde_json::json!(["codex-primary", "codex-secondary"])
+        );
+        assert!(result["recoveries"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
     fn a_recovery_request_without_remembered_windows_is_empty() {
         let request = serde_json::json!({
             "snapshot": serde_json::from_str::<serde_json::Value>(&snapshot_with_weekly_percent(
@@ -532,6 +830,60 @@ mod tests {
         let recoveries = plan_recoveries_json(&request.to_string()).expect("list recoveries");
 
         assert_eq!(recoveries, "[]");
+    }
+
+    #[test]
+    fn normalized_json_transforms_preserve_private_history_owners() {
+        let owner = serde_json::json!({
+            "connection": "anthropic.plan",
+            "identity": "a".repeat(64),
+        });
+        let mut snapshot: serde_json::Value =
+            serde_json::from_str(&snapshot_with_weekly_percent(100.0)).unwrap();
+        snapshot["accounts"][0]["connection"] = owner["connection"].clone();
+        snapshot["accounts"][0]["historyOwner"] = owner.clone();
+        let merged: serde_json::Value = serde_json::from_str(
+            &merge_dashboard_snapshots_json(&serde_json::json!([snapshot]).to_string()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(merged["accounts"][0]["historyOwner"], owner);
+
+        let request = serde_json::json!({
+            "snapshot": merged,
+            "settings": {"connections": {"anthropic.plan": {"plan": {"at": 80}}}},
+        });
+        let mut applied: serde_json::Value =
+            serde_json::from_str(&apply_alert_settings_json(&request.to_string()).unwrap())
+                .unwrap();
+        assert_eq!(applied["accounts"][0]["historyOwner"], owner);
+        assert_eq!(applied["alertConditions"].as_array().unwrap().len(), 2);
+        for condition in applied["alertConditions"].as_array().unwrap() {
+            assert_eq!(condition["key"]["historyOwner"], owner);
+        }
+        assert!(applied["watchSummary"].get("historyOwner").is_none());
+        assert!(!applied["alerts"]
+            .to_string()
+            .contains(owner["identity"].as_str().unwrap()));
+
+        let exhausted: serde_json::Value =
+            serde_json::from_str(&exhausted_windows_json(&applied.to_string()).unwrap()).unwrap();
+        assert_eq!(exhausted.as_array().unwrap().len(), 2);
+        for key in exhausted.as_array().unwrap() {
+            assert_eq!(key["historyOwner"], owner);
+        }
+        applied["accounts"][0]["allowances"][0]["usedPercent"] = serde_json::json!(20.0);
+        let request = serde_json::json!({"snapshot": applied, "exhausted": exhausted});
+        let recoveries: serde_json::Value =
+            serde_json::from_str(&plan_recoveries_json(&request.to_string()).unwrap()).unwrap();
+        assert!(recoveries.as_array().unwrap().is_empty());
+        let mut usable = request;
+        usable["snapshot"]["accounts"][0]["allowances"][1]["usedPercent"] = serde_json::json!(20.0);
+        let recoveries: serde_json::Value =
+            serde_json::from_str(&plan_recoveries_json(&usable.to_string()).unwrap()).unwrap();
+        assert_eq!(recoveries.as_array().unwrap().len(), 2);
+        for recovery in recoveries.as_array().unwrap() {
+            assert_eq!(recovery["historyOwner"], owner);
+        }
     }
 
     /// A one-account dashboard whose weekly window sits at `used_percent`.
@@ -551,6 +903,7 @@ mod tests {
             "allowances": [
                 {
                     "id": "claude-weekly",
+                    "recoveryRequirements": {"allowanceIds":["claude-weekly","claude-session"],"complete":true},
                     "source": "plan",
                     "label": "Weekly plan",
                     "usedPercent": used_percent,
@@ -563,6 +916,7 @@ mod tests {
                 },
                 {
                     "id": "claude-session",
+                    "recoveryRequirements": {"allowanceIds":["claude-session","claude-weekly"],"complete":true},
                     "source": "plan",
                     "label": "5-hour session",
                     "usedPercent": 100.0,
@@ -598,6 +952,42 @@ mod tests {
         assert!(providers.contains(&"claude"));
         assert!(providers.contains(&"cursor"));
         assert!(!providers.contains(&"mock"));
+    }
+
+    #[test]
+    fn dated_debug_api_owns_results_but_borrows_its_anchor() {
+        for (anchor, status) in [
+            ("2026-11-02T12:00:00Z", "success"),
+            ("2026-02-30T12:00:00Z", "error"),
+            ("", "error"),
+        ] {
+            let request = CString::new(anchor).unwrap();
+            let result =
+                unsafe { ward_pulse_debug_dashboard_snapshot_at_result_json(7, request.as_ptr()) };
+            assert!(!result.is_null());
+            let envelope: serde_json::Value =
+                serde_json::from_str(unsafe { CStr::from_ptr(result) }.to_str().unwrap()).unwrap();
+            unsafe { ward_pulse_string_free(result) };
+            assert_eq!(envelope["status"], status);
+            assert_eq!(request.to_str().unwrap(), anchor);
+            if status == "success" {
+                let snapshot: serde_json::Value =
+                    serde_json::from_str(envelope["dashboardJson"].as_str().unwrap()).unwrap();
+                assert_eq!(snapshot["generatedAt"], anchor);
+            } else {
+                assert!(envelope["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains("capture anchor"));
+                assert!(envelope.get("dashboardJson").is_none());
+            }
+        }
+        let invalid_utf8 = CString::new(vec![0xff]).unwrap();
+        for input in [ptr::null(), invalid_utf8.as_ptr()] {
+            assert!(
+                unsafe { ward_pulse_debug_dashboard_snapshot_at_result_json(7, input) }.is_null()
+            );
+        }
     }
 
     #[test]
@@ -665,32 +1055,59 @@ mod tests {
 
     #[test]
     fn result_api_normalizes_codex_report_json() {
-        let request = CString::new(include_str!(
-            "../../../fixtures/providers/codex/report.json"
-        ))
-        .expect("request has no null bytes");
+        for (generated_at, expected) in [
+            ("2026-07-19T12:00:00Z", "2026-07-19T12:00:00Z"),
+            ("2026-11-14T09:00:00.100Z", "2026-11-14T09:00:00.1Z"),
+            ("2026-11-14T09:00:00.800Z", "2026-11-14T09:00:00.8Z"),
+            ("2026-11-14T09:00:00.123456Z", "2026-11-14T09:00:00.123456Z"),
+        ] {
+            let mut report: serde_json::Value = serde_json::from_str(include_str!(
+                "../../../fixtures/providers/codex/report.json"
+            ))
+            .expect("parse sanitized Codex report");
+            report["generatedAt"] = generated_at.into();
+            let request = CString::new(report.to_string()).expect("request has no null bytes");
 
-        let value = unsafe { ward_pulse_codex_dashboard_snapshot_result_json(request.as_ptr()) };
-        assert!(!value.is_null());
+            let value =
+                unsafe { ward_pulse_codex_dashboard_snapshot_result_json(request.as_ptr()) };
+            assert!(!value.is_null());
 
-        let result: serde_json::Value = serde_json::from_str(
-            unsafe { CStr::from_ptr(value) }
-                .to_str()
-                .expect("result is UTF-8"),
-        )
-        .expect("parse result JSON");
-        assert_eq!(result["status"], "success");
+            let result: serde_json::Value = serde_json::from_str(
+                unsafe { CStr::from_ptr(value) }
+                    .to_str()
+                    .expect("result is UTF-8"),
+            )
+            .expect("parse result JSON");
+            unsafe { ward_pulse_string_free(value) };
+            assert_eq!(result["status"], "success");
 
-        let snapshot: serde_json::Value =
-            serde_json::from_str(result["dashboardJson"].as_str().expect("dashboard JSON"))
-                .expect("parse dashboard JSON");
-        assert_eq!(snapshot["accounts"][0]["provider"], "codex");
-        assert_eq!(
-            snapshot["accounts"][0]["allowances"][0]["usedPercent"],
-            84.0
-        );
+            let snapshot: serde_json::Value =
+                serde_json::from_str(result["dashboardJson"].as_str().expect("dashboard JSON"))
+                    .expect("parse dashboard JSON");
+            assert_eq!(snapshot["accounts"][0]["provider"], "codex");
+            assert_eq!(
+                snapshot["accounts"][0]["allowances"][0]["usedPercent"],
+                84.0
+            );
+            assert_eq!(snapshot["generatedAt"], expected);
+            assert_eq!(snapshot["accounts"][0]["lastSuccessfulSyncAt"], expected);
+        }
+    }
 
-        unsafe { ward_pulse_string_free(value) };
+    #[test]
+    fn merge_selects_positive_fraction_after_its_whole_second() {
+        let whole = "2026-11-14T09:00:00Z";
+        let fraction = "2026-11-14T09:00:00.1Z";
+        for times in [[whole, fraction], [fraction, whole]] {
+            let snapshots = times.map(|time| build_dashboard_snapshot(time.into(), vec![]));
+            let merged = merge_dashboard_snapshots_json(
+                &serde_json::to_string(&snapshots).expect("serialize snapshots"),
+            )
+            .expect("merge snapshots");
+            let snapshot: DashboardSnapshot =
+                serde_json::from_str(&merged).expect("parse snapshot");
+            assert_eq!(snapshot.generated_at.as_str(), fraction);
+        }
     }
 
     #[test]
@@ -762,8 +1179,140 @@ mod tests {
         let alerts = applied["alerts"].as_array().expect("alerts");
         assert_eq!(alerts.len(), 1);
         assert_eq!(alerts[0]["severity"], "warning");
+        let condition = &applied["alertConditions"][0];
+        assert_eq!(condition["state"], "crossed");
+        assert_eq!(condition["alert"], alerts[0]);
+        assert_eq!(
+            condition["key"],
+            serde_json::json!({
+                "provider": "mock", "accountId": "mock-local", "connection": "mock.plan",
+                "target": {"kind": "budget", "period": "today"}
+            })
+        );
 
         unsafe { ward_pulse_string_free(value) };
+    }
+
+    #[test]
+    fn result_api_applies_legacy_and_sparse_plan_window_settings() {
+        let mut snapshot: serde_json::Value =
+            serde_json::from_str(&snapshot_with_weekly_percent(80.0)).expect("parse snapshot");
+        let account = &mut snapshot["accounts"][0];
+        account["connection"] = serde_json::json!("anthropic.plan");
+        account["today"]["spent"] = serde_json::json!({"minorUnits": 50, "currency": "USD"});
+        account["allowances"][1]["status"] = serde_json::json!("ok");
+        let mut extra = account["allowances"][0].clone();
+        extra["source"] = serde_json::json!("purchased");
+        extra["label"] = serde_json::json!("Extra usage");
+        let mut unknown = account["allowances"][0].clone();
+        unknown["id"] = serde_json::json!("dynamic-window/42");
+        unknown["usedPercent"] = serde_json::Value::Null;
+        unknown["status"] = serde_json::json!("unknown");
+        let mut zero = unknown.clone();
+        zero["id"] = serde_json::json!("zero-window");
+        zero["usedPercent"] = serde_json::json!(0.0);
+        zero["status"] = serde_json::json!("ok");
+        account["allowances"]
+            .as_array_mut()
+            .unwrap()
+            .extend([extra, unknown, zero]);
+
+        for (rules, alert_count, statuses, budget_status, condition_states) in [
+            (
+                serde_json::json!({
+                    "plan": {"warnAt": 80}, "purchased": {"at": 80},
+                    "today": {"at": 50}, "budget": {"today": 100}
+                }),
+                4,
+                ["warning", "warning", "warning", "unknown", "ok"],
+                "warning",
+                vec![
+                    "crossed", "crossed", "crossed", "crossed", "unknown", "clear",
+                ],
+            ),
+            (
+                serde_json::json!({
+                    "plan": {"at": 80},
+                    "planWindows": {"claude-weekly": {}, "claude-session": {"at": 100}},
+                    "purchased": {"at": 80}, "today": {"at": 50}, "budget": {"today": 100}
+                }),
+                3,
+                ["ok", "warning", "warning", "unknown", "ok"],
+                "warning",
+                vec!["crossed", "crossed", "crossed", "unknown", "clear"],
+            ),
+            (
+                serde_json::json!({
+                    "planWindows": {
+                        "claude-weekly": {"at": 80}, "claude-session": {},
+                        "dynamic-window/42": {"at": 0}
+                    },
+                    "budget": {"today": 100}
+                }),
+                1,
+                ["warning", "ok", "ok", "unknown", "ok"],
+                "ok",
+                vec!["crossed", "unknown"],
+            ),
+        ] {
+            let request = CString::new(
+                serde_json::json!({
+                    "snapshot": snapshot,
+                    "settings": {"connections": {"anthropic.plan": rules}}
+                })
+                .to_string(),
+            )
+            .expect("request has no null bytes");
+            let value = unsafe { ward_pulse_apply_alert_settings_result_json(request.as_ptr()) };
+            assert!(!value.is_null());
+            let result: serde_json::Value = serde_json::from_str(
+                unsafe { CStr::from_ptr(value) }
+                    .to_str()
+                    .expect("result is UTF-8"),
+            )
+            .expect("parse result JSON");
+            unsafe { ward_pulse_string_free(value) };
+
+            assert_eq!(result["status"], "success");
+            assert_eq!(result.as_object().unwrap().len(), 2);
+            let applied: serde_json::Value =
+                serde_json::from_str(result["dashboardJson"].as_str().expect("dashboard JSON"))
+                    .expect("parse dashboard JSON");
+            assert_eq!(applied["alerts"].as_array().unwrap().len(), alert_count);
+            let conditions = applied["alertConditions"].as_array().unwrap();
+            assert_eq!(
+                conditions
+                    .iter()
+                    .map(|condition| condition["state"].as_str().unwrap())
+                    .collect::<Vec<_>>(),
+                condition_states
+            );
+            assert_eq!(
+                conditions
+                    .iter()
+                    .filter_map(|condition| condition.get("alert"))
+                    .cloned()
+                    .collect::<Vec<_>>(),
+                *applied["alerts"].as_array().unwrap()
+            );
+            let decoded: DashboardSnapshot = serde_json::from_value(applied.clone()).unwrap();
+            assert_eq!(serde_json::to_value(decoded).unwrap(), applied);
+            let account = &applied["accounts"][0];
+            assert_eq!(account["status"], "warning");
+            assert_eq!(account["today"]["usedPercent"], 50.0);
+            assert_eq!(account["today"]["status"], budget_status);
+            assert_eq!(
+                account["allowances"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|window| window["status"].as_str().unwrap())
+                    .collect::<Vec<_>>(),
+                statuses
+            );
+            assert!(applied["todayTotal"]["usedPercent"].is_null());
+            assert!(applied["watchSummary"]["todayUsedPercent"].is_null());
+        }
     }
 
     #[test]

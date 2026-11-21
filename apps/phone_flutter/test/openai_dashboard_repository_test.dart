@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/dashboard/openai_dashboard_repository.dart';
@@ -336,7 +337,10 @@ final class _MemoryCredentialStore implements ProviderCredentialStore {
   }
 
   @override
-  Future<void> deleteSecret(ProviderConnectionId id) async {
+  Future<void> deleteSecret(
+    ProviderConnectionId id, {
+    void Function(CredentialVersion)? onRetired,
+  }) async {
     _secrets.remove(id);
     _labels.remove(id);
   }

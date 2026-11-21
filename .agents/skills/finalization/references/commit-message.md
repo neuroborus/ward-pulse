@@ -12,6 +12,8 @@ Rules:
 
 - Prefer a small single-line message with no body. A subject line alone is the default and the preferred form; do not append details, rationale, or file lists just because they exist.
 - Use `type(scope):` with a lowercase type and a short scope. Do not draft bare subjects such as `docs: …` when a scope applies.
+- Start the first description word after `type(scope):` in lowercase, matching repository style.
+- During the existing whole-plan review before execution, Root also checks each planned commit subject against these wording rules.
 - Keep the subject imperative, about 72 characters or fewer, and focused on why the change lands.
 - Add a body only when the change is genuinely unclear without it. Treat a body as the exception, not the habit.
 - Do not insert line breaks without a reason. Write each body paragraph as one single line and let the git client wrap it; never hard-wrap a sentence across several lines.

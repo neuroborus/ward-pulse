@@ -1,11 +1,13 @@
 ---
 name: android-emulators
-description: Operate WardPulse Android phone and Wear OS emulators safely. Use for isolated Android Studio work, AVD input or screenshots, phone-watch pairing or bridge recovery, snapshots, restarts, and actions that could risk emulator state; not for ordinary app implementation or build configuration.
+description: Operate WardPulse Android phone and Wear OS emulators safely. Use for isolated Android Studio work, AVD input or screenshots, emulator phone-watch pairing or bridge recovery, snapshots, restarts and authorized AVD or system-image retirement; not for physical devices, ordinary app implementation or build configuration.
 ---
 
 # Android Emulators — WardPulse
 
 Use this skill for operational work on the project's configured phone and Wear OS AVDs.
+For physical phones and watches over USB/wireless ADB, use
+[android-devices](../android-devices/SKILL.md); its device-preservation rules differ.
 
 ## Source Of Truth
 
@@ -43,8 +45,15 @@ Use this skill for operational work on the project's configured phone and Wear O
 - Treat **Failed to enable emulator pairing** as a non-fatal consent timeout only in the
   documented verified flow, when the companion activity is already open at `CONSENT`. Do not
   generalize that conclusion to other pairing failures.
-- Verify both `WearableService` views, save both paired states, and confirm the WardPulse receipt
-  log plus refreshed complication values as described in the toolchain guide.
+- Before a paired gate, follow the toolchain's [bridge preflight](../../../docs/ANDROID_TOOLCHAIN.md#restarting-a-paired-emulator-set)
+  for both current endpoint tuples and expected-peer qualification; a retained reverse tuple alone
+  does not qualify the two-ended bridge or connectivity. Missing endpoints remain a setup limitation
+  unless causal transition evidence establishes more.
+- Verify both `WearableService` views through [diagnostic output privacy](../../../docs/ANDROID_TOOLCHAIN.md#diagnostic-output-privacy).
+  Retain only allowlisted connection/peer-match facts, not raw service records; confirm the
+  WardPulse receipt log and refreshed complication values as the toolchain guide requires.
+- After completing a new pairing, save both verified paired states as documented.
+  Read-only checks/reconnection do not automatically create snapshots; reuse suitable verified recovery.
 - Pairing data lives on `/data`, but the transient transport bridge does not survive emulator
   process restarts. For a known pair reporting `IsConnected=false`, restore the bridge before
   considering another pairing attempt.
@@ -53,8 +62,18 @@ Use this skill for operational work on the project's configured phone and Wear O
 
 ## Preserve Emulator State
 
-- Save a snapshot before any risky action. Snapshot saving requires Vulkan to be disabled in the
-  documented Android advanced-features configuration.
+- Keep suitable verified recovery before risky actions; reuse it when it still protects current
+  state. Before reconnecting a selected ADB device or stopping/restarting an emulator, retain
+  affected nonsecret forward/reverse endpoint tuples with their device and ownership required
+  for undo; a set hash/count is not a recovery handle. Keep lost mappings or obsolete dynamic
+  VM endpoints Unknown rather than guessing a replacement. Follow
+  [Preserving emulator state](../../../docs/ANDROID_TOOLCHAIN.md#preserving-emulator-state)
+  for bounded recovery, task-end checkpoint retirement and authorized AVD or system-image cleanup;
+  inspection/captures alone need no new snapshot.
+- From the repository root, run
+  `python3 .agents/skills/android-emulators/scripts/avd_storage_inventory.py --help`
+  for bounded host metadata accounting. Apply the linked retention guidance for recovery and
+  disposal decisions.
 - Never delete or recreate an AVD as a troubleshooting step. That loses sign-in, browser
   sessions, system settings, keyboard layout, and pairing state.
 - Never clear `com.google.android.gms` data on the watch; doing so destroys the pairing.
@@ -66,11 +85,15 @@ Use this skill for operational work on the project's configured phone and Wear O
 
 ## Before Acting
 
-1. Identify the exact AVDs and discover their current ADB serials.
-2. Inspect connection, process, and snapshot state without mutating it.
+1. Identify the exact AVDs and discover their current ADB serials; bind any running emulator to
+   current QEMU process argv using its actual `-avd NAME` or `@NAME` form, not one assumed shape.
+2. Inspect connection, process, and snapshot state without mutating it; qualify recovery and
+   AVD/image dependencies through the linked retention policy before storage cleanup.
 3. Read the matching toolchain procedure and choose the least state-changing operation.
-4. Save recoverable state before any operation that could affect pairing or device data.
-5. Verify the requested outcome through ADB or the documented Studio screenshot workflow.
+4. Verify suitable recoverable state before any operation that could affect pairing or device data.
+5. Verify device/UI outcomes through ADB or the documented Studio screenshot workflow. For
+   storage outcomes, use qualified manager/inventory results and the retention measurements;
+   do not boot an AVD solely to verify storage cleanup.
 
 If a proposed recovery conflicts with these preservation rules, stop before changing state and
 explain which persisted state it would destroy.

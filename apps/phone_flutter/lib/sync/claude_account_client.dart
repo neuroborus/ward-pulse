@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 
 import '../providers/claude_account_store.dart';
+import '../providers/connection_lifecycle.dart';
 
 enum ClaudeAccountFailure {
   authentication,
@@ -20,10 +21,19 @@ typedef ClaudeSessionChanged =
     Future<void> Function(ClaudeAccountSession value);
 
 final class ClaudeAccountException implements Exception {
-  const ClaudeAccountException(this.failure, [this.details]);
+  const ClaudeAccountException(
+    this.failure, [
+    this.details,
+    this.rejectionEventId,
+    this.credentialVersion,
+  ]);
 
   final ClaudeAccountFailure failure;
   final String? details;
+  final String? rejectionEventId;
+
+  /// Non-secret ownership of a failed saved-session fetch, when known.
+  final CredentialVersion? credentialVersion;
 }
 
 /// Pending PKCE authorization for Claude Code-compatible OAuth.
@@ -81,14 +91,17 @@ final class IoClaudeHttpTransport implements ClaudeHttpTransport {
     Duration? timeout,
   }) async {
     final deadline = timeout ?? _defaultTimeout;
+    var configuringRequest = false;
     try {
       final request = await _client.openUrl(method, uri).timeout(deadline);
+      configuringRequest = true;
       headers.forEach(request.headers.set);
       if (body != null) {
         final bytes = utf8.encode(body);
         request.contentLength = bytes.length;
         request.add(bytes);
       }
+      configuringRequest = false;
       final response = await request.close().timeout(deadline);
       final bytes = <int>[];
       await for (final chunk in response.timeout(deadline)) {
@@ -112,18 +125,74 @@ final class IoClaudeHttpTransport implements ClaudeHttpTransport {
         ClaudeAccountFailure.unavailable,
         '${_endpointLabel(uri)} · Timed out',
       );
-    } on SocketException {
-      throw ClaudeAccountException(
-        ClaudeAccountFailure.unavailable,
-        '${_endpointLabel(uri)} · Network unavailable',
-      );
-    } on ArgumentError catch (error) {
+    } on RedirectException {
       throw ClaudeAccountException(
         ClaudeAccountFailure.invalidResponse,
-        '${_endpointLabel(uri)} · Invalid request (${error.message})',
+        '${_endpointLabel(uri)} · Invalid HTTP redirect',
+      );
+    } on IOException catch (error) {
+      final invalidReason = switch (error) {
+        HttpException(:final message)
+            when configuringRequest || _isInvalidHttpRequest(message) =>
+          'Invalid request',
+        HttpException(:final message) when _isMalformedHttpResponse(message) =>
+          'Invalid HTTP response',
+        _ => null,
+      };
+      throw ClaudeAccountException(
+        invalidReason == null
+            ? ClaudeAccountFailure.unavailable
+            : ClaudeAccountFailure.invalidResponse,
+        '${_endpointLabel(uri)} · ${invalidReason ?? 'Network unavailable'}',
+      );
+    } on ArgumentError {
+      throw ClaudeAccountException(
+        ClaudeAccountFailure.invalidResponse,
+        '${_endpointLabel(uri)} · Invalid request',
       );
     }
   }
+
+  // Close can still fail while finalizing the outgoing request body.
+  static bool _isInvalidHttpRequest(String message) => const [
+    'No content even though contentLength was specified to be greater than 0: ',
+    'Content size below specified contentLength. ',
+    'Content size exceeds specified contentLength. ',
+  ].any(message.startsWith);
+
+  // Dart's HTTP client uses HttpException for parser errors and for wrapped
+  // socket and TLS failures. Match the pinned SDK's malformed-response messages.
+  static bool _isMalformedHttpResponse(String message) => switch (message) {
+    'Invalid request method' ||
+    'Invalid request, empty URI' ||
+    'Invalid response line' ||
+    'Invalid response line, failed to parse HTTP version' ||
+    'Invalid response, invalid HTTP version' ||
+    'Invalid response, status code is over 3 digits' ||
+    'The Content-Length header occurred more than once, at most one is allowed.' ||
+    'Content-Length must contain only digits' ||
+    'Content-Length too large' ||
+    'Unexpected type for header named content-length' ||
+    "Trying to set 'Transfer-Encoding: Chunked' on HTTP 1.0 headers" ||
+    'More than one value for header location' ||
+    'More than one value for header content-encoding' ||
+    'Failed to parse header value' ||
+    'The authentication challenge sent by the server is not correctly formatted.' ||
+    'Chunk size overflows the integer' ||
+    'URI exceeds the 1048576 size limit' ||
+    'Reason phrase exceeds the 1048576 size limit' ||
+    'Header field exceeds the 1048576 size limit' ||
+    'Header value exceeds the 1048576 size limit' => true,
+    _ =>
+      const [
+            'Invalid request, unexpected ',
+            'Invalid response status code with ',
+            'Invalid header field name, with ',
+            'Failed to parse HTTP, ',
+          ].any(message.startsWith) ||
+          (message.startsWith('Illegal value ') &&
+              message.endsWith(' in HTTP header')),
+  };
 }
 
 /// Phone-owned Claude Code OAuth (PKCE). Anthropic has no device-code grant yet.
@@ -260,6 +329,19 @@ final class ClaudeAccountClient {
         ClaudeAccountFailure.authentication,
         'Claude sign-in · Session expired',
       );
+    }
+    if (response.statusCode == 400) {
+      try {
+        final json = jsonDecode(response.body);
+        if (json is Map<String, dynamic> && json['error'] == 'invalid_grant') {
+          throw const ClaudeAccountException(
+            ClaudeAccountFailure.authentication,
+            'Claude token refresh · HTTP 400 · invalid_grant',
+          );
+        }
+      } on FormatException {
+        // Preserve the HTTP status fallback for malformed error bodies.
+      }
     }
     _requireSuccess(response, 'Claude token refresh');
     // Anthropic rotates refresh tokens; never keep the previous one.

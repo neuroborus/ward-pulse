@@ -1,4 +1,5 @@
 import '../dashboard/dashboard_models.dart';
+import 'selected_data_freshness.dart';
 
 /// Compact remaining purchased credits for the watch-face strip.
 final class WatchCreditsGlance {
@@ -6,12 +7,14 @@ final class WatchCreditsGlance {
     required this.text,
     required this.label,
     this.provider,
+    this.contributors = const [],
   });
 
   /// Glance string at most 12 characters (e.g. `500`, `1.2K`).
   final String text;
   final String label;
   final String? provider;
+  final List<SurfaceDataContributor> contributors;
 
   Map<String, Object?> toJson() => {
     'text': text,
@@ -24,6 +27,7 @@ final class WatchCreditsGlance {
 WatchCreditsGlance? resolveWatchCreditsGlance(DashboardSnapshot snapshot) {
   String? unit;
   final providers = <String>{};
+  final contributors = <SurfaceDataContributor>[];
   double total = 0;
   var sawFinite = false;
 
@@ -33,10 +37,11 @@ WatchCreditsGlance? resolveWatchCreditsGlance(DashboardSnapshot snapshot) {
         continue;
       }
       if (allowance.unlimited) {
-        return const WatchCreditsGlance(
+        return WatchCreditsGlance(
           text: '∞',
           label: 'Credits left',
           provider: null,
+          contributors: [(account: account, status: allowance.status)],
         );
       }
       final remaining = allowance.remaining;
@@ -53,6 +58,7 @@ WatchCreditsGlance? resolveWatchCreditsGlance(DashboardSnapshot snapshot) {
       }
       unit = remaining.unit;
       total += value;
+      contributors.add((account: account, status: allowance.status));
       sawFinite = true;
       providers.add(account.provider);
     }
@@ -64,9 +70,29 @@ WatchCreditsGlance? resolveWatchCreditsGlance(DashboardSnapshot snapshot) {
 
   return WatchCreditsGlance(
     text: _glanceText(total),
+    contributors: contributors,
     label: 'Credits left',
     provider: providers.length == 1 ? providers.single : null,
   );
+}
+
+/// Mirrors Wear's first eligible purchased allowance for a rendered ring.
+/// Unlike the widget sum, this channel also displays zero and unparsed values.
+SurfaceDataContributor? watchRingCreditContributor(
+  DashboardSnapshot snapshot,
+  String provider,
+) {
+  for (final account in snapshot.accounts) {
+    if (account.provider != provider) continue;
+    for (final allowance in account.allowances) {
+      if (allowance.source == AllowanceSource.purchased &&
+          !allowance.unlimited &&
+          allowance.remaining?.unit == 'credits') {
+        return (account: account, status: allowance.status);
+      }
+    }
+  }
+  return null;
 }
 
 /// Schema `creditsGlance.text` maxLength is 12.

@@ -32,15 +32,15 @@ class PhoneRefreshRequester(context: Context) {
                     messageClient
                         .sendMessage(node.id, WatchDataContract.REFRESH_PATH, ByteArray(0))
                         .addOnSuccessListener {
-                            Log.i(TAG, "Refresh request sent to ${node.displayName}.")
+                            Log.i(TAG, "Refresh request sent.")
                         }
-                        .addOnFailureListener { error ->
-                            Log.w(TAG, "Refresh request failed: ${error.message}")
+                        .addOnFailureListener {
+                            Log.w(TAG, "Failed to send refresh request.")
                         }
                 }
             }
-            .addOnFailureListener { error ->
-                Log.w(TAG, "Node lookup failed: ${error.message}")
+            .addOnFailureListener {
+                Log.w(TAG, "Connected node lookup failed.")
             }
     }
 

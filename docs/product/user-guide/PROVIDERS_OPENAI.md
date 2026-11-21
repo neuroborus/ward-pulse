@@ -48,6 +48,13 @@ For **Key rejected**, check that you pasted the full Admin key into this row. Fo
 **Access denied**, review its reporting access and the organization it belongs to.
 A successful connection can have zero or no history when there is no reported usage.
 
+Reporting access belongs to this organization key, independently of Codex plan authentication.
+Dashboard keeps its Today/Week/Month expenses inside this reporting source: midnight, Monday
+and the first calendar day in UTC define the periods. Known spend remains visible without a
+local advisory cap. **As of** is the source's successful report time; retained **Stale** data
+keeps that time. A successful check does not establish that every cost bucket is published.
+Money rounds to cents, including tiny positive amounts that can display as zero cents.
+
 ## Reconnect, change or remove a connection
 
 Use **Reconnect** or **Disconnect** for Codex plan. For a reporting key, use its Value,

@@ -1,9 +1,30 @@
+import java.io.File
 import java.util.Properties
 
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// The fixture is a separate debug application, paired with its inert Dart root.
+val widgetPublicationTest = providers.gradleProperty("wardpulseWidgetPublicationTest")
+    .map { it.toBooleanStrict() }.getOrElse(false)
+val flutterSourceRoot = project.file("../..").canonicalFile
+val targetPath = providers.gradleProperty("target").getOrElse("lib/main.dart")
+val targetFile = File(targetPath).let {
+    (if (it.isAbsolute) it else flutterSourceRoot.resolve(targetPath)).canonicalFile
+}
+val fixtureTarget = flutterSourceRoot.resolve("test_driver/phone_widget_publication.dart").canonicalFile
+require(widgetPublicationTest == (targetFile == fixtureTarget)) {
+    "The widget publication fixture target and wardpulseWidgetPublicationTest=true must be used together."
+}
+if (widgetPublicationTest) {
+    androidComponents.beforeVariants { variantBuilder ->
+        if (variantBuilder.buildType != "debug") {
+            variantBuilder.enable = false
+        }
+    }
 }
 
 // One key signs all three WardPulse packages. The phone and the Wear app share
@@ -60,11 +81,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = "app.wardpulse"
+        applicationId = if (widgetPublicationTest) "app.wardpulse.widgetpublicationtest" else "app.wardpulse"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        testInstrumentationRunner = "android.test.InstrumentationTestRunner"
 
         ndk {
             abiFilters.clear()
@@ -111,4 +133,11 @@ flutter {
 dependencies {
     implementation("com.google.android.gms:play-services-wearable:20.0.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
+    // Test-only platform facilities; no downloaded test framework or runtime app dependency.
+    val sdkTestLibraries = androidComponents.sdkComponents.sdkDirectory.get().asFile
+        .resolve("platforms/android-${android.compileSdk}/optional")
+    androidTestCompileOnly(files(
+        sdkTestLibraries.resolve("android.test.base.jar"),
+        sdkTestLibraries.resolve("android.test.runner.jar"),
+    ))
 }

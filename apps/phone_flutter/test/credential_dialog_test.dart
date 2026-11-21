@@ -1,11 +1,150 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_theme.dart';
 import 'package:ward_pulse_phone/providers/credential_dialog.dart';
+import 'package:ward_pulse_phone/providers/provider_connection.dart';
 
 const _keyboardTop = 640.0 - 280.0;
 
 void main() {
+  for (final installed in [false, true]) {
+    testWidgets(
+      'Anthropic validates ${installed ? 'replacement' : 'new'} values before Save',
+      (tester) async {
+        const guidance =
+            '$anthropicReportingKeyGuidance '
+            'The key is encrypted on this phone and sent only to Anthropic.';
+        final outcome = await _openCredential(
+          tester,
+          hasCredential: installed,
+          guidance: guidance,
+          valueValidator: validateAnthropicReportingKey,
+        );
+        final value = find.widgetWithText(
+          TextFormField,
+          installed ? 'Value (leave blank to keep)' : 'Value',
+        );
+        final editor = find.descendant(
+          of: value,
+          matching: find.byType(EditableText),
+        );
+        await tester.ensureVisible(editor);
+        await tester.pumpAndSettle();
+        expect(editor.hitTestable(), findsOneWidget);
+        await tester.enterText(
+          value,
+          installed ? '  sk-ant-admin01-synthetic  ' : 'sk-ant-admin-synthetic',
+        );
+        await tester.tap(find.text('Save'));
+        await tester.pumpAndSettle();
+        expect(outcome.completed, isFalse);
+        final error = find.text('Replace this Console Admin key.');
+        expect(error, findsOneWidget);
+        expect(
+          tester.renderObject<RenderParagraph>(error).didExceedMaxLines,
+          isFalse,
+        );
+        await tester.ensureVisible(error);
+        await tester.pumpAndSettle();
+        final scrollView = find.descendant(
+          of: find.byType(AlertDialog),
+          matching: find.byType(SingleChildScrollView),
+        );
+        final viewport = tester.getRect(scrollView);
+        final errorBounds = tester.getRect(error);
+        expect(errorBounds.top, greaterThanOrEqualTo(viewport.top));
+        expect(errorBounds.bottom, lessThanOrEqualTo(viewport.bottom));
+        expect(errorBounds.bottom, lessThanOrEqualTo(_keyboardTop));
+        _expectActionsAboveKeyboard(tester, hasCredential: installed);
+
+        final guidanceText = find.text(guidance);
+        expect(
+          tester.renderObject<RenderParagraph>(guidanceText).didExceedMaxLines,
+          isFalse,
+        );
+        for (final alignment in [0.0, 1.0]) {
+          await Scrollable.ensureVisible(
+            tester.element(guidanceText),
+            alignment: alignment,
+          );
+          await tester.pumpAndSettle();
+          expect(
+            guidanceText.hitTestable(
+              at: Alignment(0, alignment == 0 ? -0.99 : 0.99),
+            ),
+            findsOneWidget,
+          );
+          _expectActionsAboveKeyboard(tester, hasCredential: installed);
+        }
+        final label = find.widgetWithText(TextFormField, 'Label (optional)');
+        await tester.ensureVisible(label);
+        await tester.pumpAndSettle();
+        expect(label.hitTestable(), findsOneWidget);
+        expect(
+          tester.getRect(label).bottom,
+          lessThanOrEqualTo(viewport.bottom),
+        );
+        expect(tester.getRect(label).bottom, lessThanOrEqualTo(_keyboardTop));
+        _expectActionsAboveKeyboard(tester, hasCredential: installed);
+
+        await tester.ensureVisible(editor);
+        await tester.pumpAndSettle();
+        expect(editor.hitTestable(), findsOneWidget);
+        expect(
+          tester.getRect(editor).bottom,
+          lessThanOrEqualTo(viewport.bottom),
+        );
+        expect(tester.getRect(editor).bottom, lessThanOrEqualTo(_keyboardTop));
+        _expectActionsAboveKeyboard(tester, hasCredential: installed);
+        await tester.enterText(value, '  sk-ant-api03-synthetic  ');
+        await tester.tap(find.text('Save'));
+        await tester.pumpAndSettle();
+        expect(outcome.change?.value, 'sk-ant-api03-synthetic');
+        expect(outcome.change?.remove, isFalse);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('blank label-only, Cancel and Remove bypass value validation', (
+    tester,
+  ) async {
+    var validations = 0;
+    final outcome = await _openCredential(
+      tester,
+      hasCredential: true,
+      valueValidator: (_) {
+        validations++;
+        return 'Rejected candidate';
+      },
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Label (optional)'),
+      'New label',
+    );
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(outcome.change?.updateLabelOnly, isTrue);
+    expect(outcome.change?.label, 'New label');
+    for (final action in ['Cancel', 'Remove']) {
+      await tester.tap(find.text('Open credential'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Value (leave blank to keep)'),
+        'invalid-candidate',
+      );
+      await tester.tap(find.text(action));
+      await tester.pumpAndSettle();
+      if (action == 'Cancel') {
+        expect(outcome.change, isNull);
+      } else {
+        expect(outcome.change?.remove, isTrue);
+      }
+    }
+    expect(validations, 0);
+  });
+
   testWidgets(
     'large credential form validates and cancels above the keyboard',
     (tester) async {
@@ -143,8 +282,11 @@ void main() {
   );
 }
 
-void _expectActionsAboveKeyboard(WidgetTester tester) {
-  for (final label in ['Cancel', 'Save']) {
+void _expectActionsAboveKeyboard(
+  WidgetTester tester, {
+  bool hasCredential = false,
+}) {
+  for (final label in [if (hasCredential) 'Remove', 'Cancel', 'Save']) {
     final action = find.text(label);
     expect(action.hitTestable(), findsOneWidget);
     expect(tester.getRect(action).bottom, lessThanOrEqualTo(_keyboardTop));
@@ -156,6 +298,8 @@ Future<_CredentialOutcome> _openCredential(
   String? guidance,
   bool autofocus = true,
   bool allowLabel = true,
+  bool hasCredential = false,
+  String? Function(String)? valueValidator,
   FakeViewPadding initialViewInsets = const FakeViewPadding(bottom: 280),
 }) async {
   tester.view.devicePixelRatio = 1;
@@ -188,7 +332,8 @@ Future<_CredentialOutcome> _openCredential(
                           title: 'Anthropic · Organization reporting',
                           hint: 'API key',
                           allowLabel: allowLabel,
-                          hasCredential: false,
+                          hasCredential: hasCredential,
+                          valueValidator: valueValidator,
                           guidance: guidance,
                           autofocus: autofocus,
                         ),

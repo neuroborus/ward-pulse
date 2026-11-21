@@ -8,7 +8,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_theme.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
+import 'package:ward_pulse_phone/providers/claude_account_row.dart';
+import 'package:ward_pulse_phone/providers/alert_threshold_dialogs.dart';
 import 'package:ward_pulse_phone/providers/codex_account_service.dart';
+import 'package:ward_pulse_phone/providers/credential_dialog.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/providers/provider_connection_row.dart';
@@ -16,8 +19,660 @@ import 'package:ward_pulse_phone/providers/providers_screen.dart';
 import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
 import 'package:ward_pulse_phone/settings/alert_percent_threshold_editor.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
+import 'package:ward_pulse_phone/sync/claude_account_client.dart';
 
 void main() {
+  group('owned connection reveal', () {
+    const id = ProviderConnections.openAiPlatform;
+    const request = (connection: id, token: 1);
+    const statuses = {
+      ProviderFamily.openai: ProviderStatus.ok,
+      ProviderFamily.anthropic: ProviderStatus.ok,
+      ProviderFamily.cursor: ProviderStatus.ok,
+    };
+
+    Widget screen({
+      required _MemoryCredentialStore store,
+      required void Function(int) revealed,
+      ({ProviderConnectionId connection, int token})? reveal = request,
+      Map<ProviderConnectionId, ConnectionReportingUpdate> updates = const {},
+      Map<ProviderFamily, ProviderStatus> order = statuses,
+      CodexAccountService codex = const EmptyCodexAccountService(),
+      Key? key,
+    }) => MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(title: const Text('Providers')),
+        bottomNavigationBar: NavigationBar(
+          destinations: const [
+            NavigationDestination(icon: Icon(Icons.home), label: 'Dashboard'),
+            NavigationDestination(icon: Icon(Icons.hub), label: 'Providers'),
+          ],
+        ),
+        body: ProvidersScreen(
+          key: key,
+          credentialStore: store,
+          codexAccountService: codex,
+          claudeAccountService: const EmptyClaudeAccountService(),
+          onCredentialsChanged: () => fail('Unexpected credential change'),
+          alertThresholds: const AlertThresholdPreferences(),
+          onAlertThresholdsChanged: (_) async => fail('Unexpected save'),
+          onRefresh: _noRefresh,
+          statuses: order,
+          reportingUpdates: updates,
+          isSnapshotCurrent:
+              (snapshot) async => snapshot.connectionVersions.entries.every(
+                (entry) => CredentialVersion(entry.value).sameCache(
+                  store.version(
+                    ProviderConnectionId.fromStorageKey(entry.key)!,
+                  ),
+                ),
+              ),
+          revealConnection: reveal,
+          onConnectionRevealed: revealed,
+        ),
+      ),
+    );
+
+    ConnectionReportingUpdate failure(_MemoryCredentialStore store) =>
+        ConnectionReportingUpdate(
+          connection: id,
+          credentialVersion: store.version(id),
+          outcome: ConnectionReportingOutcome(
+            connection: id,
+            credentialVersion: store.version(id),
+            category: ReportingOutcomeCategory.transientFailure,
+            source: ReportingOutcomeSource.live,
+            freshness: ReportingOutcomeFreshness.current,
+          ),
+        );
+
+    for (final scale in [1.0, 1.6]) {
+      testWidgets('late reporting layout settles the complete row at $scale', (
+        tester,
+      ) async {
+        _setTestSurface(tester, const Size(390, 844));
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final store = _MemoryCredentialStore();
+        await store.writeSecret(id, 'synthetic-key');
+        final release = Completer<void>();
+        addTearDown(() {
+          if (!release.isCompleted) release.complete();
+        });
+        store.beforeReadLabel = (connection) async {
+          if (connection == id) await release.future;
+        };
+        final acknowledgements = <int>[];
+        final update = failure(store);
+        await tester.pumpWidget(
+          screen(
+            store: store,
+            revealed: acknowledgements.add,
+            updates: {id: update},
+          ),
+        );
+        await _pumpPendingReveal(tester);
+        expect(acknowledgements, isEmpty);
+        release.complete();
+        await tester.pumpAndSettle();
+        expect(acknowledgements, [1]);
+        _expectCompleteReveal(tester, 'Platform reporting', update.outcome!);
+
+        // A finished token must not turn an ordinary later publication into
+        // another navigation request after the reader scrolls elsewhere.
+        final list = find.descendant(
+          of: find.byType(ProvidersScreen),
+          matching: find.byType(Scrollable),
+        );
+        final position = tester.state<ScrollableState>(list).position;
+        final startingPixels = position.pixels;
+        final minScrollExtent = position.minScrollExtent;
+        final viewportDimension = position.viewportDimension;
+        expect(startingPixels.isFinite, isTrue);
+        expect(minScrollExtent.isFinite, isTrue);
+        expect(viewportDimension.isFinite, isTrue);
+        expect(startingPixels, greaterThan(minScrollExtent));
+        expect(viewportDimension, greaterThan(kDragSlopDefault));
+        await tester.drag(
+          list,
+          Offset(0, startingPixels - minScrollExtent + viewportDimension),
+        );
+        await tester.pumpAndSettle();
+        expect(position.pixels, lessThan(startingPixels));
+        expect(position.pixels, position.minScrollExtent);
+        await tester.pumpWidget(
+          screen(
+            store: store,
+            revealed: acknowledgements.add,
+            updates: {
+              id: ConnectionReportingUpdate(
+                connection: id,
+                credentialVersion: store.version(id),
+                outcome: ConnectionReportingOutcome(
+                  connection: id,
+                  credentialVersion: store.version(id),
+                  category: ReportingOutcomeCategory.success,
+                  source: ReportingOutcomeSource.live,
+                  freshness: ReportingOutcomeFreshness.current,
+                ),
+              ),
+            },
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(position.pixels, position.minScrollExtent);
+        expect(acknowledgements, [1]);
+      });
+    }
+
+    testWidgets('only the latest request owns delayed publication', (
+      tester,
+    ) async {
+      _setTestSurface(tester, const Size(390, 844));
+      final store = _MemoryCredentialStore();
+      final release = Completer<void>();
+      addTearDown(() {
+        if (!release.isCompleted) release.complete();
+      });
+      store.beforeReadLabel = (connection) async {
+        if (connection == id) await release.future;
+      };
+      final acknowledgements = <int>[];
+      await tester.pumpWidget(
+        screen(store: store, revealed: acknowledgements.add),
+      );
+      await _pumpPendingReveal(tester);
+      await tester.pumpWidget(
+        screen(
+          store: store,
+          revealed: acknowledgements.add,
+          reveal: (connection: ProviderConnections.anthropicPlatform, token: 2),
+        ),
+      );
+      await _pumpPendingReveal(tester);
+      expect(acknowledgements, isEmpty);
+      release.complete();
+      await tester.pumpAndSettle();
+      expect(acknowledgements, [2]);
+      _expectCompleteReveal(tester, 'Organization reporting');
+    });
+
+    for (final dispose in [false, true]) {
+      testWidgets(
+        'delayed publication cannot complete ${dispose ? 'disposed' : 'canceled'} reveal',
+        (tester) async {
+          _setTestSurface(tester, const Size(390, 844));
+          final store = _MemoryCredentialStore();
+          final release = Completer<void>();
+          addTearDown(() {
+            if (!release.isCompleted) release.complete();
+          });
+          store.beforeReadLabel = (connection) async {
+            if (connection == id) await release.future;
+          };
+          final acknowledgements = <int>[];
+          await tester.pumpWidget(
+            screen(store: store, revealed: acknowledgements.add),
+          );
+          await _pumpPendingReveal(tester);
+          await tester.pumpWidget(
+            dispose
+                ? const SizedBox()
+                : screen(
+                  store: store,
+                  revealed: acknowledgements.add,
+                  reveal: null,
+                ),
+          );
+          release.complete();
+          await tester.pumpAndSettle();
+          expect(acknowledgements, isEmpty);
+          final focused = FocusManager.instance.primaryFocus?.context;
+          if (focused != null) {
+            expect(
+              find.descendant(
+                of: find.byElementPredicate(
+                  (element) => identical(element, focused),
+                ),
+                matching: find.widgetWithText(
+                  ProviderConnectionRow,
+                  'Platform reporting',
+                ),
+              ),
+              findsNothing,
+            );
+          }
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+
+    testWidgets('superseding an unfinished animation retires its completion', (
+      tester,
+    ) async {
+      _setTestSurface(tester, const Size(390, 844));
+      final store = _MemoryCredentialStore();
+      final acknowledgements = <int>[];
+      await tester.pumpWidget(
+        screen(store: store, revealed: acknowledgements.add, reveal: null),
+      );
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        screen(
+          store: store,
+          revealed: acknowledgements.add,
+          reveal: (connection: ProviderConnections.anthropicPlatform, token: 1),
+        ),
+      );
+      final list = find.descendant(
+        of: find.byType(ProvidersScreen),
+        matching: find.byType(Scrollable),
+      );
+      expect(
+        tester.state<ScrollableState>(list).position.isScrollingNotifier.value,
+        isTrue,
+      );
+      expect(acknowledgements, isEmpty);
+      await tester.pumpWidget(
+        screen(
+          store: store,
+          revealed: acknowledgements.add,
+          reveal: (connection: ProviderConnections.codexPlan, token: 2),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(acknowledgements, [2]);
+      _expectCompleteReveal(tester, 'Codex plan');
+    });
+
+    testWidgets(
+      'an older credential read cannot resume the completed revision',
+      (tester) async {
+        _setTestSurface(tester, const Size(390, 844));
+        final oldStore = _MemoryCredentialStore();
+        final release = Completer<void>();
+        addTearDown(() {
+          if (!release.isCompleted) release.complete();
+        });
+        oldStore.beforeReadLabel = (connection) async {
+          if (connection == id) await release.future;
+        };
+        final acknowledgements = <int>[];
+        await tester.pumpWidget(
+          screen(store: oldStore, revealed: acknowledgements.add),
+        );
+        await _pumpPendingReveal(tester);
+        expect(acknowledgements, isEmpty);
+        await tester.pumpWidget(
+          screen(
+            store: _MemoryCredentialStore(),
+            revealed: acknowledgements.add,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(acknowledgements, [1]);
+        _expectCompleteReveal(tester, 'Platform reporting');
+        final list = find.descendant(
+          of: find.byType(ProvidersScreen),
+          matching: find.byType(Scrollable),
+        );
+        final position = tester.state<ScrollableState>(list).position;
+        final startingPixels = position.pixels;
+        final minScrollExtent = position.minScrollExtent;
+        final viewportDimension = position.viewportDimension;
+        expect(startingPixels.isFinite, isTrue);
+        expect(minScrollExtent.isFinite, isTrue);
+        expect(viewportDimension.isFinite, isTrue);
+        expect(startingPixels, greaterThan(minScrollExtent));
+        expect(viewportDimension, greaterThan(kDragSlopDefault));
+        await tester.drag(
+          list,
+          Offset(0, startingPixels - minScrollExtent + viewportDimension),
+        );
+        await tester.pumpAndSettle();
+        expect(position.pixels, lessThan(startingPixels));
+        expect(position.pixels, position.minScrollExtent);
+        release.complete();
+        await tester.pumpAndSettle();
+        expect(acknowledgements, [1]);
+        expect(position.pixels, position.minScrollExtent);
+      },
+    );
+
+    testWidgets('new credential publication retires the old family traversal', (
+      tester,
+    ) async {
+      _setTestSurface(tester, const Size(390, 844));
+      final store = _MemoryCredentialStore();
+      final local = _DelayedCodexAccountService();
+      addTearDown(() {
+        if (!local.read.isCompleted) local.read.complete(false);
+      });
+      final acknowledgements = <int>[];
+      await tester.pumpWidget(
+        screen(
+          store: store,
+          revealed: acknowledgements.add,
+          order: const {},
+          codex: local,
+        ),
+      );
+      await _pumpPendingReveal(tester);
+      expect(local.reads, greaterThan(0));
+      expect(
+        find.widgetWithText(ProviderConnectionRow, 'Platform reporting'),
+        findsOneWidget,
+      );
+      expect(acknowledgements, isEmpty);
+      // The target was discovered near the end while its sibling initial read
+      // remained pending. This publication moves OpenAI ahead of that offset.
+      await store.writeSecret(id, 'synthetic-key');
+      await tester.pumpWidget(
+        screen(
+          store: store,
+          revealed: acknowledgements.add,
+          order: const {},
+          codex: local,
+          updates: {id: failure(store)},
+        ),
+      );
+      await _pumpPendingReveal(tester);
+      local.read.complete(false);
+      await tester.pumpAndSettle();
+      expect(acknowledgements, [1]);
+      _expectCompleteReveal(tester, 'Platform reporting');
+      expect(
+        tester.getTopLeft(find.text('OpenAI')).dy,
+        lessThan(tester.getTopLeft(find.text('Anthropic')).dy),
+      );
+    });
+
+    testWidgets('lazy target waits for its row-local failure publication', (
+      tester,
+    ) async {
+      _setTestSurface(tester, const Size(390, 844));
+      final local = _DelayedCodexAccountService();
+      addTearDown(() {
+        if (!local.read.isCompleted) local.read.complete(false);
+      });
+      final acknowledgements = <int>[];
+      await tester.pumpWidget(
+        screen(
+          store: _MemoryCredentialStore(),
+          revealed: acknowledgements.add,
+          codex: local,
+          reveal: (connection: ProviderConnections.codexPlan, token: 1),
+        ),
+      );
+      await _pumpPendingReveal(tester);
+      expect(local.reads, 1);
+      expect(acknowledgements, isEmpty);
+      local.read.completeError(StateError('Synthetic local read failure'));
+      await tester.pumpAndSettle();
+      expect(acknowledgements, [1]);
+      _expectCompleteReveal(tester, 'Codex plan');
+      expect(local.reads, 1);
+    });
+
+    testWidgets('retired row read cannot block or focus a replacement', (
+      tester,
+    ) async {
+      _setTestSurface(tester, const Size(390, 844));
+      final store = _MemoryCredentialStore();
+      final local = _DelayedCodexAccountService();
+      addTearDown(() {
+        if (!local.read.isCompleted) local.read.complete(false);
+      });
+      final acknowledgements = <int>[];
+      await tester.pumpWidget(
+        screen(
+          key: const ValueKey('old'),
+          store: store,
+          revealed: acknowledgements.add,
+          codex: local,
+          reveal: (connection: ProviderConnections.codexPlan, token: 1),
+        ),
+      );
+      await _pumpPendingReveal(tester);
+      expect(local.reads, 1);
+      expect(acknowledgements, isEmpty);
+      await tester.pumpWidget(
+        screen(
+          key: const ValueKey('replacement'),
+          store: store,
+          revealed: acknowledgements.add,
+          reveal: (connection: ProviderConnections.anthropicPlatform, token: 2),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(acknowledgements, [2]);
+      local.read.complete(true);
+      await tester.pumpAndSettle();
+      expect(acknowledgements, [2]);
+      _expectCompleteReveal(tester, 'Organization reporting');
+    });
+
+    testWidgets(
+      'oversized row completes and its remaining recovery copy scrolls normally',
+      (tester) async {
+        _setTestSurface(tester, const Size(390, 844));
+        tester.platformDispatcher.textScaleFactorTestValue = 3;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final store = _MemoryCredentialStore();
+        await store.writeSecret(id, 'synthetic-key');
+        final update = failure(store);
+        final acknowledgements = <int>[];
+        await tester.pumpWidget(
+          screen(
+            store: store,
+            revealed: acknowledgements.add,
+            updates: {id: update},
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(acknowledgements, [1]);
+        final row = find.widgetWithText(
+          ProviderConnectionRow,
+          'Platform reporting',
+        );
+        final viewport = tester.getRect(
+          find.descendant(
+            of: find.byType(ProvidersScreen),
+            matching: find.byType(Viewport),
+          ),
+        );
+        expect(tester.getSize(row).height, greaterThan(viewport.height));
+        expect(tester.getTopLeft(row).dy, closeTo(viewport.top, 0.5));
+        _expectRevealFocus(row);
+        await tester.drag(
+          find.descendant(
+            of: find.byType(ProvidersScreen),
+            matching: find.byType(Scrollable),
+          ),
+          const Offset(0, -1400),
+        );
+        await tester.pumpAndSettle();
+        final copy = find.text(
+          '${update.outcome!.connectionLabel}\n${update.outcome!.supportingCopy}',
+        );
+        final remaining = tester.getRect(copy);
+        expect(remaining.bottom, lessThanOrEqualTo(viewport.bottom + 0.5));
+        expect(remaining.overlaps(viewport), isTrue);
+        expect(tester.getTopLeft(row).dy, lessThan(viewport.top));
+        expect(acknowledgements, [1]);
+      },
+    );
+  });
+
+  testWidgets(
+    'Plan catalogue uses owning connection and only absent-ID fallback',
+    (tester) async {
+      final snapshot = _windowSnapshot([
+        _windowAccount('cursor', 'cursor.plan', ['Models', 'Other Models']),
+        _windowAccount('cursor', 'cursor.platform', ['Sibling only']),
+        _windowAccount('cursor', 'unrecognized', ['Unknown owner']),
+        _windowAccount('codex', null, ['Legacy dynamic']),
+        _windowAccount('claude', null, ['Legacy weekly']),
+        _windowAccount('openai', null, ['Legacy reporting']),
+      ]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ProvidersScreen(
+              onRefresh: _noRefresh,
+              credentialStore: const EmptyProviderCredentialStore(),
+              codexAccountService: const EmptyCodexAccountService(),
+              claudeAccountService: const EmptyClaudeAccountService(),
+              onCredentialsChanged: () {},
+              alertThresholds: const AlertThresholdPreferences(),
+              onAlertThresholdsChanged: (_) async => fail('Unexpected save'),
+              snapshot: snapshot,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      for (final (row, labels) in [
+        ('Claude plan', ['Legacy weekly']),
+        ('Cursor plan', ['Models', 'Other Models']),
+        ('Codex plan', ['Legacy dynamic']),
+      ]) {
+        await _openRowAlerts(tester, row);
+        final dialog = tester.widget<ConnectionAlertsDialog>(
+          find.byType(ConnectionAlertsDialog),
+        );
+        expect(dialog.planWindows.map((value) => value.label), labels);
+        expect(
+          dialog.planWindows.every((value) => value.usedPercent == null),
+          isTrue,
+        );
+        expect(find.text('Sibling only'), findsNothing);
+        expect(find.text('Unknown owner'), findsNothing);
+        expect(find.text('Legacy reporting'), findsNothing);
+        for (final label in labels) {
+          expect(find.text(label), findsOneWidget);
+        }
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+      }
+    },
+  );
+
+  testWidgets('catalogue refresh keeps drafts and rejects retired owners', (
+    tester,
+  ) async {
+    final credentials = _MemoryCredentialStore();
+    var preferences = const AlertThresholdPreferences().withConnection(
+      ProviderConnections.cursorPlan,
+      const ConnectionAlertThresholds(
+        planWindows: {'saved': AlertPercentThreshold()},
+      ),
+    );
+    DashboardSnapshot? snapshot;
+    var revision = 0;
+    var saves = 0;
+    late StateSetter refresh;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              refresh = setState;
+              return ProvidersScreen(
+                onRefresh: _noRefresh,
+                credentialStore: credentials,
+                codexAccountService: const EmptyCodexAccountService(),
+                claudeAccountService: const EmptyClaudeAccountService(),
+                onCredentialsChanged: () {},
+                alertThresholds: preferences,
+                onAlertThresholdsChanged: (edit) async {
+                  final next = edit(preferences);
+                  refresh(() => preferences = next);
+                  saves++;
+                },
+                snapshot: snapshot,
+                alertContextRevision: revision,
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openRowAlerts(tester, 'Cursor plan');
+    expect(find.text('Plan'), findsOneWidget);
+    expect(find.text('Purchased'), findsOneWidget);
+    await _chooseAlert(tester, 'Plan', '20% left');
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(saves, 0);
+    refresh(() {
+      snapshot = _windowSnapshot([
+        _windowAccount('cursor', 'cursor.plan', ['Initial'], ids: ['saved']),
+      ]);
+    });
+    await tester.pumpAndSettle();
+    await _openRowAlerts(tester, 'Cursor plan');
+    await _chooseAlert(tester, 'Initial', 'Custom % left');
+    final field = find.byType(TextFormField);
+    await tester.ensureVisible(field);
+    await tester.enterText(field, '17x');
+    refresh(() => snapshot = null);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Unavailable window'), findsOneWidget);
+    expect(tester.widget<TextFormField>(field).controller!.text, '17x');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(saves, 0);
+    refresh(() {
+      snapshot = _windowSnapshot([
+        _windowAccount(
+          'cursor',
+          'cursor.plan',
+          ['New pool', 'Renamed'],
+          ids: ['new', 'saved'],
+        ),
+      ]);
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('Renamed'), findsOneWidget);
+    expect(find.text('New pool'), findsOneWidget);
+    expect(tester.widget<TextFormField>(field).controller!.text, '17x');
+    await tester.enterText(field, '17');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(saves, 1);
+    expect(
+      preferences
+          .forConnection(ProviderConnections.cursorPlan)
+          .planWindows['saved']!
+          .at,
+      83,
+    );
+
+    // A draft from the prior credential/surface owner cannot save on retirement.
+    await _openRowAlerts(tester, 'Cursor plan');
+    refresh(() {
+      revision++;
+      snapshot = null;
+    });
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(saves, 1);
+    ScaffoldMessenger.of(
+      tester.element(find.byType(ProvidersScreen)),
+    ).hideCurrentSnackBar();
+    await tester.pumpAndSettle();
+    await _openRowAlerts(tester, 'Cursor plan');
+    expect(find.text('Plan'), findsOneWidget);
+    expect(find.text('Purchased'), findsOneWidget);
+    expect(find.text('Plan window · saved'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
   group('reporting proof', () {
     Future<void> show(
       WidgetTester tester,
@@ -58,10 +713,12 @@ void main() {
     ConnectionReportingUpdate proof(
       _MemoryCredentialStore store,
       ProviderConnectionId id,
-      ReportingOutcomeCategory category,
-    ) => ConnectionReportingUpdate(
+      ReportingOutcomeCategory category, {
+      int? attemptEra,
+    }) => ConnectionReportingUpdate(
       connection: id,
       credentialVersion: store.version(id),
+      attemptEra: attemptEra,
       outcome: ConnectionReportingOutcome(
         connection: id,
         credentialVersion: store.version(id),
@@ -75,22 +732,22 @@ void main() {
       'storage and Mock cannot verify; current proof is retired by replacement',
       (tester) async {
         final store = _MemoryCredentialStore();
-        const id = ProviderConnections.anthropicPlatform;
+        const id = ProviderConnections.cursorPlatform;
         await store.writeSecret(id, 'synthetic-A');
         await show(tester, store, {});
         expect(
-          _inRow('Organization reporting', find.text('Not verified')),
+          _inRow('Team Admin API', find.text('Not verified')),
           findsOneWidget,
         );
         final update = proof(store, id, ReportingOutcomeCategory.success);
         await show(tester, store, {id: update});
         expect(
-          _inRow('Organization reporting', find.text('Connected')),
+          _inRow('Team Admin API', find.text('Connected')),
           findsOneWidget,
         );
         await show(tester, store, {id: update}, mock: true);
         expect(
-          _inRow('Organization reporting', find.text('Not verified')),
+          _inRow('Team Admin API', find.text('Not verified')),
           findsOneWidget,
         );
         expect(
@@ -100,9 +757,97 @@ void main() {
         await store.writeSecret(id, 'synthetic-B');
         await show(tester, store, {id: update});
         expect(
+          _inRow('Team Admin API', find.text('Not verified')),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'Anthropic local rejection is visible but cannot establish Connected',
+      (tester) async {
+        final store = _MemoryCredentialStore();
+        const id = ProviderConnections.anthropicPlatform;
+        await store.writeSecret(id, 'sk-ant-admin01-synthetic');
+        ConnectionReportingUpdate local(
+          ReportingOutcomeCategory category,
+          ReportingOutcomeFreshness freshness,
+        ) => ConnectionReportingUpdate(
+          connection: id,
+          credentialVersion: store.version(id),
+          outcome: ConnectionReportingOutcome(
+            connection: id,
+            credentialVersion: store.version(id),
+            category: category,
+            source: ReportingOutcomeSource.local,
+            freshness: freshness,
+          ),
+        );
+        await show(tester, store, {
+          id: local(
+            ReportingOutcomeCategory.authenticationRejected,
+            ReportingOutcomeFreshness.current,
+          ),
+        });
+        expect(
+          _inRow('Organization reporting', find.text('Key rejected')),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining(anthropicReportingKeyGuidance),
+          findsOneWidget,
+        );
+        expect(
+          _inRow('Organization reporting', find.text('Connected')),
+          findsNothing,
+        );
+        await tester.tap(find.text('Organization reporting'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.widgetWithText(TextFormField, 'Value (leave blank to keep)'),
+          'sk-ant-admin01-replacement',
+        );
+        await tester.tap(find.text('Save'));
+        await tester.pumpAndSettle();
+        expect(find.text('Replace this Console Admin key.'), findsOneWidget);
+        expect(
+          find.descendant(
+            of: find.byType(CredentialDialog),
+            matching: find.textContaining(anthropicReportingKeyGuidance),
+          ),
+          findsOneWidget,
+        );
+        expect(await store.readSecret(id), 'sk-ant-admin01-synthetic');
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        await show(tester, store, {
+          id: local(
+            ReportingOutcomeCategory.success,
+            ReportingOutcomeFreshness.current,
+          ),
+        });
+        expect(
           _inRow('Organization reporting', find.text('Not verified')),
           findsOneWidget,
         );
+        await show(tester, store, {
+          id: local(
+            ReportingOutcomeCategory.authenticationRejected,
+            ReportingOutcomeFreshness.stale,
+          ),
+        });
+        expect(
+          _inRow('Organization reporting', find.text('Not verified')),
+          findsOneWidget,
+        );
+        await show(tester, store, {
+          id: proof(store, id, ReportingOutcomeCategory.success),
+        });
+        expect(
+          _inRow('Organization reporting', find.text('Connected')),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
       },
     );
 
@@ -110,13 +855,13 @@ void main() {
       tester,
     ) async {
       final store = _MemoryCredentialStore();
-      const id = ProviderConnections.anthropicPlatform;
+      const id = ProviderConnections.cursorPlatform;
       await store.writeSecret(id, 'synthetic-key');
       var polls = 0;
       await show(tester, store, {
         id: proof(store, id, ReportingOutcomeCategory.success),
       }, changed: () => polls++);
-      await tester.tap(find.text('Organization reporting'));
+      await tester.tap(find.text('Team Admin API'));
       await tester.pumpAndSettle();
       expect(
         tester
@@ -150,25 +895,25 @@ void main() {
       'a fresh failure replaces success, with distinct permission and retry results',
       (tester) async {
         final store = _MemoryCredentialStore();
-        const id = ProviderConnections.anthropicPlatform;
+        const id = ProviderConnections.cursorPlatform;
         await store.writeSecret(id, 'synthetic-key');
         for (final category in ReportingOutcomeCategory.values) {
           await show(tester, store, {id: proof(store, id, category)});
           final outcome = proof(store, id, category).outcome!;
           expect(
-            _inRow('Organization reporting', find.text(outcome.label)),
+            _inRow('Team Admin API', find.text(outcome.label)),
             findsOneWidget,
           );
           if (outcome.failed) {
             expect(
               _inRow(
-                'Organization reporting',
+                'Team Admin API',
                 find.textContaining(outcome.connectionLabel),
               ),
               findsWidgets,
             );
             expect(
-              _inRow('Organization reporting', find.text('Connected')),
+              _inRow('Team Admin API', find.text('Connected')),
               findsNothing,
             );
           }
@@ -176,26 +921,34 @@ void main() {
       },
     );
 
-    testWidgets(
-      'later label reads retire only obsolete proof and keep siblings',
-      (tester) async {
+    for (final (category, correctClock) in [
+      (ReportingOutcomeCategory.accessDenied, false),
+      (null, false),
+      (ReportingOutcomeCategory.accessDenied, true),
+    ]) {
+      testWidgets('later label reads preserve the current sibling '
+          '(outcome: $category, clock correction: $correctClock)', (
+        tester,
+      ) async {
         _setTestSurface(tester, const Size(800, 2000));
         final store = _MemoryCredentialStore();
         const first = ProviderConnections.openAiPlatform;
-        const later = ProviderConnections.anthropicPlatform;
-        const checking = ProviderConnections.cursorPlatform;
+        const later = ProviderConnections.cursorPlatform;
         await store.writeSecret(first, 'synthetic-first');
         await store.writeSecret(later, 'synthetic-later');
-        await store.writeSecret(checking, 'synthetic-checking');
         final held = Completer<void>();
         final started = Completer<void>();
+        addTearDown(() {
+          if (!held.isCompleted) held.complete();
+        });
         store.beforeReadLabel = (id) async {
-          if (id == checking) {
+          if (id == later) {
             started.complete();
             await held.future;
           }
         };
         final validated = <DashboardSnapshot>[];
+        var minimumEra = 0;
         await tester.pumpWidget(
           MaterialApp(
             home: Scaffold(
@@ -205,19 +958,27 @@ void main() {
                 claudeAccountService: const EmptyClaudeAccountService(),
                 onCredentialsChanged: () {},
                 reportingUpdates: {
-                  first: proof(store, first, ReportingOutcomeCategory.success),
-                  later: proof(
+                  first: proof(
                     store,
-                    later,
-                    ReportingOutcomeCategory.accessDenied,
+                    first,
+                    ReportingOutcomeCategory.success,
+                    attemptEra: correctClock ? 0 : null,
                   ),
-                  checking: ConnectionReportingUpdate(
-                    connection: checking,
-                    credentialVersion: store.version(checking),
-                  ),
+                  later:
+                      category == null
+                          ? ConnectionReportingUpdate(
+                            connection: later,
+                            credentialVersion: store.version(later),
+                          )
+                          : proof(store, later, category),
                 },
                 isSnapshotCurrent: (snapshot) async {
                   validated.add(snapshot);
+                  final attemptEra =
+                      snapshot.snapshotOrdering[first.storageKey]?.attemptEra;
+                  if (attemptEra != null && attemptEra < minimumEra) {
+                    return false;
+                  }
                   return snapshot.connectionVersions.entries.every(
                     (entry) => CredentialVersion(entry.value).sameCache(
                       store.version(
@@ -236,20 +997,20 @@ void main() {
         );
         await tester.pump();
         expect(started.isCompleted, isTrue);
-        await store.writeSecret(first, 'synthetic-replacement');
+        if (correctClock) {
+          minimumEra = 1;
+        } else {
+          await store.writeSecret(first, 'synthetic-replacement');
+        }
         held.complete();
         await tester.pump();
         expect(
           validated.first.connectionVersions.keys,
-          unorderedEquals([
-            first.storageKey,
-            later.storageKey,
-            checking.storageKey,
-          ]),
+          unorderedEquals([first.storageKey, later.storageKey]),
         );
         expect(
           validated.last.connectionVersions.keys,
-          unorderedEquals([later.storageKey, checking.storageKey]),
+          unorderedEquals([later.storageKey]),
         );
         expect(
           _inRow('Platform reporting', find.text('Connected')),
@@ -260,11 +1021,10 @@ void main() {
           findsOneWidget,
         );
         expect(
-          _inRow('Organization reporting', find.text('Access denied')),
-          findsOneWidget,
-        );
-        expect(
-          _inRow('Team Admin API', find.text('Checking…')),
+          _inRow(
+            'Team Admin API',
+            find.text(category == null ? 'Checking…' : 'Access denied'),
+          ),
           findsOneWidget,
         );
         expect(
@@ -273,44 +1033,30 @@ void main() {
                 find.widgetWithText(ProviderConnectionRow, 'Team Admin API'),
               )
               .onTap,
-          isNull,
-        );
-        expect(
-          tester
-              .widget<ProviderConnectionRow>(
-                find.widgetWithText(
-                  ProviderConnectionRow,
-                  'Organization reporting',
-                ),
-              )
-              .onTap,
-          isNotNull,
+          category == null ? isNull : isNotNull,
         );
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pumpAndSettle();
-      },
-    );
+      });
+    }
 
     testWidgets('one unreadable key does not disconnect siblings', (
       tester,
     ) async {
       final store = _MemoryCredentialStore();
       await store.writeSecret(
-        ProviderConnections.anthropicPlatform,
+        ProviderConnections.cursorPlatform,
         'synthetic-key',
       );
       store.unreadable = ProviderConnections.openAiPlatform;
       await show(tester, store, {
-        ProviderConnections.anthropicPlatform: proof(
+        ProviderConnections.cursorPlatform: proof(
           store,
-          ProviderConnections.anthropicPlatform,
+          ProviderConnections.cursorPlatform,
           ReportingOutcomeCategory.success,
         ),
       });
-      expect(
-        _inRow('Organization reporting', find.text('Connected')),
-        findsOneWidget,
-      );
+      expect(_inRow('Team Admin API', find.text('Connected')), findsOneWidget);
       final primary = find.ancestor(
         of: _inRow('Platform reporting', find.text('Platform reporting')),
         matching: find.byType(InkWell),
@@ -341,17 +1087,22 @@ void main() {
   });
 
   group('connection row layout', () {
-    testWidgets('all six rows keep actions right and status below at 360dp', (
+    testWidgets('all active rows keep actions right and status below at 360dp', (
       tester,
     ) async {
-      await _pumpProvidersAtSize(tester, const Size(360, 640));
+      final store = _MemoryCredentialStore();
+      await store.writeLabel(
+        ProviderConnections.openAiPlatform,
+        'Synthetic reporting connection',
+      );
+      await _pumpProvidersAtSize(tester, const Size(360, 640), store: store);
       for (final title in const [
         'Claude plan',
         'Organization reporting',
         'Cursor plan',
         'Team Admin API',
         'Codex plan',
-        'Platform reporting',
+        'Synthetic reporting connection',
       ]) {
         final row = find.widgetWithText(ProviderConnectionRow, title);
         await tester.scrollUntilVisible(
@@ -443,7 +1194,7 @@ void main() {
         );
         expect(paragraph.didExceedMaxLines, isFalse, reason: layoutContext);
         expect(titleBoxes, isNotEmpty, reason: layoutContext);
-        if (title == 'Organization reporting') {
+        if (title == 'Synthetic reporting connection') {
           expect(titleBoxes.length, greaterThan(1), reason: layoutContext);
         }
         // Full selection containment proves ownership and nonintrusion into
@@ -543,7 +1294,7 @@ void main() {
         var budgetTaps = 0;
         var alertTaps = 0;
         const title = 'A long saved reporting label';
-        const purpose = 'Anthropic · Organization reporting';
+        const purpose = 'Cursor · Team Admin API';
         const error =
             "Check this key's permissions and your account's reporting access.";
         await tester.pumpWidget(
@@ -656,8 +1407,8 @@ void main() {
                 Card(
                   child: ProviderConnectionRow(
                     icon: Icons.key_outlined,
-                    title: 'Organization reporting',
-                    subtitle: 'Admin API key · stored on this phone',
+                    title: 'Team Admin API',
+                    subtitle: 'Team key with reporting access',
                     status: const Text(longStatus),
                     actions: [
                       IconButton(
@@ -679,10 +1430,7 @@ void main() {
         ),
       );
 
-      final row = find.widgetWithText(
-        ProviderConnectionRow,
-        'Organization reporting',
-      );
+      final row = find.widgetWithText(ProviderConnectionRow, 'Team Admin API');
       final status = find.text(longStatus);
       final rowRect = tester.getRect(row);
       final statusRect = tester.getRect(status);
@@ -749,7 +1497,7 @@ void main() {
     await tester.ensureVisible(value);
     await tester.pumpAndSettle();
     await tester.tap(value);
-    await tester.enterText(value, pasted);
+    await tester.enterText(value, ' ${Uri.encodeComponent(pasted)} ');
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
@@ -761,7 +1509,12 @@ void main() {
   testWidgets('Cursor plan Sign in uses injected port and marks Connected', (
     tester,
   ) async {
-    final store = _MemoryCredentialStore();
+    final store = _ReconnectMemoryCredentialStore();
+    await store.writeSecret(
+      ProviderConnections.cursorPlatform,
+      'team-sentinel',
+    );
+    var credentialsChanged = 0;
     var signInCalls = 0;
 
     await tester.pumpWidget(
@@ -772,12 +1525,12 @@ void main() {
             credentialStore: store,
             codexAccountService: const EmptyCodexAccountService(),
             claudeAccountService: const EmptyClaudeAccountService(),
-            onCredentialsChanged: () {},
+            onCredentialsChanged: () => credentialsChanged++,
             alertThresholds: const AlertThresholdPreferences(),
             onAlertThresholdsChanged: (_) async {},
             cursorPlanSignIn: (_) async {
               signInCalls++;
-              return 'user_01WEB::eyJhbGciOiJSUzI1NiJ9.payload.signature_padding==';
+              return ' user_01WEB%3A%3AeyJhbGciOiJSUzI1NiJ9.payload.signature_padding%3D%3D ';
             },
           ),
         ),
@@ -800,6 +1553,703 @@ void main() {
       'user_01WEB::eyJhbGciOiJSUzI1NiJ9.payload.signature_padding==',
     );
     expect(find.text('Connected'), findsWidgets);
+    expect(credentialsChanged, 1);
+    expect(store.reconnectCalls, ['begin:cursor.plan', 'complete:cursor.plan']);
+    expect(
+      await store.readSecret(ProviderConnections.cursorPlatform),
+      'team-sentinel',
+    );
+  });
+
+  for (final installed in [false, true]) {
+    testWidgets(
+      'Cursor cancellation preserves saved state (installed: $installed)',
+      (tester) async {
+        final store = _ReconnectMemoryCredentialStore();
+        if (installed) {
+          await store.writeSecret(
+            ProviderConnections.cursorPlan,
+            'saved-session',
+          );
+        }
+        var changes = 0;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: ProvidersScreen(
+                onRefresh: _noRefresh,
+                credentialStore: store,
+                codexAccountService: const EmptyCodexAccountService(),
+                claudeAccountService: const EmptyClaudeAccountService(),
+                onCredentialsChanged: () => changes++,
+                alertThresholds: const AlertThresholdPreferences(),
+                onAlertThresholdsChanged: (_) async {},
+                cursorPlanSignIn: (_) async => null,
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text('Cursor plan'),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.tap(find.text('Cursor plan'));
+        await tester.pumpAndSettle();
+        if (installed) {
+          await tester.tap(find.text('Sign in again'));
+          await tester.pumpAndSettle();
+        }
+        expect(
+          await store.readSecret(ProviderConnections.cursorPlan),
+          installed ? 'saved-session' : null,
+        );
+        expect(store.reconnectCalls, [
+          'begin:cursor.plan',
+          'cancel:cursor.plan',
+        ]);
+        expect(changes, 0);
+      },
+    );
+  }
+
+  group('Claude plan sign-in recovery', () {
+    final field = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(TextFormField),
+    );
+    final progress = find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.byType(LinearProgressIndicator),
+    );
+
+    bool enabled(WidgetTester tester, String label) {
+      final button = find.ancestor(
+        of: find.text(label),
+        matching: find.bySubtype<ButtonStyleButton>(),
+      );
+      return tester.widget<ButtonStyleButton>(button).enabled;
+    }
+
+    Future<void> openSignIn(
+      WidgetTester tester,
+      ClaudeAccountService service,
+      VoidCallback onCredentialsChanged,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ProvidersScreen(
+              onRefresh: _noRefresh,
+              credentialStore: _MemoryCredentialStore(),
+              codexAccountService: const EmptyCodexAccountService(),
+              claudeAccountService: service,
+              onCredentialsChanged: onCredentialsChanged,
+              alertThresholds: const AlertThresholdPreferences(),
+              onAlertThresholdsChanged: (_) async {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final row = _inRow('Claude plan', find.text('Claude plan'));
+      await tester.scrollUntilVisible(
+        row,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(row);
+      await tester.pump();
+      // The row's progress keeps animating behind the dialog, so elapse the
+      // route transition rather than waiting for the tree to settle.
+      await tester.pump(const Duration(seconds: 1));
+    }
+
+    /// Holds each real browser launch until the test resolves its result.
+    List<Completer<bool>> holdLaunches(
+      WidgetTester tester,
+      List<MethodCall> calls,
+    ) {
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      final messenger = tester.binding.defaultBinaryMessenger;
+      final results = <Completer<bool>>[];
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        final result = Completer<bool>();
+        results.add(result);
+        return result.future;
+      });
+      return results;
+    }
+
+    for (final window in ['start', 'code', 'cleanup', 'unchanged']) {
+      testWidgets(
+        'Claude credential-store ownership during $window',
+        (tester) async {
+          const id = ProviderConnections.claudePlan;
+          final events = <String>[];
+          final start = Completer<ClaudeLoginAttempt>();
+          final code = Completer<void>();
+          final cleanupStarted = Completer<void>();
+          final cleanup = Completer<void>();
+          ProviderConnectionId? cleanupConnection;
+          final oldAttempt = _claudeAttempt('old', events, () => code.future);
+          final currentAttempt = _claudeAttempt('current', events, () async {});
+          final service = _QueuedClaudeAccountService(events, [
+            start.future,
+            Future.value(currentAttempt),
+          ]);
+          final oldStore = _MemoryCredentialStore();
+          final replacement = _MemoryCredentialStore();
+          await oldStore.writeSecret(id, 'synthetic-old-paste');
+          await replacement.writeSecret(id, 'synthetic-replacement-paste');
+          if (window == 'cleanup' || window == 'unchanged') {
+            oldStore.beforeDeleteSecret = (connection) async {
+              cleanupConnection = connection;
+              cleanupStarted.complete();
+              await cleanup.future;
+            };
+          }
+          var changes = 0;
+          var cleared = 0;
+          final VoidCallback onChanged = () => changes++;
+          final VoidCallback onCleared = () => cleared++;
+          final connection = providerConnectionCatalog().singleWhere(
+            (c) => c.id == id,
+          );
+          final ConnectionRowControlsBuilder controls =
+              ({leading = const [], required status}) => (
+                actions: leading,
+                status: status,
+              );
+          final stores = ValueNotifier<ProviderCredentialStore>(oldStore);
+          Future<void>? editing;
+          Future<void>? submitting;
+          Future<void>? currentEditing;
+          // The widget binding prints synchronously. Keep the unknown wait's
+          // diagnostics limited to phase labels and completion flags.
+          final phase = 'HOST16-T2 $window';
+          var editingCompleted = false;
+          var submittingCompleted = false;
+          var currentEditingCompleted = false;
+          try {
+            debugPrint('$phase mount enter');
+            await tester.pumpWidget(
+              MaterialApp(
+                home: Scaffold(
+                  body: ValueListenableBuilder<ProviderCredentialStore>(
+                    valueListenable: stores,
+                    builder:
+                        (context, store, child) => ClaudeAccountRow(
+                          connection: connection,
+                          accountService: service,
+                          credentialStore: store,
+                          onCredentialsChanged: onChanged,
+                          onPastedSecretCleared: onCleared,
+                          buildControls: controls,
+                        ),
+                  ),
+                ),
+              ),
+            );
+            debugPrint('$phase mount complete');
+            debugPrint('$phase initial settle enter');
+            await tester.pumpAndSettle();
+            debugPrint('$phase initial settle complete');
+            final state = tester.state(find.byType(ClaudeAccountRow));
+            debugPrint('$phase editing enter');
+            editing =
+                (tester
+                            .widget<ProviderConnectionRow>(
+                              find.byType(ProviderConnectionRow),
+                            )
+                            .onTap
+                        as dynamic)()
+                    as Future<void>;
+            editing = editing.then((_) {
+              editingCompleted = true;
+              debugPrint('$phase editing complete');
+            });
+            debugPrint('$phase editing pump enter');
+            await tester.pump();
+            debugPrint('$phase editing pump complete');
+            expect(events, ['start']);
+            if (window == 'start') {
+              stores.value = replacement;
+              debugPrint('$phase start replacement pump enter');
+              await tester.pump();
+              debugPrint('$phase start replacement pump complete');
+            }
+            start.complete(oldAttempt);
+            debugPrint('$phase start completion pump enter');
+            await tester.pump();
+            debugPrint('$phase start completion pump complete');
+            debugPrint('$phase start transition pump enter');
+            await tester.pump(const Duration(seconds: 1));
+            debugPrint('$phase start transition pump complete');
+            if (window != 'start') {
+              expect(find.text('Connect Claude plan'), findsOneWidget);
+              debugPrint('$phase code entry enter');
+              await tester.enterText(field, 'synthetic-code#old');
+              debugPrint('$phase code entry complete');
+              debugPrint('$phase submission enter');
+              submitting =
+                  (tester
+                              .widget<FilledButton>(
+                                find.widgetWithText(FilledButton, 'Continue'),
+                              )
+                              .onPressed
+                          as dynamic)()
+                      as Future<void>;
+              submitting = submitting.then((_) {
+                submittingCompleted = true;
+                debugPrint('$phase submission complete');
+              });
+              debugPrint('$phase submission pump enter');
+              await tester.pump();
+              debugPrint('$phase submission pump complete');
+              expect(events, contains('old submit synthetic-code#old'));
+              if (window == 'code') {
+                stores.value = replacement;
+                debugPrint('$phase code replacement pump enter');
+                await tester.pump();
+                debugPrint('$phase code replacement pump complete');
+              }
+              code.complete();
+              debugPrint('$phase code completion pump enter');
+              await tester.pump();
+              debugPrint('$phase code completion pump complete');
+              debugPrint('$phase submission await enter');
+              await submitting;
+              debugPrint('$phase submission await complete');
+              if (window == 'cleanup' || window == 'unchanged') {
+                debugPrint('$phase cleanupStarted await enter');
+                await cleanupStarted.future;
+                debugPrint('$phase cleanupStarted await complete');
+                expect(cleanupConnection, id);
+                expect(changes, 0);
+                expect(cleared, 0);
+                if (window == 'cleanup') {
+                  stores.value = replacement;
+                  debugPrint('$phase cleanup replacement pump enter');
+                  await tester.pump();
+                  debugPrint('$phase cleanup replacement pump complete');
+                }
+                cleanup.complete();
+                debugPrint('$phase cleanup release pump enter');
+                await tester.pump();
+                debugPrint('$phase cleanup release pump complete');
+              }
+              debugPrint('$phase editing await enter');
+              await editing;
+              debugPrint('$phase editing await complete');
+              debugPrint('$phase editing settle enter');
+              await tester.pumpAndSettle();
+              debugPrint('$phase editing settle complete');
+            }
+            // Check the obsolete-start oracle before awaiting the row: OLD opens
+            // a dialog here, which must be dismissed only by failure-safe teardown.
+            expect(find.byType(AlertDialog), findsNothing);
+            expect(tester.state(find.byType(ClaudeAccountRow)), same(state));
+            expect(
+              tester
+                  .widget<ClaudeAccountRow>(find.byType(ClaudeAccountRow))
+                  .accountService,
+              same(service),
+            );
+            expect(changes, window == 'unchanged' ? 1 : 0);
+            expect(cleared, window == 'unchanged' ? 1 : 0);
+            expect(
+              await replacement.readSecret(id),
+              'synthetic-replacement-paste',
+            );
+            expect(replacement.deleted, isEmpty);
+            expect(
+              oldStore.deleted,
+              window == 'cleanup' || window == 'unchanged' ? [id] : isEmpty,
+            );
+            expect(
+              await oldStore.readSecret(id),
+              window == 'cleanup' || window == 'unchanged'
+                  ? isNull
+                  : 'synthetic-old-paste',
+            );
+            expect(
+              _inRow('Claude plan', find.byType(RowProgress)),
+              findsNothing,
+            );
+            expect(
+              _inRow(
+                'Claude plan',
+                find.text(
+                  window == 'unchanged' ? 'Connected' : 'Not connected',
+                ),
+              ),
+              findsOneWidget,
+            );
+            expect(find.byType(SnackBar), findsNothing);
+            if (window == 'start') expect(events, ['start', 'old cancel']);
+            debugPrint('$phase final editing await enter');
+            await editing;
+            debugPrint('$phase final editing await complete');
+
+            if (window != 'unchanged') {
+              // The replacement row can start and cancel its own real dialog.
+              debugPrint('$phase replacement editing enter');
+              currentEditing =
+                  (tester
+                              .widget<ProviderConnectionRow>(
+                                find.byType(ProviderConnectionRow),
+                              )
+                              .onTap
+                          as dynamic)()
+                      as Future<void>;
+              currentEditing = currentEditing.then((_) {
+                currentEditingCompleted = true;
+                debugPrint('$phase replacement editing complete');
+              });
+              debugPrint('$phase replacement editing pump enter');
+              await tester.pump();
+              debugPrint('$phase replacement editing pump complete');
+              debugPrint('$phase replacement transition pump enter');
+              await tester.pump(const Duration(seconds: 1));
+              debugPrint('$phase replacement transition pump complete');
+              expect(find.text('Connect Claude plan'), findsOneWidget);
+              debugPrint('$phase replacement cancel enter');
+              await tester.tap(find.text('Cancel'));
+              debugPrint('$phase replacement cancel complete');
+              debugPrint('$phase replacement settle enter');
+              await tester.pumpAndSettle();
+              debugPrint('$phase replacement settle complete');
+              debugPrint('$phase replacement editing await enter');
+              await currentEditing;
+              debugPrint('$phase replacement editing await complete');
+              expect(events.last, 'current cancel');
+              expect(changes, 0);
+              expect(cleared, 0);
+              expect(
+                await replacement.readSecret(id),
+                'synthetic-replacement-paste',
+              );
+              expect(replacement.deleted, isEmpty);
+              expect(
+                _inRow('Claude plan', find.text('Not connected')),
+                findsOneWidget,
+              );
+            }
+          } finally {
+            debugPrint(
+              '$phase teardown enter '
+              'submission=$submittingCompleted editing=$editingCompleted '
+              'replacement=$currentEditingCompleted '
+              'cleanupStarted=${cleanupStarted.isCompleted} '
+              'cleanupReleased=${cleanup.isCompleted}',
+            );
+            try {
+              if (find.byType(AlertDialog).evaluate().isNotEmpty) {
+                debugPrint('$phase teardown dialog dismissal enter');
+                Navigator.of(
+                  tester.element(find.byType(AlertDialog)),
+                ).pop(false);
+                debugPrint('$phase teardown dialog dismissal complete');
+              }
+            } finally {
+              try {
+                debugPrint('$phase teardown unmount enter');
+                await tester.pumpWidget(const SizedBox());
+                debugPrint('$phase teardown unmount complete');
+              } finally {
+                if (!start.isCompleted) start.complete(oldAttempt);
+                if (!code.isCompleted) code.complete();
+                if (!cleanup.isCompleted) cleanup.complete();
+                stores.dispose();
+                debugPrint('$phase teardown release pump enter');
+                await tester.pump();
+                debugPrint('$phase teardown release pump complete');
+                if (submitting != null) {
+                  debugPrint('$phase teardown submission await enter');
+                  await submitting;
+                  debugPrint('$phase teardown submission await complete');
+                }
+                if (editing != null) {
+                  debugPrint('$phase teardown editing await enter');
+                  await editing;
+                  debugPrint('$phase teardown editing await complete');
+                }
+                if (currentEditing != null) {
+                  debugPrint('$phase teardown replacement editing await enter');
+                  await currentEditing;
+                  debugPrint(
+                    '$phase teardown replacement editing await complete',
+                  );
+                }
+              }
+            }
+            debugPrint('$phase teardown complete');
+          }
+        },
+        timeout: const Timeout(Duration(seconds: 60)),
+      );
+    }
+
+    testWidgets('failed code entry restarts with a fresh authorization', (
+      tester,
+    ) async {
+      final events = <String>[];
+      const failure = ClaudeAccountException(
+        ClaudeAccountFailure.invalidResponse,
+        'Claude sign-in · HTTP 400',
+      );
+      final restart = Completer<ClaudeLoginAttempt>();
+      final release = Completer<void>();
+      final stale = _claudeAttempt('stale', events, () async => throw failure);
+      final fresh = _claudeAttempt('fresh', events, () => release.future);
+      final service = _QueuedClaudeAccountService(events, [
+        Future.value(stale),
+        restart.future,
+      ]);
+      var changes = 0;
+      await openSignIn(tester, service, () => changes++);
+
+      await tester.enterText(field, 'stale-code#stale');
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      // The spent attempt offers only recovery; its controls cannot resubmit.
+      expect(progress, findsNothing);
+      expect(find.text(failure.details!), findsOneWidget);
+      expect(find.text('Continue'), findsNothing);
+      expect(find.text('Open browser'), findsNothing);
+      expect(tester.widget<TextFormField>(field).enabled, isFalse);
+      expect(enabled(tester, 'Cancel'), isTrue);
+
+      await tester.tap(find.text('Restart sign-in'));
+      await tester.pump();
+      expect(progress, findsOneWidget);
+      expect(enabled(tester, 'Restart sign-in'), isFalse);
+      expect(enabled(tester, 'Cancel'), isTrue);
+      restart.complete(fresh);
+      await tester.pump();
+      expect(progress, findsNothing);
+      expect(find.text(failure.details!), findsNothing);
+      expect(find.text('Restart sign-in'), findsNothing);
+      expect(tester.widget<TextFormField>(field).controller!.text, isEmpty);
+      expect(tester.widget<TextFormField>(field).enabled, isTrue);
+      expect(enabled(tester, 'Open browser'), isTrue);
+      expect(enabled(tester, 'Continue'), isTrue);
+
+      await tester.enterText(field, 'fresh-code#fresh');
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      expect(progress, findsOneWidget);
+      expect(changes, 0);
+      release.complete();
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(changes, 1);
+      expect(_inRow('Claude plan', find.text('Connected')), findsOneWidget);
+      expect(_inRow('Claude plan', find.byType(RowProgress)), findsNothing);
+      expect(events, [
+        'start',
+        'stale submit stale-code#stale',
+        'start',
+        'fresh submit fresh-code#fresh',
+      ]);
+    });
+
+    testWidgets('cancelled completion stays dismissible and restartable', (
+      tester,
+    ) async {
+      final events = <String>[];
+      const failure = ClaudeAccountException(ClaudeAccountFailure.cancelled);
+      final stale = _claudeAttempt('stale', events, () async => throw failure);
+      final fresh = _claudeAttempt('fresh', events, () async {});
+      final service = _QueuedClaudeAccountService(events, [
+        Future.value(stale),
+        Future.value(fresh),
+      ]);
+      var changes = 0;
+      await openSignIn(tester, service, () => changes++);
+
+      await tester.enterText(field, 'stale-code#stale');
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      expect(progress, findsNothing);
+      expect(find.text('Claude sign-in failed'), findsOneWidget);
+      expect(tester.widget<TextFormField>(field).enabled, isFalse);
+      expect(enabled(tester, 'Cancel'), isTrue);
+      expect(enabled(tester, 'Restart sign-in'), isTrue);
+
+      await tester.tap(find.text('Restart sign-in'));
+      await tester.pump();
+      expect(tester.widget<TextFormField>(field).enabled, isTrue);
+      expect(enabled(tester, 'Continue'), isTrue);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(changes, 0);
+      expect(_inRow('Claude plan', find.text('Not connected')), findsOneWidget);
+      // Dismissal cancels the installed fresh attempt, never the spent one.
+      expect(events, [
+        'start',
+        'stale submit stale-code#stale',
+        'start',
+        'fresh cancel',
+      ]);
+    });
+
+    testWidgets('a stale browser result cannot mark a restarting sign-in', (
+      tester,
+    ) async {
+      final events = <String>[];
+      const failure = ClaudeAccountException(
+        ClaudeAccountFailure.invalidResponse,
+        'Claude sign-in · HTTP 400',
+      );
+      final calls = <MethodCall>[];
+      final launches = holdLaunches(tester, calls);
+      final restart = Completer<ClaudeLoginAttempt>();
+      final stale = _claudeAttempt('stale', events, () async => throw failure);
+      final fresh = _claudeAttempt('fresh', events, () async {});
+      final service = _QueuedClaudeAccountService(events, [
+        Future.value(stale),
+        restart.future,
+      ]);
+      var changes = 0;
+      try {
+        await openSignIn(tester, service, () => changes++);
+
+        await tester.tap(find.text('Open browser'));
+        await tester.pump();
+        expect(calls.single.method, 'launch');
+        expect(
+          calls.single.arguments,
+          containsPair('url', 'https://claude.invalid/authorize'),
+        );
+        await tester.enterText(field, 'stale-code#stale');
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
+        await tester.tap(find.text('Restart sign-in'));
+        await tester.pump();
+        expect(progress, findsOneWidget);
+
+        // The spent attempt's launch ends while its replacement is created.
+        launches.single.complete(false);
+        await tester.pump();
+        expect(find.text('Could not open the browser'), findsNothing);
+        restart.complete(fresh);
+        await tester.pump();
+        expect(progress, findsNothing);
+        expect(find.text('Could not open the browser'), findsNothing);
+        expect(tester.widget<TextFormField>(field).controller!.text, isEmpty);
+        expect(tester.widget<TextFormField>(field).enabled, isTrue);
+        expect(enabled(tester, 'Open browser'), isTrue);
+        expect(enabled(tester, 'Continue'), isTrue);
+
+        await tester.enterText(field, 'fresh-code#fresh');
+        await tester.tap(find.text('Continue'));
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(changes, 1);
+        expect(_inRow('Claude plan', find.text('Connected')), findsOneWidget);
+        expect(calls, hasLength(1));
+        expect(events, [
+          'start',
+          'stale submit stale-code#stale',
+          'start',
+          'fresh submit fresh-code#fresh',
+        ]);
+      } finally {
+        // Settle held work even after a failure, before fake async ends.
+        await tester.pumpWidget(const SizedBox());
+        for (final launch in launches) {
+          if (!launch.isCompleted) launch.complete(false);
+        }
+        if (!restart.isCompleted) restart.complete(fresh);
+        await tester.pump();
+      }
+    });
+
+    testWidgets('only the current attempt reports a failed browser launch', (
+      tester,
+    ) async {
+      final events = <String>[];
+      const failure = ClaudeAccountException(
+        ClaudeAccountFailure.invalidResponse,
+        'Claude sign-in · HTTP 400',
+      );
+      final calls = <MethodCall>[];
+      final launches = holdLaunches(tester, calls);
+      final stale = _claudeAttempt('stale', events, () async => throw failure);
+      final fresh = _claudeAttempt('fresh', events, () async {});
+      final service = _QueuedClaudeAccountService(events, [
+        Future.value(stale),
+        Future.value(fresh),
+      ]);
+      var changes = 0;
+      try {
+        await openSignIn(tester, service, () => changes++);
+
+        await tester.tap(find.text('Open browser'));
+        await tester.pump();
+        expect(calls.single.method, 'launch');
+        await tester.enterText(field, 'stale-code#stale');
+        await tester.tap(find.text('Continue'));
+        await tester.pump();
+        await tester.tap(find.text('Restart sign-in'));
+        await tester.pump();
+        expect(find.text('Restart sign-in'), findsNothing);
+
+        // The replaced attempt's launch fails after the fresh one is installed.
+        launches.single.completeError(PlatformException(code: 'launch_failed'));
+        await tester.pump();
+        expect(find.text('Could not open the browser'), findsNothing);
+        expect(tester.widget<TextFormField>(field).controller!.text, isEmpty);
+        expect(tester.widget<TextFormField>(field).enabled, isTrue);
+        expect(enabled(tester, 'Open browser'), isTrue);
+        expect(enabled(tester, 'Continue'), isTrue);
+
+        // The current attempt still reports its own failure; retry clears it.
+        await tester.tap(find.text('Open browser'));
+        await tester.pump();
+        expect(calls, hasLength(2));
+        launches[1].complete(false);
+        await tester.pump();
+        expect(find.text('Could not open the browser'), findsOneWidget);
+        await tester.tap(find.text('Open browser'));
+        await tester.pump();
+        expect(find.text('Could not open the browser'), findsNothing);
+        expect(calls.map((call) => call.method), [
+          'launch',
+          'launch',
+          'launch',
+        ]);
+
+        // The retried launch ends only after dismissal disposed the dialog.
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(events, [
+          'start',
+          'stale submit stale-code#stale',
+          'start',
+          'fresh cancel',
+        ]);
+        launches[2].complete(false);
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+        expect(changes, 0);
+      } finally {
+        // Settle held work even after a failure, before fake async ends.
+        await tester.pumpWidget(const SizedBox());
+        for (final launch in launches) {
+          if (!launch.isCompleted) launch.complete(false);
+        }
+        await tester.pump();
+      }
+    });
   });
 
   testWidgets(
@@ -850,8 +2300,8 @@ void main() {
         findsOneWidget,
       );
       for (final (tooltip, dialog) in const [
-        ('Budget limits', 'Budget · Team Admin API'),
-        ('Alert thresholds', 'Alerts · Team Admin API'),
+        ('Budget limits', 'Budget · Cursor · Team Admin API'),
+        ('Alert thresholds', 'Alerts · Cursor · Team Admin API'),
       ]) {
         final action = _inRow('Team Admin API', find.byTooltip(tooltip));
         await tester.ensureVisible(action);
@@ -873,6 +2323,171 @@ void main() {
       );
     },
   );
+
+  testWidgets('colliding aliases keep canonical editors and save targets', (
+    tester,
+  ) async {
+    const alias = 'Shared reporting key';
+    const sources = [
+      (
+        ProviderConnections.openAiPlatform,
+        'OpenAI · Platform reporting',
+        1000,
+        80,
+      ),
+      (
+        ProviderConnections.anthropicPlatform,
+        'Anthropic · Organization reporting',
+        2000,
+        70,
+      ),
+    ];
+    final store = _MemoryCredentialStore();
+    for (final (id, _, _, _) in sources) {
+      await store.writeSecret(id, 'synthetic-key');
+      await store.writeLabel(id, alias);
+    }
+    var preferences = AlertThresholdPreferences(
+      connections: {
+        for (final (id, _, limit, at) in sources)
+          id.storageKey: ConnectionAlertThresholds(
+            today: AlertPercentThreshold(at: at),
+            budget: ConnectionBudget(today: limit),
+          ),
+      },
+    );
+    var saves = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder:
+                (context, setState) => ProvidersScreen(
+                  onRefresh: _noRefresh,
+                  credentialStore: store,
+                  codexAccountService: const EmptyCodexAccountService(),
+                  claudeAccountService: const EmptyClaudeAccountService(),
+                  onCredentialsChanged:
+                      () => fail('Unexpected credential mutation'),
+                  alertThresholds: preferences,
+                  onAlertThresholdsChanged: (edit) async {
+                    setState(() => preferences = edit(preferences));
+                    saves++;
+                  },
+                  cursorPlanSignIn: (_) async => null,
+                ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    for (final (id, title, limit, at) in sources) {
+      Future<void> open(String tooltip, String heading) async {
+        tester
+            .state<ScrollableState>(find.byType(Scrollable).first)
+            .position
+            .jumpTo(0);
+        await tester.pumpAndSettle();
+        final row = find.byWidgetPredicate(
+          (widget) =>
+              widget is ProviderConnectionRow &&
+              widget.title == alias &&
+              widget.subtitle.startsWith('$title\n'),
+        );
+        final action = find.descendant(
+          of: row,
+          matching: find.byTooltip(tooltip),
+        );
+        await tester.scrollUntilVisible(
+          action,
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(action);
+        await tester.pumpAndSettle();
+        expect(find.text('$heading · $title'), findsOneWidget);
+        expect(find.text('$heading · $alias'), findsNothing);
+      }
+
+      final beforeBudget = preferences;
+      final beforeSaves = saves;
+      for (final action in ['Cancel', 'Save']) {
+        await open('Budget limits', 'Budget');
+        final dialog = tester.widget<ConnectionBudgetDialog>(
+          find.byType(ConnectionBudgetDialog),
+        );
+        expect(
+          dialog.budget.toJson(),
+          beforeBudget.forConnection(id).budget.toJson(),
+        );
+        final field =
+            find
+                .descendant(
+                  of: find.byType(ConnectionBudgetDialog),
+                  matching: find.byType(TextFormField),
+                )
+                .first;
+        expect(
+          tester.widget<TextFormField>(field).controller!.text,
+          '${limit ~/ 100}.00',
+        );
+        await tester.enterText(field, '99.00');
+        await tester.tap(find.text(action));
+        await tester.pumpAndSettle();
+        final expected =
+            action == 'Cancel'
+                ? beforeBudget
+                : beforeBudget.withConnection(
+                  id,
+                  beforeBudget
+                      .forConnection(id)
+                      .copyWith(budget: const ConnectionBudget(today: 9900)),
+                );
+        expect(preferences.toJson(), expected.toJson());
+        expect(saves, beforeSaves + (action == 'Save' ? 1 : 0));
+      }
+
+      final beforeAlerts = preferences;
+      for (final action in ['Cancel', 'Save']) {
+        await open('Alert thresholds', 'Alerts');
+        final dialog = tester.widget<ConnectionAlertsDialog>(
+          find.byType(ConnectionAlertsDialog),
+        );
+        expect(dialog.connection, id);
+        expect(
+          dialog.thresholds.toJson(),
+          beforeAlerts.forConnection(id).toJson(),
+        );
+        expect(
+          tester
+              .widget<AlertPercentThresholdEditor>(
+                find.widgetWithText(AlertPercentThresholdEditor, 'Today'),
+              )
+              .value
+              .at,
+          at,
+        );
+        await _chooseAlert(tester, 'Today', 'Off');
+        await tester.tap(find.text(action));
+        await tester.pumpAndSettle();
+        final expected =
+            action == 'Cancel'
+                ? beforeAlerts
+                : beforeAlerts.withConnection(
+                  id,
+                  beforeAlerts
+                      .forConnection(id)
+                      .copyWith(today: const AlertPercentThreshold()),
+                );
+        expect(preferences.toJson(), expected.toJson());
+        expect(saves, beforeSaves + (action == 'Save' ? 2 : 1));
+      }
+      expect(await store.readSecret(id), 'synthetic-key');
+      expect(await store.readLabel(id), alias);
+    }
+  });
 
   testWidgets('missing budget limits disable alerts with readable guidance', (
     tester,
@@ -950,7 +2565,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(action);
       await tester.pumpAndSettle();
-      expect(find.text('Alerts · Team Admin API'), findsOneWidget);
+      expect(find.text('Alerts · Cursor · Team Admin API'), findsOneWidget);
     }
 
     final dialog = find.byType(AlertDialog);
@@ -1233,20 +2848,249 @@ void main() {
   });
 }
 
+// Drain the bounded catalogue discovery and the existing 250 ms animation.
+// Loading indicators intentionally remain active until the controlled read ends.
+Future<void> _pumpPendingReveal(WidgetTester tester) async {
+  for (var frame = 0; frame < 4; frame++) {
+    await tester.pump();
+  }
+  await tester.pump(const Duration(milliseconds: 250));
+  await tester.pump();
+}
+
+void _expectRevealFocus(Finder row) {
+  final focused = FocusManager.instance.primaryFocus!.context!;
+  expect(
+    find.descendant(
+      of: find.byElementPredicate((element) => identical(element, focused)),
+      matching: row,
+    ),
+    findsOneWidget,
+  );
+}
+
+void _expectCompleteReveal(
+  WidgetTester tester,
+  String title, [
+  ConnectionReportingOutcome? outcome,
+]) {
+  final row = find.widgetWithText(ProviderConnectionRow, title);
+  final viewport = tester.getRect(
+    find.descendant(
+      of: find.byType(ProvidersScreen),
+      matching: find.byType(Viewport),
+    ),
+  );
+  expect(
+    viewport.bottom,
+    lessThanOrEqualTo(tester.getTopLeft(find.byType(NavigationBar)).dy),
+  );
+  for (final element in [
+    ...row.evaluate(),
+    ...find.descendant(of: row, matching: find.byType(Text)).evaluate(),
+    ...find.descendant(of: row, matching: find.byType(IconButton)).evaluate(),
+  ]) {
+    final rect = tester.getRect(
+      find.byElementPredicate((candidate) => identical(candidate, element)),
+    );
+    expect(
+      viewport.inflate(0.5).contains(rect.topLeft),
+      isTrue,
+      reason: '$rect outside $viewport',
+    );
+    expect(
+      viewport.inflate(0.5).contains(rect.bottomRight),
+      isTrue,
+      reason: '$rect outside $viewport',
+    );
+  }
+  if (outcome != null) {
+    expect(_inRow(title, find.text(outcome.label)), findsOneWidget);
+    expect(
+      _inRow(
+        title,
+        find.text('${outcome.connectionLabel}\n${outcome.supportingCopy}'),
+      ),
+      findsOneWidget,
+    );
+    expect(_inRow(title, find.byTooltip('Budget limits')), findsOneWidget);
+    expect(_inRow(title, find.byTooltip('Alert thresholds')), findsOneWidget);
+  }
+  _expectRevealFocus(row);
+}
+
+class _DelayedCodexAccountService implements CodexAccountService {
+  @override
+  Future<void> observeLifecycle(
+    void Function(String, CredentialVersion?) observer,
+  ) async {
+    observer(await isConnected() ? 'active' : 'deleted', null);
+  }
+
+  final read = Completer<bool>();
+  var reads = 0;
+  @override
+  Future<bool> isConnected() {
+    reads++;
+    return read.future;
+  }
+
+  @override
+  Future<CodexLoginAttempt> startLogin() async =>
+      throw StateError('Unexpected login');
+  @override
+  Future<String?> fetchReport() async =>
+      throw StateError('Unexpected provider request');
+  @override
+  Future<void> disconnect({
+    void Function(CredentialVersion)? onRetired,
+  }) async => throw StateError('Unexpected disconnect');
+}
+
+/// An ordinary attempt that records each submitted code and its cancellation.
+ClaudeLoginAttempt _claudeAttempt(
+  String state,
+  List<String> events,
+  Future<void> Function() complete,
+) => ClaudeLoginAttempt(
+  authorization: ClaudeAuthorizationRequest(
+    authorizationUri: Uri.parse('https://claude.invalid/authorize'),
+    codeVerifier: 'synthetic-verifier',
+    state: state,
+  ),
+  completeWithCode: (code) {
+    events.add('$state submit $code');
+    return complete();
+  },
+  cancel: () => events.add('$state cancel'),
+);
+
+/// Starts the queued attempts in order for the row and its mounted dialog.
+final class _QueuedClaudeAccountService implements ClaudeAccountService {
+  @override
+  Future<void> observeLifecycle(
+    void Function(String, CredentialVersion?) observer,
+  ) async {
+    observer(await isConnected() ? 'active' : 'deleted', null);
+  }
+
+  _QueuedClaudeAccountService(this.events, this.logins);
+
+  final List<String> events;
+  final List<Future<ClaudeLoginAttempt>> logins;
+
+  @override
+  Future<bool> isConnected() async => false;
+
+  @override
+  Future<ClaudeLoginAttempt> startLogin() {
+    events.add('start');
+    return logins.removeAt(0);
+  }
+
+  @override
+  Future<String?> fetchReport() async =>
+      throw StateError('Unexpected provider request');
+
+  @override
+  Future<void> disconnect({
+    void Function(CredentialVersion)? onRetired,
+  }) async => throw StateError('Unexpected disconnect');
+}
+
 /// Scopes a finder to the catalog row titled [title].
 Finder _inRow(String title, Finder matching) => find.descendant(
   of: find.widgetWithText(ProviderConnectionRow, title),
   matching: matching,
 );
 
-Future<void> _pumpProvidersAtSize(WidgetTester tester, Size size) async {
+DashboardSnapshot _windowSnapshot(List<ProviderSnapshot> accounts) =>
+    DashboardSnapshot.fromJson({
+      ...DashboardSnapshot.empty(generatedAt: DateTime.utc(2026)).toJson(),
+      'accounts': [for (final account in accounts) account.toJson()],
+    });
+
+ProviderSnapshot _windowAccount(
+  String provider,
+  String? connection,
+  List<String> labels, {
+  List<String>? ids,
+}) => ProviderSnapshot(
+  accountId: '$provider-${connection ?? 'legacy'}',
+  provider: provider,
+  connection: connection,
+  status: ProviderStatus.ok,
+  today: const BudgetState.unknownPeriod('today'),
+  week: const BudgetState.unknownPeriod('week'),
+  month: const BudgetState.unknownPeriod('month'),
+  credits: const [],
+  allowances: [
+    for (var i = 0; i < labels.length; i++)
+      AllowanceState(
+        id: ids?[i] ?? 'window-$i',
+        source: AllowanceSource.plan,
+        label: labels[i],
+        usedPercent: null,
+        used: null,
+        limit: null,
+        remaining: null,
+        windowMinutes: null,
+        resetsAt: null,
+        status: ProviderStatus.ok,
+      ),
+  ],
+  buckets: const [],
+  modelBreakdown: const [],
+  lastSuccessfulSyncAt: null,
+);
+
+Future<void> _openRowAlerts(WidgetTester tester, String row) async {
+  tester
+      .state<ScrollableState>(find.byType(Scrollable).first)
+      .position
+      .jumpTo(0);
+  await tester.pumpAndSettle();
+  final action = _inRow(row, find.byTooltip('Alert thresholds'));
+  await tester.scrollUntilVisible(
+    action,
+    300,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+  await tester.tap(action);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _chooseAlert(
+  WidgetTester tester,
+  String title,
+  String choice,
+) async {
+  final dropdown = find.descendant(
+    of: find.widgetWithText(AlertPercentThresholdEditor, title),
+    matching: find.byType(DropdownButton<int?>),
+  );
+  await tester.ensureVisible(dropdown);
+  await tester.pumpAndSettle();
+  await tester.tap(dropdown);
+  await tester.pumpAndSettle();
+  await tester.ensureVisible(find.text(choice).last);
+  await tester.tap(find.text(choice).last);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _pumpProvidersAtSize(
+  WidgetTester tester,
+  Size size, {
+  _MemoryCredentialStore? store,
+}) async {
   _setTestSurface(tester, size);
   await tester.pumpWidget(
     MaterialApp(
       home: Scaffold(
         body: ProvidersScreen(
           onRefresh: _noRefresh,
-          credentialStore: _MemoryCredentialStore(),
+          credentialStore: store ?? _MemoryCredentialStore(),
           codexAccountService: const EmptyCodexAccountService(),
           claudeAccountService: const EmptyClaudeAccountService(),
           onCredentialsChanged: () {},
@@ -1274,6 +3118,8 @@ class _MemoryCredentialStore
   final _generations = <ProviderConnectionId, int>{};
   ProviderConnectionId? unreadable;
   Future<void> Function(ProviderConnectionId)? beforeReadLabel;
+  Future<void> Function(ProviderConnectionId)? beforeDeleteSecret;
+  final deleted = <ProviderConnectionId>[];
   CredentialVersion version(ProviderConnectionId id) => CredentialVersion({
     'generation': '${_generations[id] ?? 0}',
     'revision': 'revision',
@@ -1299,9 +3145,15 @@ class _MemoryCredentialStore
   }
 
   @override
-  Future<void> deleteSecret(ProviderConnectionId id) async {
+  Future<void> deleteSecret(
+    ProviderConnectionId id, {
+    void Function(CredentialVersion)? onRetired,
+  }) async {
+    if (beforeDeleteSecret case final beforeDelete?) await beforeDelete(id);
+    deleted.add(id);
     _generations[id] = (_generations[id] ?? 0) + 1;
     _secrets.remove(id);
+    onRetired?.call(version(id));
     _labels.remove(id);
   }
 
@@ -1326,6 +3178,16 @@ class _MemoryCredentialStore
 Future<void> _noRefresh() async {}
 
 final class _MemoryCredentialAccess implements ConnectionCredentialAccess {
+  @override
+  Future<void> observeLifecycle(
+    void Function(String, CredentialVersion?) observer,
+  ) async {
+    final value = await store.readSecret(id);
+    observer(value == null ? 'deleted' : 'active', store.version(id));
+  }
+
+  @override
+  Future<void> admitAutomatic(CredentialVersion expected) async {}
   const _MemoryCredentialAccess(this.store, this.id);
   final _MemoryCredentialStore store;
   final ProviderConnectionId id;
@@ -1341,4 +3203,35 @@ final class _MemoryCredentialAccess implements ConnectionCredentialAccess {
       expected.sameCache(store.version(id));
   @override
   Future<R> serializeFetch<R>(Future<R> Function() operation) => operation();
+}
+
+/// Records the row's lifecycle protocol; native lifecycle tests own persistence.
+class _ReconnectMemoryCredentialStore extends _MemoryCredentialStore
+    implements ReconnectProviderCredentialStore {
+  final reconnectCalls = <String>[];
+
+  @override
+  Future<CredentialVersion> beginReconnect(ProviderConnectionId id) async {
+    reconnectCalls.add('begin:${id.storageKey}');
+    return version(id);
+  }
+
+  @override
+  Future<bool> completeReconnect(
+    ProviderConnectionId id,
+    String value,
+    CredentialVersion ticket,
+  ) async {
+    reconnectCalls.add('complete:${id.storageKey}');
+    await writeSecret(id, value);
+    return true;
+  }
+
+  @override
+  Future<void> cancelReconnect(
+    ProviderConnectionId id,
+    CredentialVersion ticket,
+  ) async {
+    reconnectCalls.add('cancel:${id.storageKey}');
+  }
 }

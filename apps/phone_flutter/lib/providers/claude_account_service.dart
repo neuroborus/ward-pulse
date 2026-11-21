@@ -15,16 +15,25 @@ final class ClaudeLoginAttempt {
   final ClaudeAuthorizationRequest authorization;
   final Future<void> Function(String pastedCode) _completeWithCode;
   final void Function() _cancel;
+  bool _submitted = false;
   bool _finished = false;
 
+  /// Accepts one code; success or failure ends the attempt.
+  ///
+  /// Recovery needs a fresh [ClaudeAccountService.startLogin] authorization.
   Future<void> completeWithCode(String pastedCode) async {
-    if (_finished) {
+    if (_submitted || _finished) {
       throw const ClaudeAccountException(ClaudeAccountFailure.cancelled);
     }
-    await _completeWithCode(pastedCode);
-    _finished = true;
+    _submitted = true;
+    try {
+      await _completeWithCode(pastedCode);
+    } finally {
+      _finished = true;
+    }
   }
 
+  /// Still applies while a submitted completion is in flight.
   void cancel() {
     if (_finished) {
       return;
@@ -41,7 +50,9 @@ abstract interface class ClaudeAccountService {
 
   Future<String?> fetchReport();
 
-  Future<void> disconnect();
+  Future<void> disconnect({void Function(CredentialVersion)? onRetired});
+
+  Future<void> observeLifecycle(CredentialLifecycleObserver observer);
 }
 
 final class MobileClaudeAccountService implements ClaudeAccountService {
@@ -147,6 +158,7 @@ final class MobileClaudeAccountService implements ClaudeAccountService {
     final session = managed == null ? await _readSession() : captured?.value;
     if (session == null) return null;
     var expected = captured?.version;
+    if (expected != null) await managed!.admitAutomatic(expected);
     try {
       final result = await _client.fetchReport(
         session,
@@ -170,19 +182,51 @@ final class MobileClaudeAccountService implements ClaudeAccountService {
       if (error.failure == ClaudeAccountFailure.authentication) {
         if (managed == null) {
           await _deleteSession();
+        } else if (managed case final ConnectionRejectionRecorder recorder) {
+          if (!await recorder.rejectAuthentication(expected!))
+            throw const ClaudeAccountException(ClaudeAccountFailure.cancelled);
+          throw ClaudeAccountException(
+            error.failure,
+            error.details,
+            expected!.values['committedConnection'],
+          );
         } else {
           await managed.deleteIfCurrent(expected!);
         }
+      }
+      if (expected != null &&
+          error.failure != ClaudeAccountFailure.authentication &&
+          error.failure != ClaudeAccountFailure.cancelled) {
+        if (!await managed!.isCurrent(expected!))
+          throw const ClaudeAccountException(ClaudeAccountFailure.cancelled);
+        throw ClaudeAccountException(
+          error.failure,
+          error.details,
+          error.rejectionEventId,
+          expected,
+        );
       }
       rethrow;
     }
   }
 
   @override
-  Future<void> disconnect() =>
-      _versioned == null ? _serialized(_disconnect) : _disconnect();
-  Future<void> _disconnect() async {
-    await _deleteSession();
+  Future<void> observeLifecycle(CredentialLifecycleObserver observer) async {
+    final managed = _versioned;
+    if (managed != null) {
+      await managed.observeLifecycle(observer);
+    } else {
+      observer(await isConnected() ? 'active' : 'deleted', null);
+    }
+  }
+
+  @override
+  Future<void> disconnect({void Function(CredentialVersion)? onRetired}) =>
+      _versioned == null
+          ? _serialized(() => _disconnect(onRetired))
+          : _disconnect(onRetired);
+  Future<void> _disconnect(void Function(CredentialVersion)? onRetired) async {
+    await _deleteSession(onRetired: onRetired);
   }
 
   Future<ClaudeAccountSession?> _readSession() async {
@@ -210,9 +254,11 @@ final class MobileClaudeAccountService implements ClaudeAccountService {
     }
   }
 
-  Future<void> _deleteSession() async {
+  Future<void> _deleteSession({
+    void Function(CredentialVersion)? onRetired,
+  }) async {
     try {
-      await _store.delete();
+      await _store.delete(onRetired: onRetired);
     } catch (_) {
       throw const ClaudeAccountException(
         ClaudeAccountFailure.unavailable,
@@ -249,5 +295,12 @@ final class EmptyClaudeAccountService implements ClaudeAccountService {
   Future<String?> fetchReport() async => null;
 
   @override
-  Future<void> disconnect() async {}
+  Future<void> disconnect({
+    void Function(CredentialVersion)? onRetired,
+  }) async {}
+
+  @override
+  Future<void> observeLifecycle(CredentialLifecycleObserver observer) async {
+    observer('deleted', null);
+  }
 }

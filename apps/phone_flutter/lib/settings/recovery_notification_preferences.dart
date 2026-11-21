@@ -2,8 +2,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Whether WardPulse may say a plan window is usable again.
 ///
-/// One switch for the whole product, not a rule per connection: a recovery has
-/// no threshold to set — it either happened or it did not.
+/// One independent recovery switch for all connections. Threshold notification
+/// delivery has its own preference; neither control changes recovery tracking.
 abstract interface class RecoveryNotificationPreferenceStore {
   Future<bool> read();
 
@@ -44,7 +44,7 @@ final class DefaultRecoveryNotificationPreferenceStore
 
 /// Reads the stored switch, defaulting to on.
 ///
-/// On until told otherwise: interrupting is the point of the feature, an unset
-/// store means the reader has not opinionated yet, and Android still gates the
-/// post behind its own permission.
+/// Preserves the existing stored-value parsing. Secure storage errors propagate
+/// to callers, which mute delivery without persisting a fallback. Android still
+/// gates posts behind its own permission.
 bool recoveryNotificationsFrom(String? stored) => stored != 'false';

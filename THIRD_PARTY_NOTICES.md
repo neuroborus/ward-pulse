@@ -1,5 +1,23 @@
 # Third-Party Notices
 
+## Noto Sans Regular and Bold
+
+The Android home widget bundles the unchanged Noto Sans Regular and Bold font files from
+`fonts-noto-core` version `20201225-2`.
+
+Source: <https://github.com/notofonts/noto-fonts>
+
+Copyright 2010, 2012–2020 Google Inc. Copyright 2015–2020 Google LLC.
+
+These fonts are distributed under the SIL Open Font License, Version 1.1. The complete
+copyright and license text is bundled beside the fonts in
+[`OFL.txt`](apps/phone_flutter/android/app/src/main/assets/fonts/OFL.txt).
+
+The exact font SHA-256 values are:
+
+- `NotoSans-Regular.ttf`: `89c3c497f618fdaa0b2d1e98fef93582f28c71debd2c4a8cdf41f190ced2909d`
+- `NotoSans-Bold.ttf`: `e83493c945848ecd4a9ad0f6d19164541a0d3e23a9c952304a00a46e00272ac5`
+
 ## Dart `ffi` 2.2.0
 
 Source: <https://github.com/dart-lang/native/tree/main/pkgs/ffi>

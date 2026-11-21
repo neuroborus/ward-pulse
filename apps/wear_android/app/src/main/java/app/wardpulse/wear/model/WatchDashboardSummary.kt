@@ -1,5 +1,6 @@
 package app.wardpulse.wear.model
 
+import java.time.DateTimeException
 import java.time.Duration
 import java.time.Instant
 import java.time.format.DateTimeParseException
@@ -154,6 +155,8 @@ data class WatchDashboardSummary(
     val manualRefreshAllowed: Boolean,
     /** ISO-8601 instant when refresh becomes allowed; null when already allowed. */
     val manualRefreshAvailableAt: String?,
+    /** Percent rings were selected on the phone, but none has usable data. */
+    val selectedRingDataUnavailable: Boolean = false,
 ) {
     /** Phone flags plus local wall clock (re-enable when [manualRefreshAvailableAt] passes). */
     fun isManualRefreshAllowed(now: Instant = Instant.now()): Boolean {
@@ -179,6 +182,16 @@ data class WatchDashboardSummary(
             true
         }
     }
+
+    /** The first instant [isStaleAt] reports age alone; null when it cannot be represented. */
+    fun staleDeadline(): Instant? =
+        try {
+            Instant.parse(generatedAt).plus(STALE_AFTER)
+        } catch (_: DateTimeException) {
+            null
+        } catch (_: ArithmeticException) {
+            null
+        }
 
     private companion object {
         val STALE_AFTER: Duration = Duration.ofHours(2)

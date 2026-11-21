@@ -17,15 +17,11 @@
     "monthTotal": { "$ref": "budget_state.schema.json" },
     "alerts": {
       "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["severity", "message"],
-        "properties": {
-          "severity": { "enum": ["info", "warning", "error"] },
-          "message": { "type": "string" }
-        }
-      }
+      "items": { "$ref": "#/$defs/alert" }
+    },
+    "alertConditions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/alertCondition" }
     },
     "watchSummary": {
       "type": "object",
@@ -39,6 +35,82 @@
     }
   },
   "$defs": {
+    "historyOwner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["connection", "identity"],
+      "description": "Private local history scope from an accepted credential's lifecycle identity digest. Not a normalized account ID or a lifecycle currentness stamp; never displayed or sent to watch/widget surfaces.",
+      "properties": {
+        "connection": { "type": "string", "minLength": 1 },
+        "identity": { "type": "string", "minLength": 1 }
+      }
+    },
+    "alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["severity", "message"],
+      "properties": {
+        "severity": { "enum": ["info", "warning", "error"] },
+        "message": { "type": "string" }
+      }
+    },
+    "alertConditionKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "accountId", "connection", "target"],
+      "properties": {
+        "provider": { "$ref": "#/$defs/providerKind" },
+        "accountId": { "type": "string" },
+        "connection": { "type": "string" },
+        "historyOwner": { "$ref": "#/$defs/historyOwner" },
+        "target": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "source", "id"],
+              "properties": {
+                "kind": { "const": "allowance" },
+                "source": { "$ref": "#/$defs/allowanceSource" },
+                "id": { "type": "string" }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "period"],
+              "properties": {
+                "kind": { "const": "budget" },
+                "period": { "enum": ["today", "week", "month"] }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "alertCondition": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key", "state", "alert"],
+          "properties": {
+            "key": { "$ref": "#/$defs/alertConditionKey" },
+            "state": { "const": "crossed" },
+            "alert": { "$ref": "#/$defs/alert" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["key", "state"],
+          "properties": {
+            "key": { "$ref": "#/$defs/alertConditionKey" },
+            "state": { "enum": ["clear", "unknown"] }
+          }
+        }
+      ]
+    },
     "providerStatus": {
       "enum": ["ok", "warning", "error", "rateLimited", "authRequired", "stale", "unknown"]
     },
@@ -89,6 +161,21 @@
     "nullableQuantity": {
       "anyOf": [{ "$ref": "#/$defs/quantity" }, { "type": "null" }]
     },
+    "recoveryRequirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["allowanceIds", "complete"],
+      "properties": {
+        "allowanceIds": {
+          "type": "array",
+          "description": "Nonempty unique Plan allowance IDs within the same account and owner; complete scope includes the target.",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "complete": { "type": "boolean" }
+      }
+    },
     "allowanceState": {
       "type": "object",
       "additionalProperties": false,
@@ -105,6 +192,9 @@
         "status"
       ],
       "properties": {
+        "recoveryRequirements": {
+          "anyOf": [{ "$ref": "#/$defs/recoveryRequirements" }, { "type": "null" }]
+        },
         "id": { "type": "string" },
         "source": { "$ref": "#/$defs/allowanceSource" },
         "label": { "type": "string" },
@@ -163,6 +253,7 @@
           "minLength": 1,
           "description": "Owning connection key. Absent on snapshots built before adapters stamped it; alerts then fall back to the provider's plan."
         },
+        "historyOwner": { "$ref": "#/$defs/historyOwner" },
         "status": { "$ref": "#/$defs/providerStatus" },
         "today": { "$ref": "budget_state.schema.json" },
         "week": { "$ref": "budget_state.schema.json" },

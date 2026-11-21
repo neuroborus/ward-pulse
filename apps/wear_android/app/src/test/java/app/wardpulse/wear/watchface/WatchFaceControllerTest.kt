@@ -24,17 +24,63 @@ class WatchFaceControllerTest {
         client.sdkInt = 33
         controller.check()
         controller.install()
+        controller.update()
         controller.useWatchFace { client.events += "permission" }
         assertEquals(WatchFaceStatus.FaceUnsupported, controller.state.value.status)
         assertTrue(client.events.isEmpty())
+        assertEquals(0, client.opened)
+    }
 
-        client.sdkInt = 34
-        client.supported = false
+    @Test
+    fun separateFaceChecksDistinguishPresenceAbsenceAndQueryFailureWithoutPushEffects() = runBlocking {
+        for (sdk in listOf(34, 36)) {
+            val client = FakeClient().apply {
+                sdkInt = sdk
+                supported = false
+                active = true
+                permission = true
+            }
+            val consent = FakeConsent(client.events)
+            val controller = controller(client, consent)
+            for (present in listOf(false, true)) {
+                client.separateInstalled = present
+                controller.check()
+                assertEquals(
+                    WatchFaceState(if (present) WatchFaceStatus.SeparateInstalled else WatchFaceStatus.SeparateMissing),
+                    controller.state.value,
+                )
+            }
+            for (failure in listOf(IllegalStateException(), NoClassDefFoundError())) {
+                client.separateFailure = failure
+                controller.check()
+                assertEquals(WatchFaceState(WatchFaceStatus.SeparateCheckFailed), controller.state.value)
+            }
+            assertEquals(List(4) { listOf("support", "separate") }.flatten(), client.events)
+            assertEquals(0, client.opened)
+            assertEquals(WatchFaceConsent.Eligible, consent.saved)
+        }
+    }
+
+    @Test
+    fun freshSeparateFaceCheckAfterExternalInstallationDoesNotInferActivityOrOfferPushActions() = runBlocking {
+        val client = FakeClient().apply {
+            sdkInt = 34
+            supported = false
+            active = true
+            permission = true
+        }
+        val controller = controller(client)
         controller.check()
+        assertEquals(WatchFaceState(WatchFaceStatus.SeparateMissing), controller.state.value)
+        client.separateInstalled = true
+        controller.check()
+        assertEquals(WatchFaceState(WatchFaceStatus.SeparateInstalled), controller.state.value)
+        controller.install()
+        controller.update()
         controller.useWatchFace { client.events += "permission" }
-        assertEquals(WatchFaceStatus.SeparateInstall, controller.state.value.status)
-        assertEquals(listOf("support", "support"), client.events)
-        assertEquals(0, client.events.count { it == "permission" })
+        assertEquals(WatchFaceState(WatchFaceStatus.SeparateInstalled), controller.state.value)
+        assertEquals(List(5) { listOf("support", "separate") }.flatten(), client.events)
+        assertEquals(0, client.opened)
     }
 
     @Test
@@ -194,6 +240,31 @@ class WatchFaceControllerTest {
         client.mutation = {}
         controller.check()
         assertEquals(WatchFaceStatus.Installed, controller.state.value.status)
+    }
+
+    @Test
+    fun checksQueuedBehindSupportedObservationDoNotRepeatActivityOrInventory() = runBlocking {
+        val client = FakeClient()
+        val controller = controller(client)
+        val completion = CompletableDeferred<Unit>()
+        client.listing = { completion.await() }
+        val checking = launch(start = CoroutineStart.UNDISPATCHED) { controller.check() }
+        val returning = launch(start = CoroutineStart.UNDISPATCHED) { controller.check() }
+        try {
+            assertFalse(returning.isCompleted)
+            assertEquals(1, client.events.count { it == "list" })
+            completion.complete(Unit)
+            checking.join()
+            returning.join()
+            assertEquals(WatchFaceStatus.Installed, controller.state.value.status)
+            assertEquals(listOf("support", "list", "active"), client.events)
+            assertEquals(1, client.opened)
+            assertEquals(client.opened, client.closed)
+        } finally {
+            completion.complete(Unit)
+            checking.cancelAndJoin()
+            returning.cancelAndJoin()
+        }
     }
 
     @Test
@@ -518,6 +589,8 @@ class WatchFaceControllerTest {
     private class FakeClient : WatchFacePushClient {
         override var sdkInt = 36
         var supported = true
+        var separateInstalled = false
+        var separateFailure: Throwable? = null
         var supportFailure: Throwable? = null
         var listFailure: Exception? = null
         var bundlePackage = PUSH_FACE_PACKAGE
@@ -537,6 +610,12 @@ class WatchFaceControllerTest {
             events += "support"
             supportFailure?.let { throw it }
             return supported
+        }
+
+        override fun isSeparateFaceInstalled(): Boolean {
+            events += "separate"
+            separateFailure?.let { throw it }
+            return separateInstalled
         }
 
         override fun openBundle(): WatchFaceBundle {
@@ -574,7 +653,10 @@ class WatchFaceControllerTest {
             return own(slot = slotId, version = bundle.versionCode)
         }
 
-        override fun hasActivationPermission() = permission
+        override fun hasActivationPermission(): Boolean {
+            events += "hasPermission"
+            return permission
+        }
         override suspend fun activate(slotId: String) {
             events += "activate"
             activatedSlot = slotId

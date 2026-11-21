@@ -4,15 +4,17 @@ use std::error::Error as StdError;
 use std::fmt;
 
 pub use demo::{
-    debug_multi_provider_dashboard, debug_multi_provider_dashboard_json, DebugDemoDashboardError,
+    debug_multi_provider_dashboard, debug_multi_provider_dashboard_at,
+    debug_multi_provider_dashboard_json, debug_multi_provider_dashboard_json_at,
+    DebugDemoDashboardError,
 };
 
 use crate::{BucketCapabilities, ProviderCapabilities};
 use serde::Deserialize;
 use ward_pulse_core::budget::calculate_budget_state;
 use ward_pulse_core::model::{
-    connection, BudgetPeriod, CreditSource, CreditState, ModelUsage, Money, ProviderKind,
-    ProviderSnapshot, ProviderStatus, UsageBucket,
+    BudgetPeriod, CreditSource, CreditState, ModelUsage, Money, ProviderKind, ProviderSnapshot,
+    ProviderSource, ProviderStatus, UsageBucket,
 };
 use ward_pulse_core::time::DateTimeUtc;
 
@@ -36,8 +38,8 @@ fn usd(cents: i64) -> Money {
 pub fn mock_provider_snapshot(account_id: impl Into<String>) -> ProviderSnapshot {
     ProviderSnapshot {
         account_id: account_id.into(),
-        provider: ProviderKind::Mock,
-        connection: Some(connection::MOCK_PLAN.to_string()),
+        source: ProviderSource::mock(),
+        history_owner: None,
         status: ProviderStatus::Ok,
         today: calculate_budget_state(
             BudgetPeriod::Today,
@@ -184,7 +186,6 @@ pub fn mock_provider_snapshot_from_usage_fixture(
     let buckets = raw.buckets;
     let model_breakdown = model_usage_from_buckets(&buckets);
     let mut snapshot = mock_provider_snapshot(account_id);
-    snapshot.provider = raw.provider;
     snapshot.today = calculate_budget_state(
         BudgetPeriod::Today,
         sum_bucket_cost(&buckets),

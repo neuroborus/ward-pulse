@@ -52,6 +52,9 @@ snapshot-core:
 validate-fixtures:
     python3 tools/validate-fixtures/validate_json.py
 
+test-fixture-validator:
+    python3 -B -m unittest discover -s tools/validate-fixtures -p 'test_*.py'
+
 docs-dev:
     npm run docs:dev
 
@@ -169,4 +172,4 @@ bundle-wear:
 bundle-watchface:
     cd apps/watchface_wff && ORG_GRADLE_PROJECT_wardpulseRequireReleaseKey=1 ./gradlew --no-daemon bundleRelease
 
-test-all: check-core check-phone check-wear check-watchface check-designs test-doc-citations check-docs
+test-all: test-fixture-validator check-core check-phone check-wear check-watchface check-designs test-doc-citations check-docs

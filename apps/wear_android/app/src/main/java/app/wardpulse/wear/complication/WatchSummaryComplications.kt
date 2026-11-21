@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import androidx.wear.watchface.complications.data.ColorRamp
 import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.ComplicationType
@@ -11,9 +12,15 @@ import androidx.wear.watchface.complications.data.NoDataComplicationData
 import androidx.wear.watchface.complications.data.PlainComplicationText
 import androidx.wear.watchface.complications.data.RangedValueComplicationData
 import androidx.wear.watchface.complications.data.ShortTextComplicationData
+import androidx.wear.watchface.complications.data.TimeRange
 import androidx.wear.watchface.complications.datasource.ComplicationDataSourceUpdateRequester
+import androidx.wear.watchface.complications.datasource.ComplicationDataTimeline
 import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.SuspendingComplicationDataSourceService
+import androidx.wear.watchface.complications.datasource.SuspendingTimelineComplicationDataSourceService
+import androidx.wear.watchface.complications.datasource.TimeInterval
+import androidx.wear.watchface.complications.datasource.TimelineEntry
+import app.wardpulse.wear.BuildConfig
 import app.wardpulse.wear.MainActivity
 import app.wardpulse.wear.data.WatchSummaryStore
 import app.wardpulse.wear.model.PulseStatus
@@ -27,32 +34,9 @@ import app.wardpulse.wear.ui.formatPercentAmount
 import app.wardpulse.wear.ui.formatPercentLabel
 import app.wardpulse.wear.ui.formatBudgetStripLabel
 import app.wardpulse.wear.ui.purchasedCreditsCompact
+import java.time.Clock
 import java.time.Instant
 import java.util.Locale
-
-abstract class ShortTextComplicationDataSourceService :
-    SuspendingComplicationDataSourceService() {
-    protected abstract val previewText: String
-
-    protected abstract fun text(summary: WatchDashboardSummary): String
-
-    override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
-        if (request.complicationType != ComplicationType.SHORT_TEXT) {
-            return null
-        }
-        val value = WatchSummaryStore(this).load()?.let(::text) ?: NO_DATA
-        return shortText(value)
-    }
-
-    override fun getPreviewData(type: ComplicationType): ComplicationData? =
-        if (type == ComplicationType.SHORT_TEXT) shortText(previewText) else null
-
-    private fun shortText(value: String) = ComplicationBuilders.shortText(this, value)
-
-    private companion object {
-        const val NO_DATA = "—"
-    }
-}
 
 /**
  * The outer half of a split band: the other pool of a plan that shares one band
@@ -78,16 +62,27 @@ abstract class SplitBandComplicationDataSourceService(private val splitIndex: In
         if (request.complicationType != ComplicationType.RANGED_VALUE) {
             return null
         }
-        val rings = WatchSummaryStore(this).load()?.rings.orEmpty()
-        return outerHalfComplicationData(rings, splitIndex) { half, outerSlot ->
+        val summary = WatchSummaryStore(this).load()
+        var route: N1PairDiagnostics.Route? = null
+        val returned = outerHalfComplicationData(summary?.rings.orEmpty(), splitIndex) { half, outerSlot, count ->
+            if (BuildConfig.DEBUG && BuildConfig.WARDPULSE_N1_PAIR_DIAGNOSTICS) {
+                route = N1PairDiagnostics.Route(
+                    summary?.rings?.indexOfFirst { it.split === half } ?: -1, outerSlot, count,
+                )
+            }
             ComplicationBuilders.ranged(
                 this,
                 WatchComplicationText.remainingPercent(half.usedPercent),
                 title = outerSlot.toString(),
                 colorArgb = RingFamily.colorArgb(half.id),
                 contentDescription = half.label,
+                ringCount = count,
             )
         }
+        n1PairDiagnostics.observe(summary, splitIndex, returned, route) {
+            it.title?.getTextAt(resources, Instant.EPOCH)
+        }
+        return returned
     }
 
     override fun getPreviewData(type: ComplicationType): ComplicationData? =
@@ -104,22 +99,141 @@ abstract class SplitBandComplicationDataSourceService(private val splitIndex: In
         }
 }
 
+private val n1PairDiagnostics = N1PairDiagnostics(
+    BuildConfig.DEBUG && BuildConfig.WARDPULSE_N1_PAIR_DIAGNOSTICS,
+) { Log.i("WardPulseN1Pair", it) }
+
+/** Bounded synthetic service-return evidence; never a delivery or rasterization claim. */
+internal class N1PairDiagnostics(
+    private val enabled: Boolean,
+    private val emit: (String) -> Unit,
+) {
+    data class Route(val payload: Int, val outside: Int, val bands: Int)
+
+    private var records = 0
+
+    @Synchronized
+    fun observe(
+        summary: WatchDashboardSummary?,
+        ordinal: Int,
+        returned: ComplicationData?,
+        route: Route?,
+        readTitle: (RangedValueComplicationData) -> CharSequence?,
+    ) {
+        if (!enabled || records >= MAX_RECORDS) return
+        val case = caseLabel(summary, ordinal) ?: return
+        records++
+        // Observation failure must not change the service's return or expose an exception.
+        try {
+            val type = when (returned) {
+                null -> "absent"
+                is RangedValueComplicationData -> "ranged_value"
+                is NoDataComplicationData -> "no_data"
+                else -> "other"
+            }
+            val fields = if (returned is RangedValueComplicationData) {
+                val title = try {
+                    when (readTitle(returned)?.toString()) {
+                        null -> "absent"
+                        "" -> "empty"
+                        "0" -> "index0"
+                        "1" -> "index1"
+                        "2" -> "index2"
+                        else -> "other"
+                    }
+                } catch (_: RuntimeException) {
+                    "unknown"
+                }
+                val valueType = when (returned.valueType) {
+                    RangedValueComplicationData.TYPE_UNDEFINED -> "undefined"
+                    RangedValueComplicationData.TYPE_PERCENTAGE -> "percentage"
+                    RangedValueComplicationData.TYPE_RATING -> "rating"
+                    else -> "other"
+                }
+                val ramp = when {
+                    returned.colorRamp == null -> "absent"
+                    returned.colorRamp?.colors?.singleOrNull() == RingFamily.CODEX_SPARK -> "spark"
+                    returned.colorRamp?.colors?.singleOrNull() == RingFamily.CURSOR -> "cursor_cyan"
+                    else -> "other"
+                }
+                "value=${number(returned.value)} min=${number(returned.min)} max=${number(returned.max)} " +
+                    "valueType=$valueType title=$title ramp=$ramp"
+            } else {
+                "value=unknown min=unknown max=unknown valueType=unknown title=unknown ramp=unknown"
+            }
+            emit(
+                "case=$case stage=service_return ordinal=0 " +
+                    "payload=${routing(route?.payload, 0..2)} outside=${routing(route?.outside, 0..2)} " +
+                    "bands=${routing(route?.bands, 1..3)} type=$type $fields",
+            )
+        } catch (_: RuntimeException) {
+            // This stage is unavailable; no substitute or exception text is emitted.
+        }
+    }
+
+    private fun caseLabel(summary: WatchDashboardSummary?, ordinal: Int): String? {
+        if (ordinal != 0 || summary == null || summary.schemaVersion != 9 || summary.dataMode != WatchDataMode.MOCK) {
+            return null
+        }
+        val codex = summary.rings.firstOrNull() ?: return null
+        if (codex.id != "allowance.codex.plan" || codex.usedPercent != 63.0 ||
+            codex.spent != null || codex.limit != null || codex.status != PulseStatus.OK
+        ) return null
+        if (summary.rings.size == 1) {
+            return if (codex.split?.let {
+                it.id == "allowance.codex.spark" && it.usedPercent == 63.0 && it.status == PulseStatus.OK
+            } == true) "N1_PAIR" else null
+        }
+        if (summary.rings.size != 2 || codex.split != null) return null
+        val cursor = summary.rings[1]
+        return if (cursor.id == "allowance.cursor.cursor-plan-models" && cursor.usedPercent == 63.0 &&
+            cursor.spent == null && cursor.limit == null && cursor.status == PulseStatus.OK &&
+            cursor.split?.let {
+                it.id == "allowance.cursor.cursor-plan-other" && it.usedPercent == 63.0 && it.status == PulseStatus.OK
+            } == true
+        ) "N2_PLAN_PAIR" else null
+    }
+
+    private fun number(value: Float): String = when {
+        !value.isFinite() -> "non_finite"
+        value !in 0f..800f -> "out_of_range"
+        else -> value.toString()
+    }
+
+    private fun routing(value: Int?, allowed: IntRange): String = when (value) {
+        null -> "unknown"
+        in allowed -> value.toString()
+        else -> "out_of_range"
+    }
+
+    companion object {
+        const val MAX_RECORDS = 4
+    }
+}
+
 /** Missing/invalid splits clear stale data; exhausted halves retain their tracks. */
 internal fun outerHalfComplicationData(
     rings: List<RingSummary>,
     splitIndex: Int,
-    build: (RingHalf, Int) -> ComplicationData,
+    build: (RingHalf, Int, Int) -> ComplicationData,
 ): ComplicationData {
+    val count = resolvedBandCount(rings) ?: return NoDataComplicationData()
     val payloadIndex = rings.indices.filter { rings[it].split != null }.getOrNull(splitIndex)
         ?: return NoDataComplicationData()
     val half = rings[payloadIndex].split ?: return NoDataComplicationData()
     val outerSlot = RingSurfaceOrder.outerSlotForPayloadIndex(rings.size, payloadIndex)
         ?: return NoDataComplicationData()
-    if (!half.usedPercent.isFinite() || half.usedPercent < 0.0) {
-        return NoDataComplicationData()
-    }
-    return build(half, outerSlot)
+    return build(half, outerSlot, count)
 }
+
+/** A pair and a known zero each occupy one band; invalid data supplies no count. */
+internal fun resolvedBandCount(rings: List<RingSummary>): Int? =
+    rings.size.takeIf { count ->
+        count in 0..3 && rings.count { it.split != null } <= 2 && rings.all { ring ->
+            ring.usedPercent.isFinite() && ring.usedPercent >= 0.0 &&
+                (ring.split?.let { it.usedPercent.isFinite() && it.usedPercent >= 0.0 } != false)
+        }
+    }
 
 /**
  * The legend row a face draws when the payload carries credits but no plan ring.
@@ -144,17 +258,15 @@ internal fun creditsOnlyComplicationData(
 internal fun ringComplicationData(
     rings: List<RingSummary>,
     ringIndex: Int,
-    build: (RingSummary, Float, String) -> ComplicationData,
+    build: (RingSummary, Float, String, Int) -> ComplicationData,
 ): ComplicationData {
+    val count = resolvedBandCount(rings) ?: return NoDataComplicationData()
     val dataIndex =
         RingSurfaceOrder.payloadIndexForOuterSlot(rings.size, ringIndex)
             ?: return NoDataComplicationData()
     val ring = rings[dataIndex]
-    if (!ring.usedPercent.isFinite() || ring.usedPercent < 0.0) {
-        return NoDataComplicationData()
-    }
     val remaining = WatchComplicationText.remainingPercent(ring.usedPercent)
-    return build(ring, remaining, WatchComplicationText.ringTitleToken(ring))
+    return build(ring, remaining, WatchComplicationText.ringTitleToken(ring), count)
 }
 
 /**
@@ -184,13 +296,15 @@ abstract class RingComplicationDataSourceService :
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData? {
         val summary = WatchSummaryStore(this).load()
         val rings = summary?.rings.orEmpty()
-        val dataIndex = RingSurfaceOrder.payloadIndexForOuterSlot(rings.size, ringIndex)
+        val dataIndex = resolvedBandCount(rings)?.let {
+            RingSurfaceOrder.payloadIndexForOuterSlot(it, ringIndex)
+        }
         val ring = dataIndex?.let { rings[it] }
         val label = ring?.label
         return when (request.complicationType) {
             // NoData clears a previous arc; null would leave stale complication data.
             ComplicationType.RANGED_VALUE ->
-                if (summary != null && dataIndex == null && ringIndex == CREDITS_RING_INDEX) {
+                if (summary != null && rings.isEmpty() && ringIndex == CREDITS_RING_INDEX) {
                     // No plan ring at all: this slot still owes the face a
                     // legend row, and the face draws it without a band because
                     // the title says there is none.
@@ -205,7 +319,7 @@ abstract class RingComplicationDataSourceService :
                         )
                     }
                 } else {
-                    ringComplicationData(rings, ringIndex) { selectedRing, remaining, title ->
+                    ringComplicationData(rings, ringIndex) { selectedRing, remaining, title, count ->
                         // One slot, two jobs: TEXT carries the strip label the
                         // folded row prints, TITLE what the face branches on —
                         // the budget period, a shared band and its outer pool,
@@ -219,6 +333,7 @@ abstract class RingComplicationDataSourceService :
                             text = dataIndex?.let {
                                 WatchComplicationText.stripLabel(summary, it)
                             },
+                            ringCount = count,
                         )
                     }
                 }
@@ -250,8 +365,9 @@ abstract class RingComplicationDataSourceService :
                 ComplicationBuilders.ranged(
                     this,
                     previewPercent,
-                    title = previewLabel,
+                    title = "",
                     colorArgb = previewColorArgb,
+                    contentDescription = previewLabel,
                 )
             ComplicationType.SHORT_TEXT ->
                 ComplicationBuilders.shortText(
@@ -268,6 +384,7 @@ private object ComplicationBuilders {
         value: String,
         contentDescription: String = value,
         title: String? = null,
+        validTimeRange: TimeRange? = null,
     ): ComplicationData =
         ShortTextComplicationData.Builder(
             text = PlainComplicationText.Builder(value).build(),
@@ -276,7 +393,7 @@ private object ComplicationBuilders {
             if (!title.isNullOrBlank()) {
                 setTitle(PlainComplicationText.Builder(title).build())
             }
-        }.setTapAction(tapAction(context)).build()
+        }.setValidTimeRange(validTimeRange).setTapAction(tapAction(context)).build()
 
     /**
      * A ring slot's data. [text] is the legend row this slot now paints below
@@ -291,8 +408,9 @@ private object ComplicationBuilders {
         colorArgb: Int = RingFamily.FALLBACK,
         contentDescription: String? = null,
         text: String? = null,
+        ringCount: Int? = null,
     ): ComplicationData =
-        rangedComplicationBuilder(percent, title, colorArgb, contentDescription, text)
+        rangedComplicationBuilder(percent, title, colorArgb, contentDescription, text, ringCount)
             .setTapAction(tapAction(context))
             .build()
 
@@ -300,7 +418,10 @@ private object ComplicationBuilders {
         PendingIntent.getActivity(
             context,
             0,
-            Intent(context, MainActivity::class.java),
+            Intent(context, MainActivity::class.java).addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP,
+            ),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 }
@@ -312,19 +433,31 @@ internal fun rangedComplicationBuilder(
     colorArgb: Int = RingFamily.FALLBACK,
     contentDescription: String? = null,
     text: String? = null,
+    ringCount: Int? = null,
 ): RangedValueComplicationData.Builder {
+    require(percent.isFinite())
     val value = percent.coerceIn(0f, 100f)
     val amount = WatchComplicationText.percentAmount(value)
     val label = text?.takeIf { it.isNotBlank() } ?: amount
     val description = contentDescription?.let { "$it $amount%" }
         ?: title.takeIf { it.isNotEmpty() }?.let { "$amount% · $it" }
         ?: WatchComplicationText.percentLabel(value)
+    // Derive every human/zero semantic above before encoding generic ranged units.
+    // Binary scaling preserves the existing Float ratio, including tiny positives.
+    val factor = when (ringCount) {
+        null -> 1f // Credits and previews without an accepted count stay legacy.
+        1 -> 2f
+        2 -> 4f
+        3 -> 8f
+        else -> error("Adaptive ring count must be between one and three")
+    }
     return RangedValueComplicationData.Builder(
-        value = value,
+        value = value * factor,
         min = 0f,
-        max = 100f,
+        max = 100f * factor,
         contentDescription = PlainComplicationText.Builder(description).build(),
-    ).setText(PlainComplicationText.Builder(label).build())
+    ).setValueType(RangedValueComplicationData.TYPE_UNDEFINED)
+        .setText(PlainComplicationText.Builder(label).build())
         .setTitle(PlainComplicationText.Builder(title).build())
         .setColorRamp(ColorRamp(intArrayOf(colorArgb), /* interpolated = */ false))
 }
@@ -358,11 +491,65 @@ class Ring3ComplicationDataSourceService : RingComplicationDataSourceService() {
     override val previewLabel = "Ring 3"
 }
 
-class StatusComplicationDataSourceService : ShortTextComplicationDataSourceService() {
-    override val previewText = "SYNC"
+/**
+ * The Status cell ages without a new summary: a fresh default expires just before the
+ * stale cutoff, and one stale entry takes over from that second until replaced.
+ * Timeline-aware clients play the entry; older clients read only the default.
+ */
+class StatusComplicationDataSourceService : SuspendingTimelineComplicationDataSourceService() {
+    /** Request clock; the device regression fixes it without changing the service. */
+    internal var clock: Clock = Clock.systemUTC()
 
-    override fun text(summary: WatchDashboardSummary) =
-        WatchComplicationText.status(summary)
+    override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationDataTimeline? {
+        if (request.complicationType != ComplicationType.SHORT_TEXT) {
+            return null
+        }
+        val summary = WatchSummaryStore(this).load()
+            ?: return ComplicationDataTimeline(ComplicationBuilders.shortText(this, NO_DATA), emptyList())
+        val now = clock.instant()
+        val cutoff = staleCutoff(summary, now)
+            ?: return ComplicationDataTimeline(status(summary, now), emptyList())
+        return ComplicationDataTimeline(
+            status(summary, now, TimeRange.before(cutoff.minusMillis(1))),
+            listOf(TimelineEntry(TimeInterval(cutoff, TIMELINE_END), status(summary, cutoff))),
+        )
+    }
+
+    override fun getPreviewData(type: ComplicationType): ComplicationData? =
+        if (type == ComplicationType.SHORT_TEXT) ComplicationBuilders.shortText(this, PREVIEW) else null
+
+    private fun status(summary: WatchDashboardSummary, at: Instant, validity: TimeRange? = null) =
+        ComplicationBuilders.shortText(
+            this,
+            WatchComplicationText.compactStatus(summary, at),
+            contentDescription = WatchComplicationText.status(summary, at),
+            validTimeRange = validity,
+        )
+
+    private companion object {
+        const val NO_DATA = "—"
+        const val PREVIEW = "SYNC"
+
+        /**
+         * Open end of the stale entry. A whole second whose milliseconds still fit a
+         * Long, so millisecond-based readers of the wire timeline cannot overflow.
+         */
+        val TIMELINE_END: Instant = Instant.ofEpochSecond(Long.MAX_VALUE / 1000)
+
+        /**
+         * The first whole second at or after a fresh summary's stale deadline: timeline
+         * endpoints travel as epoch seconds. Null keeps the request-time reading static
+         * when the Status is already stale or no endpoint can carry the cutoff.
+         */
+        fun staleCutoff(summary: WatchDashboardSummary, now: Instant): Instant? {
+            if (WatchComplicationText.statusPulse(summary, now) == PulseStatus.STALE) {
+                return null
+            }
+            val deadline = summary.staleDeadline()?.takeIf { it.isBefore(TIMELINE_END) } ?: return null
+            val cutoff = if (deadline.nano == 0) deadline else Instant.ofEpochSecond(deadline.epochSecond + 1)
+            return cutoff.takeIf { it.isAfter(Instant.EPOCH) && it.isBefore(TIMELINE_END) }
+        }
+    }
 }
 
 /**
@@ -400,6 +587,7 @@ object WatchComplicationText {
         when (ringId) {
             "allowance.cursor.cursor-plan-other" -> "cursor-other"
             "allowance.codex.spark" -> "spark"
+            "allowance.claude.claude-seven-day-fable" -> "fable"
             else -> null
         }
 
@@ -545,13 +733,30 @@ object WatchComplicationText {
                 summary.providers.single().providerLabel.uppercase(Locale.US)
             else -> "${summary.providers.size} PRV"
         }
-        val pulse = when {
+        return "$source · ${shortStatus(statusPulse(summary, now))}"
+    }
+
+    /**
+     * The Status cell's text. Healthy and stale readings drop the source to fit the
+     * cell; `tst` keeps Mock visibly demo data within seven characters. Every other
+     * status keeps the full [status] reading.
+     */
+    fun compactStatus(summary: WatchDashboardSummary, now: Instant): String {
+        val mock = summary.dataMode == WatchDataMode.MOCK
+        return when (statusPulse(summary, now)) {
+            PulseStatus.OK -> if (mock) "tst ok" else "OK"
+            PulseStatus.STALE -> if (mock) "tst old" else "STALE"
+            else -> status(summary, now)
+        }
+    }
+
+    /** The Status reading's precedence: age or the stale flag, then the provider status. */
+    internal fun statusPulse(summary: WatchDashboardSummary, now: Instant): PulseStatus =
+        when {
             summary.isStaleAt(now) -> PulseStatus.STALE
             summary.providers.size == 1 -> summary.providers.single().status
             else -> summary.overallStatus
         }
-        return "$source · ${shortStatus(pulse)}"
-    }
 
     /** Short labels so the round chin does not clip the status line. */
     fun shortStatus(status: PulseStatus): String = when (status) {

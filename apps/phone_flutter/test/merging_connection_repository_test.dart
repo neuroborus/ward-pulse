@@ -5,16 +5,166 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
+import 'package:ward_pulse_phone/dashboard/live_provider_stack.dart';
 import 'package:ward_pulse_phone/dashboard/merging_connection_repository.dart';
+import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
+import 'package:ward_pulse_phone/providers/claude_account_service.dart';
+import 'package:ward_pulse_phone/providers/provider_credential_store.dart';
+import 'package:ward_pulse_phone/providers/connection_rejection_notice.dart';
+import 'package:ward_pulse_phone/dashboard/dashboard_load.dart';
+import 'package:ward_pulse_phone/sync/provider_reporting.dart';
+import 'package:ward_pulse_phone/sync/provider_reporting_clients.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_logger.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
+
+import 'connection_cache_test_support.dart';
 
 void main() {
   final snapshot = DashboardSnapshot.fromJsonString(
     File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
   );
+
+  group('saved reporting rejection collection', () {
+    late NativeCacheTestBridge bridge;
+    setUpAll(() async {
+      bridge = await NativeCacheTestBridge.start();
+    });
+    tearDownAll(() => bridge.close());
+    setUp(() => bridge.reset());
+    test(
+      'Cursor versioned read failure keeps local feedback without auth evidence',
+      () async {
+        final storage = FakeSecureStorage();
+        final platform = ObservingCachePlatform(
+          bridge.platform('read-failure'),
+        );
+        const id = ProviderConnections.cursorPlan;
+        final credentials = SecureProviderCredentialStore(
+          storage: storage,
+          platform: platform,
+        );
+        await credentials.writeSecret(id, 'synthetic-session');
+        storage.failReadKey = storage.values.keys.single;
+        final transport = _UnexpectedReportingTransport();
+        final http = ProviderReportingHttp(transport: transport);
+        final siblingJson = snapshot.toJson();
+        (siblingJson['accounts'] as List).first['provider'] = 'openai';
+        final repository = buildLiveProviderStack(
+          credentialStore: credentials,
+          claudeAccountService: const EmptyClaudeAccountService(),
+          openAiAndCodex: ValueDashboardRepository(
+            DashboardSnapshot.fromJson(siblingJson),
+          ),
+          logger: const NullProviderSyncLogger(),
+          anthropicReportingClient: AnthropicReportingClient(http: http),
+          cursorReportingClient: CursorPlatformClient(http: http),
+          cursorSessionClient: CursorPlanClient(http: http),
+        );
+        final loaded = await repository.load();
+        final outcome = loaded.reportingOutcomes.singleWhere(
+          (outcome) => outcome.connection == id,
+        );
+        expect(outcome.category, ReportingOutcomeCategory.localReadFailure);
+        expect(outcome.source, ReportingOutcomeSource.local);
+        expect(outcome.canEditKey, isFalse);
+        expect(loaded.syncIssue, DashboardSyncIssue.credentialUnavailable);
+
+        platform.beforeInvoke = (method, arguments) async {
+          if (method == 'validFetch' &&
+              arguments['connection'] == id.storageKey) {
+            await bridge.invoke('read-failure', 'releaseFetch', arguments);
+          }
+        };
+        await expectLater(
+          repository.load(),
+          throwsA(
+            isA<DashboardLoadException>()
+                .having((error) => error.issue, 'issue', loaded.syncIssue)
+                .having(
+                  (error) =>
+                      error
+                          .snapshotOrdering[id.storageKey]
+                          ?.selectionUnverified,
+                  'selectionUnverified',
+                  isTrue,
+                ),
+          ),
+        );
+        expect(
+          await NativeConnectionRejectionNoticeStore(platform: platform).read(),
+          isEmpty,
+        );
+        expect(transport.requests, 0);
+      },
+    );
+    for (final failure in [
+      ProviderReportingFailure.authentication,
+      ProviderReportingFailure.permissionDenied,
+      ProviderReportingFailure.rateLimited,
+      ProviderReportingFailure.unavailable,
+      ProviderReportingFailure.invalidResponse,
+    ]) {
+      test(
+        '$failure records only classified auth and retains a successful sibling',
+        () async {
+          final storage = FakeSecureStorage();
+          final platform = bridge.platform('reporting');
+          final store = SecureProviderCredentialStore(
+            storage: storage,
+            platform: platform,
+          );
+          const id = ProviderConnections.anthropicPlatform;
+          await store.writeSecret(id, 'synthetic-key');
+          final siblingJson = snapshot.toJson();
+          (siblingJson['accounts'] as List).first['provider'] = 'openai';
+          final sibling = DashboardSnapshot.fromJson(siblingJson);
+          MergingConnectionRepository repository() =>
+              MergingConnectionRepository(
+                connection: id,
+                credentialStore: store,
+                fallback: ValueDashboardRepository(sibling),
+                logger: const NullProviderSyncLogger(),
+                normalizeReport:
+                    (_) =>
+                        throw StateError('No rejected response can normalize'),
+                mapError:
+                    (error) => mapReportingError(
+                      error,
+                      const NullProviderSyncLogger(),
+                    ),
+                loadCredentialReport:
+                    (_) async => throw ProviderReportingException(failure),
+              );
+          final loaded = await repository().load();
+          expect(
+            loaded.accounts.map((account) => account.accountId),
+            sibling.accounts.map((account) => account.accountId),
+          );
+          final notices = NativeConnectionRejectionNoticeStore(
+            platform: platform,
+          );
+          expect(
+            (await notices.read()).length,
+            failure == ProviderReportingFailure.authentication ? 1 : 0,
+          );
+          expect(await store.readSecret(id), 'synthetic-key');
+          if (failure == ProviderReportingFailure.authentication) {
+            final event = (await notices.read()).single;
+            expect(loaded.syncRejection, (
+              connection: id.storageKey,
+              eventId: event.eventId,
+            ));
+            await notices.dismiss(event);
+            await repository().load();
+            await bridge.invoke('test', 'restart', {});
+            expect((await notices.read()).single.dismissed, isTrue);
+          }
+        },
+      );
+    }
+  });
 
   DashboardLoadException mapError(Object error) =>
       const DashboardLoadException(details: 'mapped');
@@ -29,6 +179,65 @@ void main() {
     );
 
     expect(await repository.load(), same(snapshot));
+  });
+
+  group('unchanged connection attribution', () {
+    final version = CredentialVersion({
+      'generation': '1',
+      'revision': '2',
+      'epoch': '3',
+      'identity': 'synthetic-identity',
+      'committedConnection': 'synthetic-event',
+    });
+    final versions = {
+      ProviderConnections.openAiPlatform.storageKey: version.values,
+    };
+    final outcome = ConnectionReportingOutcome(
+      connection: ProviderConnections.openAiPlatform,
+      category: ReportingOutcomeCategory.rateLimited,
+      source: ReportingOutcomeSource.live,
+      freshness: ReportingOutcomeFreshness.current,
+      credentialVersion: version,
+    );
+
+    test('preserves the already enriched fallback snapshot', () async {
+      final enriched = snapshot
+          .withConnectionVersions(versions)
+          .withReportingOutcomes([outcome]);
+      final repository = MergingConnectionRepository(
+        fallback: ValueDashboardRepository(enriched),
+        logger: const NullProviderSyncLogger(),
+        mapError: mapError,
+        normalizeReport: (_) => throw StateError('must not normalize'),
+        loadReport: () async => null,
+      );
+
+      expect(await repository.load(), same(enriched));
+    });
+
+    test('preserves the already enriched fallback failure and stack', () async {
+      final failure = DashboardLoadException.withOutcomes(
+        issue: DashboardSyncIssue.rateLimited,
+        connectionVersions: versions,
+        reportingOutcomes: [outcome],
+      );
+      final stackTrace = StackTrace.fromString('synthetic fallback failure');
+      final repository = MergingConnectionRepository(
+        fallback: _FailingDashboardRepository(failure, stackTrace),
+        logger: const NullProviderSyncLogger(),
+        mapError: mapError,
+        normalizeReport: (_) => throw StateError('must not normalize'),
+        loadReport: () async => null,
+      );
+
+      try {
+        await repository.load();
+        fail('Expected the fallback failure.');
+      } on DashboardLoadException catch (error, trace) {
+        expect(error, same(failure));
+        expect(trace.toString(), stackTrace.toString());
+      }
+    });
   });
 
   test('normalizes a fetched report when no other account is live', () async {
@@ -246,13 +455,31 @@ void main() {
       expect(failed.watchSummary.status, ProviderStatus.stale);
       expect(failed.syncIssue, DashboardSyncIssue.rateLimited);
       expect(failed.syncDetails, 'Provider request failed');
+      final catalog = watchRingCatalog(failed);
+      const defaultPreferences = WatchRingPreferences();
+      final defaultIds = watchRingSelectionIds(failed, defaultPreferences);
+      expect(defaultIds, [
+        'budget.openai.platform.today',
+        'budget.openai.platform.week',
+        'budget.openai.platform.month',
+      ]);
+      for (final id in defaultIds) {
+        final budget = catalog.singleWhere((ring) => ring.id == id);
+        expect(budget.isAvailable, isTrue);
+        expect(budget.account?.accountId, 'openai-account');
+        expect(budget.spent?.toJson(), {'minorUnits': 150, 'currency': 'USD'});
+      }
+      expect(
+        resolveWatchRings(failed, defaultPreferences).map((ring) => ring.id),
+        defaultIds,
+      );
       final payload = jsonDecode(
         WatchDashboardSummaryPayload.fromSnapshot(
           failed,
-          const WatchRingPreferences(),
+          defaultPreferences,
         ).encode(),
       );
-      expect(payload['isStale'], isTrue);
+      expect(payload['isStale'], isFalse);
       expect(payload['providers'], [
         {
           'provider': 'openai',
@@ -265,6 +492,38 @@ void main() {
           'todaySpent': {'minorUnits': 200, 'currency': 'USD'},
         },
       ]);
+      final retainedBudget = catalog.singleWhere(
+        (ring) =>
+            ring.account?.accountId == 'claude-account' &&
+            ring.id.endsWith('.today'),
+      );
+      expect(retainedBudget.id, 'budget.anthropic.platform.today');
+      expect(retainedBudget.account?.accountId, 'claude-account');
+      expect(retainedBudget.account?.connection, 'anthropic.platform');
+      final retainedPreferences = WatchRingPreferences(
+        selectedIds: [retainedBudget.id],
+      );
+      const retainedSpend = {'minorUnits': 200, 'currency': 'USD'};
+      final retainedLimit = failed.accounts.last.today.limit!.toJson();
+      expect(watchRingSelectionIds(failed, retainedPreferences), [
+        retainedBudget.id,
+      ]);
+      final retainedRing =
+          resolveWatchRings(failed, retainedPreferences).single;
+      expect(retainedRing.id, retainedBudget.id);
+      expect(retainedRing.spent?.toJson(), retainedSpend);
+      expect(retainedRing.limit?.toJson(), retainedLimit);
+      final retainedPayload = jsonDecode(
+        WatchDashboardSummaryPayload.fromSnapshot(
+          failed,
+          retainedPreferences,
+        ).encode(),
+      );
+      final retainedPayloadRing = (retainedPayload['rings'] as List).single;
+      expect(retainedPayloadRing['id'], retainedBudget.id);
+      expect(retainedPayloadRing['spent'], retainedSpend);
+      expect(retainedPayloadRing['limit'], retainedLimit);
+      expect(retainedPayload['isStale'], isTrue);
 
       connection = _liveSnapshot(snapshot, 'claude', recoveredAt, 250);
       loadReport = () async => '{"sanitized":true}';
@@ -277,6 +536,26 @@ void main() {
       expect(recovered.todayTotal.spent?.minorUnits, 400);
       expect(recovered.overallStatus, ProviderStatus.ok);
       expect(recovered.syncIssue, isNull);
+      expect(watchRingSelectionIds(recovered, retainedPreferences), [
+        retainedBudget.id,
+      ]);
+      const recoveredSpend = {'minorUnits': 250, 'currency': 'USD'};
+      final recoveredRing =
+          resolveWatchRings(recovered, retainedPreferences).single;
+      expect(recoveredRing.id, retainedBudget.id);
+      expect(recoveredRing.spent?.toJson(), recoveredSpend);
+      expect(recoveredRing.limit?.toJson(), retainedLimit);
+      final recoveredPayload = jsonDecode(
+        WatchDashboardSummaryPayload.fromSnapshot(
+          recovered,
+          retainedPreferences,
+        ).encode(),
+      );
+      final recoveredPayloadRing = (recoveredPayload['rings'] as List).single;
+      expect(recoveredPayloadRing['id'], retainedBudget.id);
+      expect(recoveredPayloadRing['spent'], recoveredSpend);
+      expect(recoveredPayloadRing['limit'], retainedLimit);
+      expect(recoveredPayload['isStale'], isFalse);
       expect(logger.events, [
         ProviderSyncEvent.succeeded,
         ProviderSyncEvent.usingCachedSnapshot,
@@ -498,6 +777,25 @@ void main() {
   });
 }
 
+final class _UnexpectedReportingTransport implements ProviderHttpTransport {
+  int requests = 0;
+  @override
+  Future<ProviderHttpResponse> get(
+    Uri uri, {
+    required Map<String, String> headers,
+  }) async {
+    requests++;
+    throw StateError('Unexpected synthetic reporting request.');
+  }
+
+  @override
+  Future<ProviderHttpResponse> post(
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+  }) => get(uri, headers: headers);
+}
+
 DashboardSnapshot _liveSnapshot(
   DashboardSnapshot fixture,
   String provider,
@@ -582,10 +880,11 @@ final class _RecordingLogger implements ProviderSyncLogger {
 }
 
 final class _FailingDashboardRepository extends DashboardRepository {
-  const _FailingDashboardRepository(this.error);
+  const _FailingDashboardRepository(this.error, [this.stackTrace]);
 
   final Object error;
+  final StackTrace? stackTrace;
 
   @override
-  Future<DashboardSnapshot> load() => Future.error(error);
+  Future<DashboardSnapshot> load() => Future.error(error, stackTrace);
 }

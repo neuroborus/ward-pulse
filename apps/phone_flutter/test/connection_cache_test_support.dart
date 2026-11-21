@@ -30,6 +30,7 @@ final class NativeCacheTestBridge {
   final Directory _directory;
   final _pending = <int, Completer<Object?>>{};
   final _stderr = StringBuffer();
+  void Function(Future<Object?>)? onInvoke;
   var _next = 0;
   static Future<NativeCacheTestBridge> start() async {
     final root = Directory('../..').absolute.path;
@@ -83,6 +84,7 @@ final class NativeCacheTestBridge {
 
     arguments.forEach(flatten);
     _process.stdin.writeln(fields.join('\t'));
+    onInvoke?.call(result.future);
     return result.future;
   }
 
@@ -111,9 +113,25 @@ final class FakeSecureStorage extends FlutterSecureStorage {
   final values = <String, String>{};
   final deleted = <String>[];
   String? failDeleteKey;
+  String? failReadKey;
   bool failRead = false;
   bool failWrite = false;
   Future<void> Function(String)? beforeWrite;
+  Future<void> Function(String)? beforeDelete;
+  void Function(String, Future<String?>)? onRead;
+  @override
+  Future<Map<String, String>> readAll({
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WebOptions? webOptions,
+    AppleOptions? mOptions,
+    WindowsOptions? wOptions,
+  }) async {
+    if (failRead) throw StateError('Sanitized storage read failure.');
+    return Map.of(values);
+  }
+
   @override
   Future<String?> read({
     required String key,
@@ -123,9 +141,14 @@ final class FakeSecureStorage extends FlutterSecureStorage {
     WebOptions? webOptions,
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
-  }) async {
-    if (failRead) throw StateError('Sanitized storage read failure.');
-    return values[key];
+  }) {
+    final result = Future<String?>.sync(() {
+      if (failRead || key == failReadKey)
+        throw StateError('Sanitized storage read failure.');
+      return values[key];
+    });
+    onRead?.call(key, result);
+    return result;
   }
 
   @override
@@ -158,9 +181,26 @@ final class FakeSecureStorage extends FlutterSecureStorage {
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) async {
+    await beforeDelete?.call(key);
     deleted.add(key);
     if (key == failDeleteKey)
       throw StateError('Sanitized storage delete failure.');
     values.remove(key);
+  }
+}
+
+/// Delegates every operation, observing replies only after native completion.
+final class ObservingCachePlatform implements ConnectionCachePlatform {
+  ObservingCachePlatform(this.delegate);
+  final ConnectionCachePlatform delegate;
+  FutureOr<void> Function(String, Map<String, Object?>)? beforeInvoke;
+  FutureOr<void> Function(String, Map<String, Object?>, Object?)? onComplete;
+
+  @override
+  Future<Object?> invoke(String method, Map<String, Object?> arguments) async {
+    await beforeInvoke?.call(method, arguments);
+    final result = await delegate.invoke(method, arguments);
+    await onComplete?.call(method, arguments, result);
+    return result;
   }
 }

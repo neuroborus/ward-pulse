@@ -4,13 +4,17 @@ import 'package:flutter/widgets.dart';
 import 'app/ward_pulse_app.dart';
 import 'dashboard/dashboard_repository.dart';
 import 'dashboard/phone_live_bindings.dart';
+import 'settings/alert_notification_preferences.dart';
 import 'settings/alert_threshold_preferences.dart';
+import 'settings/recovery_notification_preferences.dart';
 import 'settings/debug_data_preferences.dart';
 import 'settings/refresh_interval_preferences.dart';
 import 'settings/watch_ring_preferences.dart';
 import 'widget/phone_widget_preferences.dart';
 import 'widget/phone_widget_sync.dart';
+import 'sync/alert_notifications.dart';
 import 'sync/headless_provider_sync.dart';
+import 'sync/notification_coordinator.dart';
 import 'sync/provider_sync_scheduler.dart';
 import 'sync/recovery_notifications.dart';
 import 'sync/recovery_wake.dart';
@@ -21,10 +25,12 @@ Future<void> main() async {
   await HeadlessProviderSync.ensureInitialized();
   final live = PhoneLiveBindings.create();
   final debugDataPreferenceStore = SecureDebugDataPreferenceStore();
+  final notifications = PhoneNotificationCoordinator();
 
   runApp(
     WardPulseApp(
       credentialStore: live.credentialStore,
+      rejectionNotices: live.rejectionNotices,
       codexAccountService: live.codexAccountService,
       claudeAccountService: live.claudeAccountService,
       refreshIntervalStore: SecureRefreshIntervalPreferenceStore(),
@@ -32,17 +38,33 @@ Future<void> main() async {
       phoneWidgetPreferenceStore: SecurePhoneWidgetPreferenceStore(),
       phoneWidgetSyncService: HomeWidgetPhoneWidgetSyncService(),
       alertThresholdStore: SecureAlertThresholdPreferenceStore(),
+      alertNotificationStore: SecureAlertNotificationPreferenceStore(),
+      alertConditionStore: SecureAlertConditionStore(),
+      notificationCoordinator: notifications,
+      alertNotifier: LocalAlertNotifier(coordinator: notifications),
       syncScheduler: TimerProviderSyncScheduler(),
       debugDataAvailable: kDebugMode,
       debugDataPreferenceStore: debugDataPreferenceStore,
       recoveryWatchlistStore: SecureRecoveryWatchlistStore(),
-      recoveryNotifier: LocalRecoveryNotifier(),
+      recoveryNotificationStore: SecureRecoveryNotificationPreferenceStore(),
+      recoveryNotifier: LocalRecoveryNotifier(coordinator: notifications),
       recoveryWake: const WorkmanagerRecoveryWakeScheduler(),
       repository:
           kDebugMode
               ? DebugDashboardRepository(
                 live: live.repository,
                 preferences: debugDataPreferenceStore,
+                mock: DemoDashboardRepository(
+                  debugSeed: const String.fromEnvironment(
+                    'WARD_PULSE_MOCK_SEED',
+                  ),
+                  debugAnchor:
+                      const bool.hasEnvironment('WARD_PULSE_MOCK_ANCHOR')
+                          ? const String.fromEnvironment(
+                            'WARD_PULSE_MOCK_ANCHOR',
+                          )
+                          : null,
+                ),
               )
               : live.repository,
     ),
