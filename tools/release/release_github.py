@@ -2,6 +2,7 @@
 """Publish only the independently verified transfer from the original dispatch checkout."""
 
 import hashlib
+import http.client
 import json
 import os
 from pathlib import Path
@@ -35,13 +36,19 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+class UnexpectedHTTPStatus(ValueError):
+    def __init__(self, code):
+        super().__init__("Unexpected GitHub response status")
+        self.code = code
+
+
 class GitHub:
     def __init__(self, token, repository):
         require(token and re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository))
         self.token, self.repository = token, repository
         self.opener = urllib.request.build_opener(NoRedirect())
 
-    def __call__(self, path, method="GET", payload=None, missing=False, upload=None):
+    def __call__(self, path, method="GET", payload=None, missing=False, upload=None, *, on_response=None):
         host = "https://uploads.github.com" if upload is not None else "https://api.github.com"
         headers = {"Authorization": "Bearer " + self.token, "Accept": "application/vnd.github+json",
                    "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "WardPulse-release"}
@@ -55,7 +62,10 @@ class GitHub:
                                          data=data, headers=headers, method=method)
         try:
             with self.opener.open(request, timeout=60) as response:
-                require(response.status == (201 if method == "POST" else 200))
+                if response.status != (201 if method == "POST" else 200):
+                    raise UnexpectedHTTPStatus(response.status)
+                if on_response is not None:
+                    on_response()
                 return json.load(response)
         except urllib.error.HTTPError as error:
             if missing and error.code == 404:
@@ -67,6 +77,7 @@ class Publisher:
     def __init__(self, api, sha, tag, notes, manifest, directory, draft, prerelease, latest):
         self.api, self.sha, self.tag, self.notes = api, sha, tag, notes
         self.manifest, self.directory = manifest, directory
+        self.stage, self.operation = "preflight", None
         self.draft, self.prerelease, self.latest = options(draft, prerelease, latest)
         require(re.fullmatch(r"[0-9a-f]{40}", sha) and notes.strip())
         require(len(manifest) == 9)
@@ -75,10 +86,22 @@ class Publisher:
             require(type(item["size"]) is int and item["size"] > 0)
             require(re.fullmatch(r"[0-9a-f]{64}", item["sha256"]))
 
-    def pages(self, path):
+    def request(self, operation, *args, response_stage=None, **kwargs):
+        # Retain the predefined operation only when the request raises.
+        self.operation = operation
+        if response_stage is not None:
+            def on_response():
+                self.stage = response_stage
+
+            kwargs["on_response"] = on_response
+        result = self.api(*args, **kwargs)
+        self.operation = None
+        return result
+
+    def pages(self, operation, path):
         seen = set()
         for page in range(1, 1001):
-            items = self.api(f"{path}?per_page=100&page={page}")
+            items = self.request(operation, f"{path}?per_page=100&page={page}")
             require(type(items) is list and len(items) <= 100)
             for item in items:
                 require(type(item) is dict and type(item.get("id")) is int and item["id"] > 0)
@@ -97,7 +120,7 @@ class Publisher:
 
     def conflicts(self, allowed=None, draft=True):
         matches = []
-        for release in self.pages("/releases"):
+        for release in self.pages("list-releases", "/releases"):
             require(type(release.get("tag_name")) is str)
             if release["tag_name"] == self.tag:
                 require(release["id"] == allowed)
@@ -106,7 +129,8 @@ class Publisher:
         require(matches == ([] if allowed is None else [allowed]))
 
     def tag_binding(self, required=False):
-        ref = self.api("/git/ref/tags/" + urllib.parse.quote(self.tag, safe=""), missing=True)
+        ref = self.request("read-tag-ref", "/git/ref/tags/" + urllib.parse.quote(self.tag, safe=""),
+                           missing=not required)
         if ref is None:
             require(not required)  # Only a draft may lack a real Git ref.
             return
@@ -120,13 +144,13 @@ class Publisher:
                 require(target == self.sha)
                 return
             require(obj["type"] == "tag")
-            annotation = self.api("/git/tags/" + target)
+            annotation = self.request("read-annotated-tag", "/git/tags/" + target)
             require(annotation["sha"] == target)
             obj = annotation["object"]
         raise ValueError("Tag could not be peeled")
 
     def observe(self, release_id, draft):
-        self.binding(self.api(f"/releases/{release_id}"), release_id, draft)
+        self.binding(self.request("read-release", f"/releases/{release_id}"), release_id, draft)
         self.conflicts(release_id, draft)
         self.tag_binding(required=not draft)
 
@@ -139,62 +163,95 @@ class Publisher:
             require(digest == "sha256:" + expected["sha256"])
 
     def verify_assets(self, release_id, uploaded):
-        assets = list(self.pages(f"/releases/{release_id}/assets"))
+        assets = list(self.pages("list-release-assets", f"/releases/{release_id}/assets"))
         require(len(assets) == 9 and {asset["name"] for asset in assets} == self.manifest.keys())
         for asset in assets:
             self.asset_binding(asset, asset["name"])
             require(asset["id"] == uploaded[asset["name"]])
 
     def publish(self):
+        self.stage, self.operation = "preflight", None
         self.conflicts()  # Authenticated, draft-inclusive listing; never GET-by-tag absence.
         self.tag_binding()
         # Repeat immediately before POST; this is not an atomic exclusion lock.
         self.conflicts()
         self.tag_binding()
-        created = self.api("/releases", "POST", {
+        self.stage = "draft-creation"
+        created = self.request("create-draft", "/releases", "POST", {
             "tag_name": self.tag, "target_commitish": self.sha, "name": self.tag,
             "body": self.notes, "draft": True, "prerelease": self.prerelease, "make_latest": "false",
-        })
+        }, response_stage="draft-creation-response")
         release_id = created["id"]
         require(type(release_id) is int and release_id > 0)
         self.binding(created, release_id, True)
+        self.stage = "draft-observation"
         self.observe(release_id, True)
         uploaded = {}
         for name, expected in sorted(self.manifest.items()):
+            self.stage = "asset-file-verification"
             path = self.directory / name
             require(stat.S_ISREG(path.lstat().st_mode))
             with path.open("rb") as stream:
                 require(os.fstat(stream.fileno()).st_size == expected["size"])
                 require(hashlib.file_digest(stream, "sha256").hexdigest() == expected["sha256"])
                 stream.seek(0)
-                asset = self.api(f"/releases/{release_id}/assets?name=" + urllib.parse.quote(name, safe=""),
-                                 "POST", upload=(stream, expected["size"]))
+                self.stage = "asset-upload"
+                asset = self.request("upload-asset",
+                                     f"/releases/{release_id}/assets?name=" + urllib.parse.quote(name, safe=""),
+                                     "POST", upload=(stream, expected["size"]),
+                                     response_stage="asset-upload-response")
             self.asset_binding(asset, name)
             require(type(asset.get("id")) is int and asset["id"] > 0 and asset["id"] not in uploaded.values())
             uploaded[name] = asset["id"]
+        self.stage = "asset-verification"
         self.observe(release_id, True)
         self.verify_assets(release_id, uploaded)
         if not self.draft:
+            self.stage = "publish-transition"
             self.observe(release_id, True)
-            final = self.api(f"/releases/{release_id}", "PATCH", {
+            final = self.request("publish-release", f"/releases/{release_id}", "PATCH", {
                 "tag_name": self.tag, "target_commitish": self.sha, "name": self.tag,
                 "body": self.notes,
                 "draft": False, "prerelease": self.prerelease, "make_latest": self.latest,
             })
             self.binding(final, release_id, False)
+        self.stage = "final-verification"
         self.observe(release_id, self.draft)
         self.verify_assets(release_id, uploaded)
         return release_id
 
 
+def failure_detail(error, stage, operation):
+    if operation is not None and isinstance(error, (urllib.error.HTTPError, UnexpectedHTTPStatus)):
+        status = error.code
+        if type(status) is int and 100 <= status <= 999:
+            return f"stage={stage} operation={operation} http_status={status}"
+        category = "invalid-http-status"
+    elif isinstance(error, KeyboardInterrupt):
+        category = "interrupted"
+    elif isinstance(error, (urllib.error.URLError, http.client.HTTPException)):
+        category = "transport-error"
+    elif isinstance(error, (OSError, subprocess.SubprocessError)):
+        category = "io-error"
+    elif isinstance(error, (json.JSONDecodeError, UnicodeError)):
+        category = "invalid-data"
+    elif isinstance(error, (ValueError, AttributeError, KeyError, TypeError)):
+        category = "validation-failed"
+    else:
+        category = "unexpected-error"
+    return f"stage={stage} category={category}"
+
+
 def main():
+    publisher = None
     try:
         env = os.environ
         flags = tuple(env[key] for key in ("RELEASE_DRAFT", "RELEASE_PRERELEASE", "RELEASE_LATEST"))
         options(*flags)
         require(env["GITHUB_EVENT_NAME"] == "workflow_dispatch" and env["GITHUB_REF"] == "refs/heads/main")
         root = Path(__file__).resolve().parents[2]
-        require(subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip() == env["SOURCE_SHA"])
+        head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True, stderr=subprocess.DEVNULL)
+        require(head.strip() == env["SOURCE_SHA"])
         ready = readiness(root, env["RELEASE_TAG"])
         require(ready["version"] == env["RELEASE_VERSION"])
         manifest = json.loads(Path(env["VERIFIED_TRANSFER"]).read_text())
@@ -202,9 +259,11 @@ def main():
                               env["RELEASE_TAG"], ready["notes"], manifest, Path(env["TRANSFER_DIR"]), *flags)
         release_id = publisher.publish()
         print(f"Release {release_id} confirmed with requested draft/prerelease state and all nine assets.")
-    except (Exception, KeyboardInterrupt):
+    except (Exception, KeyboardInterrupt) as error:
+        stage, operation = (publisher.stage, publisher.operation) if publisher is not None else ("preflight", None)
         raise SystemExit("Publication failed; preserve all release/tag/asset state, including any partial or "
-                         "public release, for Owner reconciliation. Do not blindly retry.")
+                         "public release, for Owner reconciliation. Do not blindly retry.\n"
+                         f"Publication diagnostic {failure_detail(error, stage, operation)}") from None
 
 
 if __name__ == "__main__":
