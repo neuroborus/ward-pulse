@@ -431,6 +431,7 @@ export default defineConfig({
       ],
     },
     { text: 'Privacy policy', link: '/product/privacy-policy' },
+    { text: 'Terms of Service', link: '/product/terms-of-service' },
   ],
   socials: [{ icon: 'github', link: 'https://github.com/neuroborus/ward-pulse' }],
   title: 'WardPulse',

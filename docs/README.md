@@ -49,6 +49,7 @@ becoming public Vocs pages.
 - [product/PROVIDER_NOTES.md](product/PROVIDER_NOTES.md) tracks provider integration assumptions and open questions.
 - [product/SECURITY_MODEL.md](product/SECURITY_MODEL.md) defines local-first credential and diagnostics rules.
 - [product/PRIVACY_POLICY.md](product/PRIVACY_POLICY.md) is the public privacy policy for the Android product.
+- [Terms of Service](product/TERMS_OF_SERVICE.md) covers use of WardPulse obtained through Google Play.
 - [product/RELEASE_CHECKLIST.md](product/RELEASE_CHECKLIST.md) is the release readiness gate for phone, Wear OS, and watch face builds.
 - [Product release ledger](../tools/release/README.md) owns Changesets versioning, generated
   notes and repository-wide release coverage; [fragments](../.changeset/README.md) target one
