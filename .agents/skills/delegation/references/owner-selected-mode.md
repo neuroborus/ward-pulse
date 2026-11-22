@@ -1,44 +1,30 @@
 # Owner-selected Runner mode
 
-The owner's 2026-11-06 direction supersedes the 2026-10-31 Lazy instruction:
-use Combined for fresh planning and code runs, use Opus as Worker while its quota
-is available, and switch all roles to Sol when that quota is exhausted.
+The owner's 2026-11-22 direction selects Independent for fresh Runner runs. Explicitly
+request `independent` for `plan-authoring`, `plan-execution`, `polishing` and `audit`,
+including fresh replacements of those pipelines.
 
-Explicitly request `combined` for fresh `plan-authoring`, `plan-execution` and
-`polishing` runs and their replacements. The owner's 2026-11-19 direction
-requires `independent` for every fresh `audit` and audit replacement. The managing
-operator verifies the publicly resolved mode and role selections before
-acceptance. Use a supported stop and reconcile any mismatch.
+| Role | Model | Native launch selection |
+| --- | --- | --- |
+| Worker while quota is available | Claude Opus 5.5 high | `claude`, `opus`, `current`, effort `high` |
+| Reviewer and Arbiter | GPT-6.2-Sol xhigh | `codex`, `gpt-6.2-sol`, `current`, effort `xhigh` |
+| Planner | GPT-6.2-Sol | `codex`, `gpt-6.2-sol`, `current`, qualified effort and context |
 
-For a Worker role, request backend `claude`, native model selector `opus` and
-profile `current` while available. The public native CLI advertises `opus`; treat
-it as an opaque native selector, not a guessed versioned model ID or proof of
-remaining quota. Use Sol for Planner, Reviewer and Arbiter, retaining qualified
-profile/effort selections. Plan-authoring has a Planner, not a Worker; its Planner
-therefore remains Sol. Qualify actual role selections before freezing a new run,
+Plan-authoring uses the Planner choice. Use Fable for audit discovery and Sol for audit
+review while Fable is available. Record any owner-selected audit model or effort override
+in the fresh launch inputs for that run. Use the standing role selections for other runs.
+
+Qualify the requested roles before freezing a fresh run. Verify the publicly resolved
+mode, models, profiles and effort before accepting the launch. `opus` is the native
+selector. Confirm its actual resolution to Claude Opus 5.5 using supported public
+model evidence. A selector echo leaves the version unverified. Use a supported stop
+and reconcile any mismatch or unverified required resolution. Use public evidence
 without inspecting private profile stores or probing accounts merely for quota.
 
-The owner's 2026-11-19 upgrade selects backend `codex` and native model `gpt-6.2-sol`
-for fresh Sol roles, preserving profile `current` and qualified effort/context choices.
-The current local catalogue and official launch were verified; `xhigh` is supported.
-This changes neither the Opus availability/fallback rule nor historical/frozen selections.
-
-On actual Opus quota exhaustion, reconcile the owning lifecycle through supported
-controls and preserve work and receipts. Apply the authorized all-Sol fallback
-by starting a fresh run in the approved scope and required pipeline mode. Keep
-the frozen role configuration for existing runs.
-
-Use Fable for audit discovery and Sol for audit review while Fable is available.
-After actual Opus quota exhaustion, apply the same all-Sol fallback to audits
-in Independent mode. Record any owner-selected audit model or effort override
-in the fresh launch inputs for that run. Use the standing role selections for
-other runs.
-
-Combined adds primary convergence and read-only clean confirmation before the
-full independent review gate in coding pipelines. Require and report its actual
-verification; old Lazy self-review/Worker confirmation is not that independent
-gate. Managed roles follow their assigned protocol without managing their own
-Runner or adding CLI self-status/admission/retirement probes.
+On confirmed Opus quota exhaustion, reconcile the owning lifecycle through supported
+controls and preserve work and receipts. Apply the authorized all-Sol fallback by
+starting a fresh Independent run in the approved scope. The same fallback applies to
+audits. Keep the frozen role configuration for existing runs.
 
 This direction applies to fresh runs only. It does not alter actual Runner-only
 code authorship, delegated design/documentation independent review, required
