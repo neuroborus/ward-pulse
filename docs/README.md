@@ -23,6 +23,7 @@ becoming public Vocs pages.
 - [Roadmap](product/user-guide/ROADMAP.md)
 - [UI screenshot index](assets/README.md)
   - [Phone store gallery](assets/store-phone/README.md)
+  - [Foldable store gallery](assets/store-foldable/README.md)
   - [Wear OS and watch face store gallery](assets/store-wear/README.md)
 
 ## Start Here
