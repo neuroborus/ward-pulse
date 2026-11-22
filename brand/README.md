@@ -6,7 +6,9 @@ reserved for assets that define the official WardPulse product identity.
 ## Directories
 
 - `icons/`: shared OpenPencil `.fig` sources and exported app and product identity icons.
-- `store/`: Play Store screenshots, feature graphics, listing copy, and release artwork.
+- `store/`: reserved for store copy and supporting brand artwork. The tracked store covers
+  and screenshots are in the [phone](../docs/assets/store-phone/README.md) and
+  [Wear OS and watch face](../docs/assets/store-wear/README.md) galleries.
 - `watchface/`: watch face visual assets and packaging artwork.
 
 ## Usage Rules

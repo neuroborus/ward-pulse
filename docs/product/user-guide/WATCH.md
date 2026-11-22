@@ -30,9 +30,9 @@ to return to the previous page; from either home page, one dismissal leaves the 
 
 ![Clock-free Wear Glance showing selected plan capacity and available purchased credits.](/screenshots/wear-glance-overview.png)
 
-The selected metric with the lowest remaining percentage appears first.
-This general Glance example uses demo usage data. The **Mock data** line identifies the
-demonstration; see the [refresh status legend](#refresh-status) for the control's colours and actions.
+The selected metric with the lowest remaining percentage appears first. This example uses
+sample usage data. See the [refresh status legend](#refresh-status) for the control's colours
+and actions.
 
 ### Plan windows
 

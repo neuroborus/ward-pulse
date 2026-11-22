@@ -2,6 +2,9 @@
 
 This directory owns the public UI PNGs used by the site, root README and task-guide illustrations.
 Apply [user-docs](../../.agents/skills/user-docs/SKILL.md) when capturing or reviewing them.
+Store assets have their own upload order and format. See the [phone gallery](store-phone/README.md)
+and the [Wear OS and watch face gallery](store-wear/README.md). The store PNGs are covered by
+the [WardPulse brand usage rules](../../brand/README.md#usage-rules).
 
 Select up to three showcase subjects per platform for the landing/README gallery. Android
 phone and Wear OS are one platform, with both phone and watch represented. Reuse the same
@@ -12,6 +15,12 @@ the original aspect ratio, and watch PNGs are 500×500px with transparent corner
 the circular screen.
 
 ## Screenshot index
+
+**Glance refresh, 2026-11-22 (Europe/Paris).** The general Glance image was recaptured on the
+round Wear emulator with the same sample credits, percentages and ring selection as the
+showcase. The fixture was refreshed for a healthy `OK` state. Its native 384×384 frame also
+supplies the [Wear store gallery](store-wear/README.md). The documentation export keeps the
+existing 500×500 round presentation. Prior capture records below describe their dated exports.
 
 **Capture refresh, 2026-11-06 (Europe/Paris).** The library remains 37 screenshots.
 Nineteen replacement examples were captured from one shared Mock/demo snapshot, reviewed
@@ -79,11 +88,9 @@ image or its placement changes.
 
 ### Current index rows
 
-Captured and Last verified refer to actual native-frame/export observations. The nineteen
-2026-11-06 rows use their actual Europe/Paris calendar dates; precise UTC observations and
-hashes are recorded in the new cohort below. All nineteen accepted exports are integrated
-into their existing paths. Current served-byte, placement and original-image-link checks
-are recorded in the new cohort.
+Captured and Last verified refer to actual native-frame/export observations. Dates are in
+Europe/Paris. The dated cohorts below record the UTC observations, hashes, placement and
+original-image-link checks for their respective exports.
 
 | File | Description | Theme | Date added | Captured | Last verified | Dimensions | App | Used in |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -117,7 +124,7 @@ are recorded in the new cohort.
 | [phone-home-widget-short-dark.png](phone-home-widget-short-dark.png) | Three complete leading demo rows, retaining applicable balance and reset details. | Dark | 2026-10-23 | 2026-11-06 | 2026-11-06 | 864×1920 | WardPulse phone | Dark Widget guide, height example |
 | [phone-watch-settings-light.png](phone-watch-settings-light.png) | Demo selection of Codex, Claude/Fable and Cursor pools across three bands. | Light | 2026-10-14 | 2026-11-06 | 2026-11-06 | 864×1920 | WardPulse phone | Light Watch guide |
 | [phone-watch-settings-dark.png](phone-watch-settings-dark.png) | Demo selection of Codex, Claude/Fable and Cursor pools across three bands. | Dark | 2026-10-14 | 2026-11-06 | 2026-11-06 | 864×1920 | WardPulse phone | Dark Watch guide |
-| [wear-glance-overview.png](wear-glance-overview.png) | Clock-free Mock data example: Codex 54%/1.2K, Claude/Fable 69%/63%, Cursor/Others 98%/80%; no active alerts. | Fixed dark | 2026-10-20 | 2026-11-06 | 2026-11-06 | 500×500 | WardPulse Wear | Both landing/README themes and general Watch guide |
+| [wear-glance-overview.png](wear-glance-overview.png) | Clock-free Glance with green OK, Codex 54%/1.2K, Claude/Fable 69%/63%, Cursor/Others 98%/80% and zero active alerts. | Fixed dark | 2026-10-20 | 2026-11-22 | 2026-11-22 | 500×500 | WardPulse Wear | Both landing/README themes and general Watch guide |
 | [wear-glance.png](wear-glance.png) | Clock-free Stale example: Claude Weekly 1%, Codex Weekly 4%, Cursor Models 50%; amber !OK, Alerts 0 disabled. | Fixed dark | 2026-10-14 | 2026-10-24 | 2026-10-24 | 500×500 | WardPulse Wear | Watch guide, refresh-status explanation of Stale / !OK only |
 | [wear-plan-windows.png](wear-plan-windows.png) | Demo Claude 5-hour session with 80% left and its reported reset shown as back at 04:46. | Fixed dark | 2026-10-14 | 2026-11-06 | 2026-11-06 | 500×500 | WardPulse Wear | Watch guide in both themes |
 | [wear-watch-face.png](wear-watch-face.png) | Three demo bands with Claude/Fable and Cursor pairs; actual Fri, 69°F and UV 1 default upper data. | Fixed dark | 2026-10-14 | 2026-11-06 | 2026-11-06 | 500×500 | WardPulse watch face | Both landing/README themes and Watch guide |
