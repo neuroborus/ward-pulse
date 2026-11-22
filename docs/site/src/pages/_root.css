@@ -199,6 +199,8 @@ footer[data-v-footer]:has(> [data-wardpulse-roadmap-audio]) {
   container: roadmap / inline-size;
   --wardpulse-roadmap-paper: var(--vocs-background-color-surface);
   --wardpulse-roadmap-muted: color-mix(in srgb, var(--vocs-text-color-primary) 82%, var(--wardpulse-roadmap-paper));
+  --wardpulse-roadmap-dot-top: 0.3em;
+  --wardpulse-roadmap-dot-left: -1.5rem;
 }
 
 /* Native Markdown stays in reading order; automatic rows grow with the actual copy. */
@@ -238,12 +240,31 @@ footer[data-v-footer]:has(> [data-wardpulse-roadmap-audio]) {
 .wardpulse-roadmap__content > h2::before {
   content: '';
   position: absolute;
-  top: 0.3em;
-  left: -1.5rem;
+  top: var(--wardpulse-roadmap-dot-top);
+  left: var(--wardpulse-roadmap-dot-left);
   width: 0.625rem;
   height: 0.625rem;
   border-radius: 50%;
   background: var(--vocs-text-color-primary);
+}
+
+.wardpulse-roadmap__content > h2#release-010::after {
+  content: '\200B' / 'Published';
+  position: absolute;
+  top: calc(var(--wardpulse-roadmap-dot-top) + 0.28125rem);
+  left: calc(var(--wardpulse-roadmap-dot-left) + 0.203125rem);
+  box-sizing: border-box;
+  width: 0.875rem;
+  height: 0.28125rem;
+  color: var(--vocs-text-color-primary);
+  border: solid var(--wardpulse-roadmap-paper);
+  border-width: 0 0 0.125rem 0.125rem;
+  transform: rotate(-50deg);
+  transform-origin: 0.0625rem calc(100% - 0.0625rem);
+  /* Trace the sides and tip in the dot's ink as the stroke crosses onto the paper. */
+  filter: drop-shadow(0.05rem 0 currentColor)
+    drop-shadow(0 0.05rem currentColor) drop-shadow(0 -0.05rem currentColor);
+  pointer-events: none;
 }
 
 .wardpulse-roadmap__content > h2:nth-of-type(1) {
