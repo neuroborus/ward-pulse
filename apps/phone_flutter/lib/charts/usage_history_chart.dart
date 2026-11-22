@@ -154,7 +154,10 @@ class _UsageHistoryFooter extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [start, end],
               )
-            else ...[start, end],
+            else ...[
+              start,
+              end,
+            ],
             const SizedBox(height: 4),
             total,
           ],
