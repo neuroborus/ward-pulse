@@ -2,9 +2,9 @@
 
 This directory owns the public UI PNGs used by the site, root README and task-guide illustrations.
 Apply [user-docs](../../.agents/skills/user-docs/SKILL.md) when capturing or reviewing them.
-Store assets have their own upload order and format. See the [phone gallery](store-phone/README.md)
-and the [Wear OS and watch face gallery](store-wear/README.md). The store PNGs are covered by
-the [WardPulse brand usage rules](../../brand/README.md#usage-rules).
+Store assets have their own upload order and format. See the [phone gallery](store-phone/README.md),
+[foldable gallery](store-foldable/README.md), and [Wear OS and watch face gallery](store-wear/README.md).
+The store PNGs are covered by the [WardPulse brand usage rules](../../brand/README.md#usage-rules).
 
 Select up to three showcase subjects per platform for the landing/README gallery. Android
 phone and Wear OS are one platform, with both phone and watch represented. Reuse the same
