@@ -22,6 +22,8 @@ becoming public Vocs pages.
 - [Report an issue](product/user-guide/REPORT_AN_ISSUE.md)
 - [Roadmap](product/user-guide/ROADMAP.md)
 - [UI screenshot index](assets/README.md)
+  - [Phone store gallery](assets/store-phone/README.md)
+  - [Wear OS and watch face store gallery](assets/store-wear/README.md)
 
 ## Start Here
 
