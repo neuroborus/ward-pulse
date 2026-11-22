@@ -67,6 +67,7 @@
 - 924d69a: Preserve known-zero purchased-credit balances on home-widget plan rows, including their freshness status, while continuing to omit missing balances.
 - e4c4b2f: Enlarge watch-face legend labels and upper readings, and lift the clock and watermark to give the legend more room. Preserve all three cells' outward border fades and add a downward fade only to the two lateral borders, keeping ring and zero-value semantics.
 - 977edbe: Keep known token history bars visible when other intervals lack token counts, without presenting their partial sum as a complete total.
+- 47b15f8: Keep Dashboard usage history dates readable at large text sizes by moving the full usage total onto its own line when space is tight.
 - 9b2c23e: Use WardPulse's original click for Alert notifications and Plan recovery. On Android 8.0 and newer, this default applies only to newly created notification categories; existing sounds and silent settings are preserved.
 - 1be5f89: Restrict Plan recovery notifications to Plan allowances so purchased meters cannot trigger them, including from remembered keys after a usage reset.
 - a3690eb: Reconcile disconnected plan rows and usage summaries as soon as local removal commits,
@@ -102,3 +103,4 @@
   included-quota recovery.
 - c6114af: Restore the centre-time tap to Glance while keeping upper complication taps local to their
   visible cells. Preserve existing assignments, visual mapping and provider-supplied tap actions.
+- 5ef9b1d: Keep metric labels visible at intermediate home-screen widget widths by reducing the side padding when needed.

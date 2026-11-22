@@ -81,24 +81,88 @@ class UsageHistoryChart extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(_rangeLabel(buckets.first.startAt, showDates)),
-                  ),
-                  Text(totalLabel),
-                  Expanded(
-                    child: Text(
-                      _rangeLabel(buckets.last.endAt, showDates),
-                      textAlign: TextAlign.end,
-                    ),
-                  ),
-                ],
+              _UsageHistoryFooter(
+                startLabel: _rangeLabel(buckets.first.startAt, showDates),
+                endLabel: _rangeLabel(buckets.last.endAt, showDates),
+                totalLabel: totalLabel,
               ),
             ],
           ],
         ),
       ),
+    );
+  }
+}
+
+class _UsageHistoryFooter extends StatelessWidget {
+  const _UsageHistoryFooter({
+    required this.startLabel,
+    required this.endLabel,
+    required this.totalLabel,
+  });
+
+  final String startLabel;
+  final String endLabel;
+  final String totalLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const gap = 8.0;
+        final style = DefaultTextStyle.of(context).style.copyWith(
+          fontWeight: MediaQuery.boldTextOf(context) ? FontWeight.bold : null,
+          letterSpacing: MediaQuery.maybeLetterSpacingOverrideOf(context),
+          wordSpacing: MediaQuery.maybeWordSpacingOverrideOf(context),
+        );
+        final painter = TextPainter(
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+          locale: Localizations.maybeLocaleOf(context),
+        );
+        double widthOf(String label) {
+          painter
+            ..text = TextSpan(text: label, style: style)
+            ..layout();
+          return painter.width;
+        }
+
+        final datesWidth = widthOf(startLabel) + gap + widthOf(endLabel);
+        final allWidth = datesWidth + gap + widthOf(totalLabel);
+        painter.dispose();
+
+        final start = Text(startLabel, textAlign: TextAlign.start);
+        final end = Text(endLabel, textAlign: TextAlign.end);
+        final total = Text(totalLabel, textAlign: TextAlign.center);
+        if (allWidth <= constraints.maxWidth) {
+          return Row(
+            children: [
+              start,
+              const SizedBox(width: gap),
+              Expanded(child: total),
+              const SizedBox(width: gap),
+              end,
+            ],
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (datesWidth <= constraints.maxWidth)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [start, end],
+              )
+            else ...[
+              start,
+              end,
+            ],
+            const SizedBox(height: 4),
+            total,
+          ],
+        );
+      },
     );
   }
 }

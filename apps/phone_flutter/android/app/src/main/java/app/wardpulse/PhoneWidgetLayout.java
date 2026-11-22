@@ -546,11 +546,15 @@ public final class PhoneWidgetLayout {
         if (details && detailWidth == 0) return null;
         int blockWidth = accent + primaryWidth + (labels ? gap + labelWidth : 0)
                 + (details ? gap + detailWidth : 0);
+        int sideMargin = margin;
+        if (columns == 2) {
+            sideMargin = Math.max(dp(density, 4), Math.min(margin, (width - blockWidth) / 2));
+        }
         boolean showBadge = stale && badge.supported;
         int header = dp(density, 19);
         if (showBadge) header = Math.max(header,
                 badge.lineBottom - badge.lineTop + dp(density, 2));
-        int cardWidth = Math.max(blockWidth + 2 * margin,
+        int cardWidth = Math.max(blockWidth + 2 * sideMargin,
                 headerWidth(density, true, showBadge, badge));
         if (cardWidth > width) return null;
         int rowHeight = dp(density, 44), lowerTop = dp(density, 29);

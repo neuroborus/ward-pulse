@@ -20,6 +20,94 @@ void main() {
     expect(find.text('USD 3.50'), findsOneWidget);
     expect(find.text('2026-07-12'), findsOneWidget);
     expect(find.text('2026-07-14'), findsOneWidget);
+    final totalTop = tester.getTopLeft(find.text('USD 3.50')).dy;
+    expect(tester.getTopLeft(find.text('2026-07-12')).dy, totalTop);
+    expect(tester.getTopLeft(find.text('2026-07-14')).dy, totalTop);
+  });
+
+  testWidgets('keeps dates and a long total readable at large bold text', (
+    tester,
+  ) async {
+    const start = '2026-07-12';
+    const end = '2026-07-14';
+    const total = '19,213,690,951 tokens';
+    final buckets = [
+      _tokenBucket(DateTime.utc(2026, 7, 12), 19_000_000_000),
+      _tokenBucket(DateTime.utc(2026, 7, 13), 213_690_951),
+    ];
+
+    for (final (width, datesShareRow) in [(520.0, true), (411.0, false)]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          builder:
+              (context, child) => MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: const TextScaler.linear(1.6),
+                  boldText: true,
+                ),
+                child: child!,
+              ),
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: width,
+                child: UsageHistoryChart(buckets: buckets),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final startRect = tester.getRect(find.text(start));
+      final endRect = tester.getRect(find.text(end));
+      final totalRect = tester.getRect(find.text(total));
+      if (datesShareRow) {
+        expect(startRect.top, endRect.top);
+      } else {
+        expect(endRect.top, greaterThanOrEqualTo(startRect.bottom));
+      }
+      expect(totalRect.top, greaterThan(endRect.bottom));
+
+      final plot = tester.getRect(
+        find.byKey(const ValueKey('usage-history-bars')),
+      );
+      final footer = Rect.fromLTRB(
+        plot.left,
+        plot.bottom,
+        plot.right,
+        tester.getRect(find.byType(Card)).bottom,
+      );
+      for (final label in [start, end, total]) {
+        final finder = find.text(label);
+        final paragraph = tester.renderObject<RenderParagraph>(finder);
+        expect(paragraph.textScaler.scale(10), closeTo(16, 0.001));
+        expect(paragraph.text.style?.fontWeight, FontWeight.bold);
+        expect(paragraph.didExceedMaxLines, isFalse);
+        final boxes = paragraph.getBoxesForSelection(
+          TextSelection(baseOffset: 0, extentOffset: label.length),
+        );
+        if (label == total) {
+          expect(boxes, isNotEmpty);
+        } else {
+          expect(boxes, hasLength(1));
+        }
+        final rect = tester.getRect(finder);
+        for (final box in boxes) {
+          final glyphs = box.toRect().shift(rect.topLeft);
+          expect(glyphs.isEmpty, isFalse);
+          expect(
+            rect.intersect(glyphs),
+            rectMoreOrLessEquals(glyphs, epsilon: 0.5),
+          );
+          expect(
+            footer.intersect(glyphs),
+            rectMoreOrLessEquals(glyphs, epsilon: 0.5),
+          );
+        }
+      }
+      expect(tester.takeException(), isNull);
+    }
   });
 
   testWidgets('separates a wrapped history title from its bucket count', (
