@@ -20,10 +20,11 @@ import 'connection_snapshot_cache.dart';
 /// Chains every credential-backed connection in front of [openAiAndCodex].
 ///
 /// Each link merges its own provider report and falls back to the links behind
-/// it, so one unconfigured or failing connection never hides the others.
+/// it, so one unconfigured or failing connection never hides the others. A null
+/// [claudeAccountService] omits Claude plan, as builds that pause it do.
 DashboardRepository buildLiveProviderStack({
   required ProviderCredentialStore credentialStore,
-  required ClaudeAccountService claudeAccountService,
+  required ClaudeAccountService? claudeAccountService,
   required DashboardRepository openAiAndCodex,
   Map<String, ConnectionSnapshotCache> caches = const {},
   ProviderSyncLogger logger = const DeveloperProviderSyncLogger(),
@@ -151,13 +152,16 @@ DashboardRepository buildLiveProviderStack({
     },
   );
 
-  final claude = claudeDashboardRepository(
-    accountService: claudeAccountService,
-    mergeSnapshots: mergeSnapshots,
-    cache: caches[ProviderConnections.claudePlan.storageKey],
-    fallback: anthropic,
-    logger: logger,
-  );
+  final claude =
+      claudeAccountService == null
+          ? anthropic
+          : claudeDashboardRepository(
+            accountService: claudeAccountService,
+            mergeSnapshots: mergeSnapshots,
+            cache: caches[ProviderConnections.claudePlan.storageKey],
+            fallback: anthropic,
+            logger: logger,
+          );
 
   final cursorTeam = connect(
     connection: ProviderConnections.cursorPlatform.storageKey,

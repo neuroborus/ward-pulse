@@ -8,6 +8,7 @@ import '../settings/alert_threshold_preferences.dart';
 import 'alert_threshold_dialogs.dart';
 import 'claude_account_row.dart';
 import 'claude_account_service.dart';
+import 'claude_plan_pause.dart';
 import 'codex_account_row.dart';
 import 'codex_account_service.dart';
 import 'credential_dialog.dart';
@@ -23,6 +24,7 @@ class ProvidersScreen extends StatefulWidget {
     required this.credentialStore,
     required this.codexAccountService,
     required this.claudeAccountService,
+    this.claudePlanPaused = claudePlanPausedInBuild,
     required this.onCredentialsChanged,
     required this.alertThresholds,
     required this.onAlertThresholdsChanged,
@@ -57,6 +59,9 @@ class ProvidersScreen extends StatefulWidget {
   final VoidCallback? onEditConnectionOpened;
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
+
+  /// Replaces the Claude plan row with the information-only paused row.
+  final bool claudePlanPaused;
   final VoidCallback onCredentialsChanged;
   final AlertThresholdPreferences? alertThresholds;
   final Future<void> Function(
@@ -659,6 +664,10 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
         onCredentialsChanged: widget.onCredentialsChanged,
         buildControls: _controlsBuilderFor(connection),
       );
+    }
+    if (connection.id == ProviderConnections.claudePlan &&
+        widget.claudePlanPaused) {
+      return PausedClaudePlanRow(connection: connection);
     }
     if (connection.id == ProviderConnections.claudePlan) {
       return ClaudeAccountRow(

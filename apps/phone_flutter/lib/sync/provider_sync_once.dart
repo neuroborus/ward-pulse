@@ -165,6 +165,8 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
 }) async {
   if (!await owner.isLive()) return null;
   final live = (createLive ?? PhoneLiveBindings.create)();
+  // Paused builds retire saved Claude plan credentials before provider work.
+  await live.retirePausedClaudePlan();
   final poll = AutomaticPollContext.current ?? AutomaticPollContext();
   final alertThresholds = await SecureAlertThresholdPreferenceStore().read();
   if (!await owner.isLive()) return null;
@@ -209,10 +211,9 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
       final ringPreferences =
           await (watchRingStore ?? SecureWatchRingPreferenceStore()).read();
       if (!await isCurrent()) return;
-      await const MethodChannelWatchSyncService().sync(
-        snapshot,
-        ringPreferences,
-      );
+      await MethodChannelWatchSyncService(
+        claudePlanPaused: live.claudePlanPaused,
+      ).sync(snapshot, ringPreferences);
     },
     syncWidget: () async {
       if (poll.whollySkipped) return;

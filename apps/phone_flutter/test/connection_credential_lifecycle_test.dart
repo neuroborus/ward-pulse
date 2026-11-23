@@ -1372,6 +1372,104 @@ void main() {
       expect(secure.values[paste], isNull);
     },
   );
+  for (final alreadyDeleted in [false, true]) {
+    test('Claude retirement survives detach, restart and a failed secure '
+        'delete (already deleted: $alreadyDeleted)', () async {
+      const connection = 'anthropic.plan';
+      const legacy = 'wardpulse.claude.account-session';
+      const paste = 'wardpulse.anthropic.plan.secret';
+      SecureClaudeAccountStore account(String owner) =>
+          SecureClaudeAccountStore(
+            storage: secure,
+            platform: bridge.platform(owner),
+          );
+      Future<Map> inspect({String operation = 'release'}) async {
+        final lease =
+            await bridge.invoke('inspect', 'acquire', {
+                  'connection': connection,
+                  'action': 'read',
+                })
+                as Map;
+        final state =
+            await bridge.invoke('inspect', 'finish', {
+                  'connection': connection,
+                  'lease': lease['lease'],
+                  'operation': operation,
+                })
+                as Map;
+        return {...state, 'cleanupSlots': lease['cleanupSlots']};
+      }
+
+      secure.values[legacy] = jsonEncode(
+        ClaudeAccountSession(
+          accessToken: 'fake-upgrade-access',
+          refreshToken: 'fake-upgrade-refresh',
+          expiresAt: now.add(const Duration(hours: 1)),
+          accountId: 'fake-upgrade-account',
+        ).toJson(),
+      );
+      secure.values[paste] = 'fake-old-paste';
+      final String? slot;
+      final Object generation;
+      if (alreadyDeleted) {
+        generation = (await inspect(operation: 'missing'))['generation']!;
+        slot = null;
+      } else {
+        final migrated = (await account('old').readVersioned())!;
+        generation = migrated.version.generation;
+        slot = (await inspect())['slot'] as String;
+      }
+      final expected = [if (slot != null) slot, legacy, paste];
+      final committed = Completer<Map>();
+      final release = Completer<void>();
+      final platform = ObservingCachePlatform(bridge.platform('retiring'));
+      platform.onComplete = (method, arguments, reply) async {
+        if (method == 'acquire' && arguments['action'] == 'retireClaudePlan') {
+          committed.complete(reply as Map);
+          await release.future;
+          throw StateError('Retiring engine detached before secure cleanup.');
+        }
+      };
+      final interrupted = expectLater(
+        SecureClaudeAccountStore(storage: secure, platform: platform).retire(),
+        throwsStateError,
+      );
+      late final Object retiredGeneration;
+      try {
+        final lease = await Future.any([
+          committed.future,
+          interrupted.then<Map>((_) {
+            throw StateError('Retirement ended before committing its lease.');
+          }),
+        ]);
+        retiredGeneration = lease['generation']!;
+        expect(retiredGeneration == generation, alreadyDeleted);
+        expect(lease['cleanupSlots'], expected);
+        await bridge.invoke('retiring', 'detach', {});
+      } finally {
+        release.complete();
+        await interrupted;
+      }
+      expect(secure.values.keys, containsAll(expected));
+      await bridge.invoke('test', 'restart', {});
+      secure.failDeleteKey = legacy;
+      await account('retry').retire();
+      expect(secure.values.keys, [legacy]);
+      expect(await inspect(), containsPair('generation', retiredGeneration));
+      expect(await inspect(), containsPair('cleanupSlots', [legacy]));
+
+      await bridge.invoke('test', 'restart', {});
+      secure.failDeleteKey = null;
+      await Future.wait([account('ui').retire(), account('worker').retire()]);
+      expect(secure.values, isEmpty);
+      final cleaned = await inspect();
+      expect(cleaned['mode'], 'deleted');
+      expect(cleaned['generation'], retiredGeneration);
+      expect(cleaned['cleanupSlots'], isEmpty);
+      expect(secure.deleted.where((key) => key == legacy), [legacy, legacy]);
+      expect(secure.deleted.where((key) => key == paste), [paste]);
+    });
+  }
   test(
     'OAuth refresh retires the migration backup for the old credential revision',
     () async {

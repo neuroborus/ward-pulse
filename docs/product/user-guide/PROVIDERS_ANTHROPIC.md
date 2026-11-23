@@ -1,64 +1,31 @@
 # Anthropic
 
-Connect **Claude plan** to read the plan windows and monthly extra usage available from
-your Claude account. Connect **Organization reporting** separately for Console API expenses.
+Use **Organization reporting** to see your Claude Console organization's API expenses and
+usage. **Claude plan** is temporarily unavailable in the public app.
 
 ## Claude plan
 
-Use the Claude account whose plan windows you want to read.
+WardPulse has paused Claude plan sign-in and monitoring in the public app because
+Anthropic's policy restricts third-party apps from using Claude plan credentials.
+Tap the grey **Connect** button under **Providers → Anthropic → Claude plan** to read
+the explanation. [Anthropic's authentication policy](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use)
 
-1. Open **Providers → Anthropic → Claude plan**.
-2. In **Connect Claude plan**, tap **Open browser**, sign in and approve the requested access.
-3. Copy the authorization code from the callback page, including its **CODE#STATE** form.
-4. Return to WardPulse, paste it into the authorization field and tap **Continue**.
-
-This field expects the callback authorization code, not an API key. If sign-in fails, for
-example because the code is incomplete, belongs to an earlier attempt or has expired, the
-dialog shows the error with **Restart sign-in** and **Cancel**. Tap **Restart sign-in**, then
-**Open browser**, approve access again, paste the new code and tap **Continue**. The old code
-cannot be reused. **Cancel** closes the dialog. A failed or cancelled attempt does not replace
-an existing Claude plan connection.
-
-**Extra usage** shows the monthly amount Claude reports as used and the applicable monthly
-cap, when available. WardPulse displays these quantities in **Credits**. Do not read that
-credit count as a dollar amount or a prepaid balance. This monthly meter does not provide
-Today or Week spending or an estimated reset date.
-
-Availability depends on your Claude account, its settings and the data Claude reports.
-Connecting WardPulse does not enable extra usage or change your billing. For a managed
-account, your organization may control access and applicable limits. See Claude's
-[personal-plan credit guide](https://support.claude.com/en/articles/12429409-manage-usage-credits-for-paid-claude-plans)
-or [Team and legacy seat-based Enterprise credit guide](https://support.claude.com/en/articles/12005970-manage-usage-credits-for-team-and-seat-based-enterprise-plans)
-for those accounts' controls.
-
-WardPulse shows the usable figures your account reports without filtering by plan name.
-This does not mean every account has extra usage enabled or provides the same figures.
-A missing, disabled or incomplete meter is not zero spending. A missing or zero cap is not
-**Unlimited** or proof of exhaustion; any known used amount or cap is shown independently.
-Its percentage appears only when reported.
-
-Plan windows are independent of extra usage. Only the windows Claude reports appear;
-a missing 5-hour window does not make other windows or extra usage unavailable. Reset
-times appear only when Claude reports them for that window.
-
-When Claude reports an included **Fable weekly** window, WardPulse shows it separately
-from your other plan windows. It is a sub-cap of the same weekly allowance, not additional
-weekly usage. Its percentage describes the Fable sub-cap itself. Missing usage stays
-unknown, and a reset is shown only when Claude supplies a valid reset for that window.
-An absent Fable window does not create an allowance or change your other windows.
+The pause also applies to previously connected plans. WardPulse removes the saved sign-in
+on this phone and keeps your saved watch and widget choices. Check your subscription's usage,
+including any 5-hour, weekly, Fable and Extra usage figures your plan provides, in
+[Claude → Settings → Usage](https://claude.ai/settings/usage).
 
 ## Organization reporting
 
-Use a key with reporting access to the intended Console organization. A Claude chat
-subscription or Claude plan login does not grant this access. Console API expenses are
-separate from Claude Plan's monthly Extra usage Credits; neither supplies the other's data.
-See Claude's explanation of [how subscription and API billing differ](https://support.claude.com/en/articles/9876003-i-have-a-paid-claude-subscription-pro-max-team-or-enterprise-plans-why-is-claude-api-usage-billed-separately-from-my-paid-claude-plan).
+Use a key with reporting access to the intended Console organization. This connection
+covers the organization's API expenses and usage. Your Claude subscription limits and
+Extra usage appear in your Claude account's Usage settings.
+[How Claude bills subscription and API usage](https://support.claude.com/en/articles/9876003-i-have-a-paid-claude-subscription-pro-max-team-or-enterprise-plans-why-is-claude-api-usage-billed-separately-from-my-paid-claude-plan)
 
 WardPulse uses one **ordinary organization-scoped API key** with actual reporting rights
 for the linked account. Leave workspace scope unset. WardPulse rejects Console **Admin**
 keys, including values starting with `sk-ant-admin`; replace one in this same reporting row.
-A key without that marker still needs organization eligibility and account rights. This
-reporting field is separate from Claude plan's authorization-code field.
+A key without that marker still needs organization eligibility and account rights.
 
 ### Convert an individual organization
 
@@ -86,8 +53,8 @@ key, **Key rejected** explains that you need an ordinary organization-scoped rep
 Open the row, enter it in **Value** and **Save**. Policy rejection keeps the previous key,
 label and cached report; it does not verify access or erase previous data.
 Other **Key rejected** results call for checking or replacing the key. For **Access denied**,
-review both the organization's reporting access and the key's rights/scope. A connected Claude
-plan cannot verify the reporting key. Do not share keys in issues or screenshots.
+review both the organization's reporting access and the key's rights and scope. Do not
+share keys in issues or screenshots.
 
 ### Read Console expenses
 
@@ -109,18 +76,13 @@ still shows known spend on Dashboard and makes it selectable on Widget. Widget k
 reported amount and currency, with **No cap**, **Cap unavailable** or **Percentage unavailable**
 when applicable; missing spend stays **Unavailable**. Watchface budget rings still require
 known spend, a positive same-currency cap and a usable percentage. Saved unavailable
-choices remain removable. Widget Extra usage details keep independent monthly used/cap
-Credits, distinct from purchased credits left. See [Dashboard](/guide/dashboard#spend-history-and-model-detail),
+choices remain removable. See [Dashboard](/guide/dashboard#spend-history-and-model-detail),
 [Watch](/guide/watch#choose-usage-rings) and [Widget](/guide/widget#add-and-configure-it).
 
 ## Reconnect, change or remove a connection
 
-If your Claude plan sign-in expires, open **Providers → Anthropic → Claude plan** and
-sign in again. If it is still shown as connected, use **Reconnect**. An Organization
-reporting key cannot renew a Claude plan sign-in.
-
-Use **Reconnect** or **Disconnect** for Claude plan. For Organization reporting, replace
-**Value** and tap **Save**, change only **Label** with Value blank, or **Remove** the saved
-key. **Cancel** discards the unsaved edit. Blank Value preserves the saved key; the field
+For Organization reporting, replace **Value** and tap **Save**, change only **Label** with
+Value blank, or **Remove** the saved key. **Cancel** discards the unsaved edit.
+Blank Value preserves the saved key; the field
 never displays it back. Removing it in WardPulse does not revoke it at the provider. See
 [connection management](/guide/providers#reconnect-change-or-remove-a-connection).

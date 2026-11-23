@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' show PointerDeviceKind, SemanticsAction;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -9,6 +10,7 @@ import 'package:ward_pulse_phone/app/ward_pulse_theme.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/providers/claude_account_service.dart';
 import 'package:ward_pulse_phone/providers/claude_account_row.dart';
+import 'package:ward_pulse_phone/providers/claude_plan_pause.dart';
 import 'package:ward_pulse_phone/providers/alert_threshold_dialogs.dart';
 import 'package:ward_pulse_phone/providers/codex_account_service.dart';
 import 'package:ward_pulse_phone/providers/credential_dialog.dart';
@@ -22,6 +24,75 @@ import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 import 'package:ward_pulse_phone/sync/claude_account_client.dart';
 
 void main() {
+  testWidgets(
+    'paused Claude Connect explains the policy without opening sign-in',
+    (tester) async {
+      _setTestSurface(tester, const Size(390, 1100));
+      final starts = <String>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ProvidersScreen(
+              credentialStore: _MemoryCredentialStore(),
+              codexAccountService: const EmptyCodexAccountService(),
+              claudeAccountService: _QueuedClaudeAccountService(starts, []),
+              claudePlanPaused: true,
+              onCredentialsChanged: () => fail('Unexpected credential change'),
+              alertThresholds: const AlertThresholdPreferences(),
+              onAlertThresholdsChanged:
+                  (_) async => fail('Unexpected alert edit'),
+              onRefresh: _noRefresh,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final row = find.byType(PausedClaudePlanRow);
+      await tester.scrollUntilVisible(row, 250);
+      final button = find.descendant(
+        of: row,
+        matching: find.widgetWithText(TextButton, 'Connect'),
+      );
+      final explanation = find.text(claudePlanPauseExplanation);
+      final semantics = tester.getSemantics(button).getSemanticsData();
+      expect(semantics.tooltip, claudePlanPauseExplanation);
+      expect(semantics.hasAction(SemanticsAction.tap), isTrue);
+      expect(find.byType(ClaudeAccountRow), findsNothing);
+      expect(find.text('Organization reporting'), findsOneWidget);
+
+      Future<void> expectExplanation() async {
+        await tester.pumpAndSettle();
+        expect(explanation, findsOneWidget);
+        Tooltip.dismissAllToolTips();
+        await tester.pumpAndSettle();
+        expect(explanation, findsNothing);
+      }
+
+      await tester.tap(button);
+      await expectExplanation();
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer();
+      try {
+        final center = tester.getCenter(button);
+        await mouse.moveTo(center);
+        await expectExplanation();
+        // Click in place after dismissing the hover tooltip.
+        await mouse.down(center);
+        await mouse.up();
+        await expectExplanation();
+      } finally {
+        await mouse.removePointer();
+      }
+      final text = find.descendant(of: button, matching: find.text('Connect'));
+      Focus.of(tester.element(text)).requestFocus();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await expectExplanation();
+      expect(starts, isEmpty);
+      expect(find.byType(AlertDialog), findsNothing);
+    },
+  );
+
   group('owned connection reveal', () {
     const id = ProviderConnections.openAiPlatform;
     const request = (connection: id, token: 1);

@@ -20,6 +20,114 @@ import 'selected_data_freshness_test_support.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test(
+    'paused rings keep their saved IDs and free publication capacity',
+    () async {
+      final published = _captureWatchPublications();
+      final mixedSource = freshnessSnapshot([
+        freshnessAccount(
+          'claude',
+          'anthropic.plan',
+          status: ProviderStatus.stale,
+          allowances: [
+            freshnessAllowance('claude-five-hour'),
+            freshnessAllowance(
+              'claude-extra-usage',
+              purchased: true,
+              remaining: '20',
+            ),
+          ],
+        ),
+        freshnessAccount('claude', 'anthropic.platform'),
+      ], overall: ProviderStatus.stale);
+      const planAlert = AlertCondition.crossed(
+        key: AlertConditionKey(
+          provider: 'claude',
+          accountId: 'anthropic.plan-account',
+          connection: 'anthropic.plan',
+          target: AllowanceAlertTarget(
+            source: AllowanceSource.plan,
+            id: 'claude-five-hour',
+          ),
+        ),
+        alert: AlertSummary(severity: 'warning', message: 'Plan threshold'),
+      );
+      const organizationAlert = AlertCondition.crossed(
+        key: AlertConditionKey(
+          provider: 'claude',
+          accountId: 'anthropic.platform-account',
+          connection: 'anthropic.platform',
+          target: BudgetAlertTarget(period: AlertBudgetPeriod.today),
+        ),
+        alert: AlertSummary(severity: 'warning', message: 'Console threshold'),
+      );
+      final snapshot = DashboardSnapshot.fromJson({
+        ...mixedSource.toJson(),
+        'todayTotal': {
+          ...mixedSource.todayTotal.toJson(),
+          'spent': {'minorUnits': 5000, 'currency': 'USD'},
+        },
+        'alerts': [
+          planAlert.alert!.toJson(),
+          organizationAlert.alert!.toJson(),
+        ],
+        'alertConditions': [planAlert.toJson(), organizationAlert.toJson()],
+      });
+      const budgets = [
+        'budget.anthropic.platform.today',
+        'budget.anthropic.platform.week',
+        'budget.anthropic.platform.month',
+      ];
+      const mixed = WatchRingPreferences(
+        selectedIds: [claudePlanRingId, ...budgets],
+      );
+      const planOnly = WatchRingPreferences(selectedIds: [claudePlanRingId]);
+      const debug = MethodChannelWatchSyncService(claudePlanPaused: false);
+      const production = MethodChannelWatchSyncService(claudePlanPaused: true);
+      expect(watchRingSlotCost(mixed.migratedIds, claudePlanPaused: true), 3);
+      expect(
+        watchRingPayloadSubtitle(snapshot, planOnly, claudePlanPaused: true),
+        'Selected ring data unavailable',
+      );
+      await debug.sync(snapshot, mixed);
+      expect(published, isEmpty);
+      await production.sync(snapshot, mixed);
+      await production.sync(snapshot, planOnly);
+
+      expect(published, hasLength(2));
+      final mixedPayload =
+          jsonDecode(published.first.arguments as String) as Map;
+      final planOnlyPayload =
+          jsonDecode(published.last.arguments as String) as Map;
+      expect(
+        (mixedPayload['rings'] as List).map((ring) => (ring as Map)['id']),
+        unorderedEquals(budgets),
+      );
+      expect(planOnlyPayload['rings'], isEmpty);
+      expect(planOnlyPayload['selectedRingDataUnavailable'], isTrue);
+      for (final payload in [mixedPayload, planOnlyPayload]) {
+        expect(payload['allowances'], isEmpty);
+        expect(payload['creditsGlance'], isNull);
+        expect(payload['providers'], [
+          {
+            'provider': 'claude',
+            'status': 'ok',
+            'todaySpent': {'minorUnits': 2500, 'currency': 'USD'},
+          },
+        ]);
+        expect((payload['today'] as Map)['spent'], {
+          'minorUnits': 2500,
+          'currency': 'USD',
+        });
+        expect(payload['alerts'], [organizationAlert.alert!.toJson()]);
+        expect(payload['overallStatus'], 'ok');
+        expect(payload['isStale'], isFalse);
+      }
+      expect(mixed.selectedIds, [claudePlanRingId, ...budgets]);
+      expect(planOnly.selectedIds, [claudePlanRingId]);
+    },
+  );
+
   for (final (label, settings) in [
     (
       'Plan threshold',

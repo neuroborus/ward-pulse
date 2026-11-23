@@ -8,13 +8,13 @@ WardPulse is local-first. The MVP must not introduce a custom cloud path for pro
   to authenticate requests directly to their provider. Reporting uses one OpenAI organization
   Admin key, one ordinary organization-scoped Anthropic key with actual linked-account rights,
   or one Cursor Team key per corresponding row; ChatGPT/Codex sign-in uses OpenAI's
-  device-code flow. Claude subscription uses Claude Code's PKCE authorization-code flow (browser
-  plus pasted callback code); Cursor plan uses an experimental in-app WebView dashboard sign-in
+  device-code flow. Debug builds retain Claude plan's experimental PKCE authorization-code flow
+  (browser plus pasted callback code). Cursor plan uses an experimental in-app WebView dashboard sign-in
   that captures the `WorkosCursorSessionToken` cookie (optional Advanced paste remains for
   recovery). This is not OAuth.
 - Phone-held API keys, Codex/Claude OAuth tokens, and Cursor plan session tokens are stored with
   platform-secure storage under immutable per-connection generation/revision keys. Legacy
-  fixed-key installs migrate without requiring another login.
+  fixed-key installs for supported connections migrate without requiring another login.
 - Saved credentials are never displayed in full. Credential entry may reveal only the current unsaved value after an explicit user action.
 - Optional user-defined labels for API-key connections are plain phone-local display metadata. They are stored beside the credential reference, never concatenated into the secret value, and never sent to Wear OS.
 - Anthropic Organization reporting excludes the documented Console Admin marker
@@ -139,6 +139,13 @@ transaction over network waits.
 
 ## Claude Account
 
+- Profile and Release omit personal Claude authorization, refresh, reporting and revocation.
+  On startup or headless sync, they retire the Claude plan credential and its normalized cache
+  locally. Native storage commits the retirement barrier and durable cleanup queue before secure
+  deletion. An existing deletion keeps its generation and queues any legacy keys from older
+  installs. Failed deletes remain queued for later attempts. Console Organization reporting and
+  saved display preferences are independent of retirement.
+- The following sign-in and reporting behavior applies to Debug builds.
 - The phone opens Claude Code's PKCE authorize URL in the external browser. After approval, the
   user pastes the short-lived authorization code (`CODE#STATE`) from Anthropic's callback page;
   the phone exchanges it for tokens. Anthropic does not offer a device-code grant for this client.

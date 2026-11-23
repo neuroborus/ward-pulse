@@ -174,6 +174,7 @@ public final class ConnectionCacheEngine {
         state.put("revision", unique());
         state.put("epoch", unique());
         state.put("mode", mode);
+        state.remove("claudePlanRetired");
         SNAPSHOT_KEYS.forEach(state::remove);
     }
     private static void retire(Map<String, String> state, String slot) {
@@ -190,6 +191,20 @@ public final class ConnectionCacheEngine {
     private static List<String> retired(Map<String, String> state) {
         String slots = state.get("retired");
         return slots == null || slots.isEmpty() ? new ArrayList<>() : new ArrayList<>(Arrays.asList(slots.split("\n")));
+    }
+    private static void retireLegacyKeys(String connection, Map<String, String> state) {
+        retire(state, legacyKey(connection));
+        if ("openai.plan".equals(connection)) retire(state, "wardpulse.codex-companion.config");
+        if ("anthropic.plan".equals(connection)) retire(state, "wardpulse.anthropic.plan.secret");
+    }
+    private static void deleteCredential(String connection, Map<String, String> state) {
+        for (String key : Arrays.asList("slot", "previousSlot", "pendingSlot", "backupKey", "previousBackupKey"))
+            retire(state, state.get(key));
+        retireLegacyKeys(connection, state);
+        barrier(state, "deleted");
+        Arrays.asList("slot", "identity", "previousSlot", "previousIdentity", "previousMode",
+                "pendingSlot", "previousBackupKey").forEach(state::remove);
+        removeBackup(state);
     }
     private static boolean same(Map<String, String> state, Map<String, String> expected, boolean credentialRevision) {
         return "active".equals(state.get("mode")) && expected != null
@@ -335,7 +350,11 @@ public final class ConnectionCacheEngine {
                 throw new IllegalArgumentException("Rejection ownership required.");
             if (pending.fetchTicket != null && !validFetch(pending.owner, connection, pending.fetchTicket))
                 throw new IllegalStateException("Account fetch superseded.");
-            if (fenced.contains(connection) && !"reconnect".equals(pending.action))
+            boolean retireClaudePlan = "retireClaudePlan".equals(pending.action);
+            if (retireClaudePlan && !"anthropic.plan".equals(connection))
+                throw new IllegalArgumentException("Invalid retirement.");
+            boolean storageFenced = fenced.contains(connection);
+            if (storageFenced && !"reconnect".equals(pending.action) && !retireClaudePlan)
                 throw new IllegalStateException("Credential lifecycle unavailable.");
             Map<String, String> state = state(connection);
             boolean pendingAction = "complete".equals(pending.action) || "cancel".equals(pending.action);
@@ -371,12 +390,27 @@ public final class ConnectionCacheEngine {
             } else if (pendingAction) {
                 if (!matches) throw new IllegalStateException("Reconnect superseded.");
                 lease.slot = state.get("pendingSlot");
+            } else if (retireClaudePlan) {
+                boolean alreadyRetired = "true".equals(state.get("claudePlanRetired"));
+                if (!alreadyRetired) {
+                    if ("deleted".equals(state.get("mode"))) {
+                        // Older deletions may have left the fixed keys unqueued.
+                        retireLegacyKeys(connection, state);
+                    } else {
+                        deleteCredential(connection, state);
+                    }
+                    state.put("claudePlanRetired", "true");
+                }
+                if (storageFenced || !alreadyRetired) {
+                    // state() supplies the last confirmed data while fenced. Commit before
+                    // clearing the fence or granting the secure-storage cleanup lease.
+                    persist(connection, state);
+                    fenced.remove(connection);
+                    failedCommitPriorState.remove(connection);
+                }
             } else if ("delete".equals(pending.action) || "rejectDelete".equals(pending.action)) {
-                retire(state, state.get("slot")); retire(state, legacyKey(connection));
-                if ("openai.plan".equals(connection)) retire(state, "wardpulse.codex-companion.config");
-                if ("anthropic.plan".equals(connection)) retire(state, "wardpulse.anthropic.plan.secret");
-                barrier(state, "deleted"); state.remove("slot"); state.remove("identity");
-                state.remove("previousSlot"); state.remove("previousIdentity"); state.remove("previousMode"); state.remove("pendingSlot"); state.remove("previousBackupKey"); removeBackup(state); persist(connection, state);
+                deleteCredential(connection, state);
+                persist(connection, state);
             } else if ("refresh".equals(pending.action)) {
                 if (!"active".equals(state.get("mode"))) throw new IllegalStateException("Credential changed.");
                 lease.slot = "wardpulse.connection." + connection + "." + unique();
@@ -496,7 +530,8 @@ public final class ConnectionCacheEngine {
             Lease lease = leases.get(connection);
             if (!lease.owner.equals(owner)) continue;
             if (lease.slot != null) abandonedSlots.add(lease.slot);
-            if (!"read".equals(lease.action)) {
+            // Deletion is already durable when the lease is granted.
+            if (!Arrays.asList("read", "delete", "rejectDelete", "retireClaudePlan").contains(lease.action)) {
                 try {
                     Map<String, String> state = state(connection);
                     retire(state, state.get("slot")); barrier(state, "pending");

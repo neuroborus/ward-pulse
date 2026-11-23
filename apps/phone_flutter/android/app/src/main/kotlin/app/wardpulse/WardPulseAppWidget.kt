@@ -90,11 +90,16 @@ class WardPulseAppWidget : AppWidgetProvider() {
     ): Publication {
         val sizes = hostSizes(options)
         fun stored(key: String): String = cache[key] as? String ?: ""
+        // A paused build keeps the cached stale flag until a clean publication recomputes it.
         val stale = stored("stale") == "1"
         val count = (cache["row_count"] as? Number)?.toInt()?.coerceIn(0, PhoneWidgetLayout.MAX_ROWS) ?: 0
-        val empty = stored("empty") == "1" || count == 0
+        // Honor the cached empty marker and filter paused rows before Dart runs.
+        val shown = PhoneWidgetLayout.shownRows(
+            count, context.resources.getBoolean(R.bool.ward_pulse_claude_plan_paused),
+        ) { stored(it) }
+        val empty = shown.isEmpty()
         val zone = ZoneId.systemDefault()
-        val rows = (0 until count).map { index ->
+        val rows = shown.map { index ->
             PhoneWidgetLayout.Row.fromCache(
                 stored("row_${index}_label"), stored("row_${index}_family"),
                 stored("row_${index}_pool"), stored("row_${index}_percent"),

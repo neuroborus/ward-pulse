@@ -1,6 +1,7 @@
 package app.wardpulse.watchsync;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -55,6 +56,8 @@ public final class ConnectionCacheEngineTest {
         verifiedReconnectRetiresNotice(); failedReconnectReportPreservesConfirmedState();
         failedSnapshotTransactionsRetainConfirmedPair();
         failedFirstLegacyCleanupRetainsEmptyState();
+        claudePlanRetirement();
+        failedClaudePlanRetirementFences();
         System.out.println("Connection cache engine: " + assertions + " assertions passed.");
     }
     static void restartPartialAndMonotonic() {
@@ -99,7 +102,12 @@ public final class ConnectionCacheEngineTest {
         check(deletion.get() == null, "Cross-engine delete queues behind awaited secure read.");
         finish(engine, "A", read, "confirm");
         check(deletion.get() != null && !engine.valid(C, v), "Queued deletion commits barrier after read.");
-        finish(engine, "B", deletion.get(), "release");
+        engine.detach("B");
+        Map<String, Object> deleted = acquire(engine, "cold", "read", null);
+        check("deleted".equals(deleted.get("mode")) && version(deleted).equals(version(deletion.get()))
+                && deleted.get("cleanupSlots").equals(deletion.get().get("cleanupSlots")),
+            "Detaching a committed delete lease retains its generation and cleanup queue.");
+        finish(engine, "cold", deleted, "release");
         Map<String, String> active = version(login(engine));
         Map<String, Object> refresh = acquire(engine, "dead", "refresh", active);
         String abandonedSlot = (String)refresh.get("writeSlot");
@@ -138,6 +146,100 @@ public final class ConnectionCacheEngineTest {
         check("migration".equals(retryRead.get("mode")), "Interrupted migration retains installed-session retry path.");
         cold.prepareMigration("ui", C, (String)retryRead.get("lease"));
         check("active".equals(finish(cold, "ui", retryRead, "activate").get("mode")), "Legacy migration can recover.");
+    }
+
+    static void claudePlanRetirement() {
+        String claude = "anthropic.plan";
+        String session = "wardpulse.claude.account-session";
+        String pasted = "wardpulse.anthropic.plan.secret";
+        for (boolean alreadyDeleted : new boolean[]{false, true}) {
+            Disk disk = new Disk();
+            ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+            Map<String, String> sibling = version(login(engine));
+            Map<String, Object> read = acquire(engine, "old", claude, "read", null);
+            String ticket = (String) read.get("lease");
+            String activeSlot = null;
+            Map<String, Object> before;
+            if (alreadyDeleted) {
+                before = engine.finish("old", claude, ticket, "missing", null);
+            } else {
+                activeSlot = (String) engine.prepareMigration("old", claude, ticket).get("writeSlot");
+                before = engine.finish("old", claude, ticket, "activate", ID);
+                check(engine.writeSnapshot(claude, version(before), "sanitized-plan", 10),
+                    "The migrated session has a warm cache.");
+            }
+
+            Map<String, Object> paused = acquire(engine, "ui", claude, "retireClaudePlan", null);
+            List<String> expected = alreadyDeleted ? List.of(session, pasted) : List.of(activeSlot, session, pasted);
+            check("deleted".equals(paused.get("mode")) && paused.get("cleanupSlots").equals(expected)
+                    && paused.get("generation").equals(before.get("generation")) == alreadyDeleted,
+                "Retirement durably queues both fixed keys and any active slot without rotating an old deletion.");
+            check(!engine.valid(claude, version(before)) && !disk.data.containsKey(claude + ".snapshot")
+                    && engine.valid(C, sibling),
+                "Only the Claude plan cache and credential are retired.");
+
+            AtomicReference<Map<String, Object>> overlap = new AtomicReference<>();
+            engine.acquire("worker", claude, "retireClaudePlan", null, overlap::set,
+                error -> { throw new RuntimeException(error); });
+            check(overlap.get() == null, "Overlapping retirement waits for the current lease.");
+            engine.detach("ui");
+            Map<String, Object> retry = overlap.get();
+            check("deleted".equals(retry.get("mode")) && version(retry).equals(version(paused))
+                    && retry.get("cleanupSlots").equals(expected),
+                "Detach releases the waiter with the same barrier and exact queue.");
+            String retryTicket = (String) retry.get("lease");
+            check(engine.acknowledgeCleanup("worker", claude, retryTicket, expected), "Cleanup is acknowledged.");
+            engine.finish("worker", claude, retryTicket, "release", null);
+            Map<String, Object> cold = acquire(new ConnectionCacheEngine(disk),
+                "cold", claude, "retireClaudePlan", null);
+            check(version(cold).equals(version(paused)) && cold.get("cleanupSlots").equals(List.of()),
+                "Restart does not requeue acknowledged keys.");
+        }
+    }
+
+    static void failedClaudePlanRetirementFences() {
+        String claude = "anthropic.plan";
+        MemoryUpdatingDisk disk = new MemoryUpdatingDisk();
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+        Map<String, String> sibling = version(login(engine));
+        Map<String, Object> login = login(engine, claude);
+        Map<String, String> active = version(login);
+        check(engine.writeSnapshot(claude, active, "sanitized-plan", 10), "Claude starts with a warm cache.");
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        disk.fail = true;
+        engine.acquire("ui", claude, "retireClaudePlan", null,
+            ignored -> { throw new AssertionError("Retirement lease requires a successful commit."); }, failure::set);
+        check(failure.get() instanceof IllegalStateException && !engine.valid(claude, active),
+            "Failed retirement cannot grant permission to delete or report.");
+        disk.fail = false;
+        check(engine.writeSnapshot(C, sibling, "sanitized-sibling", 10)
+                && "active".equals(disk.data.get(claude + ".mode"))
+                && active.get("generation").equals(disk.data.get(claude + ".generation"))
+                && "sanitized-plan".equals(disk.data.get(claude + ".snapshot")),
+            "A sibling commit preserves the last confirmed retirement state.");
+        failure.set(null);
+        engine.acquire("worker", claude, "read", null,
+            ignored -> { throw new AssertionError("Ordinary reads must stay fenced after a failed retirement."); },
+            failure::set);
+        check(failure.get() instanceof IllegalStateException, "Storage recovery alone does not lift the fence.");
+
+        Map<String, Object> retry = acquire(engine, "worker", claude, "retireClaudePlan", null);
+        check("deleted".equals(disk.data.get(claude + ".mode"))
+                && !active.get("generation").equals(retry.get("generation"))
+                && !disk.data.containsKey(claude + ".snapshot") && !engine.valid(claude, active),
+            "A retry in the same engine durably retires the prior credential and its cache.");
+        List<String> slots = List.of((String) login.get("slot"),
+            "wardpulse.claude.account-session", "wardpulse.anthropic.plan.secret");
+        List<?> cleanup = (List<?>) retry.get("cleanupSlots");
+        check(cleanup.size() == slots.size() && cleanup.containsAll(slots),
+            "Only the successful retry grants the cleanup lease for the active slot and both legacy keys.");
+        String ticket = (String) retry.get("lease");
+        check(engine.acknowledgeCleanup("worker", claude, ticket, slots), "Retry cleanup can be acknowledged.");
+        engine.finish("worker", claude, ticket, "release", null);
+        Map<String, Object> again = acquire(engine, "worker", claude, "retireClaudePlan", null);
+        check(version(again).equals(version(retry)) && List.of().equals(again.get("cleanupSlots")),
+            "The same engine retains the retired state and does not requeue acknowledged keys.");
+        engine.finish("worker", claude, (String) again.get("lease"), "release", null);
     }
     static void corruptionAndFailures() {
         Disk disk = new Disk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);

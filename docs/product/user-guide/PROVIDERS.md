@@ -7,12 +7,11 @@ Each connection is independent.
 | Family | Plan connection | Reporting connection |
 | --- | --- | --- |
 | OpenAI | <span id="codex-subscription">[Codex plan](/guide/providers-openai#codex-plan)</span> | <span id="openai-platform-reporting">[Platform reporting](/guide/providers-openai#platform-reporting)</span> |
-| Anthropic | <span id="claude-subscription">[Claude plan](/guide/providers-anthropic#claude-plan)</span> | <span id="anthropic-organization-reporting">[Organization reporting](/guide/providers-anthropic#organization-reporting)</span> |
+| Anthropic | <span id="claude-subscription">[Claude plan](/guide/providers-anthropic#claude-plan)</span> (temporarily unavailable) | <span id="anthropic-organization-reporting">[Organization reporting](/guide/providers-anthropic#organization-reporting)</span> |
 | Cursor | <span id="cursor-plan">[Cursor plan](/guide/providers-cursor#cursor-plan)</span> | <span id="cursor-team-admin-api">[Team Admin API](/guide/providers-cursor#team-admin-api)</span> |
 
-Claude Plan extra usage is read through the Claude plan connection. It is separate from
-Console organization API expenses and from Cursor Team API expenses. Reporting keys need
-organization/team access independently of personal plan eligibility.
+Anthropic **Organization reporting** is available with a qualifying Claude Console key.
+Reporting keys need their own organization or team access.
 
 Plan and reporting connections have separate statuses. Connected rows do not confirm a
 fresh Dashboard report.
@@ -53,8 +52,8 @@ unpublished; retained Stale data keeps its original successful time. See
 
 ## Reconnect, change or remove a connection
 
-- For **Codex plan** or **Claude plan**, tap the connected row and choose **Reconnect** or
-  **Disconnect**. For **Cursor plan**, choose **Sign in again** to replace the dashboard login.
+- For **Codex plan**, tap the connected row and choose **Reconnect** or **Disconnect**.
+  For **Cursor plan**, choose **Sign in again** to replace the dashboard login.
 - Cancelling a replacement sign-in keeps the existing connection.
 - To replace a reporting key, tap its row, enter the new **Value** and tap **Save**. Check the
   result beside that row. The saved key is not displayed back into the field.
@@ -77,9 +76,9 @@ Provider sign-out is best effort when that material is available; local removal 
 guarantee provider-side revocation.
 
 A saved rejection warning on Dashboard opens Providers at its exact connection. For an
-unconnected **Codex plan** or **Claude plan**, tap the row to start sign-in; for a connected
-plan, tap the row and choose **Reconnect** if needed. Tap an unconnected **Cursor plan** row
-to sign in to its dashboard, or choose **Sign in again** for a connected session. Reporting
+unconnected **Codex plan**, tap the row to start sign-in. For a connected Codex plan, choose
+**Reconnect** if needed. Tap an unconnected **Cursor plan** row to sign in to its dashboard,
+or choose **Sign in again** for a connected session. Reporting
 rows keep their key editor. The warning records a past rejection. Review the row's current
 status before changing it.
 

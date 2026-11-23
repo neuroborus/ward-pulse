@@ -2,9 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
+import 'package:ward_pulse_bindings/ward_pulse_bindings.dart'
+    show mergeDashboardSnapshotsJson;
 import 'package:ward_pulse_watch_sync/ward_pulse_watch_sync.dart';
 
 import '../dashboard/dashboard_models.dart';
+import '../providers/claude_plan_pause.dart';
+import '../providers/provider_connection.dart';
 import '../settings/watch_ring_preferences.dart';
 import 'manual_refresh_window.dart';
 import 'selected_data_freshness.dart';
@@ -25,7 +29,11 @@ abstract interface class WatchSyncService {
 }
 
 class MethodChannelWatchSyncService implements WatchSyncService {
-  const MethodChannelWatchSyncService();
+  const MethodChannelWatchSyncService({
+    this.claudePlanPaused = claudePlanPausedInBuild,
+  });
+
+  final bool claudePlanPaused;
 
   static const _watchRefreshChannel = MethodChannel(
     'app.wardpulse/watch_refresh',
@@ -42,7 +50,12 @@ class MethodChannelWatchSyncService implements WatchSyncService {
   }) async {
     // Keep the last valid publication while the owner corrects saved choices.
     if (watchRingCapacityReason(
-          watchRingSelectionIds(snapshot, ringPreferences),
+          watchRingSelectionIds(
+            snapshot,
+            ringPreferences,
+            claudePlanPaused: claudePlanPaused,
+          ),
+          claudePlanPaused: claudePlanPaused,
         ) !=
         null) {
       return;
@@ -53,6 +66,7 @@ class MethodChannelWatchSyncService implements WatchSyncService {
         ringPreferences,
         manualRefreshAnchorAt: manualRefreshAnchorAt,
         mockDataMode: mockDataMode,
+        claudePlanPaused: claudePlanPaused,
       ).encode(),
     );
   }
@@ -84,19 +98,70 @@ class WatchDashboardSummaryPayload {
   final Map<String, Object?> _value;
 
   factory WatchDashboardSummaryPayload.fromSnapshot(
-    DashboardSnapshot snapshot,
+    DashboardSnapshot source,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     DateTime? clock,
     bool mockDataMode = false,
+    bool claudePlanPaused = claudePlanPausedInBuild,
   }) {
-    final selectionIds = watchRingSelectionIds(snapshot, ringPreferences);
-    final capacityReason = watchRingCapacityReason(selectionIds);
+    final planConnection = ProviderConnections.claudePlan.storageKey;
+    final accounts =
+        claudePlanPaused
+            ? source.accounts
+                .where((account) {
+                  final connection =
+                      account.connection ?? account.historyOwner?.connection;
+                  return connection != planConnection &&
+                      !(connection == null &&
+                          account.provider == 'claude' &&
+                          account.allowances.isNotEmpty);
+                })
+                .toList(growable: false)
+            : source.accounts;
+    final removedPlan = accounts.length != source.accounts.length;
+    // Rebuild totals and health from the surviving accounts when a caller
+    // supplies an older snapshot. Ordinary live snapshots are already scoped.
+    final snapshot =
+        !removedPlan
+            ? source
+            : accounts.isEmpty
+            ? DashboardSnapshot.empty(generatedAt: source.generatedAt)
+            : DashboardSnapshot.fromJsonString(
+              mergeDashboardSnapshotsJson([
+                source.withAccounts(accounts).toJsonString(),
+              ]),
+            );
+    final alerts =
+        removedPlan ||
+                (claudePlanPaused &&
+                    source.alertConditions.any(
+                      (condition) => condition.key.connection == planConnection,
+                    ))
+            ? [
+              for (final condition in source.alertConditions)
+                if (condition.key.connection != planConnection)
+                  if (condition.alert case final alert?) alert,
+            ]
+            : source.alerts;
+    final selectionIds = watchRingSelectionIds(
+      snapshot,
+      ringPreferences,
+      claudePlanPaused: claudePlanPaused,
+    );
+    final capacityReason = watchRingCapacityReason(
+      selectionIds,
+      claudePlanPaused: claudePlanPaused,
+    );
     if (capacityReason != null) {
       throw StateError(capacityReason);
     }
     final rings = orderWatchRingsForSurface(
-      resolveWatchRings(snapshot, ringPreferences),
+      resolveWatchRings(
+        snapshot,
+        ringPreferences,
+        claudePlanPaused: claudePlanPaused,
+      ),
       snapshot: snapshot,
     );
     final creditsGlance =
@@ -161,7 +226,7 @@ class WatchDashboardSummaryPayload {
           },
       ],
       'alerts': [
-        for (final alert in snapshot.alerts)
+        for (final alert in alerts)
           {'severity': alert.severity, 'message': alert.message},
       ],
       'isStale': selectedDataIsStale(snapshot, [

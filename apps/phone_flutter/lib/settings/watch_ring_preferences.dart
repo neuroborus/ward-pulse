@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../dashboard/dashboard_models.dart';
+import '../providers/claude_plan_pause.dart';
 import '../providers/provider_connection.dart';
 import '../sync/credit_request_runway.dart';
 import '../sync/selected_data_freshness.dart';
@@ -385,6 +386,7 @@ List<WatchRingMetric> watchRingCatalog(
   bool collapseClaudePlan = true,
   bool collapseCodexPlan = true,
   bool localCapsAvailable = true,
+  bool claudePlanPaused = claudePlanPausedInBuild,
 }) {
   final accounts = snapshot?.accounts ?? const <ProviderSnapshot>[];
   final metrics = <WatchRingMetric>[];
@@ -466,38 +468,56 @@ List<WatchRingMetric> watchRingCatalog(
     }
   }
 
-  return metrics;
+  return [
+    for (final metric in metrics)
+      if (!_isPausedRing(metric.id, claudePlanPaused)) metric,
+  ];
 }
+
+/// Saved Claude plan choices stay saved but occupy no band while the build
+/// pauses Claude plan; they render nothing until the pause ends.
+bool _isPausedRing(String id, bool claudePlanPaused) =>
+    claudePlanPaused && providerFromRingId(id) == 'claude';
+
+Set<String> _effectiveRingIds(Iterable<String> ids, bool claudePlanPaused) => {
+  for (final id in ids)
+    if (!_isPausedRing(id, claudePlanPaused)) id,
+};
+
+int _selectedPairCount(Set<String> selected) =>
+    _splitBands
+        .where(
+          (band) =>
+              selected.contains(band.innerId) &&
+              selected.contains(band.outerId),
+        )
+        .length;
 
 /// What a selection costs in ring slots: **bands**, not pools. Both halves of a
 /// configured pair share one band, so they cost one slot; either alone is an
 /// ordinary ring (`WATCH_RING_DESIGN.md`, Split band).
-int watchRingSlotCost(Iterable<String> ids) {
-  final selected = ids.toSet();
-  final shared = _splitBands.where(
-    (band) =>
-        selected.contains(band.innerId) && selected.contains(band.outerId),
-  );
-  return selected.length - shared.length;
+///
+/// Shared by the Watchface picker, Settings sync and Wear publication.
+int watchRingSlotCost(
+  Iterable<String> ids, {
+  bool claudePlanPaused = claudePlanPausedInBuild,
+}) {
+  final selected = _effectiveRingIds(ids, claudePlanPaused);
+  return selected.length - _selectedPairCount(selected);
 }
 
 /// Selection constraints are independent of whether a metric currently has data.
 String? watchRingCapacityReason(
   Iterable<String> ids, {
   int maxSlots = watchRingSlotCount,
-}) {
-  final selected = ids.toSet();
-  if (watchRingSlotCost(selected) > maxSlots) {
+  bool claudePlanPaused = claudePlanPausedInBuild,
+}) => _capacityReason(_effectiveRingIds(ids, claudePlanPaused), maxSlots);
+
+String? _capacityReason(Set<String> selected, int maxSlots) {
+  final splits = _selectedPairCount(selected);
+  if (selected.length - splits > maxSlots) {
     return 'Only $maxSlots bands can be shown. Deselect a metric from another band.';
   }
-  final splits =
-      _splitBands
-          .where(
-            (band) =>
-                selected.contains(band.innerId) &&
-                selected.contains(band.outerId),
-          )
-          .length;
   if (splits > watchRingSplitCount) {
     return 'Only two paired bands can be shown. Deselect one metric from another pair.';
   }
@@ -509,11 +529,11 @@ String? watchRingCapacityReason(
 /// Skips what does not fit rather than stopping at it: the second pool of a pair
 /// costs nothing once the first is in, and it may sit behind a ring that no
 /// longer fits — stopping there would split the pair and hand the watch a half.
-List<String> _withinSlotBudget(Iterable<String> ids, int maxSlots) {
+List<String> _withinSlotBudget(Iterable<String> ids) {
   final out = <String>[];
   for (final id in ids) {
     if (!out.contains(id) &&
-        watchRingCapacityReason([...out, id], maxSlots: maxSlots) == null) {
+        _capacityReason({...out, id}, watchRingSlotCount) == null) {
       out.add(id);
     }
   }
@@ -526,15 +546,19 @@ List<String> _withinSlotBudget(Iterable<String> ids, int maxSlots) {
 /// These are catalog ids, before selected halves are packed into bands.
 List<String> watchRingSelectionIds(
   DashboardSnapshot? snapshot,
-  WatchRingPreferences preferences,
-) {
+  WatchRingPreferences preferences, {
+  bool claudePlanPaused = claudePlanPausedInBuild,
+}) {
   if (!preferences.usesDefaults || snapshot == null) {
     return preferences.migratedIds;
   }
   return _withinSlotBudget([
-    for (final metric in watchRingCatalog(snapshot))
+    for (final metric in watchRingCatalog(
+      snapshot,
+      claudePlanPaused: claudePlanPaused,
+    ))
       if (metric.isAvailable) metric.id,
-  ], watchRingSlotCount).toList(growable: false);
+  ]).toList(growable: false);
 }
 
 /// Resolves rings for the watch payload: only available percent metrics.
@@ -543,13 +567,22 @@ List<String> watchRingSelectionIds(
 /// [orderWatchRingsForSurface] before sending to Wear/WFF.
 List<WatchRingMetric> resolveWatchRings(
   DashboardSnapshot snapshot,
-  WatchRingPreferences preferences,
-) {
+  WatchRingPreferences preferences, {
+  bool claudePlanPaused = claudePlanPausedInBuild,
+}) {
   final catalog = {
-    for (final metric in watchRingCatalog(snapshot)) metric.id: metric,
+    for (final metric in watchRingCatalog(
+      snapshot,
+      claudePlanPaused: claudePlanPaused,
+    ))
+      metric.id: metric,
   };
   return [
-    for (final id in watchRingSelectionIds(snapshot, preferences))
+    for (final id in watchRingSelectionIds(
+      snapshot,
+      preferences,
+      claudePlanPaused: claudePlanPaused,
+    ))
       if (catalog[id] case final metric? when metric.isAvailable) metric,
   ];
 }
@@ -643,15 +676,28 @@ List<WatchRingMetric> orderWatchRingsForSurface(
 /// one slot, so it is named once using the table's band label.
 String watchRingPayloadSubtitle(
   DashboardSnapshot snapshot,
-  WatchRingPreferences ringPreferences,
-) {
-  final selectedIds = watchRingSelectionIds(snapshot, ringPreferences);
-  if (watchRingCapacityReason(selectedIds) != null) {
+  WatchRingPreferences ringPreferences, {
+  bool claudePlanPaused = claudePlanPausedInBuild,
+}) {
+  final selectedIds = watchRingSelectionIds(
+    snapshot,
+    ringPreferences,
+    claudePlanPaused: claudePlanPaused,
+  );
+  final capacityReason = watchRingCapacityReason(
+    selectedIds,
+    claudePlanPaused: claudePlanPaused,
+  );
+  if (capacityReason != null) {
     return 'Watch updates paused · correct ring choices to resume';
   }
   final bands = pairWatchRings(
     orderWatchRingsForSurface(
-      resolveWatchRings(snapshot, ringPreferences),
+      resolveWatchRings(
+        snapshot,
+        ringPreferences,
+        claudePlanPaused: claudePlanPaused,
+      ),
       snapshot: snapshot,
     ),
   );

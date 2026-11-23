@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:ward_pulse_phone/dashboard/phone_live_bindings.dart';
 import 'package:ward_pulse_phone/providers/provider_connection.dart';
@@ -16,16 +18,21 @@ import 'package:ward_pulse_phone/sync/openai_reporting_client.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting_clients.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/dashboard/apply_alert_settings.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
+import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
 import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
+import 'package:ward_pulse_phone/settings/recovery_notification_preferences.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/headless_provider_sync.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_once.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/sync/automatic_poll.dart';
+import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
 import 'package:ward_pulse_phone/sync/recovery_wake.dart';
+import 'package:ward_pulse_phone/sync/recovery_watchlist.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_sync.dart';
 
@@ -81,6 +88,7 @@ void main() {
 
   group('production shared collection rejection wiring', () {
     late NativeCacheTestBridge bridge;
+    setUpAll(AndroidFlutterLocalNotificationsPlugin.registerWith);
     setUpAll(() async {
       bridge = await NativeCacheTestBridge.start();
     });
@@ -1725,6 +1733,280 @@ void main() {
       );
     }
     test(
+      'paused bindings omit Claude plan during offline fallback and recovery',
+      () async {
+        const plan = ProviderConnections.claudePlan;
+        const organization = ProviderConnections.anthropicPlatform;
+        const paste = 'wardpulse.anthropic.plan.secret';
+        final secure = FakeSecureStorage();
+        final now = DateTime.utc(2026, 11, 21, 12);
+        final platform = bridge.platform('seed');
+        await bridge.invoke('test', 'setClock', {
+          'value': now.millisecondsSinceEpoch,
+        });
+        final store = SecureClaudeAccountStore(
+          storage: secure,
+          platform: platform,
+        );
+        await store.write(
+          ClaudeAccountSession(
+            accessToken: 'fake-expired',
+            refreshToken: 'fake-refresh',
+            accountId: 'fake-upgrade-account',
+            expiresAt: now,
+          ),
+        );
+        final secrets = SecureProviderCredentialStore(
+          storage: secure,
+          platform: platform,
+        );
+        await secrets.writeSecret(organization, 'fake-console-reporting-key');
+        await secrets.writeSecret(
+          ProviderConnections.cursorPlan,
+          'fake-cursor-session',
+        );
+        final personalRequests = <String>[];
+        var organizationRequests = 0;
+        var cursorRequests = 0;
+        PhoneLiveBindings create(
+          String owner, {
+          required bool paused,
+          bool cursorOffline = false,
+        }) => PhoneLiveBindings.create(
+          claudePlanPaused: paused,
+          secureStorage: secure,
+          cachePlatform: bridge.platform(owner),
+          claudeClient: ClaudeAccountClient(
+            clock: () => now,
+            transport: _UpgradeClaudeTransport(personalRequests),
+          ),
+          anthropicClient: AnthropicReportingClient(
+            http: ProviderReportingHttp(
+              transport: _OpenAiReportingTransport(
+                providerFails: false,
+                onRequest: () => organizationRequests++,
+              ),
+            ),
+          ),
+          cursorClient: CursorPlanClient(
+            http: ProviderReportingHttp(
+              transport: _CursorPlanTransport(
+                40,
+                offline: cursorOffline,
+                onRequest: () => cursorRequests++,
+              ),
+            ),
+          ),
+        );
+
+        final debug = create('debug', paused: false);
+        final debugSnapshot = await debug.repository.load();
+        expect(
+          debugSnapshot.accounts.map((account) => account.connection),
+          containsAll([
+            plan.storageKey,
+            organization.storageKey,
+            'cursor.plan',
+          ]),
+        );
+        expect(personalRequests, [
+          'POST /v1/oauth/token',
+          'GET /api/oauth/usage',
+        ]);
+        const rules = AlertThresholdPreferences(
+          connections: {
+            'anthropic.plan': ConnectionAlertThresholds(
+              plan: AlertPercentThreshold(at: 30),
+            ),
+          },
+        );
+        expect(applyUserAlertSettings(debugSnapshot, rules).alerts, isNotEmpty);
+        await SecureAlertThresholdPreferenceStore().write(rules);
+        final planAccount = debugSnapshot.accounts.singleWhere(
+          (account) => account.connection == plan.storageKey,
+        );
+        final historyOwner = planAccount.historyOwner!;
+        final window = planAccount.allowances.singleWhere(
+          (allowance) => allowance.id == 'claude-five-hour',
+        );
+        final key = (
+          accountId: planAccount.accountId,
+          historyOwner: historyOwner,
+          allowanceId: window.id,
+        );
+        final history = SecureRecoveryWatchlistStore();
+        await history.writeObserved(
+          [key],
+          {historyOwner},
+          requirements: {key: window.recoveryRequirements!},
+        );
+        await SecureRecoveryNotificationPreferenceStore().write(true);
+        final saved = await history.readPendingOwners({historyOwner});
+        final recoverable =
+            reconcilePlanRecoveries(
+              debugSnapshot,
+              saved.pending,
+            ).recoveries.single;
+        expect(recoverable.allowanceId, key.allowanceId);
+        expect(recoverable.historyOwner, historyOwner);
+
+        final expired = (await store.readVersioned())!;
+        await store.refresh(
+          ClaudeAccountSession(
+            accessToken: expired.value.accessToken,
+            refreshToken: expired.value.refreshToken,
+            accountId: expired.value.accountId,
+            expiresAt: now,
+          ),
+          expired.version,
+        );
+        secure.values[paste] = 'fake-old-paste';
+        final version = (await store.readVersioned())!.version;
+        expect(
+          await platform.invoke('readSnapshot', {
+            'connection': plan.storageKey,
+            'expected': version.values,
+          }),
+          isNotNull,
+        );
+        for (final (field, value) in [
+          ('rejectionEvent', version.values['committedConnection']),
+          ('rejectionDismissed', 'false'),
+        ]) {
+          await bridge.invoke('test', 'setDisk', {
+            'key': '${plan.storageKey}.$field',
+            'value': value,
+          });
+        }
+        expect((await debug.rejectionNotices.read()).single.connection, plan);
+
+        personalRequests.clear();
+        final foreground = create('foreground', paused: true);
+        // Admission stays closed even before startup retirement reaches storage.
+        final foregroundSnapshot = await foreground.repository.load();
+        expect(
+          foregroundSnapshot.accounts.map((account) => account.connection),
+          unorderedEquals([organization.storageKey, 'cursor.plan']),
+        );
+        expect(
+          foregroundSnapshot.connectionVersions,
+          isNot(contains(plan.storageKey)),
+        );
+        expect(await foreground.rejectionNotices.read(), isEmpty);
+        expect(await foreground.claudeAccountService.isConnected(), isFalse);
+        expect(
+          foreground.claudeAccountService.startLogin,
+          throwsA(isA<ClaudeAccountException>()),
+        );
+        expect(await foreground.claudeAccountService.fetchReport(), isNull);
+        await foreground.claudeAccountService.disconnect();
+        expect(personalRequests, isEmpty);
+
+        final notificationPlatform = FlutterLocalNotificationsPlatform.instance;
+        final targetPlatform = debugDefaultTargetPlatformOverride;
+        const channel = MethodChannel(
+          'dexterous.com/flutter/local_notifications',
+        );
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        final posted = <int>[];
+        addTearDown(() {
+          try {
+            messenger.setMockMethodCallHandler(channel, null);
+            channel.setMethodCallHandler(null);
+          } finally {
+            FlutterLocalNotificationsPlatform.instance = notificationPlatform;
+            debugDefaultTargetPlatformOverride = targetPlatform;
+          }
+        });
+        AndroidFlutterLocalNotificationsPlugin.registerWith();
+        debugDefaultTargetPlatformOverride = TargetPlatform.android;
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'show')
+            posted.add((call.arguments as Map)['id'] as int);
+          return true;
+        });
+        await LocalRecoveryNotifier().notify(recoverable);
+        expect(posted, [recoveryNotificationId(recoverable)]);
+        posted.clear();
+
+        final capture = _SurfaceCapture();
+        _bindSurfaces(capture: capture);
+        final failures = <Object>[];
+        final organizationBeforeHeadless = organizationRequests;
+        final cursorBeforeHeadless = cursorRequests;
+        secure.failDeleteKey = paste;
+        expect(
+          await runHeadlessProviderTask(
+            HeadlessProviderSync.taskName,
+            sync:
+                () => providerSyncOnce(
+                  debugBuild: false,
+                  load:
+                      (owner) => loadProviderSyncWork(
+                        owner,
+                        createLive:
+                            () => create(
+                              'headless',
+                              paused: true,
+                              cursorOffline: true,
+                            ),
+                        watchRingStore: _WatchRead(
+                          () async => const WatchRingPreferences(
+                            selectedIds: [claudePlanRingId, cursorOwnPoolId],
+                          ),
+                        ),
+                        widgetStore: _WidgetRead(
+                          () async => const PhoneWidgetPreferences(
+                            selectedIds: [_ordinaryWidgetId, cursorOwnPoolId],
+                          ),
+                        ),
+                      ),
+                  logFailure: (_, error, _) => failures.add(error),
+                ),
+          ),
+          isTrue,
+        );
+        expect(failures, isEmpty);
+        expect(personalRequests, isEmpty);
+        expect(organizationRequests, greaterThan(organizationBeforeHeadless));
+        expect(cursorRequests, cursorBeforeHeadless + 1);
+        expect(secure.values[paste], 'fake-old-paste');
+        expect(
+          await platform.invoke('readSnapshot', {
+            'connection': plan.storageKey,
+            'expected': version.values,
+          }),
+          isNull,
+        );
+        expect(_watchUsage(capture.watchSummaries.single), {
+          cursorOwnPoolId: 40,
+        });
+        expect(capture.watchSummaries.single['alerts'], isEmpty);
+        expect(capture.watchSummaries.single['isStale'], isTrue);
+        expect(
+          (capture.watchSummaries.single['allowances'] as List).map(
+            (allowance) => (allowance as Map)['label'],
+          ),
+          everyElement(startsWith('Cursor · ')),
+        );
+        expect(posted, isEmpty);
+        expect((await history.readOwners({historyOwner})).keys, [key]);
+        expect(capture.redraws.single, containsPair('row_count', 1));
+        expect(capture.redraws.single, containsPair('row_0_family', 'Cursor'));
+        expect(
+          capture.redraws.single,
+          containsPair('row_0_percent', '60% left'),
+        );
+        expect(capture.redraws.single, containsPair('stale', '1'));
+        expect(
+          await secrets.readSecret(organization),
+          'fake-console-reporting-key',
+        );
+      },
+    );
+
+    test(
       'headless Claude rejection retires after the replacement stores a live report',
       () async {
         const id = ProviderConnections.claudePlan;
@@ -2716,10 +2998,15 @@ final class _OpenAiReportingTransport implements ProviderHttpTransport {
 }
 
 final class _CursorPlanTransport implements ProviderHttpTransport {
-  const _CursorPlanTransport(this.usedPercent, {this.onRequest});
+  const _CursorPlanTransport(
+    this.usedPercent, {
+    this.onRequest,
+    this.offline = false,
+  });
 
   final int usedPercent;
   final void Function()? onRequest;
+  final bool offline;
 
   @override
   Future<ProviderHttpResponse> get(
@@ -2727,6 +3014,7 @@ final class _CursorPlanTransport implements ProviderHttpTransport {
     required Map<String, String> headers,
   }) async {
     onRequest?.call();
+    if (offline) throw TimeoutException('Synthetic Cursor offline.');
     return ProviderHttpResponse(
       statusCode: 200,
       headers: const {},
@@ -2818,6 +3106,35 @@ final class _StubClaudeTransport implements ClaudeHttpTransport {
     String? body,
     Duration? timeout,
   }) async => response;
+}
+
+final class _UpgradeClaudeTransport implements ClaudeHttpTransport {
+  const _UpgradeClaudeTransport(this.requests);
+
+  final List<String> requests;
+
+  @override
+  Future<ClaudeHttpResponse> send(
+    String method,
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+    Duration? timeout,
+  }) async {
+    requests.add('$method ${uri.path}');
+    return switch (method) {
+      'POST' => const ClaudeHttpResponse(
+        statusCode: 200,
+        body:
+            '{"access_token":"fake-renewed","refresh_token":"fake-rotated","expires_in":3600}',
+      ),
+      'GET' => const ClaudeHttpResponse(
+        statusCode: 200,
+        body: '{"five_hour":{"utilization":42},"seven_day":{"utilization":38}}',
+      ),
+      _ => throw StateError('Unexpected test request.'),
+    };
+  }
 }
 
 final class _ObservedRepository extends DashboardRepository {

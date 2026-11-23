@@ -17,21 +17,17 @@ own metric choices.
 
 ![Widget metric selection showing provider and window labels in the dark theme.](/screenshots/phone-widget-settings-dark.png)
 
-The examples below use demo usage data and the same selected metrics. Choices save as you tap.
+The examples use demo usage data and the same selected metrics. Choices save as you tap.
 
-You can select up to **six** metrics. Widget selection is independent of Watchface; changing
-one does not change the other. Claude and Codex windows remain separate widget choices,
-including Fable weekly when reported, and Cursor Models/Other Models can be separate rows.
+You can select up to **six** metrics. Widget selection is independent of Watchface. Codex
+windows can be selected separately, and Cursor Models and Other Models can use separate rows.
 The watch's three-band/two-pair limits do not apply to the widget's six independent rows.
 Widget updates continue while saved watch choices need correction. Selected exhausted pools stay as
 **0%**. With all six slots used, deselect a metric before adding another.
 
-**Claude Extra usage** can be selected when Claude reports a usable percentage. A missing
-monthly cap does not disable an otherwise usable percentage. When its percentage is
-unavailable, the choice remains unavailable; a saved choice can still be removed. Missing
-amounts or caps are not filled in as zero or Unlimited. Its right-hand details show used
-and cap amounts independently in the reported units, such as Credits. These describe usage,
-not purchased credits left; a monthly reset is not estimated.
+[Claude plan metrics](/guide/providers-anthropic#claude-plan), including Fable and Extra usage,
+are temporarily unavailable in the public app. Android can keep showing old rows until the
+launcher redraws the widget.
 
 Console and Cursor Team expenses can be selected with known spend even without a local
 cap. Known zero is valid; missing spend is unavailable. Saved unavailable choices can still
@@ -130,29 +126,29 @@ For an old widget, missing rows or delayed updates, use
 
 ## <span id="earlier-launcher-appearance"></span>Widget size examples
 
-These views use the same selection. Width changes the visible columns; height changes how
-many complete rows fit.
+These views use the same demo selection, including Claude plan metrics that are paused in
+the public app. Width changes the visible columns. Height changes how many complete rows fit.
 
 ### <span id="earlier-wide-widget"></span>Wide widget
 
-![Wide WardPulse widget with primary values, metric labels and available balance/reset details in the light theme.](/screenshots/phone-home-widget-light.png)
+![Wide WardPulse widget demo with primary values, metric labels and available balance/reset details in the light theme.](/screenshots/phone-home-widget-light.png)
 
-![Wide WardPulse widget with primary values, metric labels and available balance/reset details in the dark theme.](/screenshots/phone-home-widget-dark.png)
+![Wide WardPulse widget demo with primary values, metric labels and available balance/reset details in the dark theme.](/screenshots/phone-home-widget-dark.png)
 
 ### <span id="earlier-labeled-widget"></span>Widget with labels
 
-![Medium-width WardPulse widget with primary values and full metric labels in the light theme.](/screenshots/phone-home-widget-with-label-light.png)
+![Medium-width WardPulse widget demo with primary values and full metric labels in the light theme.](/screenshots/phone-home-widget-with-label-light.png)
 
-![Medium-width WardPulse widget with primary values and full metric labels in the dark theme.](/screenshots/phone-home-widget-with-label-dark.png)
+![Medium-width WardPulse widget demo with primary values and full metric labels in the dark theme.](/screenshots/phone-home-widget-with-label-dark.png)
 
 ### <span id="earlier-percentage-only-widget"></span>Primary values only
 
-![Narrow WardPulse widget showing complete primary values without labels or right-hand details in the light theme.](/screenshots/phone-home-widget-percent-only-light.png)
+![Narrow WardPulse widget demo with complete primary values in the light theme.](/screenshots/phone-home-widget-percent-only-light.png)
 
-![Narrow WardPulse widget showing complete primary values without labels or right-hand details in the dark theme.](/screenshots/phone-home-widget-percent-only-dark.png)
+![Narrow WardPulse widget demo with complete primary values in the dark theme.](/screenshots/phone-home-widget-percent-only-dark.png)
 
 ### <span id="earlier-short-widget"></span>Short widget
 
-![Reduced-height WardPulse widget showing complete rows from the same selection in the light theme.](/screenshots/phone-home-widget-short-light.png)
+![Reduced-height WardPulse widget demo with complete rows in the light theme.](/screenshots/phone-home-widget-short-light.png)
 
-![Reduced-height WardPulse widget showing complete rows from the same selection in the dark theme.](/screenshots/phone-home-widget-short-dark.png)
+![Reduced-height WardPulse widget demo with complete rows in the dark theme.](/screenshots/phone-home-widget-short-dark.png)

@@ -671,6 +671,11 @@ final class ConnectionCredentialStorage
     }
   }
 
+  /// Commits local Claude plan retirement and drains its durable cleanup queue.
+  Future<void> retireClaudePlan() async {
+    await _release(await _begin('retireClaudePlan'));
+  }
+
   Future<void> write(String value) async {
     final ticket = await beginReconnect();
     try {

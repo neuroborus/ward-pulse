@@ -4,8 +4,11 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /** Exercises production presentation, fit and navigation without an Android dependency. */
@@ -453,6 +456,184 @@ public final class PhoneWidgetTest {
         }
     }
 
+    private static void pausedClaudePlanCases() {
+        Map<String, String> cache = new HashMap<>();
+        Function<String, String> stored = key -> cache.getOrDefault(key, "");
+        String[][] rows = {
+            // label, family, pool, kind, color, percent
+            {"Claude · 5-hour session", "Claude", "5-hour session", "allowance", "ffe8915a", "50% left"},
+            {"Codex · Weekly plan", "Codex", "Weekly plan", "allowance", "ff65d78a", "50% left"},
+            {"Anthropic platform · Month", "Anthropic", "Month", "budget", "ffe8915a", "50% left"},
+            {"Claude · Fable", "Claude", "Fable weekly", "allowance", "ffff603d", ""},
+            {"Claude · Weekly plan", "", "", "", "", "50% left"},
+            {"Weekly plan", "", "", "", "ffe8915a", "0% left"},
+            {"Weekly plan", "", "", "", "ff65d78a", "50% left"},
+            {"5-hour session", "", "", "", "ffe8915a", ""},
+            {"Weekly plan", "", "Weekly plan", "", "ffe8915a", "50% left"},
+            {"Claude · Weekly plan", "", "Weekly plan", "", "", "50% left"},
+            {"Codex · Weekly plan", "", "Weekly plan", "", "ffe8915a", "50% left"},
+            {"Claude · Weekly plan", "", "", "allowance", "", "50% left"},
+            {"Codex · Weekly plan", "", "", "allowance", "ff65d78a", "50% left"},
+            {"Weekly plan", "", "", "allowance", "ffe8915a", "50% left"},
+            {"Claude · Weekly plan", "", "", "budget", "ffe8915a", "50% left"},
+            {"Anthropic platform · Month", "Anthropic platform", "Month", "", "ffe8915a", "50% left"},
+        };
+        for (int index = 0; index < rows.length; index++) {
+            String[] fields = {"label", "family", "pool", "kind", "color", "percent"};
+            for (int field = 0; field < fields.length; field++)
+                cache.put("row_" + index + "_" + fields[field], rows[index][field]);
+        }
+        check(PhoneWidgetLayout.shownRows(rows.length, false, stored).size() == rows.length,
+                "Flutter Debug redraws every cached Claude row.");
+        check(PhoneWidgetLayout.shownRows(rows.length, true, stored)
+                        .equals(Arrays.asList(1, 2, 6, 7, 8, 10, 12, 15)),
+                "A paused build drops typed and legacy Claude rows even if a write omitted the family, "
+                        + "but keeps Organization budgets and same-named rows of active providers.");
+
+        // A legacy writer replacing the Codex row stopped before writing family and pool.
+        cache.put("row_1_percent", "30% left");
+        cache.put("row_1_label", "Claude · Weekly plan");
+        check(PhoneWidgetLayout.shownRows(3, true, stored).equals(Collections.singletonList(2)),
+                "A paused redraw drops the Claude allowance despite its leftover Codex family.");
+        check(PhoneWidgetLayout.shownRows(3, false, stored).equals(Arrays.asList(0, 1, 2)),
+                "Debug keeps the interrupted allowance eligible for redraw.");
+
+        cache.put("stale", "1");
+        checkCachedEmpty(PhoneWidgetLayout.shownRows(1, true, stored), cache);
+
+        // The legacy writer stored kind and spend before replacing the row identity.
+        cache.put("row_0_kind", "budget");
+        cache.put("row_0_spent_minor", "1234");
+        cache.put("row_0_spent_currency", "USD");
+        for (String label : Arrays.asList("Claude · 5-hour session", "Anthropic platform · Month")) {
+            cache.put("row_0_label", label);
+            check(PhoneWidgetLayout.shownRows(1, false, stored).equals(Collections.singletonList(0)),
+                    "Debug keeps the interrupted budget eligible for redraw: " + label);
+            checkCachedEmpty(PhoneWidgetLayout.shownRows(1, true, stored), cache);
+        }
+        cache.put("row_0_family", "Anthropic");
+        check(PhoneWidgetLayout.shownRows(1, false, stored).equals(Collections.singletonList(0)),
+                "Debug retains the partially replaced budget while its old pool is still present.");
+        checkCachedEmpty(PhoneWidgetLayout.shownRows(1, true, stored), cache);
+        cache.put("row_0_pool", "Month");
+        check(PhoneWidgetLayout.shownRows(1, true, stored).equals(Collections.singletonList(0)),
+                "A completed Organization budget redraws despite the Claude accent.");
+
+        cache.put("empty", "1");
+        for (boolean paused : new boolean[]{false, true}) {
+            checkCachedEmpty(PhoneWidgetLayout.shownRows(rows.length, paused, stored), cache);
+        }
+
+        Map<String, String> flat = new HashMap<>();
+        Function<String, String> flatStored = key -> flat.getOrDefault(key, "");
+        flat.put("stale", "1");
+        flat.put("row_0_color", "ffe8915a");
+        for (String label : Arrays.asList("5h", "Weekly", "Opus weekly", "Sonnet weekly")) {
+            flat.put("row_0_label", label);
+            flat.remove("row_0_kind");
+            flat.put("row_0_percent", "50% left");
+            checkCachedEmpty(PhoneWidgetLayout.shownRows(1, true, flatStored), flat);
+            // An uncapped budget overwrote kind and percent but left the old flat label and color.
+            flat.put("row_0_kind", "budget");
+            flat.put("row_0_percent", "");
+            checkCachedEmpty(PhoneWidgetLayout.shownRows(1, true, flatStored), flat);
+        }
+        flat.put("row_0_label", "Weekly");
+        flat.remove("row_0_kind");
+        flat.put("row_0_percent", "50% left");
+        flat.put("row_0_color", "ff65d78a");
+        check(PhoneWidgetLayout.shownRows(1, true, flatStored).equals(Collections.singletonList(0)),
+                "A short flat label with another provider's accent remains eligible.");
+    }
+
+    private static void checkCachedEmpty(List<Integer> shown, Map<String, String> cache) {
+        check(shown.isEmpty(), "No cached rows are eligible for drawing or accessibility.");
+        boolean stale = "1".equals(cache.get("stale"));
+        PhoneWidgetLayout.Plan empty = PhoneWidgetLayout.fit(180, 100, 1, Collections.emptyList(),
+                shown.isEmpty(), stale, metrics(1), PhoneWidgetLayout.MAX_BITMAP_BYTES, 0);
+        check(empty.state == PhoneWidgetLayout.EmptyState.NO_METRICS
+                        && empty.rows.isEmpty()
+                        && empty.text.stream().anyMatch(run -> run.text.equals("No metrics"))
+                        && empty.text.stream().anyMatch(run -> run.text.equals("STALE")),
+                "An empty cached publication retains its stale badge.");
+    }
+
+    private static void interruptedClaudeAllowanceCases() {
+        Map<String, String> cache = new HashMap<>();
+        Function<String, String> stored = key -> cache.getOrDefault(key, "");
+        cache.put("stale", "1");
+        cache.put("row_0_kind", "allowance");
+        cache.put("row_0_percent", "50% left");
+        cache.put("row_0_label", "Weekly");
+        cache.put("row_0_color", "ffe8915a");
+        checkCachedEmpty(PhoneWidgetLayout.shownRows(1, true, stored), cache);
+
+        // Replacing a structured Claude allowance stopped after label and family.
+        cache.put("row_0_label", "Cursor Models");
+        cache.put("row_0_family", "Cursor");
+        cache.put("row_0_resets_at", "2028-02-10T09:15:00Z");
+        String[][] previousWindows = {
+            {"ffe8915a", "5-hour session"},
+            {"ffff8a00", "Fable weekly"},
+            {"ffff603d", "Fable weekly"},
+        };
+        for (String[] previous : previousWindows) {
+            cache.put("row_0_color", previous[0]);
+            for (String kind : Arrays.asList("", "allowance")) {
+                cache.put("row_0_kind", kind);
+                cache.put("row_0_pool", previous[1]);
+                checkCachedEmpty(PhoneWidgetLayout.shownRows(1, true, stored), cache);
+                // After the pool write, the previous reset and accent are still present.
+                cache.put("row_0_pool", "Models");
+                checkCachedEmpty(PhoneWidgetLayout.shownRows(1, true, stored), cache);
+                check(PhoneWidgetLayout.shownRows(1, false, stored).equals(Collections.singletonList(0)),
+                        "Debug retains the allowance during the legacy replacement.");
+            }
+        }
+
+        cache.put("row_0_kind", "allowance");
+        cache.put("row_0_resets_at", "2028-02-11T10:30:00Z");
+        cache.put("row_0_color", "ff7e93b8");
+        check(PhoneWidgetLayout.shownRows(1, true, stored).equals(Collections.singletonList(0)),
+                "The completed Cursor allowance redraws while Claude plan is paused.");
+        PhoneWidgetLayout.Row cursor = PhoneWidgetLayout.Row.fromCache(
+                stored.apply("row_0_label"), stored.apply("row_0_family"), stored.apply("row_0_pool"),
+                stored.apply("row_0_percent"), "", stored.apply("row_0_resets_at"), ZoneId.of("UTC"),
+                (int) Long.parseLong(stored.apply("row_0_color"), 16));
+        PhoneWidgetLayout.Plan plan = fitRow(cursor, 500);
+        check(plan.text.stream().anyMatch(run -> run.text.equals("Reset 11 Feb 10:30"))
+                        && PhoneWidgetLayout.rowDescription(plan.rows.get(0))
+                                .equals("Cursor Models, 50% remaining, Reset 11 Feb 10:30"),
+                "The completed row draws and announces its own reset.");
+    }
+
+    private static void interruptedLegacyBudgetCases() {
+        Map<String, String> cache = new HashMap<>();
+        Function<String, String> stored = key -> cache.getOrDefault(key, "");
+        cache.put("stale", "1");
+        cache.put("row_0_percent", "50% left");
+        cache.put("row_0_label", "Anthropic platform · Month");
+        cache.put("row_0_family", "Anthropic platform");
+        cache.put("row_0_color", "ffe8915a");
+
+        // The previous allowance had no reset, but its pool has not been replaced.
+        cache.put("row_0_pool", "5-hour session");
+        checkCachedEmpty(PhoneWidgetLayout.shownRows(1, true, stored), cache);
+        check(PhoneWidgetLayout.shownRows(1, false, stored).equals(Collections.singletonList(0)),
+                "Debug redraws the untyped budget with its old pool.");
+
+        // This replacement reached the new pool and still has the previous allowance reset.
+        cache.put("row_0_pool", "Month");
+        cache.put("row_0_resets_at", "2028-02-10T09:15:00Z");
+        checkCachedEmpty(PhoneWidgetLayout.shownRows(1, true, stored), cache);
+        check(PhoneWidgetLayout.shownRows(1, false, stored).equals(Collections.singletonList(0)),
+                "Debug redraws the untyped budget with its old reset.");
+
+        cache.remove("row_0_resets_at");
+        check(PhoneWidgetLayout.shownRows(1, true, stored).equals(Collections.singletonList(0)),
+                "A complete untyped Organization budget redraws with its original accent.");
+    }
+
     private static void cacheAndCalendarCases() {
         ZoneId utc = ZoneId.of("UTC");
         PhoneWidgetLayout.Row legacy = PhoneWidgetLayout.Row.fromCache("Cursor Models", "", "",
@@ -527,6 +708,9 @@ public final class PhoneWidgetTest {
         layoutCases();
         intermediateResize();
         cacheAndCalendarCases();
+        pausedClaudePlanCases();
+        interruptedClaudeAllowanceCases();
+        interruptedLegacyBudgetCases();
         dataAndMoneyCases();
         adaptiveMoneyInsets();
         check(PhoneWidgetLayout.emptyState(0, false, 0) == PhoneWidgetLayout.EmptyState.NO_METRICS,

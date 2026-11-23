@@ -31,9 +31,12 @@ Read the [privacy policy](/product/privacy-policy) for what is stored and sent b
 
 Plan sign-in and reporting have separate rows under **Providers**. Reporting uses an OpenAI
 organization Admin key, a qualifying non-workspace-scoped Anthropic key with organization
-reporting rights, or a Cursor Team key with reporting access. Claude Plan monthly Extra
-usage uses Claude plan sign-in and stays separate from Console API expenses. A personal plan
-alone does not grant organization/team reporting access.
+reporting rights, or a Cursor Team key with reporting access. A personal plan alone does
+not grant organization/team reporting access.
+
+[Claude plan sign-in and monitoring](/guide/providers-anthropic#claude-plan) are temporarily
+unavailable in the public app. Anthropic **Organization reporting** is available with a
+qualifying Claude Console key.
 
 Until a connected provider reports successfully, WardPulse has no usage data to show. A
 provider may also omit a meter that your account does not expose. **Unknown** or **Balance
@@ -49,7 +52,7 @@ and [Troubleshooting](/guide/troubleshooting).
 | Watchface | Choose which known metrics fill the watch's ring slots. |
 | Widget | Choose the phone home widget's independent metric list. |
 | Providers | Connect accounts or keys, reconnect/remove them, and set alert thresholds or budget limits. |
-| Settings | Set refresh cadence, Alert notifications and Plan recovery delivery; read sync information and legal information. |
+| Settings | Set refresh and notification preferences, check sync, or open the Privacy Policy. |
 
 Next, [set up the watch](/guide/watch), [add a home widget](/guide/widget), or adjust
 [sync and notifications](/guide/sync). WardPulse's budget limits help you track spending;

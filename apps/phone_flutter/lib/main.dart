@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
@@ -24,6 +26,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await HeadlessProviderSync.ensureInitialized();
   final live = PhoneLiveBindings.create();
+  unawaited(live.retirePausedClaudePlan());
   final debugDataPreferenceStore = SecureDebugDataPreferenceStore();
   final notifications = PhoneNotificationCoordinator();
 
@@ -33,6 +36,7 @@ Future<void> main() async {
       rejectionNotices: live.rejectionNotices,
       codexAccountService: live.codexAccountService,
       claudeAccountService: live.claudeAccountService,
+      claudePlanPaused: live.claudePlanPaused,
       refreshIntervalStore: SecureRefreshIntervalPreferenceStore(),
       watchRingPreferenceStore: SecureWatchRingPreferenceStore(),
       phoneWidgetPreferenceStore: SecurePhoneWidgetPreferenceStore(),

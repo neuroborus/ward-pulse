@@ -586,7 +586,12 @@ Official references:
 ## Claude subscription reporting
 
 Status: implemented as an experimental on-device compatibility integration on 2026-07-25;
-phone-owned PKCE sign-in landed 2026-07-26.
+phone-owned PKCE sign-in landed 2026-07-26. The flow below is available in Debug builds.
+Profile and Release pause personal Claude sign-in, refresh and reports under Anthropic's
+credential-use policy. These builds retire the old session and cache locally while preserving
+saved display choices. [Anthropic organization reporting](#anthropic-organization-reporting)
+uses a separate Console credential and remains available. See the
+[Claude account security rules](SECURITY_MODEL.md#claude-account).
 
 Anthropic does not publish a device-code grant for Claude Code. The phone runs the same PKCE
 authorization-code flow Claude Code uses (`client_id` for Claude Code, redirect

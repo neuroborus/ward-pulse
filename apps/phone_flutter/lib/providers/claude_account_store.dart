@@ -102,6 +102,9 @@ final class SecureClaudeAccountStore
     await _credentials.delete(onRetired: onRetired);
   }
 
+  /// Local retirement of the session and any pasted token; no revocation.
+  Future<void> retire() => _credentials.retireClaudePlan();
+
   @override
   Future<bool> rejectAuthentication(CredentialVersion expected) =>
       _credentials.recordRejection(expected, removeCredential: true);
