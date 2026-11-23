@@ -2248,7 +2248,7 @@ void main() {
     expect(find.widgetWithText(ListTile, 'Help'), findsOneWidget);
   });
 
-  testWidgets('Settings keeps Help and Legal without snapshot or debug', (
+  testWidgets('Settings keeps Help, Privacy Policy, Legal without snapshot', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -2276,6 +2276,10 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Legal'), findsOneWidget);
+    final helpTop = tester.getTopLeft(find.text('Help')).dy;
+    final privacyTop = tester.getTopLeft(find.text('Privacy Policy')).dy;
+    expect(privacyTop, greaterThan(helpTop));
+    expect(tester.getTopLeft(find.text('Legal')).dy, greaterThan(privacyTop));
     expect(
       find.text(
         'WardPulse is an independent usage monitor. It is not affiliated with, '
@@ -2366,100 +2370,113 @@ void main() {
     );
   });
 
-  testWidgets('Settings Help opens the public guide in an external browser', (
-    tester,
-  ) async {
-    const channel = MethodChannel('plugins.flutter.io/url_launcher');
-    final messenger = tester.binding.defaultBinaryMessenger;
-    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
-    final calls = <MethodCall>[];
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      calls.add(call);
-      return true;
-    });
+  for (final (row, url) in [
+    ('Help', 'https://neuroborus.github.io/ward-pulse/'),
+    (
+      'Privacy Policy',
+      'https://neuroborus.github.io/ward-pulse/product/privacy-policy/',
+    ),
+  ]) {
+    testWidgets('Settings $row opens its public page in an external browser', (
+      tester,
+    ) async {
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      final messenger = tester.binding.defaultBinaryMessenger;
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final calls = <MethodCall>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return true;
+      });
 
-    await tester.pumpWidget(
-      WardPulseApp(repository: const NoProvidersDashboardRepository()),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Settings'));
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('Help'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(find.text('Help'));
-    await tester.pumpAndSettle();
-
-    expect(calls, hasLength(1));
-    expect(calls.single.method, 'launch');
-    expect(
-      calls.single.arguments,
-      allOf(
-        containsPair('url', 'https://neuroborus.github.io/ward-pulse/'),
-        containsPair('useWebView', false),
-        containsPair('useSafariVC', false),
-        containsPair('universalLinksOnly', false),
-        containsPair('headers', isEmpty),
-      ),
-    );
-    expect(find.byType(SnackBar), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
-
-  for (final throwsException in [false, true]) {
-    for (final disposeBeforeCompletion in [false, true]) {
-      testWidgets(
-        'Settings Help handles '
-        '${throwsException ? 'a platform exception' : 'a false launch result'}'
-        '${disposeBeforeCompletion ? ' after disposal' : ''}',
-        (tester) async {
-          const channel = MethodChannel('plugins.flutter.io/url_launcher');
-          final messenger = tester.binding.defaultBinaryMessenger;
-          addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
-          final completion = Completer<bool>();
-          final calls = <MethodCall>[];
-          messenger.setMockMethodCallHandler(channel, (call) async {
-            calls.add(call);
-            return completion.future;
-          });
-
-          await tester.pumpWidget(
-            WardPulseApp(repository: const NoProvidersDashboardRepository()),
-          );
-          await tester.pumpAndSettle();
-          await tester.tap(find.text('Settings'));
-          await tester.pumpAndSettle();
-          await tester.scrollUntilVisible(
-            find.text('Help'),
-            300,
-            scrollable: find.byType(Scrollable).first,
-          );
-          await tester.tap(find.text('Help'));
-          await tester.pump();
-          expect(calls, hasLength(1));
-          expect(calls.single.method, 'launch');
-          expect(find.byType(SnackBar), findsNothing);
-
-          if (disposeBeforeCompletion) {
-            await tester.pumpWidget(const SizedBox.shrink());
-          }
-          if (throwsException) {
-            completion.completeError(PlatformException(code: 'launch_failed'));
-          } else {
-            completion.complete(false);
-          }
-          await tester.pumpAndSettle();
-
-          expect(tester.takeException(), isNull);
-          expect(
-            find.text('Could not open the browser'),
-            disposeBeforeCompletion ? findsNothing : findsOneWidget,
-          );
-        },
+      await tester.pumpWidget(
+        WardPulseApp(repository: const NoProvidersDashboardRepository()),
       );
-    }
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text(row),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text(row));
+      await tester.pumpAndSettle();
+
+      expect(calls, hasLength(1));
+      expect(calls.single.method, 'launch');
+      expect(
+        calls.single.arguments,
+        allOf(
+          containsPair('url', url),
+          containsPair('useWebView', false),
+          containsPair('useSafariVC', false),
+          containsPair('universalLinksOnly', false),
+          containsPair('headers', isEmpty),
+        ),
+      );
+      expect(find.byType(SnackBar), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  // Both rows share one launcher; Help covers exception and disposal guards.
+  for (final (row, throwsException, disposeBeforeCompletion) in [
+    ('Help', false, false),
+    ('Help', false, true),
+    ('Help', true, false),
+    ('Help', true, true),
+    ('Privacy Policy', false, false),
+  ]) {
+    testWidgets(
+      'Settings $row handles '
+      '${throwsException ? 'a platform exception' : 'a false launch result'}'
+      '${disposeBeforeCompletion ? ' after disposal' : ''}',
+      (tester) async {
+        const channel = MethodChannel('plugins.flutter.io/url_launcher');
+        final messenger = tester.binding.defaultBinaryMessenger;
+        addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+        final completion = Completer<bool>();
+        final calls = <MethodCall>[];
+        messenger.setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          return completion.future;
+        });
+
+        await tester.pumpWidget(
+          WardPulseApp(repository: const NoProvidersDashboardRepository()),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Settings'));
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(
+          find.text(row),
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.tap(find.text(row));
+        await tester.pump();
+        expect(calls, hasLength(1));
+        expect(calls.single.method, 'launch');
+        expect(find.byType(SnackBar), findsNothing);
+
+        if (disposeBeforeCompletion) {
+          await tester.pumpWidget(const SizedBox.shrink());
+        }
+        if (throwsException) {
+          completion.completeError(PlatformException(code: 'launch_failed'));
+        } else {
+          completion.complete(false);
+        }
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(
+          find.text('Could not open the browser'),
+          disposeBeforeCompletion ? findsNothing : findsOneWidget,
+        );
+      },
+    );
   }
 
   testWidgets('slot cards say where metrics come from when there are none', (
