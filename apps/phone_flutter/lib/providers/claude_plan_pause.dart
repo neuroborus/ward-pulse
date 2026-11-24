@@ -11,8 +11,9 @@ import 'provider_connection_row.dart';
 const claudePlanPausedInBuild = !kDebugMode;
 
 const claudePlanPauseExplanation =
-    'Claude plan sign-in and monitoring are paused because Anthropic does not '
-    'permit WardPulse to use Claude plan credentials.';
+    'Claude plan sign-in and monitoring are paused. '
+    "Anthropic's policy restricts third-party apps from using Claude plan "
+    'credentials.';
 
 /// Muted Claude plan row whose Connect action only explains the pause.
 ///
