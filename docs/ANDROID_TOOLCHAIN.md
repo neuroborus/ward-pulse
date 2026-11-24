@@ -1033,6 +1033,35 @@ The injected-manager tests do not establish unobserved platform scenarios. That 
 post-DONE Owner documentation build/browser and output-handoff procedure belongs to the
 dated 2026-10-16 Push task.
 
+## Android debug APKs from GitHub Actions
+
+Open **Actions → Android Debug Build → Run workflow** and select the branch to build.
+When the run completes, download its artifacts and extract the APKs:
+
+- `WardPulse-Debug-Android.apk` for the phone.
+- `WardPulse-Debug-WearOS.apk` for the Wear OS app.
+- `WardPulse-Debug-WatchFace-WearOS5Plus.apk` for the standalone watch face on Wear OS 5 or later.
+
+The workflow publishes the three APKs only as artifacts attached to the run.
+
+By default, each run creates a temporary Android debug keystore. The phone and Wear APKs
+use the same signing certificate for phone-to-watch sync. Use both APKs from the same run
+when using the temporary key. To keep a consistent APK signer across runs, set the repository
+Actions secret `WARDPULSE_DEBUG_KEYSTORE_B64` to the base64 of a dedicated debug keystore.
+Create the keystore with alias `androiddebugkey` and `android` as both passwords. The workflow
+installs it at `~/.android/debug.keystore`. The embedded development Push watch face uses a
+separate signing key created for each run.
+
+Debug and release APKs use the same package IDs. Android requires a matching signing
+certificate for an in-place update. A different signer prevents both an update and a
+side-by-side installation of that package. Keep the existing app and its data by testing on
+another device or emulator, or use a debug APK signed with the key already trusted by the
+installed debug app. Uninstalling the existing app removes its local data.
+
+On the debug phone app, enable sample usage in **Settings → Debug → Mock data**. With
+**Mock data** off, open **Providers → Anthropic → Claude plan** to reach the development
+sign-in flow.
+
 ## Release artifact builds
 
 The [release checklist](product/RELEASE_CHECKLIST.md#release-versions) owns the package and
