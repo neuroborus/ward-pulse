@@ -1,5 +1,10 @@
 # Home widget
 
+:::danger
+Claude plan sign-in and monitoring are paused. Anthropic's policy restricts third-party apps
+from using Claude plan credentials.
+:::
+
 The WardPulse home widget shows selected allowances, reported expenses, applicable purchased
 credits and real reset times. It is updated from the phone's reporting and has its
 own metric choices.

@@ -4,6 +4,7 @@ This directory owns the public UI PNGs used by the site, root README and task-gu
 Apply [user-docs](../../.agents/skills/user-docs/SKILL.md) when capturing or reviewing them.
 Store assets have their own upload order and format. See the [phone gallery](store-phone/README.md),
 [foldable gallery](store-foldable/README.md), and [Wear OS and watch face gallery](store-wear/README.md).
+The [advertising assets](advertising/README.md) cover the Google Play Feature Graphic and Reddit ads.
 The store PNGs are covered by the [WardPulse brand usage rules](../../brand/README.md#usage-rules).
 
 Select up to three showcase subjects per platform for the landing/README gallery. Android
@@ -15,6 +16,16 @@ the original aspect ratio, and watch PNGs are 500×500px with transparent corner
 the circular screen.
 
 ## Screenshot index
+
+**Dashboard gallery refresh, 2026-11-24 (Europe/Paris).** Both themes show the same
+OpenAI demo view with Codex at 54% left, 1,200 purchased credits, six million tokens in
+usage history and USD 0.50 in Platform reporting. The overlapping Codex capacity and
+credit values agree with Glance. The phone captures were resized from 1080×2400 to 864×1920.
+
+| Documentation export | Captured UTC | Native SHA-256 | Export SHA-256 |
+| --- | --- | --- | --- |
+| `phone-dashboard-overview-light.png` | 2026-11-24T11:26:16Z | `9c0bf7980b35301b885401e3b63b6024c19857a2379bf74895572603f50e5426` | `273ae0a03c1517536499f88c986e282fd789c273aa107233d740bab96ed47481` |
+| `phone-dashboard-overview-dark.png` | 2026-11-24T11:18:32Z | `5263a44a15e73047121b208f618e37d51a7fe0e0f5fff85773543320374eb577` | `b6a71a252ebead76c22c564e515d806e57a6d67740655937d2ffd8e52f9b9fa7` |
 
 **Glance refresh, 2026-11-22 (Europe/Paris).** The general Glance image was recaptured on the
 round Wear emulator with the same sample credits, percentages and ring selection as the
@@ -94,10 +105,10 @@ original-image-link checks for their respective exports.
 
 | File | Description | Theme | Date added | Captured | Last verified | Dimensions | App | Used in |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| [phone-dashboard-overview-light.png](phone-dashboard-overview-light.png) | Phone Dashboard usage overview using the shared demo state. | Light | 2026-10-20 | 2026-11-06 | 2026-11-06 | 864×1920 | WardPulse phone | Light landing/README gallery |
-| [phone-dashboard-overview-dark.png](phone-dashboard-overview-dark.png) | Phone Dashboard usage overview using the shared demo state. | Dark | 2026-10-20 | 2026-11-06 | 2026-11-06 | 864×1920 | WardPulse phone | Dark landing/README gallery |
-| [phone-dashboard-light.png](phone-dashboard-light.png) | Claude unsupported-response warning and previous data. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Light Troubleshooting guide, warning / previous-data example only |
-| [phone-dashboard-dark.png](phone-dashboard-dark.png) | Claude unsupported-response warning and previous data. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Dark Troubleshooting guide, warning / previous-data example only |
+| [phone-dashboard-overview-light.png](phone-dashboard-overview-light.png) | Demo Dashboard showing Codex weekly capacity, purchased credits, token history and OpenAI Platform reporting. | Light | 2026-10-20 | 2026-11-24 | 2026-11-24 | 864×1920 | WardPulse phone | Light landing/README gallery |
+| [phone-dashboard-overview-dark.png](phone-dashboard-overview-dark.png) | Demo Dashboard showing Codex weekly capacity, purchased credits, token history and OpenAI Platform reporting. | Dark | 2026-10-20 | 2026-11-24 | 2026-11-24 | 864×1920 | WardPulse phone | Dark landing/README gallery |
+| [phone-dashboard-light.png](phone-dashboard-light.png) | Historical Claude unsupported-response warning and previous data. | Light | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Former Troubleshooting illustration, retired 2026-11-24 |
+| [phone-dashboard-dark.png](phone-dashboard-dark.png) | Historical Claude unsupported-response warning and previous data. | Dark | 2026-10-14 | 2026-10-18 | 2026-10-18 | 864×1920 | WardPulse phone | Former Troubleshooting illustration, retired 2026-11-24 |
 | [phone-providers-light.png](phone-providers-light.png) | Shared-state Providers: four visible Connected rows and independent actions, without a warning badge. | Light | 2026-10-14 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Historical placements: Providers overview; Anthropic/Cursor connection examples; Getting started; Dashboard actions; active guide uses retired 2026-11-03 |
 | [phone-providers-dark.png](phone-providers-dark.png) | Shared-state Providers: four visible Connected rows and independent actions, without a warning badge. | Dark | 2026-10-14 | 2026-10-27 | 2026-10-27 | 864×1920 | WardPulse phone | Historical placements: Providers overview; Anthropic/Cursor connection examples; Getting started; Dashboard actions; active guide uses retired 2026-11-03 |
 | [phone-cursor-sign-in-help-light.png](phone-cursor-sign-in-help-light.png) | Cursor Help with Google/email recovery and Advanced paste; neutral Mock setup background. | Light | 2026-10-14 | 2026-10-28 | 2026-10-28 | 864×1920 | WardPulse phone | Light Cursor guide, Advanced paste |

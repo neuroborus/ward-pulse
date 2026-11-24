@@ -1,5 +1,10 @@
 # Read the Dashboard
 
+:::danger
+Claude plan sign-in and monitoring are paused. Anthropic's policy restricts third-party apps
+from using Claude plan credentials.
+:::
+
 Open **Dashboard** to see the reporting available from your connected providers. Related plan
 and API connections appear together under their provider family: OpenAI, Anthropic or Cursor.
 Each connection keeps its own data and status. Not every account provides spend, model detail,
@@ -9,8 +14,8 @@ With no connected providers, Dashboard shows **Connect a provider**. Saved alert
 budget limits leave this idle state healthy. They do not supply usage reports or prove a
 successful sync.
 
-[Claude plan monitoring](/guide/providers-anthropic#claude-plan), including Fable and
-Extra usage, is temporarily unavailable in the public app.
+See [Claude plan](/guide/providers-anthropic#claude-plan) for how this affects Fable and
+Extra usage.
 
 ## Display order
 

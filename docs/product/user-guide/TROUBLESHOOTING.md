@@ -94,13 +94,6 @@ or repair a billing problem.
 network access and refresh on the phone. Earlier successful values and their timestamps can
 survive restart, but a connection with no successful report has no data to recover.
 
-![Dashboard showing previous data and a Claude unsupported-response warning in the light theme.](/screenshots/phone-dashboard-light.png)
-
-![Dashboard showing previous data and a Claude unsupported-response warning in the dark theme.](/screenshots/phone-dashboard-dark.png)
-
-These earlier captures show **Showing previous data** alongside a failed Claude report.
-The notice identifies data from an earlier report.
-
 If a provider reports a rate limit, wait for any supplied availability/reset time or try later.
 Repeated refresh taps cannot remove a provider limit. A successful report may still contain
 unchanged values, especially for reporting such as Cursor Team Admin API.

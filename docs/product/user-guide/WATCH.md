@@ -1,5 +1,10 @@
 # Watch and watch face
 
+:::danger
+Claude plan sign-in and monitoring are paused. Anthropic's policy restricts third-party apps
+from using Claude plan credentials.
+:::
+
 The Wear app shows a compact usage summary from your phone. The optional WardPulse face
 adds remaining-capacity rings. Connect providers and set budgets or alert rules on the phone.
 
@@ -29,9 +34,9 @@ to return to the previous page; from either home page, one dismissal leaves the 
 
 ![Clock-free Wear Glance showing selected plan capacity and available purchased credits.](/screenshots/wear-glance-overview.png)
 
-The selected metric with the lowest remaining percentage appears first. This example uses
-sample usage data. See the [refresh status legend](#refresh-status) for the control's colours
-and actions.
+The selected metric with the lowest remaining percentage appears first. This demo includes
+Claude plan and Fable readings. Both are paused in the public app. See the
+[refresh status legend](#refresh-status) for the control's colours and actions.
 
 ### Plan windows
 
@@ -44,8 +49,8 @@ rows; start outside the legend to change pages. Refresh and Alerts stay in place
 
 ![Plan windows showing a reported usage window and its reset time.](/screenshots/wear-plan-windows.png)
 
-This example shows a demo Claude plan window. Reset times belong to their reported windows
-and may differ between windows.
+This demo shows the reset time for a Claude plan window. Claude plan monitoring is paused
+in the public app. Other windows may reset at different times.
 
 ### Alerts and refresh
 
@@ -78,7 +83,8 @@ that every provider is current or that a refresh reached the phone.
 
 ![Clock-free Wear Glance showing amber !OK, Stale and disabled Alerts: 0 in a circular screen.](/screenshots/wear-glance.png)
 
-This example shows amber **!OK** with **Stale**: the saved summary needs a newer report.
+This earlier capture shows amber **!OK** with **Stale** when the saved summary needs a
+newer report. It includes a Claude plan reading from before the pause.
 **Alerts: 0** is disabled because there are no active alerts.
 
 If **Ring data unavailable** replaces the rows, none of the selected rings has displayable
@@ -216,9 +222,9 @@ permission-decline image above does not illustrate this separate-installation ch
 
 ![WardPulse circular watch face with the selected usage bands and populated default upper cells.](/screenshots/wear-watch-face.png)
 
-This face and the general Glance example use the same demo data and ring selection. Shared
-bands show separate remaining percentages; purchased credits appear where applicable. The
-upper cells show the day, temperature and UV index.
+This face and the general Glance example use the same demo data and ring selection, including
+Claude plan and Fable readings. Shared bands show separate remaining percentages, and purchased
+credits appear where applicable. The upper cells show the day, temperature and UV index.
 
 The three upper complication cells are customized in the **system watch-face editor**. Open
 the watch's edit/customize action for WardPulse and select an upper cell to choose an available

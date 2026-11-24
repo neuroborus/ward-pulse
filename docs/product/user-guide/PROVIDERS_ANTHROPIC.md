@@ -1,12 +1,15 @@
 # Anthropic
 
 Use **Organization reporting** to see your Claude Console organization's API expenses and
-usage. **Claude plan** is temporarily unavailable in the public app.
+usage.
 
 ## Claude plan
 
-WardPulse has paused Claude plan sign-in and monitoring in the public app because
-Anthropic's policy restricts third-party apps from using Claude plan credentials.
+:::danger
+Claude plan sign-in and monitoring are paused. Anthropic's policy restricts third-party apps
+from using Claude plan credentials.
+:::
+
 Tap the grey **Connect** button under **Providers → Anthropic → Claude plan** to read
 the explanation. [Anthropic's authentication policy](https://code.claude.com/docs/en/legal-and-compliance#authentication-and-credential-use)
 
