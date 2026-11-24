@@ -360,6 +360,75 @@ void main() {
         ),
       );
     });
+
+    test('keeps the API key at the configured origin on a redirect', () async {
+      final origin = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => origin.close(force: true));
+      final destination = await HttpServer.bind(
+        InternetAddress.loopbackIPv4,
+        0,
+      );
+      addTearDown(() => destination.close(force: true));
+      final httpClient = HttpClient();
+      addTearDown(() => httpClient.close(force: true));
+      final originKeys = <String?>[];
+      var destinationRequests = 0;
+      origin.listen((request) async {
+        originKeys.add(request.headers.value('x-api-key'));
+        request.response
+          ..statusCode = HttpStatus.found
+          ..headers.set(
+            HttpHeaders.locationHeader,
+            Uri(
+              scheme: 'http',
+              host: destination.address.address,
+              port: destination.port,
+              path: '/v1/organizations/usage_report/messages',
+            ).toString(),
+          )
+          ..write('{"error":{"code":"synthetic_redirect"}}');
+        await request.response.close();
+      });
+      destination.listen((request) async {
+        destinationRequests += 1;
+        request.response.write(_page());
+        await request.response.close();
+      });
+      final client = AnthropicReportingClient(
+        http: ProviderReportingHttp(
+          transport: IoProviderHttpTransport(client: httpClient),
+        ),
+        baseUri: Uri(
+          scheme: 'http',
+          host: origin.address.address,
+          port: origin.port,
+        ),
+      );
+
+      Object? failure;
+      try {
+        await client.fetchDailyReports(
+          apiKey: 'sk-ant-api03-synthetic',
+          start: DateTime.utc(2026, 7, 19),
+          end: DateTime.utc(2026, 7, 19, 12),
+        );
+      } catch (error) {
+        failure = error;
+      }
+
+      expect(destinationRequests, 0);
+      expect(originKeys, ['sk-ant-api03-synthetic']);
+      expect(
+        failure,
+        isA<ProviderReportingException>()
+            .having(
+              (error) => error.failure,
+              'failure',
+              ProviderReportingFailure.unavailable,
+            )
+            .having((error) => error.details, 'details', 'Usage · HTTP 302'),
+      );
+    });
   });
 
   group('CursorPlanClient', () {
