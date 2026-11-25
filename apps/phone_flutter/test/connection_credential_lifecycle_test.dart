@@ -1251,6 +1251,34 @@ void main() {
       secure.failWrite = false;
       await bridge.invoke('test', 'restart', {});
       expect((await store('cold').read())?.value, 'fake-installed');
+      for (final failure in ['read', 'migration']) {
+        await bridge.reset();
+        secure.values.clear();
+        secure.values['wardpulse.cursor.plan.secret'] = 'fake-installed';
+        // Reconnect tolerates its failed legacy materialization.
+        secure.failRead = failure == 'read';
+        secure.failWrite = failure == 'migration';
+        final ticket = await store('ui').beginReconnect();
+        secure.failRead = secure.failWrite = false;
+        await store('ui').cancelReconnect(ticket);
+        await bridge.invoke('test', 'restart', {});
+        final migrated = (await store('cold').read())!;
+        expect(migrated.value, 'fake-installed', reason: failure);
+        expect(
+          secure.values['wardpulse.cursor.plan.secret'],
+          'fake-installed',
+          reason: failure,
+        );
+        expect(
+          secure.values.entries.where(
+            (entry) =>
+                entry.key.startsWith('wardpulse.connection.') &&
+                entry.value == 'fake-installed',
+          ),
+          hasLength(1),
+          reason: '$failure migration copies the installed secret',
+        );
+      }
     },
   );
   test(
@@ -2087,6 +2115,116 @@ void main() {
           ).read(),
           isEmpty,
         );
+      },
+    );
+    test(
+      '$family usage 401 after an accepted refresh keeps the rotated session',
+      () async {
+        final id =
+            family == 'codex'
+                ? ProviderConnections.codexPlan
+                : ProviderConnections.claudePlan;
+        final later = now.add(const Duration(hours: 1));
+        var denied = false;
+        var successAt = now;
+        // Ordered token and usage requests, labelled by the presented token.
+        final requests = <String>[];
+        final session = runtime('usage', (uri, headers, body) async {
+          if (uri.path.endsWith('/token')) {
+            requests.add('token');
+            return (
+              status: 200,
+              body: jsonEncode({
+                'access_token':
+                    family == 'codex'
+                        ? _jwt(now.add(const Duration(days: 1)), 'rotated')
+                        : 'rotated',
+                'refresh_token': 'fake-rotated-refresh',
+                'expires_in': 3600,
+              }),
+            );
+          }
+          if (uri.path.endsWith('/usage')) {
+            final token =
+                headers['Authorization']!.contains('rotated')
+                    ? 'rotated'
+                    : 'original';
+            requests.add('usage $token ${denied ? 401 : 200}');
+            if (denied) return (status: 401, body: '{}');
+          }
+          return _usageResponse(uri);
+        });
+        await session.write('synthetic-account', 'synthetic-token');
+        final before = (await session.read())!.version;
+        final cache = ConnectionSnapshotCache(
+          connection: id.storageKey,
+          platform: bridge.platform('usage'),
+          readCredentialVersion: () async => (await session.read())?.version,
+        );
+        String normalize(String _) =>
+            _connectionSnapshot(
+              id.storageKey,
+              family,
+              successAt,
+            ).toJsonString();
+        final repository =
+            family == 'codex'
+                ? codexDashboardRepository(
+                  accountService: const EmptyCodexAccountService(),
+                  fallback: const NoProvidersDashboardRepository(),
+                  cache: cache,
+                  loadReport: session.fetch,
+                  normalizeReport: normalize,
+                  logger: const NullProviderSyncLogger(),
+                )
+                : claudeDashboardRepository(
+                  accountService: const EmptyClaudeAccountService(),
+                  fallback: const NoProvidersDashboardRepository(),
+                  cache: cache,
+                  loadReport: session.fetch,
+                  normalizeReport: normalize,
+                  logger: const NullProviderSyncLogger(),
+                );
+        final first = await repository.load();
+        expect(first.syncIssue, isNull);
+        expect(first.accounts.single.lastSuccessfulSyncAt, now);
+
+        denied = true;
+        successAt = later;
+        final retained = await repository.load();
+        // The credential must survive before any report-shape assertion.
+        final rotated = (await session.read())!;
+        expect(rotated.value, contains('rotated'));
+        expect(rotated.version.generation, before.generation);
+        expect(rotated.version.revision, isNot(before.revision));
+        expect(requests, [
+          'usage original 200',
+          'usage original 401',
+          'token',
+          'usage rotated 401',
+        ]);
+        expect(
+          await NativeConnectionRejectionNoticeStore(
+            platform: bridge.platform('notices'),
+          ).read(),
+          isEmpty,
+        );
+        expect(
+          retained.syncIssue,
+          family == 'codex'
+              ? DashboardSyncIssue.codexPermissionDenied
+              : DashboardSyncIssue.claudePermissionDenied,
+        );
+        expect(retained.syncRejection, isNull);
+        expect(retained.accounts.single.status, ProviderStatus.stale);
+        expect(retained.accounts.single.lastSuccessfulSyncAt, now);
+
+        denied = false;
+        final recovered = await repository.load();
+        expect(recovered.syncIssue, isNull);
+        expect(recovered.accounts.single.lastSuccessfulSyncAt, later);
+        expect(requests.skip(4), ['usage rotated 200']);
+        expect((await session.read())!.version.values, rotated.version.values);
       },
     );
     test(

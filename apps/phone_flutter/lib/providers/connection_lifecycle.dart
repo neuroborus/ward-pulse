@@ -647,9 +647,9 @@ final class ConnectionCredentialStorage
     }
   }
 
+  /// Native state commits an admitted cancellation without granting a lease.
   Future<void> cancelReconnect(CredentialVersion ticket) async {
-    final lease = await _begin('cancel', ticket);
-    if (lease['accepted'] == true) await _finish(lease, 'cancel');
+    await _begin('cancel', ticket);
   }
 
   Future<void> deleteLegacyPastedSecret() async {

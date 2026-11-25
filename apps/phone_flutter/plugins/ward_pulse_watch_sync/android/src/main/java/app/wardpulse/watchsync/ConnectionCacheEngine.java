@@ -389,6 +389,12 @@ public final class ConnectionCacheEngine {
                 retire(state, lease.slot); state.put("pendingSlot", lease.slot); persist(connection, state); fenced.remove(connection); failedCommitPriorState.remove(connection);
             } else if (pendingAction) {
                 if (!matches) throw new IllegalStateException("Reconnect superseded.");
+                if ("cancel".equals(pending.action)) {
+                    // Commit without a lease so a detached owner cannot strand the prior reference.
+                    restoreCancelled(state); persist(connection, state);
+                    Map<String, Object> answer = view(state); answer.put("accepted", true);
+                    pending.success.accept(answer); next(connection); return;
+                }
                 lease.slot = state.get("pendingSlot");
             } else if (retireClaudePlan) {
                 boolean alreadyRetired = "true".equals(state.get("claudePlanRetired"));
@@ -429,6 +435,14 @@ public final class ConnectionCacheEngine {
             if (lease.slot != null) answer.put("writeSlot", lease.slot);
             pending.success.accept(answer);
         } catch (Exception error) { pending.failure.accept(error); next(connection); }
+    }
+    /** Restore the confirmed prior connection under the reconnect generation. */
+    private static void restoreCancelled(Map<String, String> state) {
+        String previous = state.remove("previousSlot"); String previousIdentity = state.remove("previousIdentity");
+        String previousMode = state.remove("previousMode"); String backup = state.remove("previousBackupKey");
+        if (backup != null) state.put("backupKey", backup);
+        state.remove("pendingSlot"); state.put("mode", previous != null ? "active" : "legacy".equals(previousMode) ? "legacy" : "deleted");
+        if (previous != null) { state.put("slot", previous); state.put("identity", previousIdentity); bindBackup(state); }
     }
     private void next(String connection) {
         ArrayDeque<Pending> queue = queues.get(connection);
@@ -476,14 +490,6 @@ public final class ConnectionCacheEngine {
                 if ("complete".equals(lease.action) || !state.containsKey("committedConnection"))
                     state.put("committedConnection", unique());
                 state.remove("previousSlot"); state.remove("previousIdentity"); state.remove("previousMode"); state.remove("pendingSlot"); state.remove("previousBackupKey"); persist(connection, state);
-            } else if ("cancel".equals(operation)) {
-                if (!"cancel".equals(lease.action)) throw new IllegalStateException("Invalid cancellation.");
-                String previous = state.remove("previousSlot"); String previousIdentity = state.remove("previousIdentity");
-                String previousMode = state.remove("previousMode"); String backup = state.remove("previousBackupKey");
-                if (backup != null) state.put("backupKey", backup);
-                state.remove("pendingSlot"); state.put("mode", previous != null ? "active" : "legacy".equals(previousMode) ? "legacy" : "deleted");
-                if (previous != null) { state.put("slot", previous); state.put("identity", previousIdentity); bindBackup(state); }
-                persist(connection, state);
             } else if ("missing".equals(operation) || ("confirm".equals(operation) && !identity.equals(state.get("identity")))) {
                 retire(state, state.get("slot")); barrier(state, "deleted");
                 state.remove("slot"); state.remove("identity"); removeBackup(state); persist(connection, state);
