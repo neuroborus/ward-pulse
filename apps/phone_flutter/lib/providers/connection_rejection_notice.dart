@@ -26,13 +26,18 @@ final class NativeConnectionRejectionNoticeStore
     implements ConnectionRejectionNoticeStore {
   const NativeConnectionRejectionNoticeStore({
     this.platform = const MethodChannelConnectionCachePlatform(),
+    this.hidden = const {},
   });
   final ConnectionCachePlatform platform;
+
+  /// Paused connections whose retained notices are never shown.
+  final Set<ProviderConnectionId> hidden;
 
   @override
   Future<List<ConnectionRejectionNotice>> read() async {
     final notices = <ConnectionRejectionNotice>[];
     for (final entry in providerConnectionCatalog()) {
+      if (hidden.contains(entry.id)) continue;
       final value = Map<String, Object?>.from(
         (await platform.invoke('readNotice', {
               'connection': entry.id.storageKey,

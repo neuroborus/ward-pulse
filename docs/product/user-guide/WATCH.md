@@ -1,5 +1,10 @@
 # Watch and watch face
 
+:::danger
+Claude plan sign-in and monitoring are paused. Anthropic's policy restricts third-party apps
+from using Claude plan credentials.
+:::
+
 The Wear app shows a compact usage summary from your phone. The optional WardPulse face
 adds remaining-capacity rings. Connect providers and set budgets or alert rules on the phone.
 
@@ -17,9 +22,8 @@ sign in to providers on the watch. If the phone has data but the watch does not,
 ## Read the Wear app
 
 **Glance** shows remaining capacity with provider labels, compact tracks, optional purchased
-credits and refresh status. A title such as **Claude plan · Weekly** names the plan and its
-selected window. Paired **Cursor / Others**, **Codex plan** or **Claude / Fable** rows show two
-percentages, with the inner half first.
+credits and refresh status. A title such as **Codex plan · Weekly** names the plan and its
+selected window. Paired rows show two percentages, with the inner half first.
 Glance hides the clock to make room for larger labels. The clock remains on **Plan windows**,
 **Alerts**, the **Watch face** setup screen and the prompt shown before the first summary.
 
@@ -30,9 +34,9 @@ to return to the previous page; from either home page, one dismissal leaves the 
 
 ![Clock-free Wear Glance showing selected plan capacity and available purchased credits.](/screenshots/wear-glance-overview.png)
 
-The selected metric with the lowest remaining percentage appears first. This example uses
-sample usage data. See the [refresh status legend](#refresh-status) for the control's colours
-and actions.
+The selected metric with the lowest remaining percentage appears first. This demo includes
+Claude plan and Fable readings. Both are paused in the public app. See the
+[refresh status legend](#refresh-status) for the control's colours and actions.
 
 ### Plan windows
 
@@ -45,7 +49,8 @@ rows; start outside the legend to change pages. Refresh and Alerts stay in place
 
 ![Plan windows showing a reported usage window and its reset time.](/screenshots/wear-plan-windows.png)
 
-Reset times belong to their reported windows and may differ between windows.
+This demo shows the reset time for a Claude plan window. Claude plan monitoring is paused
+in the public app. Other windows may reset at different times.
 
 ### Alerts and refresh
 
@@ -78,7 +83,8 @@ that every provider is current or that a refresh reached the phone.
 
 ![Clock-free Wear Glance showing amber !OK, Stale and disabled Alerts: 0 in a circular screen.](/screenshots/wear-glance.png)
 
-This example shows amber **!OK** with **Stale**: the saved summary needs a newer report.
+This earlier capture shows amber **!OK** with **Stale** when the saved summary needs a
+newer report. It includes a Claude plan reading from before the pause.
 **Alerts: 0** is disabled because there are no active alerts.
 
 If **Ring data unavailable** replaces the rows, none of the selected rings has displayable
@@ -92,7 +98,7 @@ See [Sync and notifications](/guide/sync#refresh-now) for request delivery and r
 1. On the phone, open **Watchface**.
 2. Under **Ring slots → Wear & watch face**, select the known metrics you want.
 3. Read the count of used slots. The limit is three bands and at most two paired bands.
-   Selecting both halves of a supported Codex/Spark, Cursor or Claude/Fable pair shares one
+   Selecting both halves of a supported pair, such as Codex/Spark or Cursor, shares one
    band, so the count can differ from the number of checked rows. Either half alone uses
    an ordinary band.
 4. If a choice is disabled, read its reason. Free another band or break another pair as
@@ -104,6 +110,11 @@ See [Sync and notifications](/guide/sync#refresh-now) for request delivery and r
 ![Watchface metric selection showing shared ring choices in the dark theme.](/screenshots/phone-watch-settings-dark.png)
 
 This selection uses demo usage data; supported paired metrics share a band.
+
+[Claude plan metrics](/guide/providers-anthropic#claude-plan), including Fable, are temporarily
+unavailable in the public app. Saved Claude plan choices use no ring slots while paused.
+If those are your only choices, **Next watch payload** shows **Selected ring data unavailable**.
+Wear can keep showing its last summary until it receives an update from the phone.
 
 Console organization and Cursor Team **Today**, **Week** and **Month** budget choices use
 remaining percentages. Each needs known spend, a positive cap in the same currency and a
@@ -148,20 +159,13 @@ closest to the centre on the [face](#select-and-customize-the-face). Outside-to-
 move toward less capacity left.
 Order changes with usage; the phone picker chooses metrics, not display order.
 A shared band uses the lower remaining percentage of its two halves for its position.
-Codex's main pool, Cursor Models or ordinary Claude keeps the left/inner half; Spark,
-Other Models or Fable keeps the right/outer half. Usage changes never swap these identities.
+Codex's main pool and Cursor Models keep the left or inner half of their pair. Spark and
+Other Models keep the right or outer half. These positions stay fixed as usage changes.
 
-Claude plan windows use the tightest known window, including an exhausted zero. The phone
-Dashboard still lists the individual windows. For an unpaired ordinary Claude row, the Glance title keeps the chosen window's
-name: **5h**, **Weekly**, **Opus weekly** or **Sonnet weekly**. A selected exhausted metric
-keeps a grey empty track and pale-red **0%** token; it is not replaced by a less-used window.
-Tiny positive values rounded to zero keep ordinary styling.
-
-**Claude plan** uses those ordinary windows; **Claude · Fable** is a separate included weekly
-sub-cap when reported. Selecting both produces **Claude / Fable**. Fable uses warm red
-with an orange tint (`#FF603D`); ordinary Claude keeps `#E8915A`. A missing percentage stays
-unknown: only known halves fill rings, and a surviving half uses an ordinary band. Reported
-resets stay with their own windows on **Plan windows**.
+A selected exhausted metric keeps a grey empty track and pale-red **0%** token. Tiny
+positive values rounded to zero keep ordinary styling. Rings show reported percentages,
+and a surviving half uses an ordinary band. Reported resets stay with their own windows
+on **Plan windows**.
 
 **Next watch payload** describes what the phone will send; it is not delivery confirmation.
 Ring choices are independent of the phone's [home-widget selection](/guide/widget).
@@ -218,9 +222,9 @@ permission-decline image above does not illustrate this separate-installation ch
 
 ![WardPulse circular watch face with the selected usage bands and populated default upper cells.](/screenshots/wear-watch-face.png)
 
-This face and the general Glance example use the same demo data and ring selection. Shared
-bands show separate remaining percentages; purchased credits appear where applicable. The
-upper cells show the day, temperature and UV index.
+This face and the general Glance example use the same demo data and ring selection, including
+Claude plan and Fable readings. Shared bands show separate remaining percentages, and purchased
+credits appear where applicable. The upper cells show the day, temperature and UV index.
 
 The three upper complication cells are customized in the **system watch-face editor**. Open
 the watch's edit/customize action for WardPulse and select an upper cell to choose an available

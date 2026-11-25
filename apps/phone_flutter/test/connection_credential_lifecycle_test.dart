@@ -1251,6 +1251,34 @@ void main() {
       secure.failWrite = false;
       await bridge.invoke('test', 'restart', {});
       expect((await store('cold').read())?.value, 'fake-installed');
+      for (final failure in ['read', 'migration']) {
+        await bridge.reset();
+        secure.values.clear();
+        secure.values['wardpulse.cursor.plan.secret'] = 'fake-installed';
+        // Reconnect tolerates its failed legacy materialization.
+        secure.failRead = failure == 'read';
+        secure.failWrite = failure == 'migration';
+        final ticket = await store('ui').beginReconnect();
+        secure.failRead = secure.failWrite = false;
+        await store('ui').cancelReconnect(ticket);
+        await bridge.invoke('test', 'restart', {});
+        final migrated = (await store('cold').read())!;
+        expect(migrated.value, 'fake-installed', reason: failure);
+        expect(
+          secure.values['wardpulse.cursor.plan.secret'],
+          'fake-installed',
+          reason: failure,
+        );
+        expect(
+          secure.values.entries.where(
+            (entry) =>
+                entry.key.startsWith('wardpulse.connection.') &&
+                entry.value == 'fake-installed',
+          ),
+          hasLength(1),
+          reason: '$failure migration copies the installed secret',
+        );
+      }
     },
   );
   test(
@@ -1372,6 +1400,104 @@ void main() {
       expect(secure.values[paste], isNull);
     },
   );
+  for (final alreadyDeleted in [false, true]) {
+    test('Claude retirement survives detach, restart and a failed secure '
+        'delete (already deleted: $alreadyDeleted)', () async {
+      const connection = 'anthropic.plan';
+      const legacy = 'wardpulse.claude.account-session';
+      const paste = 'wardpulse.anthropic.plan.secret';
+      SecureClaudeAccountStore account(String owner) =>
+          SecureClaudeAccountStore(
+            storage: secure,
+            platform: bridge.platform(owner),
+          );
+      Future<Map> inspect({String operation = 'release'}) async {
+        final lease =
+            await bridge.invoke('inspect', 'acquire', {
+                  'connection': connection,
+                  'action': 'read',
+                })
+                as Map;
+        final state =
+            await bridge.invoke('inspect', 'finish', {
+                  'connection': connection,
+                  'lease': lease['lease'],
+                  'operation': operation,
+                })
+                as Map;
+        return {...state, 'cleanupSlots': lease['cleanupSlots']};
+      }
+
+      secure.values[legacy] = jsonEncode(
+        ClaudeAccountSession(
+          accessToken: 'fake-upgrade-access',
+          refreshToken: 'fake-upgrade-refresh',
+          expiresAt: now.add(const Duration(hours: 1)),
+          accountId: 'fake-upgrade-account',
+        ).toJson(),
+      );
+      secure.values[paste] = 'fake-old-paste';
+      final String? slot;
+      final Object generation;
+      if (alreadyDeleted) {
+        generation = (await inspect(operation: 'missing'))['generation']!;
+        slot = null;
+      } else {
+        final migrated = (await account('old').readVersioned())!;
+        generation = migrated.version.generation;
+        slot = (await inspect())['slot'] as String;
+      }
+      final expected = [if (slot != null) slot, legacy, paste];
+      final committed = Completer<Map>();
+      final release = Completer<void>();
+      final platform = ObservingCachePlatform(bridge.platform('retiring'));
+      platform.onComplete = (method, arguments, reply) async {
+        if (method == 'acquire' && arguments['action'] == 'retireClaudePlan') {
+          committed.complete(reply as Map);
+          await release.future;
+          throw StateError('Retiring engine detached before secure cleanup.');
+        }
+      };
+      final interrupted = expectLater(
+        SecureClaudeAccountStore(storage: secure, platform: platform).retire(),
+        throwsStateError,
+      );
+      late final Object retiredGeneration;
+      try {
+        final lease = await Future.any([
+          committed.future,
+          interrupted.then<Map>((_) {
+            throw StateError('Retirement ended before committing its lease.');
+          }),
+        ]);
+        retiredGeneration = lease['generation']!;
+        expect(retiredGeneration == generation, alreadyDeleted);
+        expect(lease['cleanupSlots'], expected);
+        await bridge.invoke('retiring', 'detach', {});
+      } finally {
+        release.complete();
+        await interrupted;
+      }
+      expect(secure.values.keys, containsAll(expected));
+      await bridge.invoke('test', 'restart', {});
+      secure.failDeleteKey = legacy;
+      await account('retry').retire();
+      expect(secure.values.keys, [legacy]);
+      expect(await inspect(), containsPair('generation', retiredGeneration));
+      expect(await inspect(), containsPair('cleanupSlots', [legacy]));
+
+      await bridge.invoke('test', 'restart', {});
+      secure.failDeleteKey = null;
+      await Future.wait([account('ui').retire(), account('worker').retire()]);
+      expect(secure.values, isEmpty);
+      final cleaned = await inspect();
+      expect(cleaned['mode'], 'deleted');
+      expect(cleaned['generation'], retiredGeneration);
+      expect(cleaned['cleanupSlots'], isEmpty);
+      expect(secure.deleted.where((key) => key == legacy), [legacy, legacy]);
+      expect(secure.deleted.where((key) => key == paste), [paste]);
+    });
+  }
   test(
     'OAuth refresh retires the migration backup for the old credential revision',
     () async {
@@ -1989,6 +2115,116 @@ void main() {
           ).read(),
           isEmpty,
         );
+      },
+    );
+    test(
+      '$family usage 401 after an accepted refresh keeps the rotated session',
+      () async {
+        final id =
+            family == 'codex'
+                ? ProviderConnections.codexPlan
+                : ProviderConnections.claudePlan;
+        final later = now.add(const Duration(hours: 1));
+        var denied = false;
+        var successAt = now;
+        // Ordered token and usage requests, labelled by the presented token.
+        final requests = <String>[];
+        final session = runtime('usage', (uri, headers, body) async {
+          if (uri.path.endsWith('/token')) {
+            requests.add('token');
+            return (
+              status: 200,
+              body: jsonEncode({
+                'access_token':
+                    family == 'codex'
+                        ? _jwt(now.add(const Duration(days: 1)), 'rotated')
+                        : 'rotated',
+                'refresh_token': 'fake-rotated-refresh',
+                'expires_in': 3600,
+              }),
+            );
+          }
+          if (uri.path.endsWith('/usage')) {
+            final token =
+                headers['Authorization']!.contains('rotated')
+                    ? 'rotated'
+                    : 'original';
+            requests.add('usage $token ${denied ? 401 : 200}');
+            if (denied) return (status: 401, body: '{}');
+          }
+          return _usageResponse(uri);
+        });
+        await session.write('synthetic-account', 'synthetic-token');
+        final before = (await session.read())!.version;
+        final cache = ConnectionSnapshotCache(
+          connection: id.storageKey,
+          platform: bridge.platform('usage'),
+          readCredentialVersion: () async => (await session.read())?.version,
+        );
+        String normalize(String _) =>
+            _connectionSnapshot(
+              id.storageKey,
+              family,
+              successAt,
+            ).toJsonString();
+        final repository =
+            family == 'codex'
+                ? codexDashboardRepository(
+                  accountService: const EmptyCodexAccountService(),
+                  fallback: const NoProvidersDashboardRepository(),
+                  cache: cache,
+                  loadReport: session.fetch,
+                  normalizeReport: normalize,
+                  logger: const NullProviderSyncLogger(),
+                )
+                : claudeDashboardRepository(
+                  accountService: const EmptyClaudeAccountService(),
+                  fallback: const NoProvidersDashboardRepository(),
+                  cache: cache,
+                  loadReport: session.fetch,
+                  normalizeReport: normalize,
+                  logger: const NullProviderSyncLogger(),
+                );
+        final first = await repository.load();
+        expect(first.syncIssue, isNull);
+        expect(first.accounts.single.lastSuccessfulSyncAt, now);
+
+        denied = true;
+        successAt = later;
+        final retained = await repository.load();
+        // The credential must survive before any report-shape assertion.
+        final rotated = (await session.read())!;
+        expect(rotated.value, contains('rotated'));
+        expect(rotated.version.generation, before.generation);
+        expect(rotated.version.revision, isNot(before.revision));
+        expect(requests, [
+          'usage original 200',
+          'usage original 401',
+          'token',
+          'usage rotated 401',
+        ]);
+        expect(
+          await NativeConnectionRejectionNoticeStore(
+            platform: bridge.platform('notices'),
+          ).read(),
+          isEmpty,
+        );
+        expect(
+          retained.syncIssue,
+          family == 'codex'
+              ? DashboardSyncIssue.codexPermissionDenied
+              : DashboardSyncIssue.claudePermissionDenied,
+        );
+        expect(retained.syncRejection, isNull);
+        expect(retained.accounts.single.status, ProviderStatus.stale);
+        expect(retained.accounts.single.lastSuccessfulSyncAt, now);
+
+        denied = false;
+        final recovered = await repository.load();
+        expect(recovered.syncIssue, isNull);
+        expect(recovered.accounts.single.lastSuccessfulSyncAt, later);
+        expect(requests.skip(4), ['usage rotated 200']);
+        expect((await session.read())!.version.values, rotated.version.values);
       },
     );
     test(

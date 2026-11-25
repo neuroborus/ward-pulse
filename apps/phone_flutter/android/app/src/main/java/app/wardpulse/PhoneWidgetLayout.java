@@ -6,10 +6,12 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.StringJoiner;
+import java.util.function.Function;
 
 /** Complete measured rows and columns shared by the native painter and JVM harness. */
 public final class PhoneWidgetLayout {
@@ -130,18 +132,10 @@ public final class PhoneWidgetLayout {
         public static Row fromCache(String label, String family, String pool, String percent,
                 String credits, String reset, ZoneId zone, int color) {
             if (family.isEmpty() || pool.isEmpty()) {
-                family = "";
-                pool = label;
-                if (label.equals("Cursor Models")) {
-                    family = "Cursor";
-                    pool = "Models";
-                } else {
-                    int cut = label.indexOf(" · ");
-                    if (cut > 0 && knownFamily(label.substring(0, cut))) {
-                        family = label.substring(0, cut);
-                        pool = label.substring(cut + 3);
-                    }
-                }
+                family = legacyFamily(label);
+                if (family.isEmpty()) pool = label;
+                else if (label.equals("Cursor Models")) pool = "Models";
+                else pool = label.substring(family.length() + " · ".length());
             }
             String identity = label;
             if (identity.isEmpty()) identity = family.isEmpty() ? pool
@@ -340,6 +334,92 @@ public final class PhoneWidgetLayout {
                 || name.equals("OpenAI platform") || name.equals("Anthropic plan")
                 || name.equals("Anthropic platform") || name.equals("Cursor plan")
                 || name.equals("Cursor platform");
+    }
+
+    private static String legacyFamily(String label) {
+        if (label.equals("Cursor Models")) return "Cursor";
+        int separator = label.indexOf(" · ");
+        if (separator <= 0) return "";
+        String family = label.substring(0, separator);
+        return knownFamily(family) ? family : "";
+    }
+
+    private static final int CLAUDE_ACCENT = 0xFFE8915A;
+    private static final int CLAUDE_FABLE_ACCENT = 0xFFFF603D;
+    private static final int LEGACY_CLAUDE_FABLE_ACCENT = 0xFFFF8A00;
+    private static final List<String> CLAUDE_PLAN_LABELS = Arrays.asList("5-hour session",
+            "Weekly plan", "Weekly Opus", "Weekly Sonnet", "Fable weekly", "Extra usage",
+            "5h", "Weekly", "Opus weekly", "Sonnet weekly");
+
+    private static boolean claudePlanFamily(String family) {
+        return family.equals("Claude") || family.equals("Claude plan") || family.equals("Anthropic plan");
+    }
+
+    /**
+     * Rows that a build pausing Claude plan must suppress on redraw.
+     *
+     * <p>Legacy writers saved the label before replacing the family and pool.
+     * The qualified label is announced, while a complete family and pool are drawn.
+     * Either can still identify Claude plan during a partial write, even for budget kind.
+     * A budget with a qualified label and complete display fields must agree on identity.
+     */
+    private static boolean hiddenWhileClaudePlanPaused(String label, String family, String pool,
+            String kind, String percent, String reset, Integer color) {
+        String labelFamily = legacyFamily(label);
+        if (label.equals("Claude plan") || label.startsWith("Claude plan · ")
+                || claudePlanFamily(labelFamily)) return true;
+        boolean allowance = kind.equals("allowance");
+        if (claudePlanFamily(family) && (!pool.isEmpty() || allowance)) return true;
+        // Both cached Fable accents identify the same plan window.
+        if (color != null && (color == CLAUDE_FABLE_ACCENT || color == LEGACY_CLAUDE_FABLE_ACCENT))
+            return true;
+        boolean claudeAccent = color != null && color == CLAUDE_ACCENT;
+        // The legacy writer stored the accent last, after the pool and reset. Active allowances
+        // use other accents. Before kind was stored, budgets had a qualified family name.
+        boolean legacyAllowance = kind.isEmpty()
+                && (family.equals("Codex") || family.equals("Cursor") || family.equals("OpenAI"));
+        if (claudeAccent && (allowance || legacyAllowance)) return true;
+        if (kind.isEmpty() && (labelFamily.endsWith(" platform") || labelFamily.endsWith(" plan"))) {
+            // Before kind was stored, a budget used the qualified family and always cleared reset.
+            return !reset.isEmpty() || (!family.isEmpty() && !pool.isEmpty()
+                    && !label.equals(family + " · " + pool));
+        }
+        boolean budget = kind.equals("budget");
+        if (budget && !family.isEmpty() && !pool.isEmpty() && label.contains(" · ")) {
+            String period = " · " + pool;
+            return !label.equals(family + " platform" + period)
+                    && !label.equals(family + " plan" + period)
+                    && !label.equals(family + period);
+        }
+        // A budget replacement can clear percent before updating an old flat label.
+        return claudeAccent && family.isEmpty() && pool.isEmpty() && CLAUDE_PLAN_LABELS.contains(label)
+                && (budget || (kind.isEmpty() && validPercent(percentText(percent))));
+    }
+
+    /** Cached row indexes to redraw; a paused build drops older Claude plan rows. */
+    public static List<Integer> shownRows(int count, boolean claudePlanPaused,
+            Function<String, String> stored) {
+        // Legacy writers could mark a publication empty before replacing its rows.
+        if ("1".equals(stored.apply("empty"))) return Collections.emptyList();
+        List<Integer> shown = new ArrayList<>();
+        for (int index = 0; index < count; index++) {
+            String prefix = "row_" + index + "_";
+            if (!claudePlanPaused || !hiddenWhileClaudePlanPaused(stored.apply(prefix + "label"),
+                    stored.apply(prefix + "family"), stored.apply(prefix + "pool"),
+                    stored.apply(prefix + "kind"), stored.apply(prefix + "percent"),
+                    stored.apply(prefix + "resets_at"), cachedColor(stored.apply(prefix + "color"))))
+                shown.add(index);
+        }
+        return shown;
+    }
+
+    /** The cached hex ARGB accent, or null when absent or unreadable. */
+    private static Integer cachedColor(String hex) {
+        try {
+            return (int) Long.parseLong(hex, 16);
+        } catch (NumberFormatException invalid) {
+            return null;
+        }
     }
 
     public static String percentText(String cached) {

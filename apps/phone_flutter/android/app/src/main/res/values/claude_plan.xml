@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Profile and Release pause Claude plan; src/debug keeps it for Flutter Debug. -->
+    <bool name="ward_pulse_claude_plan_paused">true</bool>
+</resources>

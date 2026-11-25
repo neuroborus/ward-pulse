@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Flutter Debug keeps Claude plan, matching kDebugMode in the phone shell. -->
+    <bool name="ward_pulse_claude_plan_paused">false</bool>
+</resources>

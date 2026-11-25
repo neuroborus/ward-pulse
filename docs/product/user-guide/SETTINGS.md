@@ -12,6 +12,7 @@ home-widget metrics are on **Widget**.
 | Notifications | Independent Alert notifications and Plan recovery switches, plus an Android settings action when notifications are blocked. |
 | Diagnostics | Sync timestamp/status and the next Watch and Widget summaries, when phone data is available. |
 | Help | User guide in your external browser. |
+| Privacy Policy | WardPulse's privacy policy in your external browser. |
 | Legal | Independent product information. |
 
 Follow [Sync and notifications](/guide/sync) to set the cadence or notification permission.
@@ -42,6 +43,8 @@ These summaries do not confirm that the watch received an update, that widget pu
 succeeded, or how many rows and details fit your launcher's allocation.
 
 Choose **Settings → Help** to open the user guide in your external browser.
+Choose **Settings → Privacy Policy**, directly below **Help**, to read the
+[privacy policy](/product/privacy-policy) in your browser.
 
 ## Stored data and provider requests
 

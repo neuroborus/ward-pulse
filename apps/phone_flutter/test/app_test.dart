@@ -15,6 +15,8 @@ import 'package:ward_pulse_phone/sync/provider_reporting_clients.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/providers/codex_account_row.dart';
 import 'package:ward_pulse_phone/providers/codex_account_store.dart';
+import 'package:ward_pulse_phone/providers/claude_account_store.dart';
+import 'package:ward_pulse_phone/sync/claude_account_client.dart';
 import 'package:ward_pulse_phone/sync/codex_account_client.dart';
 import 'package:ward_pulse_phone/providers/connection_rejection_notice.dart';
 import 'package:ward_pulse_phone/providers/cursor_plan_row.dart';
@@ -63,6 +65,107 @@ void main() {
     setUpAll(() async => bridge = await NativeCacheTestBridge.start());
     tearDownAll(() => bridge.close());
     setUp(() => bridge.reset());
+
+    testWidgets(
+      'paused Claude stays out of manual, scheduled, and Wear-request refreshes',
+      (tester) async {
+        await tester.runAsync(() async {
+          final secure = FakeSecureStorage();
+          final platform = bridge.platform('foreground');
+          var instant = DateTime.utc(2026, 1, 1, 12);
+          await SecureClaudeAccountStore(
+            storage: secure,
+            platform: platform,
+          ).write(
+            ClaudeAccountSession(
+              accessToken: 'fake-upgrade-access',
+              refreshToken: 'fake-upgrade-refresh',
+              accountId: 'fake-upgrade-account',
+              expiresAt: instant,
+            ),
+          );
+          final personalRequests = <Uri>[];
+          final live = PhoneLiveBindings.create(
+            claudePlanPaused: true,
+            secureStorage: secure,
+            cachePlatform: platform,
+            clock: () => instant,
+            claudeClient: ClaudeAccountClient(
+              clock: () => instant,
+              transport: _RecordingClaudeTransport(personalRequests),
+            ),
+            cursorClient: CursorPlanClient(
+              http: ProviderReportingHttp(transport: _PlanReportingTransport()),
+            ),
+          );
+          await live.credentialStore.writeSecret(
+            ProviderConnections.cursorPlan,
+            'fake-cursor-session',
+          );
+          final scheduler = _ManualProviderSyncScheduler();
+          final watch = _FakeWatchSyncService();
+          final publications = <DateTime, Completer<DashboardSnapshot>>{};
+          watch.onSync = (snapshot) {
+            final publication = publications[snapshot.generatedAt];
+            if (publication != null && !publication.isCompleted) {
+              publication.complete(snapshot);
+            }
+          };
+          Future<DashboardSnapshot> refresh(
+            Future<void> Function() trigger,
+          ) async {
+            final published =
+                publications[instant] = Completer<DashboardSnapshot>();
+            await bridge.invoke('test', 'setClock', {
+              'value': instant.millisecondsSinceEpoch,
+            });
+            await trigger();
+            final snapshot = await published.future;
+            await tester.pumpAndSettle();
+            instant = instant.add(const Duration(hours: 1));
+            return snapshot;
+          }
+
+          try {
+            // Keep the expired session installed during all four loads. The
+            // live repository must exclude it even before cleanup runs.
+            final snapshots = [
+              await refresh(
+                () => tester.pumpWidget(
+                  WardPulseApp(
+                    repository: live.repository,
+                    credentialStore: live.credentialStore,
+                    claudeAccountService: live.claudeAccountService,
+                    claudePlanPaused: live.claudePlanPaused,
+                    rejectionNotices: live.rejectionNotices,
+                    syncScheduler: scheduler,
+                    watchSyncService: watch,
+                    readExhaustedWindows: (_) => const [],
+                  ),
+                ),
+              ),
+              await refresh(() async => scheduler.tick()),
+              await refresh(() => tester.tap(find.byTooltip('Refresh'))),
+              await refresh(() async => watch.refreshHandler!()),
+            ];
+            for (final snapshot in snapshots) {
+              expect(snapshot.accounts.map((account) => account.connection), [
+                'cursor.plan',
+              ]);
+              expect(snapshot.alerts, isEmpty);
+            }
+            expect(personalRequests, isEmpty);
+          } finally {
+            try {
+              await tester.pumpWidget(const SizedBox());
+            } finally {
+              await scheduler.dispose();
+            }
+          }
+        });
+      },
+      timeout: const Timeout(Duration(seconds: 60)),
+    );
 
     testWidgets(
       'Codex encrypted-read failure reconciles before post-lease cleanup feedback',
@@ -2248,7 +2351,7 @@ void main() {
     expect(find.widgetWithText(ListTile, 'Help'), findsOneWidget);
   });
 
-  testWidgets('Settings keeps Help and Legal without snapshot or debug', (
+  testWidgets('Settings keeps Help, Privacy Policy, Legal without snapshot', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -2276,6 +2379,10 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Legal'), findsOneWidget);
+    final helpTop = tester.getTopLeft(find.text('Help')).dy;
+    final privacyTop = tester.getTopLeft(find.text('Privacy Policy')).dy;
+    expect(privacyTop, greaterThan(helpTop));
+    expect(tester.getTopLeft(find.text('Legal')).dy, greaterThan(privacyTop));
     expect(
       find.text(
         'WardPulse is an independent usage monitor. It is not affiliated with, '
@@ -2366,100 +2473,110 @@ void main() {
     );
   });
 
-  testWidgets('Settings Help opens the public guide in an external browser', (
-    tester,
-  ) async {
-    const channel = MethodChannel('plugins.flutter.io/url_launcher');
-    final messenger = tester.binding.defaultBinaryMessenger;
-    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
-    final calls = <MethodCall>[];
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      calls.add(call);
-      return true;
-    });
+  for (final (row, url) in [
+    ('Help', 'https://neuroborus.github.io/ward-pulse/'),
+    (
+      'Privacy Policy',
+      'https://neuroborus.github.io/ward-pulse/product/privacy-policy/',
+    ),
+  ]) {
+    testWidgets('Settings $row opens its public page in an external browser', (
+      tester,
+    ) async {
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      final messenger = tester.binding.defaultBinaryMessenger;
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final calls = <MethodCall>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return true;
+      });
 
-    await tester.pumpWidget(
-      WardPulseApp(repository: const NoProvidersDashboardRepository()),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Settings'));
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('Help'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.tap(find.text('Help'));
-    await tester.pumpAndSettle();
-
-    expect(calls, hasLength(1));
-    expect(calls.single.method, 'launch');
-    expect(
-      calls.single.arguments,
-      allOf(
-        containsPair('url', 'https://neuroborus.github.io/ward-pulse/'),
-        containsPair('useWebView', false),
-        containsPair('useSafariVC', false),
-        containsPair('universalLinksOnly', false),
-        containsPair('headers', isEmpty),
-      ),
-    );
-    expect(find.byType(SnackBar), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
-
-  for (final throwsException in [false, true]) {
-    for (final disposeBeforeCompletion in [false, true]) {
-      testWidgets(
-        'Settings Help handles '
-        '${throwsException ? 'a platform exception' : 'a false launch result'}'
-        '${disposeBeforeCompletion ? ' after disposal' : ''}',
-        (tester) async {
-          const channel = MethodChannel('plugins.flutter.io/url_launcher');
-          final messenger = tester.binding.defaultBinaryMessenger;
-          addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
-          final completion = Completer<bool>();
-          final calls = <MethodCall>[];
-          messenger.setMockMethodCallHandler(channel, (call) async {
-            calls.add(call);
-            return completion.future;
-          });
-
-          await tester.pumpWidget(
-            WardPulseApp(repository: const NoProvidersDashboardRepository()),
-          );
-          await tester.pumpAndSettle();
-          await tester.tap(find.text('Settings'));
-          await tester.pumpAndSettle();
-          await tester.scrollUntilVisible(
-            find.text('Help'),
-            300,
-            scrollable: find.byType(Scrollable).first,
-          );
-          await tester.tap(find.text('Help'));
-          await tester.pump();
-          expect(calls, hasLength(1));
-          expect(calls.single.method, 'launch');
-          expect(find.byType(SnackBar), findsNothing);
-
-          if (disposeBeforeCompletion) {
-            await tester.pumpWidget(const SizedBox.shrink());
-          }
-          if (throwsException) {
-            completion.completeError(PlatformException(code: 'launch_failed'));
-          } else {
-            completion.complete(false);
-          }
-          await tester.pumpAndSettle();
-
-          expect(tester.takeException(), isNull);
-          expect(
-            find.text('Could not open the browser'),
-            disposeBeforeCompletion ? findsNothing : findsOneWidget,
-          );
-        },
+      await tester.pumpWidget(
+        WardPulseApp(repository: const NoProvidersDashboardRepository()),
       );
-    }
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text(row),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text(row));
+      await tester.pumpAndSettle();
+
+      expect(calls, hasLength(1));
+      expect(calls.single.method, 'launch');
+      expect(
+        calls.single.arguments,
+        allOf(
+          containsPair('url', url),
+          containsPair('useWebView', false),
+          containsPair('useSafariVC', false),
+          containsPair('universalLinksOnly', false),
+          containsPair('headers', isEmpty),
+        ),
+      );
+      expect(find.byType(SnackBar), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  // Both rows share one launcher; Help covers exception and disposal guards.
+  for (final (row, throwsException, disposeBeforeCompletion) in [
+    ('Help', false, false),
+    ('Help', false, true),
+    ('Help', true, false),
+    ('Help', true, true),
+    ('Privacy Policy', false, false),
+  ]) {
+    testWidgets('Settings $row handles '
+        '${throwsException ? 'a platform exception' : 'a false launch result'}'
+        '${disposeBeforeCompletion ? ' after disposal' : ''}', (tester) async {
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      final messenger = tester.binding.defaultBinaryMessenger;
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final completion = Completer<bool>();
+      final calls = <MethodCall>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return completion.future;
+      });
+
+      await tester.pumpWidget(
+        WardPulseApp(repository: const NoProvidersDashboardRepository()),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text(row),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.text(row));
+      await tester.pump();
+      expect(calls, hasLength(1));
+      expect(calls.single.method, 'launch');
+      expect(find.byType(SnackBar), findsNothing);
+
+      if (disposeBeforeCompletion) {
+        await tester.pumpWidget(const SizedBox.shrink());
+      }
+      if (throwsException) {
+        completion.completeError(PlatformException(code: 'launch_failed'));
+      } else {
+        completion.complete(false);
+      }
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+      expect(
+        find.text('Could not open the browser'),
+        disposeBeforeCompletion ? findsNothing : findsOneWidget,
+      );
+    });
   }
 
   testWidgets('slot cards say where metrics come from when there are none', (
@@ -8428,6 +8545,7 @@ class _FakeWatchSyncService implements WatchSyncService {
   final mockModes = <bool>[];
   bool fail = false;
   void Function()? refreshHandler;
+  void Function(DashboardSnapshot)? onSync;
 
   @override
   Future<void> sync(
@@ -8439,6 +8557,7 @@ class _FakeWatchSyncService implements WatchSyncService {
     syncedSnapshots.add(snapshot);
     syncedPreferences.add(ringPreferences);
     mockModes.add(mockDataMode);
+    onSync?.call(snapshot);
     if (fail) throw StateError('Watch unavailable');
   }
 
@@ -9031,6 +9150,24 @@ final class _PlanCodexTransport implements CodexHttpTransport {
           },
     ),
   );
+}
+
+final class _RecordingClaudeTransport implements ClaudeHttpTransport {
+  const _RecordingClaudeTransport(this.requests);
+
+  final List<Uri> requests;
+
+  @override
+  Future<ClaudeHttpResponse> send(
+    String method,
+    Uri uri, {
+    required Map<String, String> headers,
+    String? body,
+    Duration? timeout,
+  }) async {
+    requests.add(uri);
+    return const ClaudeHttpResponse(statusCode: 503, body: '{}');
+  }
 }
 
 final class _PlanReportingTransport implements ProviderHttpTransport {

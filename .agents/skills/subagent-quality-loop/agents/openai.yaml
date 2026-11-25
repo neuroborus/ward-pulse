@@ -1,0 +1,4 @@
+interface:
+  display_name: "Subagent Quality Loop"
+  short_description: "Executor and reviewer iterate until a clean full pass"
+  default_prompt: "Use $subagent-quality-loop to complete this task with a separate executor and independent reviewer until a full review finds zero issues."

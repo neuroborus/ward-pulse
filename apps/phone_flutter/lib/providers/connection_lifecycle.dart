@@ -647,9 +647,9 @@ final class ConnectionCredentialStorage
     }
   }
 
+  /// Native state commits an admitted cancellation without granting a lease.
   Future<void> cancelReconnect(CredentialVersion ticket) async {
-    final lease = await _begin('cancel', ticket);
-    if (lease['accepted'] == true) await _finish(lease, 'cancel');
+    await _begin('cancel', ticket);
   }
 
   Future<void> deleteLegacyPastedSecret() async {
@@ -669,6 +669,11 @@ final class ConnectionCredentialStorage
     } finally {
       await _release(lease);
     }
+  }
+
+  /// Commits local Claude plan retirement and drains its durable cleanup queue.
+  Future<void> retireClaudePlan() async {
+    await _release(await _begin('retireClaudePlan'));
   }
 
   Future<void> write(String value) async {

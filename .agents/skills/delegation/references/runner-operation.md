@@ -152,14 +152,12 @@ targeted same-run feedback when available, or fresh reviewed requirements when a
 gap supplies a new corrective change. Otherwise preserve the blocker without blind retry, new run or
 manual report repair. Keep the same authorized scope, roles and guards.
 
-Follow the [owner-selected direction](owner-selected-mode.md). Explicitly select
-`combined` for fresh `plan-authoring`, `plan-execution` and `polishing` runs and
-their replacements. Explicitly select `independent` for every fresh `audit` and
-audit replacement. Apply the qualified role selections and authorized quota
-fallback in the linked direction.
-The managing operator verifies the owning run's actual public mode through the supported API before acceptance or an authorized coordinator commit; defaults are insufficient.
+Apply the [owner-selected direction](owner-selected-mode.md) for fresh pipeline mode,
+role selections, model qualification and quota fallback. The managing operator checks
+the owning run's actual public mode and role selections through supported evidence before
+acceptance or an authorized coordinator commit.
 Managed code roles report their assigned mode/protocol and complete that mode's actual verification, without managing their own Runner or adding a CLI self-status/admission/retirement probe.
-Operator mode observation and HOST work are not additional Native checks or completion/commit prerequisites. For Combined coding pipelines, report evidence of primary convergence followed by the full independent review gate.
+Operator mode observation and HOST work are not additional Native checks or completion/commit prerequisites. For Combined coding pipelines, report evidence of primary convergence and read-only clean confirmation before the full independent review gate.
 The operator uses a supported stop on mismatch; preserve required checks and the coordinator's full independent ZERO.
 
 Before a fresh start, reconcile one self-contained role-facing task/context against the current scoped Native

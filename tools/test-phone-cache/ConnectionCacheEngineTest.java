@@ -1,6 +1,7 @@
 package app.wardpulse.watchsync;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -51,10 +52,15 @@ public final class ConnectionCacheEngineTest {
     }
     public static void main(String[] ignored) {
         automaticAdmission(); automaticMetadataFailure(); automaticWriteCannotActivateCandidate(); absenceOwnership();
-        restartPartialAndMonotonic(); deletionAndOAuthRevision(); leaseQueueAndDetach(); cancellationAndMigration(); corruptionAndFailures(); identityAndAggregate(); fetchExclusion(); cleanupAcknowledgement(); supersededCancellation(); failedCommitMemoryCannotActivate(); siblingWritesCannotActivateCandidate(); emptyPriorStateSurvivesSiblingWrite(); activeBackupCleanupProtection(); timestampPrecisionAndLegacyUpgrade(); rejectionLifecycle(); rejectionOwnership(); noticeFailures(); noticeMetadataValidation();
+        restartPartialAndMonotonic(); deletionAndOAuthRevision(); leaseQueueAndDetach();
+        // Runs before other cancellation cases so a lost saved reference fails first.
+        cancelledReconnectSurvivesDetach();
+        cancellationAndMigration(); corruptionAndFailures(); identityAndAggregate(); fetchExclusion(); cleanupAcknowledgement(); supersededCancellation(); failedCommitMemoryCannotActivate(); siblingWritesCannotActivateCandidate(); emptyPriorStateSurvivesSiblingWrite(); activeBackupCleanupProtection(); timestampPrecisionAndLegacyUpgrade(); rejectionLifecycle(); rejectionOwnership(); noticeFailures(); noticeMetadataValidation();
         verifiedReconnectRetiresNotice(); failedReconnectReportPreservesConfirmedState();
         failedSnapshotTransactionsRetainConfirmedPair();
         failedFirstLegacyCleanupRetainsEmptyState();
+        claudePlanRetirement();
+        failedClaudePlanRetirementFences();
         System.out.println("Connection cache engine: " + assertions + " assertions passed.");
     }
     static void restartPartialAndMonotonic() {
@@ -99,7 +105,12 @@ public final class ConnectionCacheEngineTest {
         check(deletion.get() == null, "Cross-engine delete queues behind awaited secure read.");
         finish(engine, "A", read, "confirm");
         check(deletion.get() != null && !engine.valid(C, v), "Queued deletion commits barrier after read.");
-        finish(engine, "B", deletion.get(), "release");
+        engine.detach("B");
+        Map<String, Object> deleted = acquire(engine, "cold", "read", null);
+        check("deleted".equals(deleted.get("mode")) && version(deleted).equals(version(deletion.get()))
+                && deleted.get("cleanupSlots").equals(deletion.get().get("cleanupSlots")),
+            "Detaching a committed delete lease retains its generation and cleanup queue.");
+        finish(engine, "cold", deleted, "release");
         Map<String, String> active = version(login(engine));
         Map<String, Object> refresh = acquire(engine, "dead", "refresh", active);
         String abandonedSlot = (String)refresh.get("writeSlot");
@@ -120,10 +131,27 @@ public final class ConnectionCacheEngineTest {
         Map<String, Object> pendingRead = acquire(engine, "worker", "read", null);
         check("pending".equals(pendingRead.get("mode")), "Worker cannot select credentials while sign-in pending.");
         finish(engine, "worker", pendingRead, "release");
-        Map<String, Object> cancel = acquire(engine, "ui", "cancel", version(reconnect));
-        Map<String, Object> restored = finish(engine, "ui", cancel, "cancel");
+        Map<String, Object> restored = acquire(engine, "ui", "cancel", version(reconnect));
         check(active.get("slot").equals(restored.get("slot")), "Cancelled reconnect retains previous credential.");
         check(!active.get("generation").equals(restored.get("generation")), "Cancellation cannot revive old in-flight request.");
+        check(Boolean.TRUE.equals(restored.get("accepted")) && !restored.containsKey("lease"), "Cancellation commits without a lease.");
+        String legacyKey = "wardpulse.codex.account-session";
+        for (boolean migrationStarted : new boolean[]{false, true}) {
+            // A failed legacy read or interrupted migration precedes the cancelled reconnect.
+            Disk legacyDisk = new Disk(); ConnectionCacheEngine legacyEngine = new ConnectionCacheEngine(legacyDisk);
+            Map<String, Object> failedRead = acquire(legacyEngine, "ui", "read", null);
+            if (migrationStarted) legacyEngine.prepareMigration("ui", C, (String)failedRead.get("lease"));
+            finish(legacyEngine, "ui", failedRead, "release");
+            Map<String, Object> legacyPending = acquire(legacyEngine, "ui", "reconnect", null);
+            finish(legacyEngine, "ui", legacyPending, "release");
+            check("legacy".equals(acquire(legacyEngine, "ui", "cancel", version(legacyPending)).get("mode")), "Cancellation restores legacy recovery.");
+            ConnectionCacheEngine coldLegacy = new ConnectionCacheEngine(legacyDisk);
+            Map<String, Object> coldRead = acquire(coldLegacy, "cold", "read", null);
+            @SuppressWarnings("unchecked") List<String> coldCleanup = (List<String>)coldRead.get("cleanupSlots");
+            check("legacy".equals(coldRead.get("mode")) && !coldCleanup.contains(legacyKey), "Cold read keeps the installed session after cancellation.");
+            coldLegacy.prepareMigration("cold", C, (String)coldRead.get("lease"));
+            check("active".equals(finish(coldLegacy, "cold", coldRead, "activate").get("mode")), "Cold read migrates the installed session after cancellation.");
+        }
         Disk installed = new Disk(); ConnectionCacheEngine migrationEngine = new ConnectionCacheEngine(installed);
         Map<String, Object> read = acquire(migrationEngine, "ui", "read", null);
         migrationEngine.prepareMigration("ui", C, (String)read.get("lease"));
@@ -138,6 +166,100 @@ public final class ConnectionCacheEngineTest {
         check("migration".equals(retryRead.get("mode")), "Interrupted migration retains installed-session retry path.");
         cold.prepareMigration("ui", C, (String)retryRead.get("lease"));
         check("active".equals(finish(cold, "ui", retryRead, "activate").get("mode")), "Legacy migration can recover.");
+    }
+
+    static void claudePlanRetirement() {
+        String claude = "anthropic.plan";
+        String session = "wardpulse.claude.account-session";
+        String pasted = "wardpulse.anthropic.plan.secret";
+        for (boolean alreadyDeleted : new boolean[]{false, true}) {
+            Disk disk = new Disk();
+            ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+            Map<String, String> sibling = version(login(engine));
+            Map<String, Object> read = acquire(engine, "old", claude, "read", null);
+            String ticket = (String) read.get("lease");
+            String activeSlot = null;
+            Map<String, Object> before;
+            if (alreadyDeleted) {
+                before = engine.finish("old", claude, ticket, "missing", null);
+            } else {
+                activeSlot = (String) engine.prepareMigration("old", claude, ticket).get("writeSlot");
+                before = engine.finish("old", claude, ticket, "activate", ID);
+                check(engine.writeSnapshot(claude, version(before), "sanitized-plan", 10),
+                    "The migrated session has a warm cache.");
+            }
+
+            Map<String, Object> paused = acquire(engine, "ui", claude, "retireClaudePlan", null);
+            List<String> expected = alreadyDeleted ? List.of(session, pasted) : List.of(activeSlot, session, pasted);
+            check("deleted".equals(paused.get("mode")) && paused.get("cleanupSlots").equals(expected)
+                    && paused.get("generation").equals(before.get("generation")) == alreadyDeleted,
+                "Retirement durably queues both fixed keys and any active slot without rotating an old deletion.");
+            check(!engine.valid(claude, version(before)) && !disk.data.containsKey(claude + ".snapshot")
+                    && engine.valid(C, sibling),
+                "Only the Claude plan cache and credential are retired.");
+
+            AtomicReference<Map<String, Object>> overlap = new AtomicReference<>();
+            engine.acquire("worker", claude, "retireClaudePlan", null, overlap::set,
+                error -> { throw new RuntimeException(error); });
+            check(overlap.get() == null, "Overlapping retirement waits for the current lease.");
+            engine.detach("ui");
+            Map<String, Object> retry = overlap.get();
+            check("deleted".equals(retry.get("mode")) && version(retry).equals(version(paused))
+                    && retry.get("cleanupSlots").equals(expected),
+                "Detach releases the waiter with the same barrier and exact queue.");
+            String retryTicket = (String) retry.get("lease");
+            check(engine.acknowledgeCleanup("worker", claude, retryTicket, expected), "Cleanup is acknowledged.");
+            engine.finish("worker", claude, retryTicket, "release", null);
+            Map<String, Object> cold = acquire(new ConnectionCacheEngine(disk),
+                "cold", claude, "retireClaudePlan", null);
+            check(version(cold).equals(version(paused)) && cold.get("cleanupSlots").equals(List.of()),
+                "Restart does not requeue acknowledged keys.");
+        }
+    }
+
+    static void failedClaudePlanRetirementFences() {
+        String claude = "anthropic.plan";
+        MemoryUpdatingDisk disk = new MemoryUpdatingDisk();
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+        Map<String, String> sibling = version(login(engine));
+        Map<String, Object> login = login(engine, claude);
+        Map<String, String> active = version(login);
+        check(engine.writeSnapshot(claude, active, "sanitized-plan", 10), "Claude starts with a warm cache.");
+        AtomicReference<Exception> failure = new AtomicReference<>();
+        disk.fail = true;
+        engine.acquire("ui", claude, "retireClaudePlan", null,
+            ignored -> { throw new AssertionError("Retirement lease requires a successful commit."); }, failure::set);
+        check(failure.get() instanceof IllegalStateException && !engine.valid(claude, active),
+            "Failed retirement cannot grant permission to delete or report.");
+        disk.fail = false;
+        check(engine.writeSnapshot(C, sibling, "sanitized-sibling", 10)
+                && "active".equals(disk.data.get(claude + ".mode"))
+                && active.get("generation").equals(disk.data.get(claude + ".generation"))
+                && "sanitized-plan".equals(disk.data.get(claude + ".snapshot")),
+            "A sibling commit preserves the last confirmed retirement state.");
+        failure.set(null);
+        engine.acquire("worker", claude, "read", null,
+            ignored -> { throw new AssertionError("Ordinary reads must stay fenced after a failed retirement."); },
+            failure::set);
+        check(failure.get() instanceof IllegalStateException, "Storage recovery alone does not lift the fence.");
+
+        Map<String, Object> retry = acquire(engine, "worker", claude, "retireClaudePlan", null);
+        check("deleted".equals(disk.data.get(claude + ".mode"))
+                && !active.get("generation").equals(retry.get("generation"))
+                && !disk.data.containsKey(claude + ".snapshot") && !engine.valid(claude, active),
+            "A retry in the same engine durably retires the prior credential and its cache.");
+        List<String> slots = List.of((String) login.get("slot"),
+            "wardpulse.claude.account-session", "wardpulse.anthropic.plan.secret");
+        List<?> cleanup = (List<?>) retry.get("cleanupSlots");
+        check(cleanup.size() == slots.size() && cleanup.containsAll(slots),
+            "Only the successful retry grants the cleanup lease for the active slot and both legacy keys.");
+        String ticket = (String) retry.get("lease");
+        check(engine.acknowledgeCleanup("worker", claude, ticket, slots), "Retry cleanup can be acknowledged.");
+        engine.finish("worker", claude, ticket, "release", null);
+        Map<String, Object> again = acquire(engine, "worker", claude, "retireClaudePlan", null);
+        check(version(again).equals(version(retry)) && List.of().equals(again.get("cleanupSlots")),
+            "The same engine retains the retired state and does not requeue acknowledged keys.");
+        engine.finish("worker", claude, (String) again.get("lease"), "release", null);
     }
     static void corruptionAndFailures() {
         Disk disk = new Disk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
@@ -362,9 +484,42 @@ public final class ConnectionCacheEngineTest {
         check(!cleanup.contains(active.get("slot")), "Superseded reconnect protects immutable prior ref.");
         finish(engine, "B", b, "release");
         check(Boolean.FALSE.equals(acquire(engine, "A", "complete", version(a)).get("accepted")), "Superseded login cannot select old candidate.");
-        Map<String, Object> cancel = acquire(engine, "B", "cancel", version(b));
-        Map<String, Object> restored = finish(engine, "B", cancel, "cancel");
+        Map<String, Object> restored = acquire(engine, "B", "cancel", version(b));
         check(active.get("slot").equals(restored.get("slot")) && restored.get("generation").equals(b.get("generation")), "Second cancellation restores prior credential with new generation.");
+    }
+    static void cancelledReconnectSurvivesDetach() {
+        Disk disk = new Disk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+        Map<String, Object> active = login(engine);
+        Map<String, Object> pending = acquire(engine, "ui", "reconnect", null); finish(engine, "ui", pending, "release");
+        Map<String, Object> cancelled = acquire(engine, "ui", "cancel", version(pending));
+        engine.detach("ui");
+        ConnectionCacheEngine cold = new ConnectionCacheEngine(disk);
+        Map<String, Object> read = acquire(cold, "cold", "read", null);
+        // Inspect the saved slot before the return contract so a lost reference fails first.
+        check(active.get("slot").equals(read.get("slot")) && "active".equals(read.get("mode")), "Detach after cancellation keeps the saved credential.");
+        @SuppressWarnings("unchecked") List<String> cleanup = (List<String>)read.get("cleanupSlots");
+        check(!cleanup.contains(active.get("slot")) && pending.get("generation").equals(read.get("generation")), "Cold read keeps the restored slot under the reconnect generation.");
+        finish(cold, "cold", read, "release");
+        check(!cancelled.containsKey("lease") && version(cancelled).equals(version(read)), "Cancellation returns its committed state without a lease.");
+
+        Map<String, Object> successor = acquire(cold, "B", "reconnect", null); finish(cold, "B", successor, "release");
+        check(Boolean.FALSE.equals(acquire(cold, "ui", "cancel", version(pending)).get("accepted")), "Stale cancellation replay cannot settle a successor reconnect.");
+        Map<String, Object> current = finish(cold, "B", acquire(cold, "B", "complete", version(successor)), "activate");
+        check(Boolean.FALSE.equals(acquire(cold, "ui", "cancel", version(pending)).get("accepted")) && cold.valid(C, version(current)), "Stale cancellation replay cannot replace the successor.");
+
+        Map<String, Object> retry = acquire(cold, "ui", "reconnect", null); finish(cold, "ui", retry, "release");
+        Map<String, Object> held = acquire(cold, "worker", "read", null);
+        AtomicReference<Map<String, Object>> queued = new AtomicReference<>();
+        cold.acquire("ui", C, "cancel", version(retry), queued::set, error -> { throw new RuntimeException(error); });
+        check(queued.get() == null, "Cancellation waits for a competing owner.");
+        finish(cold, "worker", held, "release");
+        check(queued.get() != null && current.get("slot").equals(queued.get().get("slot")) && !queued.get().containsKey("lease"), "Queued cancellation commits after the competing owner.");
+        cold.detach("ui");
+        check("active".equals(acquire(new ConnectionCacheEngine(disk), "cold", "read", null).get("mode")), "Queued cancellation survives detach.");
+
+        Map<String, Object> disconnect = acquire(cold, "settings", "delete", null); finish(cold, "settings", disconnect, "release");
+        check(Boolean.FALSE.equals(acquire(cold, "ui", "cancel", version(retry)).get("accepted")), "Cancellation cannot undo an intentional disconnect.");
+        check("deleted".equals(acquire(new ConnectionCacheEngine(disk), "cold", "read", null).get("mode")), "Intentional disconnect stays deleted.");
     }
 
     static void failedCommitMemoryCannotActivate() {
@@ -378,8 +533,7 @@ public final class ConnectionCacheEngineTest {
         check(failed && !engine.valid(C, version(pending)), "Unknown commit fences memory-visible active state.");
         disk.fail = false;
         Map<String, Object> retry = acquire(engine, "ui", "reconnect", null); finish(engine, "ui", retry, "release");
-        Map<String, Object> cancel = acquire(engine, "ui", "cancel", version(retry));
-        Map<String, Object> restored = finish(engine, "ui", cancel, "cancel");
+        Map<String, Object> restored = acquire(engine, "ui", "cancel", version(retry));
         check(original.get("slot").equals(restored.get("slot")) && !uncertainSlot.equals(restored.get("slot")), "Explicit recovery cannot reactivate unknown committed candidate.");
         Map<String, Object> current = login(engine);
         Map<String, Object> secondPending = acquire(engine, "ui", "reconnect", null); finish(engine, "ui", secondPending, "release");
@@ -388,8 +542,7 @@ public final class ConnectionCacheEngineTest {
         try { finish(engine, "ui", secondComplete, "activate"); } catch (IllegalStateException expected) { }
         disk.fail = false;
         Map<String, Object> secondRetry = acquire(engine, "ui", "reconnect", null); finish(engine, "ui", secondRetry, "release");
-        Map<String, Object> secondCancel = acquire(engine, "ui", "cancel", version(secondRetry));
-        Map<String, Object> secondRestored = finish(engine, "ui", secondCancel, "cancel");
+        Map<String, Object> secondRestored = acquire(engine, "ui", "cancel", version(secondRetry));
         check(current.get("slot").equals(secondRestored.get("slot")) && !original.get("slot").equals(secondRestored.get("slot")), "Second failure recovery uses immediately prior valid state.");
 
     }
@@ -452,8 +605,7 @@ public final class ConnectionCacheEngineTest {
             }
             coldEngine.finish("cold", sibling, (String)coldSibling.get("lease"), "release", null);
             Map<String, Object> retry = acquire(engine, "ui", "reconnect", null); finish(engine, "ui", retry, "release");
-            Map<String, Object> cancel = acquire(engine, "ui", "cancel", version(retry));
-            check(original.get("slot").equals(finish(engine, "ui", cancel, "cancel").get("slot")), "Explicit recovery after a sibling write preserves the confirmed prior credential.");
+            check(original.get("slot").equals(acquire(engine, "ui", "cancel", version(retry)).get("slot")), "Explicit recovery after a sibling write preserves the confirmed prior credential.");
             check(engine.valid(C, version(login(engine))), "Successful reconnect remains usable after sibling-write recovery.");
         }
     }
@@ -478,11 +630,17 @@ public final class ConnectionCacheEngineTest {
     static void activeBackupCleanupProtection() {
         Disk disk = new Disk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
         Map<String, Object> migration = acquire(engine, "ui", "read", null);
-        engine.prepareMigration("ui", C, (String)migration.get("lease")); finish(engine, "ui", migration, "activate");
+        engine.prepareMigration("ui", C, (String)migration.get("lease"));
+        Map<String, Object> migrated = finish(engine, "ui", migration, "activate");
         Map<String, Object> pending = acquire(engine, "ui", "reconnect", null); finish(engine, "ui", pending, "release");
-        Map<String, Object> cancel = acquire(engine, "ui", "cancel", version(pending)); finish(engine, "ui", cancel, "cancel");
-        Map<String, Object> read = acquire(engine, "cold", "read", null);
+        Map<String, Object> restored = acquire(engine, "ui", "cancel", version(pending));
         String legacy = "wardpulse.codex.account-session";
+        check("active".equals(restored.get("mode")) && migrated.get("slot").equals(restored.get("slot"))
+                && pending.get("generation").equals(restored.get("generation")) && legacy.equals(restored.get("backupKey"))
+                && restored.get("slot").equals(restored.get("backupSlot")) && pending.get("generation").equals(restored.get("backupGeneration"))
+                && restored.get("revision").equals(restored.get("backupRevision")),
+            "Cancellation reply restores the slot and guarded backup under the reconnect generation.");
+        Map<String, Object> read = acquire(engine, "cold", "read", null);
         @SuppressWarnings("unchecked") java.util.List<String> cleanup = (java.util.List<String>)read.get("cleanupSlots");
         check(!cleanup.contains(legacy), "Cancelled reconnect active backup is excluded from cleanup enumeration.");
         engine.acknowledgeCleanup("cold", C, (String)read.get("lease"), java.util.List.of(legacy));
@@ -569,8 +727,7 @@ public final class ConnectionCacheEngineTest {
         Map<String, Object> refreshed = finish(engine, "worker", refresh, "activate");
         check(committed.equals(refreshed.get("committedConnection")), "Ordinary token refresh preserves event eligibility.");
         Map<String, Object> pending = acquire(engine, "ui", "reconnect", null); finish(engine, "ui", pending, "release");
-        Map<String, Object> cancel = acquire(engine, "ui", "cancel", version(pending));
-        Map<String, Object> restored = finish(engine, "ui", cancel, "cancel");
+        Map<String, Object> restored = acquire(engine, "ui", "cancel", version(pending));
         check(committed.equals(restored.get("committedConnection")), "Cancelled reconnect keeps committed identity despite new generation.");
         rejection(engine, "poll", C, version(restored), false);
         check(Boolean.TRUE.equals(engine.readNotice(C).get("dismissed")), "Cancellation cannot rearm dismissed rejection.");

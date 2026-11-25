@@ -49,6 +49,9 @@ Check prose against actual UI, capabilities and limitations using existing ownin
 and internal review notes. Do not invent public download/store routes, successful live
 authentication, exact background scheduling or release/hardware acceptance.
 
+Keep internal review status, placeholders and publication to-dos in `LOCAL_ARTIFACTS/`.
+Remove them from production-bound public copy and metadata.
+
 Do not add public Source notes to satisfy the citation gate: it rejects unstable `path:line`
 references and does not require source footers. Keep source verification internal, with
 stable files plus named symbols/recipes or document sections when citing those sources.

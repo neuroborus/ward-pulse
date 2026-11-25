@@ -4,6 +4,10 @@ See your AI plan capacity, purchased balances and API spend on Android. WardPuls
 reporting from OpenAI, Anthropic and Cursor into one phone dashboard, with an optional
 Wear OS summary, watch face and home-screen widget.
 
+> [!CAUTION]
+> Claude plan sign-in and monitoring are paused. Anthropic's policy restricts third-party apps
+> from using Claude plan credentials.
+
 [![User Guide](docs/assets/user-guide-button.png)](https://neuroborus.github.io/ward-pulse/)
 
 Gallery screenshots show demo usage data.

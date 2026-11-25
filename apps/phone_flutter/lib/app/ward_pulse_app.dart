@@ -12,6 +12,7 @@ import '../dashboard/plan_recoveries.dart';
 import '../dashboard/provider_status_color.dart';
 import '../dashboard/provider_status_severity.dart';
 import '../providers/claude_account_service.dart';
+import '../providers/claude_plan_pause.dart';
 import '../providers/codex_account_service.dart';
 import '../providers/credential_dialog.dart';
 import '../providers/connection_rejection_notice.dart';
@@ -55,6 +56,7 @@ class WardPulseApp extends StatelessWidget {
     this.credentialStore = const EmptyProviderCredentialStore(),
     this.codexAccountService = const EmptyCodexAccountService(),
     this.claudeAccountService = const EmptyClaudeAccountService(),
+    this.claudePlanPaused = claudePlanPausedInBuild,
     this.refreshIntervalStore = const DefaultRefreshIntervalPreferenceStore(),
     this.watchRingPreferenceStore = const DefaultWatchRingPreferenceStore(),
     this.phoneWidgetPreferenceStore = const DefaultPhoneWidgetPreferenceStore(),
@@ -86,6 +88,7 @@ class WardPulseApp extends StatelessWidget {
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
+  final bool claudePlanPaused;
   final RefreshIntervalPreferenceStore refreshIntervalStore;
   final WatchRingPreferenceStore watchRingPreferenceStore;
   final PhoneWidgetPreferenceStore phoneWidgetPreferenceStore;
@@ -122,6 +125,7 @@ class WardPulseApp extends StatelessWidget {
         credentialStore: credentialStore,
         codexAccountService: codexAccountService,
         claudeAccountService: claudeAccountService,
+        claudePlanPaused: claudePlanPaused,
         refreshIntervalStore: refreshIntervalStore,
         watchRingPreferenceStore: watchRingPreferenceStore,
         phoneWidgetPreferenceStore: phoneWidgetPreferenceStore,
@@ -157,6 +161,7 @@ class DashboardHost extends StatefulWidget {
     required this.credentialStore,
     required this.codexAccountService,
     required this.claudeAccountService,
+    this.claudePlanPaused = claudePlanPausedInBuild,
     required this.refreshIntervalStore,
     required this.watchRingPreferenceStore,
     required this.phoneWidgetPreferenceStore,
@@ -186,6 +191,7 @@ class DashboardHost extends StatefulWidget {
   final ProviderCredentialStore credentialStore;
   final CodexAccountService codexAccountService;
   final ClaudeAccountService claudeAccountService;
+  final bool claudePlanPaused;
   final RefreshIntervalPreferenceStore refreshIntervalStore;
   final WatchRingPreferenceStore watchRingPreferenceStore;
   final PhoneWidgetPreferenceStore phoneWidgetPreferenceStore;
@@ -1693,6 +1699,7 @@ class _DashboardHostState extends State<DashboardHost>
                 credentialStore: widget.credentialStore,
                 codexAccountService: widget.codexAccountService,
                 claudeAccountService: widget.claudeAccountService,
+                claudePlanPaused: widget.claudePlanPaused,
                 onCredentialsChanged: _onCredentialsChanged,
                 onSaveReportingCredential: _saveReportingCredential,
                 reportingUpdates: Map.unmodifiable(_reportingUpdates),

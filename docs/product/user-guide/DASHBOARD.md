@@ -1,5 +1,10 @@
 # Read the Dashboard
 
+:::danger
+Claude plan sign-in and monitoring are paused. Anthropic's policy restricts third-party apps
+from using Claude plan credentials.
+:::
+
 Open **Dashboard** to see the reporting available from your connected providers. Related plan
 and API connections appear together under their provider family: OpenAI, Anthropic or Cursor.
 Each connection keeps its own data and status. Not every account provides spend, model detail,
@@ -8,6 +13,9 @@ purchased usage or a history chart.
 With no connected providers, Dashboard shows **Connect a provider**. Saved alert rules or
 budget limits leave this idle state healthy. They do not supply usage reports or prove a
 successful sync.
+
+See [Claude plan](/guide/providers-anthropic#claude-plan) for how this affects Fable and
+Extra usage.
 
 ## Display order
 
@@ -35,10 +43,6 @@ Remaining percentages do not set the Dashboard order. The
   state.
 - **Purchased** allowance bars track the amount **used**. Their headline can show a remaining
   balance, **Unlimited**, a percent used, or **Balance unavailable**, depending on the report.
-- **Claude Extra usage** shows the reported monthly amount used and applicable cap in
-  **Credits**, independently when available. It is a usage meter, not a prepaid balance.
-  A missing used amount is not zero; a missing or zero cap is neither **Unlimited** nor
-  proof of exhaustion. Its percentage is shown only when reported.
 - Read the units beside credits or purchased balances. A credit count is not a dollar amount.
 - A plan window can include a reset time. **Reset time unavailable** means WardPulse does not
   have that time; it does not mean the window never resets.
@@ -48,8 +52,8 @@ Remaining percentages do not set the Dashboard order. The
 to 0%; watch displays keep ordinary styling for that rounded value.
 
 Selected exhausted watch metrics remain present with an empty grey track and a pale-red zero
-percentage. They do not disappear or get replaced by a less-used Claude window. The widget
-also keeps exhausted rows as **0% left**. See [Watch](/guide/watch) and [Widget](/guide/widget).
+percentage. The widget keeps exhausted rows as **0% left**. See [Watch](/guide/watch) and
+[Widget](/guide/widget).
 
 ## Spend, history and model detail
 
@@ -71,10 +75,6 @@ Partial history bars do not establish a complete total: a missing daily cost buc
 History and **Model usage** appear when the provider
 supplies usable data; WardPulse does not create a local log of your prompts or a continuous
 activity history.
-
-Claude Plan extra usage provides monthly used/cap figures rather than Console API costs
-or Today/Week spending. It does not create a daily cost history. Ordinary Claude plan
-windows remain separate.
 
 Personal plan activity and API organization/team usage keep separate histories and balances
 within a family. Use the source label when more than one connection is listed. Read each
@@ -106,8 +106,7 @@ reporting rows have the same saved **Label**. Check that title before editing.
    for example **25.00**. Amounts must be at least **0.01**, with up to two decimal places.
 3. Leave a period empty for no limit, then tap **Save**.
 
-**Cancel** discards an unsaved budget draft. Claude Extra usage's reported cap is not a
-WardPulse-editable monetary budget.
+**Cancel** discards an unsaved budget draft.
 
 ### Alert thresholds
 
@@ -161,7 +160,7 @@ spending limits or alter billing. Active threshold alerts appear on Dashboard.
 ## Saved rejection warnings
 
 If a saved connection is rejected, Dashboard keeps a warning naming that connection.
-It describes a past rejection. Claude and Fable share one Claude plan warning.
+It describes a past rejection.
 
 Tap the warning text to open **Providers** at the named connection. Review its current
 status and use its own sign-in or key controls if recovery is still needed. Opening the

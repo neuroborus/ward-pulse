@@ -254,7 +254,17 @@ final class CodexAccountClient {
       }
       current = await _refresh(current);
       await onSessionChanged?.call(current);
-      return _fetchReport(current);
+      try {
+        return await _fetchReport(current);
+      } on CodexAccountException catch (retry) {
+        // The refresh was accepted, so a repeated 401 denies usage access
+        // rather than rejecting the saved session.
+        if (retry.failure != CodexAccountFailure.authentication) rethrow;
+        throw CodexAccountException(
+          CodexAccountFailure.permissionDenied,
+          retry.details,
+        );
+      }
     }
   }
 

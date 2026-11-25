@@ -86,6 +86,8 @@ final class IoProviderHttpTransport implements ProviderHttpTransport {
     String? body,
   }) async {
     final request = await open().timeout(_timeout);
+    // Credential headers must never reach an origin other than the configured one.
+    request.followRedirects = false;
     headers.forEach(request.headers.set);
     if (body != null) {
       // Declared length keeps the request unchunked for provider gateways.
@@ -94,6 +96,14 @@ final class IoProviderHttpTransport implements ProviderHttpTransport {
       request.add(bytes);
     }
     final response = await request.close().timeout(_timeout);
+    if (response.statusCode >= 300 && response.statusCode < 400) {
+      await response.drain<void>().timeout(_timeout);
+      return ProviderHttpResponse(
+        statusCode: response.statusCode,
+        headers: const {},
+        body: '',
+      );
+    }
     final responseHeaders = <String, String>{};
     response.headers.forEach((name, values) {
       responseHeaders[name.toLowerCase()] = values.join(',');

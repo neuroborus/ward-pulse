@@ -300,7 +300,17 @@ final class ClaudeAccountClient {
       }
       current = await refresh(current);
       await onSessionChanged(current);
-      return _reportFor(current);
+      try {
+        return await _reportFor(current);
+      } on ClaudeAccountException catch (retry) {
+        // The refresh was accepted, so a repeated 401 denies usage access
+        // rather than rejecting the saved session.
+        if (retry.failure != ClaudeAccountFailure.authentication) rethrow;
+        throw ClaudeAccountException(
+          ClaudeAccountFailure.permissionDenied,
+          retry.details,
+        );
+      }
     }
   }
 

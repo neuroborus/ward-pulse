@@ -16,8 +16,12 @@ const _independentProductDisclaimer =
     'endorsed by, or sponsored by OpenAI, Anthropic, Cursor, Google, or any '
     'other provider. Product names are trademarks of their respective owners.';
 
+const _helpUrl = 'https://neuroborus.github.io/ward-pulse/';
+const _privacyPolicyUrl =
+    'https://neuroborus.github.io/ward-pulse/product/privacy-policy/';
+
 /// Systemic phone settings: poll cadence, notifications, diagnostics, help,
-/// legal, and debug toggles.
+/// privacy policy, legal, and debug toggles.
 /// Not connections, credentials, Watchface/Widget layout, or alert thresholds
 /// (those live on Providers).
 class SettingsScreen extends StatefulWidget {
@@ -205,11 +209,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _openHelp() async {
+  Future<void> _openInBrowser(String url) async {
     bool opened;
     try {
       opened = await launchUrl(
-        Uri.parse('https://neuroborus.github.io/ward-pulse/'),
+        Uri.parse(url),
         mode: LaunchMode.externalApplication,
       );
     } catch (_) {
@@ -465,12 +469,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
         ],
         Card(
-          child: ListTile(
-            leading: const Icon(Icons.help_outline),
-            title: const Text('Help'),
-            subtitle: const Text('Open the user guide in your browser'),
-            trailing: const Icon(Icons.open_in_new),
-            onTap: _openHelp,
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.help_outline),
+                title: const Text('Help'),
+                subtitle: const Text('Open the user guide in your browser'),
+                trailing: const Icon(Icons.open_in_new),
+                onTap: () => _openInBrowser(_helpUrl),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.privacy_tip_outlined),
+                title: const Text('Privacy Policy'),
+                subtitle: const Text('Open the privacy policy in your browser'),
+                trailing: const Icon(Icons.open_in_new),
+                onTap: () => _openInBrowser(_privacyPolicyUrl),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 16),

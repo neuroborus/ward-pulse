@@ -47,6 +47,11 @@ is unavailable, it may relay them through Google-owned servers; that relayed tra
 end-to-end encrypted. This is separate from provider credentials, which are not sent to the
 watch or a WardPulse server.
 
+## Privacy Contact
+
+WardPulse is developed by **neuroborus**. For questions about this policy or how the app
+handles personal information, [email the developer](mailto:michael@hasso.tech).
+
 ## Independent Product
 
 WardPulse is an independent usage monitor. It is not affiliated with, endorsed by or sponsored

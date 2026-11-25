@@ -16,8 +16,6 @@ for its update timing.
 If a connection is saved but a meter says **Unknown**, **Balance unavailable** or is absent,
 check what that account exposes in the provider's own dashboard. Some providers do not report
 every balance, reset time, model breakdown or history. A missing value is not a zero.
-Claude Extra usage may report its monthly used amount, cap or percentage independently;
-a missing or zero cap is not Unlimited or proof of exhaustion.
 
 ## Loading or an error screen
 
@@ -62,9 +60,8 @@ Check the setup for the named connection:
   needs an ordinary organization-scoped key linked to an account with reporting rights,
   outside workspace scope. Replace Console Admin keys in this row's **Value** field and
   **Save**. WardPulse rejects their documented marker before requesting a report and keeps
-  the saved key, label and cache on rejection. **Cancel** leaves the edit unsaved. A
-  candidate without that marker or a working Claude plan login does not establish reporting
-  permissions.
+  the saved key, label and cache on rejection. **Cancel** leaves the edit unsaved. Confirm
+  that the replacement key has the required organization reporting permissions.
 - [Cursor Team Admin API](/guide/providers-cursor#team-admin-api) needs a Team key with reporting
   access; check [General → View team resources](/guide/providers-cursor#team-key-permissions).
 
@@ -76,9 +73,11 @@ and a positive same-currency cap; read known spend without a cap on Dashboard. S
 choices remain removable. An unset cap is not a provider outage. Retained Stale amounts keep
 the source's previous successful time, even when a sibling source updates.
 
-For a current plan/session error, open the named plan row under **Providers** and sign in again.
-If it still says **Connected**, use **Reconnect**, or **Sign in again** for Cursor.
-Claude callback paste expects **CODE#STATE**, not a reporting key.
+See [Claude plan](/guide/providers-anthropic#claude-plan) for why its sign-in and monitoring
+are temporarily unavailable in the public app.
+
+For a current Codex or Cursor plan error, open the named row under **Providers** and sign
+in again. If it still says **Connected**, use **Reconnect**, or **Sign in again** for Cursor.
 Do not paste a secret into an unrelated row or a help request.
 
 Cursor plan sign-in offers **Retry**, **Cancel** and **Help** after a startup, page or session
@@ -94,14 +93,6 @@ or repair a billing problem.
 **Showing previous data** and **STALE** identify earlier data kept after failed refresh. Restore
 network access and refresh on the phone. Earlier successful values and their timestamps can
 survive restart, but a connection with no successful report has no data to recover.
-
-![Dashboard showing previous data and a Claude unsupported-response warning in the light theme.](/screenshots/phone-dashboard-light.png)
-
-![Dashboard showing previous data and a Claude unsupported-response warning in the dark theme.](/screenshots/phone-dashboard-dark.png)
-
-These captures show **Claude returned an unsupported usage response.** with **Showing previous
-data**. Earlier data remains visible; the message alone does not establish why the response
-was unsupported.
 
 If a provider reports a rate limit, wait for any supplied availability/reset time or try later.
 Repeated refresh taps cannot remove a provider limit. A successful report may still contain

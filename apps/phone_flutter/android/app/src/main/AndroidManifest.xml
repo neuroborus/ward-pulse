@@ -7,6 +7,7 @@
 
     <application
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:label="WardPulse"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
