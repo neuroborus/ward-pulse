@@ -3,6 +3,7 @@ package app.wardpulse.watchsync;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** Runs the production transaction engine with an ordinary durable map backend. */
@@ -61,6 +62,8 @@ public final class ConnectionCacheEngineTest {
         failedFirstLegacyCleanupRetainsEmptyState();
         claudePlanRetirement();
         failedClaudePlanRetirementFences();
+        dataModeAuthority(); modePolicyWriteFailure(); dataModeFetchFencing();
+        scopedCredentialAdmission(); scopedSnapshotMaintenance(); unscopedFetchLeavesModeAbsent();
         System.out.println("Connection cache engine: " + assertions + " assertions passed.");
     }
     static void restartPartialAndMonotonic() {
@@ -910,6 +913,275 @@ public final class ConnectionCacheEngineTest {
         String stamp = (String) engine.stampFetch(owner, C, ticket, version).get("stamp");
         engine.releaseFetch(owner, C, ticket);
         return stamp;
+    }
+    static String boundFetch(ConnectionCacheEngine engine, String owner, long generation) {
+        AtomicReference<Map<String, Object>> answer = new AtomicReference<>();
+        engine.acquireFetch(owner, C, generation, answer::set, error -> { throw new AssertionError(error); });
+        return (String)answer.get().get("fetchTicket");
+    }
+    /** A committed switch, or `null` while admitted effects still drain. */
+    static Map<String, Object> switchMode(ConnectionCacheEngine engine, String owner, String mode) {
+        AtomicReference<Map<String, Object>> answer = new AtomicReference<>();
+        engine.switchMode(owner, mode, answer::set, error -> { throw new AssertionError(error); });
+        return answer.get();
+    }
+    static void dataModeAuthority() {
+        Disk modes = new Disk(); long[] now = {1000};
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(new Disk(), modes, () -> now[0], true);
+        check(Boolean.FALSE.equals(engine.readMode().get("initialized")), "A fresh install has no mode record.");
+        boolean closed = false;
+        try { engine.beginOperation(); } catch (IllegalStateException expected) { closed = true; }
+        check(closed, "Operations wait for the mode record.");
+        Map<String, Object> first = engine.initializeMode(true);
+        check("mock".equals(first.get("mode")) && Long.valueOf(0).equals(first.get("generation")), "Debug migrates a legacy Mock choice.");
+        Map<String, Object> again = engine.initializeMode(false);
+        check(first.get("installId").equals(again.get("installId")) && "mock".equals(again.get("mode")),
+            "Migration runs only while the record is absent.");
+        check(!engine.beginOperation().get("requestId").equals(engine.beginOperation().get("requestId")),
+            "Every operation has its own request ID.");
+
+        ConnectionCacheEngine release = new ConnectionCacheEngine(new Disk(), new Disk(), () -> now[0], false);
+        check("live".equals(release.initializeMode(true).get("mode")), "Production startup ignores a legacy Mock key.");
+        boolean rejected = false;
+        try { release.switchMode("ui", "mock", ignored -> {}, ignored -> {}); } catch (IllegalArgumentException expected) { rejected = true; }
+        check(rejected, "Production rejects Mock.");
+
+        // Both isolates share one monitor: a held OAuth rotation settles before the switch.
+        String held = engine.enterEffect("headless", 0L);
+        check(held != null, "The current generation admits a short effect.");
+        AtomicReference<Map<String, Object>> switched = new AtomicReference<>();
+        engine.switchMode("foreground", "live", switched::set, error -> { throw new AssertionError(error); });
+        check(switched.get() == null && "mock".equals(engine.readMode().get("mode")), "A switch waits for an admitted effect.");
+        check(engine.enterEffect("headless", 0L) == null && !engine.operationCurrent(0L), "Admission closes before the switch.");
+        boolean draining = false;
+        try { engine.beginOperation(); } catch (IllegalStateException expected) { draining = true; }
+        check(draining, "No operation begins while a switch drains.");
+        Map<String, String> version = version(login(engine));
+        String ticket = fetch(engine, "legacy");
+        check(claim(engine, "legacy", ticket, version, 300000), "A scoped switch leaves unscoped cadence available.");
+        engine.releaseFetch("legacy", C, ticket);
+        engine.exitEffect("headless", held, true);
+        check("live".equals(switched.get().get("mode")) && Long.valueOf(1).equals(switched.get().get("generation")),
+            "The settled effect lets the switch commit.");
+        check(Boolean.TRUE.equals(switched.get().get("unresolved")), "Unresolved rotation storage reaches the switch.");
+
+        // Live -> synthetic -> Live retires every earlier generation.
+        check(Long.valueOf(2).equals(switchMode(engine, "foreground", "demo").get("generation")), "Demo advances the generation.");
+        Map<String, Object> live = switchMode(engine, "foreground", "live");
+        check(Long.valueOf(3).equals(live.get("generation")) && Boolean.FALSE.equals(live.get("unresolved")),
+            "Returning to Live advances again without stale failures.");
+        check(!engine.operationCurrent(1L) && engine.operationCurrent(3L), "Earlier Live operations stay retired.");
+        check(Long.valueOf(3).equals(switchMode(engine, "foreground", "live").get("generation")), "The same mode keeps its generation.");
+
+        modes.fail = true;
+        AtomicReference<Exception> failed = new AtomicReference<>();
+        engine.switchMode("foreground", "mock", ignored -> { throw new AssertionError("Failed write committed."); }, failed::set);
+        modes.fail = false;
+        check(failed.get() != null && "live".equals(engine.readMode().get("mode")) && engine.operationCurrent(3L),
+            "A failed mode write keeps the old record and generation.");
+
+        ConnectionCacheEngine restarted = new ConnectionCacheEngine(new Disk(), modes, () -> now[0], true);
+        Map<String, Object> view = restarted.readMode();
+        check(first.get("installId").equals(view.get("installId")) && "live".equals(view.get("mode"))
+            && Long.valueOf(3).equals(view.get("generation")), "Restart keeps install, mode and generation.");
+
+        String stranded = engine.enterEffect("headless", 3L);
+        check(stranded != null && switchMode(engine, "foreground", "mock") == null, "A detached isolate's effect holds the switch.");
+        engine.detach("headless");
+        check("mock".equals(engine.readMode().get("mode")), "Detach drains a dead isolate's effects.");
+
+        check(Boolean.FALSE.equals(switchMode(engine, "foreground", "live").get("unresolved")),
+            "A dropped short effect is not an unresolved rotation.");
+        // A detached isolate's sent OAuth refresh can no longer store its rotation.
+        check(engine.enterEffect("headless", 5L, true) != null, "A sent refresh holds a settlement lease.");
+        AtomicReference<Map<String, Object>> dropped = new AtomicReference<>();
+        engine.switchMode("foreground", "demo", dropped::set, error -> { throw new AssertionError(error); });
+        engine.detach("headless");
+        check(Boolean.TRUE.equals(dropped.get().get("unresolved")), "A dropped settlement is reported unresolved.");
+    }
+    static void modePolicyWriteFailure() {
+        MemoryUpdatingDisk modes = new MemoryUpdatingDisk();
+        ConnectionCacheEngine debug = new ConnectionCacheEngine(new Disk(), modes, () -> 1000L, true);
+        Map<String, Object> mock = debug.initializeMode(true);
+        ConnectionCacheEngine production = new ConnectionCacheEngine(new Disk(), modes, () -> 1000L, false);
+
+        modes.fail = true;
+        boolean failed = false;
+        try { production.beginOperation(); } catch (IllegalStateException expected) { failed = true; }
+        check(failed && "live".equals(modes.data.get("mode")), "A failed migration may expose Live in storage memory only.");
+        failed = false;
+        try { production.initializeMode(false); } catch (IllegalStateException expected) { failed = true; }
+        check(failed, "Initialization cannot adopt the unconfirmed Live record or replace the install.");
+
+        modes.fail = false;
+        Map<String, Object> live = production.beginOperation();
+        check("live".equals(live.get("mode")) && mock.get("installId").equals(live.get("installId"))
+            && Long.valueOf(1).equals(live.get("generation")), "Only a successful write admits the next generation.");
+        check(!production.operationCurrent(0L), "The migrated record retires the original Mock generation.");
+    }
+    static void dataModeFetchFencing() {
+        long[] now = {1000};
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(new Disk(), new Disk(), () -> now[0], true);
+        engine.initializeMode(false);
+        Map<String, String> v = version(login(engine));
+        String ticket = boundFetch(engine, "foreground", 0L);
+        Map<String, Object> cacheOnly = engine.claimAutomatic("foreground", C, ticket, v, 300000, true);
+        check(Boolean.FALSE.equals(cacheOnly.get("admitted")) && !cacheOnly.containsKey("automaticAt"),
+            "Cache-only startup neither admits nor anchors a poll.");
+        check(claim(engine, "foreground", ticket, v, 300000), "Cache-only startup leaves cadence available.");
+        // The admitted attempt failed to connect; it still counts.
+        engine.releaseFetch("foreground", C, ticket, null); now[0]++;
+        ticket = boundFetch(engine, "headless", 0L);
+        Map<String, Object> denied = engine.claimAutomatic("headless", C, ticket, v, 300000, false);
+        check(Boolean.FALSE.equals(denied.get("admitted")) && Long.valueOf(301000).equals(denied.get("nextEligible")),
+            "Cadence denial follows an admitted connection failure.");
+        engine.releaseFetch("headless", C, ticket, null);
+
+        now[0] += 300000;
+        ticket = boundFetch(engine, "foreground", 0L);
+        check(claim(engine, "foreground", ticket, v, 300000), "A due poll is admitted.");
+        Map<String, Object> stamp = engine.stampFetch("foreground", C, ticket, v);
+        // Retirement during transport setup.
+        check(switchMode(engine, "ui", "mock") != null, "No send was initiated, so the switch commits.");
+        check(!engine.validFetch("foreground", C, ticket) && engine.enterEffect("foreground", 0L) == null,
+            "A retired fetch cannot initiate its send after setup.");
+        boolean superseded = false;
+        try { engine.stampFetch("foreground", C, ticket, v); } catch (IllegalStateException expected) { superseded = true; }
+        check(superseded, "A retired fetch cannot stamp.");
+        AtomicReference<Exception> rejection = new AtomicReference<>();
+        engine.acquire("foreground", C, "reject", v, ticket, ignored -> {}, rejection::set);
+        check(rejection.get() != null && engine.readNotice(C).isEmpty(), "A retired fetch cannot reject its credential.");
+        // Retirement before native release.
+        check("superseded".equals(engine.writeSnapshotOrdered("foreground", C, v, "late", 2000000L,
+            (String)stamp.get("stamp")).get("status")), "A retired stamp cannot publish.");
+        engine.releaseFetch("foreground", C, ticket, 999999999L);
+        boolean retired = false;
+        try { boundFetch(engine, "foreground", 0L); } catch (IllegalStateException expected) { retired = true; }
+        check(retired, "A retired generation cannot acquire a fetch.");
+        ticket = fetch(engine, "foreground");
+        check(ticket != null, "The retired fetch released its reservation.");
+        engine.releaseFetch("foreground", C, ticket, null);
+        boolean synthetic = false;
+        try { boundFetch(engine, "foreground", 1L); } catch (IllegalStateException expected) { synthetic = true; }
+        check(synthetic, "Synthetic modes never acquire a provider fetch.");
+
+        switchMode(engine, "ui", "live");
+        ticket = boundFetch(engine, "foreground", 2L);
+        AtomicReference<Map<String, Object>> queued = new AtomicReference<>();
+        AtomicReference<Exception> retiredQueue = new AtomicReference<>();
+        engine.acquireFetch("headless", C, 2L, queued::set, retiredQueue::set);
+        check(queued.get() == null, "A second engine's fetch waits for ownership.");
+        switchMode(engine, "ui", "demo");
+        switchMode(engine, "ui", "live");
+        engine.releaseFetch("foreground", C, ticket, null);
+        check(queued.get() == null && retiredQueue.get() != null, "A queued fetch retired by a switch is failed, not granted.");
+        ticket = boundFetch(engine, "headless", 4L);
+        check(ticket != null, "Current work acquires after the retired queue.");
+        engine.releaseFetch("headless", C, ticket, null);
+
+        ticket = boundFetch(engine, "foreground", 4L);
+        Map<String, Object> fresh = engine.stampFetch("foreground", C, ticket, v);
+        check("stored".equals(engine.writeSnapshotOrdered("foreground", C, v, "fresh", 3000L,
+            (String)fresh.get("stamp")).get("status")), "A current Live stamp publishes.");
+        engine.releaseFetch("foreground", C, ticket, 3L);
+    }
+    static void scopedCredentialAdmission() {
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(new Disk());
+        engine.initializeMode(false);
+        String ticket = boundFetch(engine, "worker", 0L);
+        AtomicReference<Map<String, Object>> read = new AtomicReference<>();
+        engine.acquire("worker", C, "read", null, ticket, read::set, error -> { throw new AssertionError(error); });
+        check(read.get() != null, "A scoped read can enter secure storage in Live.");
+
+        AtomicReference<Map<String, Object>> queued = new AtomicReference<>();
+        AtomicReference<Exception> retired = new AtomicReference<>();
+        engine.acquire("worker", C, "read", null, ticket, queued::set, retired::set);
+        check(queued.get() == null && retired.get() == null, "The second read waits for credential ownership.");
+        AtomicReference<Map<String, Object>> queuedCapture = new AtomicReference<>();
+        AtomicReference<Exception> retiredCapture = new AtomicReference<>();
+        engine.acquire("cache", C, "read", null, null, 0L, null, queuedCapture::set, retiredCapture::set);
+        check(queuedCapture.get() == null && retiredCapture.get() == null, "Cache capture also waits for credential ownership.");
+        AtomicReference<Map<String, Object>> switched = new AtomicReference<>();
+        engine.switchMode("ui", "demo", switched::set, error -> { throw new AssertionError(error); });
+        check(switched.get() == null, "The switch waits for the admitted storage transaction.");
+
+        finish(engine, "worker", read.get(), "release");
+        check(switched.get() != null && "demo".equals(switched.get().get("mode")),
+            "Finishing storage drains the switch while the fetch is still held.");
+        check(queued.get() == null && retired.get() != null, "A queued read rechecks ownership before touching storage.");
+        check(queuedCapture.get() == null && retiredCapture.get() != null,
+            "A queued cache capture rechecks its generation without a fetch ticket.");
+        finish(engine, "ui", acquire(engine, "ui", "read", null), "release");
+        check(!engine.releaseFetch("worker", C, ticket, null), "The retired fetch can still release its reservation.");
+
+        switchMode(engine, "ui", "live");
+        String nextTicket = boundFetch(engine, "worker", 2L);
+        read.set(null);
+        engine.acquire("worker", C, "read", null, nextTicket, read::set, error -> { throw new AssertionError(error); });
+        check(read.get() != null && switchMode(engine, "ui", "demo") == null,
+            "An admitted read holds the mode switch until its engine detaches.");
+        engine.detach("worker");
+        check("demo".equals(engine.readMode().get("mode")), "Detach releases the scoped storage lease.");
+    }
+    static void scopedSnapshotMaintenance() {
+        Disk disk = new Disk();
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+        engine.initializeMode(false);
+        Map<String, String> version = version(login(engine));
+        engine.writeSnapshot(C, version, "retained", 1000L);
+        disk.data.remove(C + ".snapshotTimeUnit");
+        disk.data.put(C + ".snapshotAt", "1");
+        switchMode(engine, "ui", "demo");
+        switchMode(engine, "ui", "live");
+
+        Map<String, String> legacy = snapshotFields(disk);
+        check(!engine.upgradeSnapshotTimestamp(C, version, "retained", 1000L, 0L),
+            "A retired scope cannot upgrade timestamp metadata even for identical bytes.");
+        check("superseded".equals(engine.writeSnapshotOrdered("worker", C, version, "late", 2000L, null, 0L).get("status"))
+                && legacy.equals(snapshotFields(disk)), "A retired scope cannot overwrite an unstamped cache row.");
+        check(engine.upgradeSnapshotTimestamp(C, version, "retained", 1000L, 2L),
+            "Current Live can still upgrade legacy timestamp precision.");
+
+        disk.data.put(C + ".snapshotVersion", "future");
+        Map<String, String> unsupported = snapshotFields(disk);
+        check(Boolean.FALSE.equals(engine.readSnapshotPair(C, version, false, 0L).get("valid"))
+                && unsupported.equals(snapshotFields(disk)) && engine.valid(C, version),
+            "A retired read cannot implicitly purge unsupported data or change its epoch.");
+        check(Boolean.FALSE.equals(engine.readSnapshotPair(C, version, false, 2L).get("valid"))
+                && !disk.data.containsKey(C + ".snapshot") && !engine.valid(C, version),
+            "Current Live still purges unsupported payloads and advances the epoch.");
+    }
+    static void unscopedFetchLeavesModeAbsent() {
+        long[] now = {1000};
+        Disk modes = new Disk() {
+            @Override public Map<String, String> read() { throw new AssertionError("Unscoped work read the mode record."); }
+        };
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(new Disk(), modes, () -> now[0], true);
+        Map<String, String> v = version(login(engine));
+        AtomicReference<Map<String, Object>> answer = new AtomicReference<>();
+        engine.acquireFetch("ui", C, answer::set);
+        String ticket = (String)answer.get().get("fetchTicket");
+        check(engine.validFetch("ui", C, ticket) && claim(engine, "ui", ticket, v, 300000),
+            "An unscoped poll is admitted without a mode record.");
+        Map<String, Object> stamp = engine.stampFetch("ui", C, ticket, v);
+        check("stored".equals(engine.writeSnapshotOrdered("ui", C, v, "unscoped", 2000L, (String)stamp.get("stamp")).get("status")),
+            "An unscoped stamp publishes.");
+        engine.releaseFetch("ui", C, ticket, 2L);
+        String forged = "1:" + ticket + ":" + UUID.randomUUID();
+        check("superseded".equals(engine.writeSnapshotOrdered("ui", C, v, "forged", 3000L, forged).get("status")),
+            "An invalid unscoped stamp is rejected without reading the mode record.");
+        check(modes.data.isEmpty(), "Unscoped work never creates the mode record.");
+
+        // A failed first write that stays visible in memory is never adopted.
+        MemoryUpdatingDisk leaky = new MemoryUpdatingDisk(); leaky.fail = true;
+        ConnectionCacheEngine first = new ConnectionCacheEngine(new Disk(), leaky, () -> now[0], true);
+        boolean failed = false;
+        try { first.initializeMode(true); } catch (IllegalStateException expected) { failed = true; }
+        check(failed && Boolean.FALSE.equals(first.readMode().get("initialized")), "A failed import leaves the record absent.");
+        check(!first.operationCurrent(0L) && first.enterEffect("ui", 0L) == null,
+            "The unconfirmed first generation admits no effects.");
+        leaky.fail = false;
+        check("live".equals(first.initializeMode(false).get("mode")), "A later start retries the import.");
     }
     static boolean claim(ConnectionCacheEngine engine, String owner, String ticket, Map<String, String> v, long interval) {
         return Boolean.TRUE.equals(engine.claimAutomatic(owner, C, ticket, v, interval).get("admitted"));

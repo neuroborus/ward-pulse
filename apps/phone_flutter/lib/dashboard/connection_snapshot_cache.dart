@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../providers/connection_lifecycle.dart';
 import '../providers/provider_connection.dart';
+import '../sync/data_mode.dart';
 import 'dashboard_models.dart';
 
 final class CapturedConnectionCache {
@@ -154,6 +155,8 @@ final class ConnectionSnapshotCache {
   ]) => _platform.invoke(method, {
     'connection': connection,
     if (expected != null) 'expected': expected.values,
+    if (DataModeOperation.current case final operation?)
+      'generation': operation.generation,
     ...values,
   });
   Future<bool> valid(CredentialVersion version) async =>

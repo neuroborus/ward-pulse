@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 
 import '../dashboard/dashboard_models.dart';
+import 'data_mode.dart';
 import 'provider_sync_logger.dart';
 
 enum ProviderReportingFailure {
@@ -85,17 +86,22 @@ final class IoProviderHttpTransport implements ProviderHttpTransport {
     Map<String, String> headers, {
     String? body,
   }) async {
+    DataModeOperation.admitTransport();
     final request = await open().timeout(_timeout);
     // Credential headers must never reach an origin other than the configured one.
     request.followRedirects = false;
     headers.forEach(request.headers.set);
-    if (body != null) {
-      // Declared length keeps the request unchunked for provider gateways.
-      final bytes = utf8.encode(body);
-      request.contentLength = bytes.length;
-      request.add(bytes);
-    }
-    final response = await request.close().timeout(_timeout);
+    // Declared length keeps the request unchunked for provider gateways.
+    final bytes = body == null ? null : utf8.encode(body);
+    if (bytes != null) request.contentLength = bytes.length;
+    // Ownership is rechecked after setup; a retired operation never sends.
+    final response = await DataModeOperation.sendRequest(
+      request,
+      write: () {
+        if (bytes != null) request.add(bytes);
+      },
+      timeout: _timeout,
+    );
     if (response.statusCode >= 300 && response.statusCode < 400) {
       await response.drain<void>().timeout(_timeout);
       return ProviderHttpResponse(
