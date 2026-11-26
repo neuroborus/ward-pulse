@@ -188,6 +188,59 @@ selector; never copy back normal data. Full HOST gates remain separate. This fix
 provider/scheduler behavior, normal-package acceptance or original-incident reproduction.
 Historical evidence and visual acceptance below remain unchanged.
 
+### Data-mode publication order — 2026-11-26 technical correction
+
+The process-wide `ConnectionCacheEngine` now orders publications across the foreground and
+WorkManager engines, superseding "without chronological ordering" above. Each load takes an
+ordinal; ordinals order only replacement of the shared accepted snapshot. The headless worker
+claims it before any fallible setup and reads its settings after the claim. The foreground reads
+its preferences, and may probe the Wear cache, before claiming immediately ahead of the
+repository read, after any Live preparation; its publications carry the revision of its
+confirmed in-memory choices (the revision its own save settles, or a newer settled revision a
+claim reports) rather than of a fresh read. Each source-validated snapshot registers its
+acceptance, whether or not it publishes, so a late older load cannot be accepted or ticketed.
+Widget and alert-rule saves are bracketed by the engine. A ticket is issued only for the newest
+accepted load while its mode generation is current, no save is in flight, its revision matches
+and its selection proof is valid. The accepted load can re-ticket for a slot edit, rule edit or
+resend. The store commit revalidates the ticket's load, generation, revision and selection under
+the engine lock, and the commit and `updateAppWidget` require the newest ticket
+(`publication_sequence`), so a save, reconnect, late result or delayed redraw cannot replace
+newer rows. Until replacement rows commit, each installed widget's first `updateAppWidget` of
+ticketed rows also rechecks, under that lock, the accepted load, settings revision and selection
+proof they committed under, including after a STALE re-ticket; a widget that already shows them
+keeps redrawing them, as on resize. An eligible publication's explicit empty result is its
+content too and needs the same authority. A durable `publication_delivered` set records the
+widgets whose submitted views showed that content, so after a process restart Live rows whose
+authority is gone reach only them until the next publication; synthetic rows, which carry no
+source proof, renew it locally from `publication_complete` in their generation unless a newer
+load was accepted before the restart (each acceptance first clears a durable
+`publication_renewable` flag that a proven commit sets, and is refused, retryably, when that
+removal is not confirmed on disk), and until the new process accepts a load
+or begins a save. No-fit frames, a frame the Claude Plan pause emptied, and the neutral empty
+frame that clears another generation's rows need only the stored-sequence fence and grant no retained redraw. A
+durable `publication_framed` set records the widgets holding any frame of the
+rows; a refused first frame removes its widget. A publication refused by native ordering, by a retired or draining mode
+generation (including native `widget_publication_retired` after the Dart guards passed) or
+superseded by a newer request reports no success and keeps its change pending; storage failures
+still throw. A headless failure marks STALE only the still-committed rows its claim observed and
+defers to a pending ticket. Startup and each mode switch redraw installed widgets from
+current-generation rows, or empty. A durable `publication_complete` flag records a confirmed
+full ticketed publication of the saved settings; each settings save clears it before writing, a
+failed disk commit clears it from memory and STALE writes leave it unchanged. A mode without
+that flag (upgrade, cutover-era or untagged rows, a save the process died before publishing)
+publishes retained input even when cadence skips every poll, as does a mode whose installed
+widgets are not all framed, which the headless and foreground paths both query natively after
+every ordered skipped load's acceptance, whatever its claim saw; otherwise skipped polls stay
+quiet. Mock has no headless publication; its
+foreground loads always publish, and a launcher-only redraw after a restart renews as above. Selection reads never write back their migration. A refused foreground request, a widget
+edit whose source retired or one saved without a Dashboard acceptance stays pending and
+republishes only the widget from retained input or confirmed absence, after any active load or
+draining switch settles; Dashboard, alert and Watch state are untouched. Mock retries read the
+captured sample source in the current generation; without usable sample data (a failed or
+account-free read, one with no eligible row for a nonempty or default selection, or no source, as
+in Demo), the stored rows and the pending change stay as they are.
+Unticketed fixture writes still supersede every older ticket.
+
 ## Own-font rendering, states and accessibility
 
 ### Intrinsic geometry and size publication — 2026-11-06 revision

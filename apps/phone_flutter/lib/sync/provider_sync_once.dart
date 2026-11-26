@@ -39,6 +39,9 @@ final class HeadlessLiveOwner {
   HeadlessLiveOwner(this.operation);
 
   final DataModeOperation operation;
+
+  /// The launcher claim taken before setup read settings or providers.
+  PhoneWidgetPublicationInput? publication;
   var _modeRetired = false;
   var _provenanceRetired = false;
   Future<bool> Function()? _provenance;
@@ -120,16 +123,21 @@ Future<void> providerSyncOnce({
   await operation.run(() async {
     final ProviderSyncWork? loaded;
     try {
+      // Claimed before any fallible setup, so a failure marks only the
+      // committed rows it observed.
+      owner.publication = await PhoneWidgetPublicationInput.begin();
       loaded = await poll.run(() => load(owner));
     } catch (error, stackTrace) {
       await _attemptProviderSyncStep('setup', () async {
         if (!await owner.isLive()) return;
         logFailure('setup', error, stackTrace);
-        if (!poll.whollySkipped) {
+        final publication = owner.publication;
+        if (!poll.whollySkipped && publication != null) {
           await _attemptProviderSyncStep('widget', () async {
-            if (await owner.isCurrent()) {
-              await markWidgetStale(isCurrent: owner.isCurrent);
-            }
+            if (!await owner.isCurrent()) return;
+            await publication.run(
+              () => markWidgetStale(isCurrent: owner.isCurrent),
+            );
           }, logFailure);
         }
       }, logFailure);
@@ -164,6 +172,9 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
   // Paused builds retire saved Claude plan credentials before provider work.
   if (!await owner.operation.guard(live.retirePausedClaudePlan)) return null;
   final poll = AutomaticPollContext.current ?? AutomaticPollContext();
+  // Ordered before the settings and provider reads it publishes.
+  final publication =
+      owner.publication ??= await PhoneWidgetPublicationInput.begin();
   final alertThresholds = await SecureAlertThresholdPreferenceStore().read();
   if (!await owner.isLive()) return null;
   final DashboardSnapshot loaded;
@@ -200,6 +211,9 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
   if (!await owner._isProvenanceCurrent()) {
     throw StateError('Connection changed during refresh.');
   }
+  // Retained cadence-skipped input is accepted too; a newer acceptance in any
+  // engine refuses this load's publications.
+  final accepted = await publication.accept(snapshot);
   return ProviderSyncWork(
     isCurrent: owner._isProvenanceCurrent,
     syncWatch: () async {
@@ -245,14 +259,21 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
       );
     },
     syncWidget: () async {
-      if (poll.whollySkipped) return;
+      // An upgrade, a mode return or a widget still owed a frame publishes
+      // the retained input once, even when cadence skipped every provider.
+      if (!accepted ||
+          (poll.whollySkipped && await publication.isEstablished())) {
+        return;
+      }
       final widgetPreferences =
           await (widgetStore ?? SecurePhoneWidgetPreferenceStore()).read();
       if (!await isCurrent()) return;
-      await HomeWidgetPhoneWidgetSyncService().sync(
-        snapshot,
-        widgetPreferences,
-        isCurrent: isCurrent,
+      await publication.run(
+        () => HomeWidgetPhoneWidgetSyncService().sync(
+          snapshot,
+          widgetPreferences,
+          isCurrent: isCurrent,
+        ),
       );
     },
     syncRecoveries: () async {

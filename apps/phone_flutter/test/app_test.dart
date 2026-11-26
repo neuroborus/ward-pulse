@@ -3935,6 +3935,144 @@ void main() {
     },
   );
 
+  testWidgets(
+    'a skipped foreground poll republishes for a widget owed a frame',
+    (tester) async {
+      final source = _surfaceSelectionSnapshot();
+      final polls = <AutomaticPollContext>[];
+      final repository = _CountingDashboardRepository(() {
+        if (AutomaticPollContext.current case final poll?) {
+          if (polls.isNotEmpty) {
+            const connection = 'openai.platform';
+            poll.skipped[connection] = AutomaticPollSkipped(
+              connection,
+              CredentialVersion({}),
+              DateTime.utc(2026, 11, 6),
+            );
+          }
+          polls.add(poll);
+        }
+        return source;
+      });
+      // What each claim saw, and what the recheck after acceptance reports:
+      // whether every installed widget holds a frame. Only the recheck
+      // decides a skipped poll.
+      var claimedFramed = false;
+      var framed = true;
+      // A widget is added, or its resize refused, while the load is accepted.
+      var oweFrameOnAccept = false;
+      var loads = 0;
+      var tickets = 0;
+      // The publication boundary in call order: claims, acceptances,
+      // establishment queries, tickets, commits and launcher redraws.
+      final trace = <String>[];
+      final published = <Map<Object?, Object?>>[];
+      const publicationChannel = MethodChannel(
+        'app.wardpulse/widget_publication',
+      );
+      const launcherChannel = MethodChannel('home_widget');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      Future<Object?> handle(MethodCall call) async {
+        trace.add(call.method);
+        switch (call.method) {
+          case 'beginLoad':
+            return {
+              'load': ++loads,
+              'settingsRevision': 0,
+              'observed': 0,
+              'established': claimedFramed,
+            };
+          case 'accept':
+            if (oweFrameOnAccept) framed = false;
+            return true;
+          case 'established':
+            return framed;
+          case 'issue':
+            return ++tickets;
+          case 'publish':
+            published.add(call.arguments as Map<Object?, Object?>);
+            return true;
+          case 'updateWidget':
+            return true;
+        }
+        throw MissingPluginException();
+      }
+
+      for (final channel in [publicationChannel, launcherChannel]) {
+        messenger.setMockMethodCallHandler(channel, handle);
+        addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      }
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      // The Watch send completes in the test zone, so no tick stays in flight
+      // behind it.
+      final watch = _FakeWatchSyncService();
+      // The production service, with its own queue, issues the tickets.
+      final launcher = HomeWidgetPhoneWidgetSyncService(
+        coordinator: PhoneWidgetSyncCoordinator(
+          write: HomeWidgetPhoneWidgetSyncService.writeHomeWidgetPayload,
+        ),
+      );
+      const preferences = PhoneWidgetPreferences(selectedIds: [_expenseRingId]);
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          syncScheduler: scheduler,
+          applyAlertSettings: (snapshot, _) => snapshot,
+          modeAuthority: MemoryDataModeAuthority(),
+          phoneWidgetPreferenceStore:
+              _MemoryPhoneWidgetStore()..value = preferences,
+          watchSyncService: watch,
+          phoneWidgetSyncService: launcher,
+          readExhaustedWindows: (_) => const [],
+          readPlanRecoveries: (_, _) => const [],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(polls.single.whollySkipped, isFalse);
+      expect(watch.syncedSnapshots, hasLength(1));
+      expect(published, hasLength(1));
+      expect(trace, isNot(contains('established')));
+
+      // The claim saw a widget owed a frame, but it was framed before the
+      // recheck: no ticket and no redraw.
+      var since = trace.length;
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(polls, hasLength(2));
+      expect(polls.last.whollySkipped, isTrue);
+      expect(trace.sublist(since), ['beginLoad', 'accept', 'established']);
+
+      // The claim sees every widget framed; one is owed a frame before the
+      // recheck.
+      claimedFramed = true;
+      oweFrameOnAccept = true;
+      since = trace.length;
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(polls, hasLength(3));
+      expect(polls.last.whollySkipped, isTrue);
+      expect(trace.sublist(since), [
+        'beginLoad',
+        'accept',
+        'established',
+        'issue',
+        'publish',
+        'updateWidget',
+      ]);
+      // The retained input commits under the ticket issued after the recheck.
+      final rows = buildPhoneWidgetPayload(source, preferences).rows;
+      expect(rows, hasLength(1));
+      expect(published, hasLength(2));
+      expect(published.last['ticket'], tickets);
+      expect(published.last['row_count'], 1);
+      expect(published.last['row_0_label'], rows.single.label);
+      expect(watch.syncedSnapshots, hasLength(1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('a skipped poll publishes rules reread before a failed refresh', (
     tester,
   ) async {
@@ -4269,20 +4407,55 @@ void main() {
         const connection = 'openai.platform';
         final snapshot = _surfaceSelectionSnapshot();
         final polls = <AutomaticPollContext>[];
-        final repository = _CountingDashboardRepository(() {
-          final poll = AutomaticPollContext.current;
-          if (poll == null) throw const DashboardLoadException();
-          polls.add(poll);
-          if (polls.length == 2) throw const DashboardLoadException();
-          if (polls.length >= 3) {
-            poll.skipped[connection] = AutomaticPollSkipped(
-              connection,
-              CredentialVersion({}),
-              DateTime.utc(2026, 11, 6),
-            );
-          }
-          return snapshot;
-        });
+        // The manual refresh fails; a later cache-only read finds no rows
+        // under the confirmed credential, at the cache's empty order.
+        const manualFailure = DashboardLoadException(
+          details: 'Manual refresh failed.',
+        );
+        const cacheOrder = 'null:none';
+        const cacheMiss = DashboardLoadException(
+          connectionVersions: {
+            connection: {'generation': 'platform-1', 'epoch': '1'},
+          },
+          snapshotOrdering: {
+            connection: SnapshotOrdering(emptyCacheOrder: cacheOrder),
+          },
+        );
+        final reads = <String>[];
+        // Widget publications made before each validation of the cache miss.
+        final cacheMissValidations = <int>[];
+        final launcher = _FakePhoneWidgetSyncService();
+        final repository = _CountingDashboardRepository(
+          () {
+            final poll = AutomaticPollContext.current;
+            if (poll == null) {
+              if (DataModeOperation.current?.cacheOnly == true) {
+                reads.add('cache-only');
+                throw cacheMiss;
+              }
+              reads.add('manual');
+              throw manualFailure;
+            }
+            polls.add(poll);
+            if (polls.length == 2) throw const DashboardLoadException();
+            if (polls.length >= 3) {
+              poll.skipped[connection] = AutomaticPollSkipped(
+                connection,
+                CredentialVersion({}),
+                DateTime.utc(2026, 11, 6),
+              );
+            }
+            return snapshot;
+          },
+          validateFailure: (failure) async {
+            if (!identical(failure, cacheMiss)) return true;
+            cacheMissValidations.add(launcher.syncedSnapshots.length);
+            // The absence holds only while the cache stays at that empty
+            // order; a row cached under the same credential moves it.
+            return failure.snapshotOrdering[connection]?.emptyCacheOrder ==
+                cacheOrder;
+          },
+        );
         final rings = _MemoryWatchRingStore();
         final widgets = _MemoryPhoneWidgetStore();
         if (watchFails) {
@@ -4293,7 +4466,6 @@ void main() {
           widgets.beforeRead = _unavailablePreference;
         }
         final watch = _FakeWatchSyncService();
-        final launcher = _FakePhoneWidgetSyncService();
         final scheduler = _ManualProviderSyncScheduler();
         addTearDown(scheduler.dispose);
         await tester.pumpWidget(
@@ -4359,10 +4531,12 @@ void main() {
         expect(polls, hasLength(4));
         expect(watch.syncedSnapshots, hasLength(1));
         expect(launcher.syncedSnapshots, hasLength(1));
+        expect(reads, isEmpty);
 
         // A confirmed choice remains removable after a failed manual load.
         await tester.tap(find.byTooltip('Refresh'));
         await tester.pumpAndSettle();
+        expect(reads, ['manual']);
         final savedChoice = find.byWidgetPredicate(
           (widget) => widget is CheckboxListTile && widget.value == true,
         );
@@ -4371,19 +4545,39 @@ void main() {
         await tester.tap(savedChoice);
         await tester.pumpAndSettle();
         expect(watch.syncedSnapshots, hasLength(1));
-        expect(launcher.syncedSnapshots, hasLength(1));
         if (watchFails) {
           expect(rings.writes.single.selectedIds, isEmpty);
+          expect(launcher.syncedSnapshots, hasLength(1));
+          expect(reads, ['manual']);
+          expect(cacheMissValidations, isEmpty);
         } else {
           expect(widgets.writes.single.selectedIds, isEmpty);
+          // Without a Dashboard acceptance, the widget-only retry reads the
+          // cache and publishes the empty choice from its confirmed absence,
+          // validated before its acceptance and again at dispatch.
+          expect(reads, ['manual', 'cache-only']);
+          expect(cacheMissValidations, [1, 1]);
+          expect(launcher.syncedSnapshots, hasLength(2));
+          expect(launcher.syncedSnapshots.last.accounts, isEmpty);
+          expect(
+            launcher.syncedSnapshots.last.connectionVersions,
+            cacheMiss.connectionVersions,
+          );
+          final ordering = launcher.syncedSnapshots.last.snapshotOrdering;
+          expect(ordering[connection]?.emptyCacheOrder, cacheOrder);
+          expect(launcher.syncedPreferences.last.selectedIds, isEmpty);
+          expect(launcher.payload.rows, isEmpty);
         }
 
+        // The skipped poll publishes the deferred Watch removal; the widget
+        // already holds its empty frame and is not published again.
         scheduler.tick();
         await tester.pumpAndSettle();
         expect(polls, hasLength(5));
         expect(polls.last.whollySkipped, isTrue);
         expect(watch.syncedSnapshots, hasLength(watchFails ? 2 : 1));
         expect(launcher.syncedSnapshots, hasLength(watchFails ? 1 : 2));
+        expect(reads, watchFails ? ['manual'] : ['manual', 'cache-only']);
         if (watchFails) {
           expect(watch.payload['rings'], isEmpty);
         } else {
@@ -4414,6 +4608,7 @@ void main() {
             write: (payload, {required isCurrent}) async {
               written.add(payload);
               if (written.length == 1) await firstWrite.future;
+              return true;
             },
           ),
         );
@@ -4534,6 +4729,7 @@ void main() {
         write: (payload, {required isCurrent}) async {
           spent.add(payload.rows.single.spent?.minorUnits);
           if (spent.length == 1) await firstWrite.future;
+          return true;
         },
       ),
     );
@@ -4617,6 +4813,7 @@ void main() {
       PhoneWidgetSyncCoordinator(
         write: (payload, {required isCurrent}) async {
           rowCounts.add(payload.rows.length);
+          return true;
         },
       ),
     );
@@ -7410,6 +7607,405 @@ void main() {
     },
   );
 
+  testWidgets(
+    'a refused slot edit republishes from retained input without polling',
+    (tester) async {
+      final source = _alertTestSnapshot();
+      final live = _PublicationRepository(source);
+      final widgetSync = _FakePhoneWidgetSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          applyAlertSettings: (snapshot, _) => snapshot,
+          modeAuthority: MemoryDataModeAuthority(),
+          phoneWidgetSyncService: widgetSync,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(live.cacheOnlyLoads, [false]);
+
+      // A headless publication was accepted after this Dashboard's load.
+      widgetSync.refusals = 1;
+      await tester.tap(find.text('Widget'));
+      await tester.pumpAndSettle();
+      await tester
+          .widget<WidgetScreen>(find.byType(WidgetScreen))
+          .onPreferencesChanged(
+            (_) => const PhoneWidgetPreferences(selectedIds: []),
+          );
+      await tester.pumpAndSettle();
+      expect(live.cacheOnlyLoads, [false, true]);
+      expect(widgetSync.syncedPreferences, hasLength(3));
+      expect(widgetSync.syncedPreferences.skip(1).map((p) => p.selectedIds), [
+        isEmpty,
+        isEmpty,
+      ]);
+      expect(widgetSync.refusals, 0);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a slot edit after a headless replacement republishes the cached rows',
+    (tester) async {
+      final source = _alertTestSnapshot();
+      final live = _PublicationRepository(source);
+      final widgetSync = _FakePhoneWidgetSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          applyAlertSettings: (snapshot, _) => snapshot,
+          modeAuthority: MemoryDataModeAuthority(),
+          phoneWidgetSyncService: widgetSync,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(live.cacheOnlyLoads, [false]);
+
+      // A headless refresh replaced the cached row this Dashboard shows.
+      final replacement = _alertTestSnapshot(windowLabel: 'Replacement');
+      live
+        ..retired = source
+        ..snapshot = replacement;
+      await tester.tap(find.text('Widget'));
+      await tester.pumpAndSettle();
+      await tester
+          .widget<WidgetScreen>(find.byType(WidgetScreen))
+          .onPreferencesChanged(
+            (_) => const PhoneWidgetPreferences(selectedIds: []),
+          );
+      await tester.pumpAndSettle();
+      expect(live.cacheOnlyLoads, [false, true]);
+      expect(widgetSync.syncedSnapshots, hasLength(2));
+      expect(widgetSync.syncedSnapshots.last, same(replacement));
+      expect(widgetSync.syncedPreferences.last.selectedIds, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'removing the last saved slot after a failed load republishes the widget',
+    (tester) async {
+      final source = _alertTestSnapshot();
+      final live = _PublicationRepository(source)..failPolling = true;
+      final widgetSync = _FakePhoneWidgetSyncService();
+      final store =
+          _MemoryPhoneWidgetStore()
+            ..value = const PhoneWidgetPreferences(
+              selectedIds: ['budget.openai.platform.today'],
+            );
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          applyAlertSettings: (snapshot, _) => snapshot,
+          modeAuthority: MemoryDataModeAuthority(),
+          phoneWidgetPreferenceStore: store,
+          phoneWidgetSyncService: widgetSync,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(live.cacheOnlyLoads.first, isFalse);
+      final loads = live.cacheOnlyLoads.length;
+      final syncs = widgetSync.syncedSnapshots.length;
+
+      await tester.tap(find.text('Widget'));
+      await tester.pumpAndSettle();
+      await tester
+          .widget<WidgetScreen>(find.byType(WidgetScreen))
+          .onPreferencesChanged(
+            (_) => const PhoneWidgetPreferences(selectedIds: []),
+          );
+      await tester.pumpAndSettle();
+      expect(store.value.selectedIds, isEmpty);
+      // The retry reads retained input only; it polls no provider.
+      expect(live.cacheOnlyLoads.skip(loads), [true]);
+      expect(widgetSync.syncedSnapshots, hasLength(syncs + 1));
+      expect(widgetSync.syncedSnapshots.last, same(source));
+      expect(widgetSync.syncedPreferences.last.selectedIds, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a slot edit after a failed Mock load republishes the sample rows',
+    (tester) async {
+      final live = _PublicationRepository(_alertTestSnapshot());
+      final sample = _PublicationRepository(
+        _alertTestSnapshot(windowLabel: 'Sample'),
+      )..failPolling = true;
+      final watch = _FakeWatchSyncService();
+      final widgetSync = _FakePhoneWidgetSyncService();
+      final store = _MemoryPhoneWidgetStore()..value = _savedSampleSlots;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          mockRepository: sample,
+          applyAlertSettings: (snapshot, _) => snapshot,
+          modeAuthority: MemoryDataModeAuthority(mode: DataMode.mock),
+          debugDataAvailable: true,
+          watchSyncService: watch,
+          phoneWidgetPreferenceStore: store,
+          phoneWidgetSyncService: widgetSync,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(sample.cacheOnlyLoads, [false]);
+      expect(widgetSync.syncedSnapshots, isEmpty);
+      final pushes = watch.syncedSnapshots.length;
+
+      await _removeSavedWidgetSlot(tester, _savedPlatformSlot);
+      expect(store.value.selectedIds, [_sampleWindowSlot]);
+      // The retry reads the captured sample source only; no provider runs.
+      expect(sample.cacheOnlyLoads, [false, true]);
+      expect(live.loads, 0);
+      expect(widgetSync.syncedSnapshots.single, same(sample.snapshot));
+      expect(widgetSync.syncedPreferences.single.selectedIds, [
+        _sampleWindowSlot,
+      ]);
+      expect(widgetSync.payload.rows.single.label, contains('Sample'));
+      // Wear and the Dashboard keep the failed load's state.
+      expect(watch.syncedSnapshots, hasLength(pushes));
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Sample'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('an empty Mock sample read keeps the slot edit pending', (
+    tester,
+  ) async {
+    final live = _PublicationRepository(_alertTestSnapshot());
+    final sample = _PublicationRepository(
+      _alertTestSnapshot(windowLabel: 'Sample'),
+    )..failPolling = true;
+    final widgetSync = _FakePhoneWidgetSyncService();
+    final store = _MemoryPhoneWidgetStore()..value = _savedSampleSlots;
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: live,
+        mockRepository: sample,
+        applyAlertSettings: (snapshot, _) => snapshot,
+        modeAuthority: MemoryDataModeAuthority(mode: DataMode.mock),
+        debugDataAvailable: true,
+        phoneWidgetPreferenceStore: store,
+        phoneWidgetSyncService: widgetSync,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(sample.cacheOnlyLoads, [false]);
+
+    // The captured sample source answers with no sample data.
+    sample.snapshot = DashboardSnapshot.empty();
+    await _removeSavedWidgetSlot(tester, _savedPlatformSlot);
+    expect(store.value.selectedIds, [_sampleWindowSlot]);
+    expect(sample.cacheOnlyLoads, [false, true]);
+    expect(live.loads, 0);
+    // Nothing replaces the launcher rows, so the edit stays unpublished.
+    expect(widgetSync.syncedSnapshots, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'a Mock sample without an eligible slot row keeps the edit pending',
+    (tester) async {
+      final live = _PublicationRepository(_alertTestSnapshot());
+      final sample = _PublicationRepository(
+        _alertTestSnapshot(windowLabel: 'Sample'),
+      )..failPolling = true;
+      final widgetSync = _FakePhoneWidgetSyncService();
+      final store = _MemoryPhoneWidgetStore()..value = _savedSampleSlots;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          mockRepository: sample,
+          applyAlertSettings: (snapshot, _) => snapshot,
+          modeAuthority: MemoryDataModeAuthority(mode: DataMode.mock),
+          debugDataAvailable: true,
+          phoneWidgetPreferenceStore: store,
+          phoneWidgetSyncService: widgetSync,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(sample.cacheOnlyLoads, [false]);
+
+      // The sample has accounts, but none supplies the remaining saved slot.
+      sample.snapshot = _surfaceSelectionSnapshot();
+      expect(sample.snapshot.accounts, isNotEmpty);
+      expect(
+        buildPhoneWidgetPayload(
+          sample.snapshot,
+          const PhoneWidgetPreferences(selectedIds: [_sampleWindowSlot]),
+        ).isEmpty,
+        isTrue,
+      );
+      await _removeSavedWidgetSlot(tester, _savedPlatformSlot);
+      expect(store.value.selectedIds, [_sampleWindowSlot]);
+      expect(sample.cacheOnlyLoads, [false, true]);
+      expect(live.loads, 0);
+      expect(widgetSync.syncedSnapshots, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('a held Mock widget retry retires with its mode generation', (
+    tester,
+  ) async {
+    final live = _PublicationRepository(_alertTestSnapshot());
+    final sample = _PublicationRepository(
+      _alertTestSnapshot(windowLabel: 'Sample'),
+    )..failPolling = true;
+    final authority = MemoryDataModeAuthority(mode: DataMode.mock);
+    final widgetSync = _FakePhoneWidgetSyncService();
+    final store = _MemoryPhoneWidgetStore()..value = _savedSampleSlots;
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: live,
+        mockRepository: sample,
+        applyAlertSettings: (snapshot, _) => snapshot,
+        modeAuthority: authority,
+        debugDataAvailable: true,
+        phoneWidgetPreferenceStore: store,
+        phoneWidgetSyncService: widgetSync,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(sample.cacheOnlyLoads, [false]);
+
+    final held = Completer<DashboardSnapshot>();
+    addTearDown(() {
+      if (!held.isCompleted) held.complete(sample.snapshot);
+    });
+    sample.response = held.future;
+    await _removeSavedWidgetSlot(tester, _savedPlatformSlot);
+    expect(store.value.selectedIds, [_sampleWindowSlot]);
+    expect(sample.cacheOnlyLoads, [false, true]);
+
+    await tester.tap(await _openMockToggle(tester));
+    await tester.pumpAndSettle();
+    expect(authority.writes, [DataMode.live]);
+    held.complete(sample.snapshot);
+    await tester.pumpAndSettle();
+    // The retired generation's sample rows never reach the launcher.
+    expect(
+      widgetSync.syncedSnapshots.where((s) => identical(s, sample.snapshot)),
+      isEmpty,
+    );
+    expect(widgetSync.syncedSnapshots.last, same(live.snapshot));
+    expect(widgetSync.syncedPreferences.last.selectedIds, [_sampleWindowSlot]);
+    expect(sample.cacheOnlyLoads, [false, true]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a held launcher acceptance yields to a newer foreground load', (
+    tester,
+  ) async {
+    final source = _alertTestSnapshot();
+    final newer = _alertTestSnapshot(windowLabel: 'Window B');
+    final live = _PublicationRepository(source);
+    final widgetSync =
+        _FakePhoneWidgetSyncService()
+          ..input = const PhoneWidgetPublicationInput(
+            load: 1,
+            settingsRevision: 0,
+            observed: 0,
+          );
+    final held = Completer<bool>();
+    var accepts = 0;
+    const channel = MethodChannel('app.wardpulse/widget_publication');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method != 'accept') return null;
+      if (++accepts == 1) return held.future;
+      return true;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: live,
+        applyAlertSettings: (snapshot, _) => snapshot,
+        modeAuthority: MemoryDataModeAuthority(),
+        phoneWidgetSyncService: widgetSync,
+      ),
+    );
+    for (var i = 0; i < 20 && accepts == 0; i++) {
+      await tester.pump();
+    }
+    expect(accepts, 1);
+
+    final refresh = Completer<DashboardSnapshot>();
+    live.response = refresh.future;
+    await tester.tap(find.byTooltip('Refresh'));
+    await tester.pump();
+    held.complete(true);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump();
+    }
+    // The retired load installs neither its acceptance nor its rows.
+    expect(widgetSync.syncedSnapshots, isEmpty);
+
+    live
+      ..snapshot = newer
+      ..response = null;
+    refresh.complete(newer);
+    await tester.pumpAndSettle();
+    expect(accepts, 2);
+    expect(widgetSync.syncedSnapshots, hasLength(1));
+    expect(widgetSync.syncedSnapshots.single, same(newer));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'installed widgets redraw on startup, each switch and a failed restart',
+    (tester) async {
+      final source = _alertTestSnapshot();
+      final live = _PublicationRepository(source);
+      final mock = _PublicationRepository(
+        _alertTestSnapshot(windowLabel: 'Sample'),
+      );
+      final authority = MemoryDataModeAuthority();
+      final widgetSync = _FakePhoneWidgetSyncService();
+      Widget app() => WardPulseApp(
+        repository: live,
+        applyAlertSettings: (snapshot, _) => snapshot,
+        mockRepository: mock,
+        modeAuthority: authority,
+        debugDataAvailable: true,
+        phoneWidgetSyncService: widgetSync,
+      );
+
+      await tester.pumpWidget(app());
+      await tester.pumpAndSettle();
+      expect(widgetSync.redraws, 1);
+      expect(widgetSync.syncedSnapshots, [source]);
+
+      await tester.tap(await _openMockToggle(tester));
+      await tester.pumpAndSettle();
+      expect(widgetSync.redraws, 2);
+      expect(widgetSync.syncedSnapshots.last, same(mock.snapshot));
+
+      await tester.tap(await _openMockToggle(tester));
+      await tester.pumpAndSettle();
+      expect(widgetSync.redraws, 3);
+      expect(widgetSync.syncedSnapshots.last, same(source));
+
+      // The process dies after the Mock write; Live is written before the
+      // restart and its first load fails.
+      await tester.tap(await _openMockToggle(tester));
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox());
+      await authority.switchTo(DataMode.live);
+      live.failLoad = true;
+      final published = List.of(widgetSync.syncedSnapshots);
+      await tester.pumpWidget(app());
+      await tester.pumpAndSettle();
+      expect(widgetSync.redraws, 5);
+      expect(widgetSync.syncedSnapshots, published);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   for (final (fail, owned) in [(false, true), (true, true), (true, false)]) {
     testWidgets(
       'a held mode write survives an overlapping scheduled tick (failure: $fail, retained: $owned)',
@@ -10052,20 +10648,47 @@ class _HoldingWatchSyncService extends _FakeWatchSyncService {
 class _FakePhoneWidgetSyncService implements PhoneWidgetSyncService {
   final syncedSnapshots = <DashboardSnapshot>[];
   final syncedPreferences = <PhoneWidgetPreferences>[];
+  final syncedInputs = <PhoneWidgetPublicationInput?>[];
   PhoneWidgetPayload get payload =>
       buildPhoneWidgetPayload(syncedSnapshots.last, syncedPreferences.last);
   bool fail = false;
+  var redraws = 0;
+  var settingsSaves = 0;
+
+  /// Requests native refuses next, as when a newer load in another engine
+  /// owns the launcher.
+  var refusals = 0;
+  PhoneWidgetPublicationInput input = PhoneWidgetPublicationInput.unordered;
 
   @override
-  Future<void> sync(
+  Future<bool> sync(
     DashboardSnapshot snapshot,
     PhoneWidgetPreferences preferences, {
     PhoneWidgetSyncGuard? isCurrent,
   }) async {
-    if (isCurrent != null && !await isCurrent()) return;
+    if (isCurrent != null && !await isCurrent()) return false;
     syncedSnapshots.add(snapshot);
     syncedPreferences.add(preferences);
+    syncedInputs.add(PhoneWidgetPublicationInput.current);
     if (fail) throw StateError('Widget unavailable');
+    if (refusals == 0) return true;
+    refusals--;
+    return false;
+  }
+
+  @override
+  Future<PhoneWidgetPublicationInput> beginLoad() async => input;
+
+  @override
+  Future<int?> saveSettings(Future<void> Function() save) async {
+    settingsSaves++;
+    await save();
+    return null;
+  }
+
+  @override
+  Future<void> redraw() async {
+    redraws++;
   }
 }
 
@@ -10076,7 +10699,7 @@ final class _QueuedPhoneWidgetSyncService implements PhoneWidgetSyncService {
   final requests = <Future<void>>[];
 
   @override
-  Future<void> sync(
+  Future<bool> sync(
     DashboardSnapshot snapshot,
     PhoneWidgetPreferences preferences, {
     PhoneWidgetSyncGuard? isCurrent,
@@ -10088,6 +10711,19 @@ final class _QueuedPhoneWidgetSyncService implements PhoneWidgetSyncService {
     requests.add(request);
     return request;
   }
+
+  @override
+  Future<PhoneWidgetPublicationInput> beginLoad() async =>
+      PhoneWidgetPublicationInput.unordered;
+
+  @override
+  Future<int?> saveSettings(Future<void> Function() save) async {
+    await save();
+    return null;
+  }
+
+  @override
+  Future<void> redraw() async {}
 }
 
 class _FailingWatchSyncService implements WatchSyncService {
@@ -10137,11 +10773,13 @@ final class _CountingDashboardRepository extends DashboardRepository {
     this._load, {
     this.beforeObservedLoad,
     this.validateSnapshot,
+    this.validateFailure,
   });
 
   final DashboardSnapshot Function() _load;
   final Future<void> Function(ReportingObserver)? beforeObservedLoad;
   final Future<bool> Function(DashboardSnapshot)? validateSnapshot;
+  final Future<bool> Function(DashboardLoadException)? validateFailure;
 
   @override
   Future<DashboardSnapshot> load() async => _load();
@@ -10157,6 +10795,30 @@ final class _CountingDashboardRepository extends DashboardRepository {
   @override
   Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) =>
       validateSnapshot?.call(snapshot) ?? super.isSnapshotCurrent(snapshot);
+
+  @override
+  Future<bool> isFailureCurrent(DashboardLoadException failure) =>
+      validateFailure?.call(failure) ?? super.isFailureCurrent(failure);
+}
+
+/// The `_alertTestSnapshot` plan window, and a saved slot no source reports.
+const _sampleWindowSlot = 'allowance.codex.window-a';
+const _savedPlatformSlot = 'budget.anthropic.platform.today';
+const _savedSampleSlots = PhoneWidgetPreferences(
+  selectedIds: [_sampleWindowSlot, _savedPlatformSlot],
+);
+
+/// Clears [slot]'s picker checkbox on the Widget tab.
+Future<void> _removeSavedWidgetSlot(WidgetTester tester, String slot) async {
+  await tester.tap(find.text('Widget'));
+  await tester.pumpAndSettle();
+  final tile = find.ancestor(
+    of: find.textContaining(slot),
+    matching: find.byType(CheckboxListTile),
+  );
+  await tester.ensureVisible(tile);
+  await tester.tap(tile);
+  await tester.pumpAndSettle();
 }
 
 class _MemoryPhoneWidgetStore implements PhoneWidgetPreferenceStore {

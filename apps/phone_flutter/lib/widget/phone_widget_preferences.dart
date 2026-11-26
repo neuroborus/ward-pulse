@@ -293,14 +293,9 @@ final class SecurePhoneWidgetPreferenceStore
         for (final entry in decoded)
           if (entry is String) entry,
       ];
-      final preferences = phoneWidgetPreferencesFromStoredIds(ids);
-      final migrated = preferences.selectedIds;
-      if (migrated == null) {
-        await _storage.delete(key: _key);
-      } else if (!_sameIds(ids.take(phoneWidgetSlotCount).toList(), migrated)) {
-        await _storage.write(key: _key, value: jsonEncode(migrated));
-      }
-      return preferences;
+      // Side-effect-free: a headless read must not overwrite a newer save.
+      // Migration is deterministic; the next save stores the migrated form.
+      return phoneWidgetPreferencesFromStoredIds(ids);
     } on FormatException {
       return const PhoneWidgetPreferences();
     }
@@ -313,18 +308,6 @@ final class SecurePhoneWidgetPreferenceStore
     }
     return _storage.write(key: _key, value: jsonEncode(value.migratedIds));
   }
-}
-
-bool _sameIds(List<String> a, List<String> b) {
-  if (a.length != b.length) {
-    return false;
-  }
-  for (var i = 0; i < a.length; i++) {
-    if (a[i] != b[i]) {
-      return false;
-    }
-  }
-  return true;
 }
 
 final class DefaultPhoneWidgetPreferenceStore

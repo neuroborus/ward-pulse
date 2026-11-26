@@ -40,6 +40,7 @@ import '../sync/watch_sync_service.dart';
 import '../watchface/watchface_screen.dart';
 import '../widget/phone_widget_preferences.dart';
 import '../widget/phone_widget_navigation.dart';
+import '../widget/phone_widget_payload.dart';
 import '../widget/phone_widget_sync.dart';
 import '../widget/widget_screen.dart';
 import 'surface_order.dart';
@@ -248,6 +249,7 @@ final class _SnapshotAcceptance {
     required this.ruleGeneration,
     required this.surfaceRevision,
     required this.poll,
+    required this.publication,
   });
 
   // Rule edits replace the acceptance while retaining the provider observation.
@@ -259,6 +261,9 @@ final class _SnapshotAcceptance {
   final int ruleGeneration;
   final int surfaceRevision;
   final AutomaticPollContext? poll;
+
+  /// The observation's launcher claim; edits republish under fresh tickets.
+  final PhoneWidgetPublicationInput publication;
 }
 
 final class _RetiredDashboardLoad implements Exception {
@@ -354,6 +359,14 @@ class _DashboardHostState extends State<DashboardHost>
   var _watchPublicationPending = false;
   var _widgetPublicationPending = false;
   var _widgetPublicationRevision = 0;
+  var _widgetRepublishing = false;
+
+  /// A saved widget selection no launcher publication represents yet.
+  var _widgetEditUnpublished = false;
+
+  /// The settled settings revision this engine's confirmed widget and rule
+  /// choices correspond to; launcher tickets require it to stay current.
+  int? _surfaceSettingsRevision;
   WatchRingPreferences? _pendingRingPreferences;
   PhoneWidgetPreferences? _pendingWidgetPreferences;
   Future<void> _ringPreferenceWork = Future<void>.value();
@@ -1193,8 +1206,11 @@ class _DashboardHostState extends State<DashboardHost>
     final store = widget.phoneWidgetPreferenceStore;
     setState(() => _pendingWidgetPreferences = value);
     final work = _widgetPreferenceWork.then((_) async {
+      final int? settled;
       try {
-        await store.write(value);
+        settled = await widget.phoneWidgetSyncService.saveSettings(
+          () => store.write(value),
+        );
       } catch (_) {
         if (mounted && revision == _widgetPreferenceRevision) {
           setState(() => _pendingWidgetPreferences = null);
@@ -1202,14 +1218,21 @@ class _DashboardHostState extends State<DashboardHost>
         rethrow;
       }
       if (!mounted) return;
+      _noteSurfaceSettingsRevision(settled);
       setState(() {
         _widgetPreferences = value;
         _widgetPublicationPending = true;
+        _widgetEditUnpublished = true;
         if (revision == _widgetPreferenceRevision)
           _pendingWidgetPreferences = null;
       });
       final acceptance = _acceptance;
-      if (acceptance != null) unawaited(_syncPhoneWidget(acceptance));
+      if (acceptance != null && _isAccepted(acceptance)) {
+        unawaited(_syncPhoneWidget(acceptance));
+      } else {
+        // A failed or replaced Dashboard load leaves no input to publish.
+        unawaited(_republishPhoneWidget());
+      }
     });
     _widgetPreferenceWork = work.then<void>(
       (_) {},
@@ -1251,8 +1274,11 @@ class _DashboardHostState extends State<DashboardHost>
         previous == null
             ? null
             : widget.applyAlertSettings(previous.input, value);
-    await widget.alertThresholdStore.write(value);
+    final settled = await widget.phoneWidgetSyncService.saveSettings(
+      () => widget.alertThresholdStore.write(value),
+    );
     if (!mounted) return;
+    _noteSurfaceSettingsRevision(settled);
     _confirmAlertThresholds(value);
     if (previous == null || withAlerts == null) return;
     try {
@@ -1276,6 +1302,7 @@ class _DashboardHostState extends State<DashboardHost>
       ruleGeneration: _ruleGeneration,
       surfaceRevision: surfaceRevision,
       poll: previous.poll,
+      publication: previous.publication,
     );
     setState(() => _acceptance = acceptance);
     unawaited(_syncWatch(acceptance));
@@ -1289,6 +1316,7 @@ class _DashboardHostState extends State<DashboardHost>
     AutomaticPollContext? poll,
     Set<ProviderConnectionId> retiredUpdates,
     DataModeOperation operation,
+    PhoneWidgetPublicationInput publication,
   ) => _serializeSnapshotSettings(() async {
     if (!mounted || revision != _loadRevision) {
       throw const _RetiredDashboardLoad();
@@ -1314,9 +1342,17 @@ class _DashboardHostState extends State<DashboardHost>
       ruleGeneration: _ruleGeneration,
       surfaceRevision: _surfaceRevision,
       poll: poll,
+      publication: publication,
     );
     await _retireAutomaticDispatches(operation);
     if (!await operation.guard(() async {
+      // A refused acceptance still shows; its launcher request republishes.
+      // Ownership is checked after it: the host or load may have retired.
+      await publication.accept(snapshot);
+      // Rechecked after acceptance, which retires the first delivery of rows
+      // a widget is still owed.
+      final established =
+          poll?.whollySkipped == true && await publication.isEstablished();
       if (!await _ownsLoad(
         revision,
         () => _source(operation).isSnapshotCurrent(snapshot),
@@ -1337,6 +1373,10 @@ class _DashboardHostState extends State<DashboardHost>
         // Either surface may have to wait while a newer load takes over.
         if (poll?.whollySkipped != true) {
           _watchPublicationPending = true;
+          _widgetPublicationPending = true;
+        } else if (!established) {
+          // An upgrade, a mode return or a widget still owed a frame
+          // publishes the retained input once.
           _widgetPublicationPending = true;
         }
       });
@@ -1416,6 +1456,8 @@ class _DashboardHostState extends State<DashboardHost>
       if (!mounted || revision != _loadRevision)
         throw const _RetiredDashboardLoad();
       if (!_modeReady || _mode != operation.mode) {
+        // Installed widgets may still show rows from before a mode write.
+        if (!_modeReady) unawaited(_redrawPhoneWidget());
         setState(() {
           _mode = operation.mode;
           _modeReady = true;
@@ -1575,6 +1617,11 @@ class _DashboardHostState extends State<DashboardHost>
       if (!mounted || revision != _loadRevision)
         throw const _RetiredDashboardLoad();
     }
+    // Ordered before the repository read; a newer load's acceptance wins.
+    final publication = await widget.phoneWidgetSyncService.beginLoad();
+    if (!mounted || revision != _loadRevision)
+      throw const _RetiredDashboardLoad();
+    _noteSurfaceSettingsRevision(publication.settingsRevision);
     // A superseded request cannot leave a row spinning without active work.
     _reportingUpdates.removeWhere((_, update) => update.checking);
     final observed = <ProviderConnectionId, ConnectionReportingUpdate?>{};
@@ -1701,6 +1748,7 @@ class _DashboardHostState extends State<DashboardHost>
         poll,
         retired,
         operation,
+        publication,
       );
     } on _RetiredDashboardLoad {
       await reconcileObserved();
@@ -1972,6 +2020,8 @@ class _DashboardHostState extends State<DashboardHost>
           _rejectionNotices = const [];
           _snapshot = _loadSnapshot();
         });
+        // The outgoing generation's rows leave the launcher before the load.
+        unawaited(_redrawPhoneWidget());
       });
     } finally {
       _modeChangeInFlight = false;
@@ -2005,34 +2055,211 @@ class _DashboardHostState extends State<DashboardHost>
     _widgetPublicationPending = true;
     final publicationRevision = ++_widgetPublicationRevision;
     final preferences = _widgetPreferences;
+    final settingsRevision = _surfaceSettingsRevision;
     if (preferences == null) return;
     final snapshot = acceptance.snapshot;
     bool accepted() =>
         publicationRevision == _widgetPublicationRevision &&
         _hasCurrentRules(acceptance) &&
         identical(preferences, _widgetPreferences);
-    Future<bool> isCurrent() async =>
-        accepted() &&
-        await _isSourceCurrent(acceptance.operation, snapshot) &&
-        accepted();
+    Future<bool> proof() => _isSourceCurrent(acceptance.operation, snapshot);
     try {
-      if (!await isCurrent() || !accepted()) return;
-      var dispatchAllowed = false;
-      final operation = acceptance.operation;
-      await operation.run(
-        () => widget.phoneWidgetSyncService.sync(
-          snapshot,
-          preferences,
-          isCurrent: () async => dispatchAllowed = await isCurrent(),
-        ),
-      );
-      if (dispatchAllowed && accepted()) _widgetPublicationPending = false;
+      // Work elsewhere may have retired the source before the request.
+      final published =
+          accepted() && await proof() && accepted()
+              ? await _dispatchPhoneWidget(
+                acceptance.operation,
+                snapshot,
+                acceptance.publication,
+                preferences,
+                settingsRevision,
+                accepted: accepted,
+                proof: proof,
+              )
+              : null;
+      // The saved change stays pending until a publication represents it.
+      if (published != true &&
+          accepted() &&
+          (published == false || _widgetEditUnpublished)) {
+        unawaited(_republishPhoneWidget());
+      }
     } catch (_) {
       // Launcher widget updates must not block the phone dashboard.
       developer.log(
         'Dashboard refresh could not update the widget.',
         name: phoneWidgetLogName,
       );
+    }
+  }
+
+  /// Publishes [snapshot] under [publication]. Completes with `true` once
+  /// committed rows represent the pending request, `false` when native
+  /// refused it or a newer request superseded it after the last guard and
+  /// `null` when [accepted] or [proof] retired it.
+  Future<bool?> _dispatchPhoneWidget(
+    DataModeOperation operation,
+    DashboardSnapshot snapshot,
+    PhoneWidgetPublicationInput publication,
+    PhoneWidgetPreferences preferences,
+    int? settingsRevision, {
+    required bool Function() accepted,
+    required Future<bool> Function() proof,
+  }) async {
+    var dispatchAllowed = false;
+    final published = await operation.run(
+      () => publication
+          .withSettingsRevision(settingsRevision)
+          .run(
+            () => widget.phoneWidgetSyncService.sync(
+              snapshot,
+              preferences,
+              isCurrent:
+                  () async =>
+                      dispatchAllowed =
+                          accepted() && await proof() && accepted(),
+            ),
+          ),
+    );
+    if (!dispatchAllowed || !accepted()) return null;
+    if (!published) return false;
+    _widgetPublicationPending = false;
+    _widgetEditUnpublished = false;
+    return true;
+  }
+
+  void _noteSurfaceSettingsRevision(int? revision) {
+    if (revision != null && revision > (_surfaceSettingsRevision ?? -1)) {
+      _surfaceSettingsRevision = revision;
+    }
+  }
+
+  /// Cache reads a widget retry may waste while work in another engine keeps
+  /// retiring its source or refusing its ticket.
+  static const _widgetRepublishAttempts = 3;
+
+  /// Publishes the pending launcher request from retained input, or from
+  /// confirmed absence, without a provider poll: native refused it, its
+  /// source retired or no Dashboard acceptance exists. Mock reads its captured
+  /// sample source in the current generation; without one, as in Demo, the
+  /// choice and stored rows stay as they are. Only the widget is
+  /// published; Dashboard acceptance, notification work and Watch state stay
+  /// as they are. An active load publishes the request itself; the retry
+  /// resumes once it settles.
+  Future<void> _republishPhoneWidget() async {
+    if (_widgetRepublishing) return;
+    _widgetRepublishing = true;
+    try {
+      // A superseded attempt is not a failure: the newer state retries.
+      var failures = 0;
+      while (failures < _widgetRepublishAttempts) {
+        while (mounted && _activeLoad != null) {
+          await _activeLoad;
+        }
+        final preferences = _widgetPreferences;
+        final rules = _alertThresholds;
+        if (!mounted ||
+            !_widgetPublicationPending ||
+            !_modeReady ||
+            preferences == null ||
+            rules == null) {
+          return;
+        }
+        final settingsRevision = _surfaceSettingsRevision;
+        final publicationRevision = _widgetPublicationRevision;
+        // A cache read through the shared repository would retire a newer
+        // load, and a newer request or edit publishes itself.
+        bool accepted() =>
+            mounted &&
+            _activeLoad == null &&
+            publicationRevision == _widgetPublicationRevision &&
+            identical(preferences, _widgetPreferences) &&
+            identical(rules, _alertThresholds);
+        // A switch that refused the publication may fail and keep this mode.
+        final operation = await _modeAuthority.begin(
+          cacheOnly: true,
+          waitForSwitch: true,
+        );
+        // Ordered before the cache read; a newer load's acceptance wins.
+        final publication = await widget.phoneWidgetSyncService.beginLoad();
+        if (!accepted()) continue;
+        final retained = await _retainedWidgetInput(
+          operation,
+          rules,
+          preferences,
+        );
+        if (!accepted()) continue;
+        // Unreadable sample rows keep the saved choice and the stored rows.
+        if (retained == null) return;
+        final (snapshot, proof) = retained;
+        if (await proof() &&
+            accepted() &&
+            await operation.run(() => publication.accept(snapshot)) &&
+            await _dispatchPhoneWidget(
+                  operation,
+                  snapshot,
+                  publication,
+                  preferences,
+                  settingsRevision,
+                  accepted: accepted,
+                  proof: proof,
+                ) ==
+                true) {
+          return;
+        }
+        failures++;
+      }
+    } catch (_) {
+      // Unavailable mode or cache storage; the next load publishes.
+    } finally {
+      _widgetRepublishing = false;
+    }
+  }
+
+  /// The retained input a widget retry publishes, with its source proof, or
+  /// `null` when no captured sample source has rows to read for [preferences].
+  Future<(DashboardSnapshot, Future<bool> Function())?> _retainedWidgetInput(
+    DataModeOperation operation,
+    AlertThresholdPreferences rules,
+    PhoneWidgetPreferences preferences,
+  ) async {
+    // The no-provider placeholder supplies no sample rows.
+    if (operation.mode.synthetic &&
+        (operation.mode != DataMode.mock || widget.mockRepository == null)) {
+      return null;
+    }
+    try {
+      final snapshot = widget.applyAlertSettings(
+        await operation.run(_source(operation).load),
+        rules,
+      );
+      // A sample without accounts, or without an eligible row for a nonempty
+      // or default selection, supplies no sample rows either.
+      if (operation.mode.synthetic &&
+          (snapshot.accounts.isEmpty ||
+              (preferences.selectedIds?.isEmpty != true &&
+                  buildPhoneWidgetPayload(snapshot, preferences).isEmpty))) {
+        return null;
+      }
+      return (snapshot, () => _isSourceCurrent(operation, snapshot));
+    } on DashboardLoadException catch (failure) {
+      // A sample failure confirms no absence.
+      if (operation.mode.synthetic) return null;
+      // Confirmed absence replaces rows the cache no longer holds.
+      return (
+        failure.selection,
+        () async =>
+            await operation.isCurrent() &&
+            await _source(operation).isFailureCurrent(failure),
+      );
+    }
+  }
+
+  /// Redraws installed widgets from current-generation rows, or empty.
+  Future<void> _redrawPhoneWidget() async {
+    try {
+      await widget.phoneWidgetSyncService.redraw();
+    } catch (_) {
+      developer.log('Could not redraw the widget.', name: phoneWidgetLogName);
     }
   }
 

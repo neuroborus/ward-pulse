@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.os.Bundle
 import android.test.InstrumentationTestCase
+import app.wardpulse.watchsync.ConnectionCacheEngine
 import app.wardpulse.watchsync.PhoneWidgetPublicationStore
 import es.antonborri.home_widget.HomeWidgetPlugin
 import junit.framework.Assert.assertEquals
@@ -29,7 +30,12 @@ class PhoneWidgetPublicationTest : InstrumentationTestCase() {
     override fun tearDown() {
         try {
             if (::preferences.isInitialized) assertTrue(preferences.edit().clear().commit())
-        } finally { super.tearDown() }
+        } finally {
+            try {
+                // Releases a settings save or ticket this test left on the process-wide authority.
+                PhoneWidgetPublicationStore.engine(context).detach(OWNER)
+            } finally { super.tearDown() }
+        }
     }
 
     fun testOverlappingPublicationsRemainComplete() {
@@ -140,6 +146,43 @@ class PhoneWidgetPublicationTest : InstrumentationTestCase() {
         WidgetPublicationFixture.assertStored(context, preferences, next + ("stale" to "1"), "failed STALE commit")
     }
 
+    fun testUnconfirmedRenewalRetirementRetries() {
+        assertTrue(preferences.edit().putBoolean("publication_renewable", true)
+            .putBoolean("publication_complete", true).commit())
+        var commits = 0
+        var failing = true
+        // Memory loses the flag either way.
+        val store = PhoneWidgetPublicationStore(editing { editor -> committing(editor) { commits++; !failing } })
+        assertFalse(store.retireRenewal())
+        assertEquals("the injected failure", 1, commits)
+        assertFalse(preferences.contains("publication_renewable"))
+        assertTrue("only the renewal flag retires", preferences.getBoolean("publication_complete", false))
+        assertFalse("a retry cannot infer the removal from memory", store.retireRenewal())
+        assertEquals(2, commits)
+        failing = false
+        assertTrue(store.retireRenewal())
+        assertEquals(3, commits)
+        assertTrue(store.retireRenewal())
+        assertEquals(3, commits)
+
+        // A fixture write's failed commit also removes the flag from memory only.
+        assertTrue(preferences.edit().putBoolean("publication_renewable", true).commit())
+        val engine = PhoneWidgetPublicationStore.engine(context)
+        val fixture = engine.reserveWidgetPublication(OWNER, store.sequence() ?: 0L)
+        failing = true
+        val attempted = commits
+        assertEquals(false, store.publish(WidgetPublicationFixture.payload("fixture", 1, 20), null, fixture, engine,
+            proven = false))
+        val published = commits
+        assertTrue("the injected publication failure", published > attempted)
+        assertFalse(preferences.contains("publication_renewable"))
+        failing = false
+        assertTrue(store.retireRenewal())
+        assertEquals(published + 1, commits)
+        assertTrue(store.retireRenewal())
+        assertEquals(published + 1, commits)
+    }
+
     fun testRetiredRowsAndStaleFlagAreIneligibleForRedraw() {
         val initial = PhoneWidgetPublicationStore.Mode("install", 0L, "live")
         val mock = PhoneWidgetPublicationStore.Mode("install", 1L, "mock")
@@ -164,9 +207,195 @@ class PhoneWidgetPublicationTest : InstrumentationTestCase() {
         assertEquals(2, returned.eligibleRows(preferences.all)["row_count"])
     }
 
+    fun testTicketsOrderPublicationsAndDelayedRedraws() {
+        // Issue, commit and launcher delivery share the process-wide authority.
+        val engine = PhoneWidgetPublicationStore.engine(context)
+        val store = PhoneWidgetPublicationStore(preferences)
+        fun begin() = engine.beginWidgetLoad { store.sequence() ?: 0L }
+        fun accept(load: Long) = engine.acceptSnapshotLoad(load, null,
+            null, emptyMap<String, Long>(), emptyMap<String, Map<String, Any>>(), emptyMap<String, String>())
+        val headless = begin()
+        val foreground = begin()
+        val revision = foreground["settingsRevision"] as Long
+        fun issue(load: Map<String, Any>) = engine.issueWidgetPublication(OWNER, load["load"] as Long, null,
+            revision, store.sequence() ?: 0L,
+            null, emptyMap<String, Long>(), emptyMap<String, Map<String, Any>>(), emptyMap<String, String>())
+        assertTrue(accept(foreground["load"] as Long))
+        assertFalse("late headless acceptance", accept(headless["load"] as Long))
+        val a = WidgetPublicationFixture.payload("A", 2, 10)
+        val first = issue(foreground)!!
+        assertEquals(true, store.publish(a, null, first, engine))
+        val rendered = PhoneWidgetPublicationStore.sequenceOf(preferences.all)
+        assertNull("late headless result", issue(headless))
+
+        val b = WidgetPublicationFixture.payload("B", 3, 70)
+        val edit = issue(foreground)!!
+        assertNull("superseded ticket", store.publish(a, null, first, engine))
+        assertEquals(true, store.publish(b, null, edit, engine))
+        WidgetPublicationFixture.assertStored(context, preferences, b, "slot edit re-ticket")
+        val mode = PhoneWidgetPublicationStore.currentMode(context)
+        var delivered = "none"
+        mode.deliverIfCurrent(context, preferences, 1, rendered, true) { delivered = "A" }
+        assertEquals("delayed redraw of a replaced publication", "none", delivered)
+        mode.deliverIfCurrent(context, preferences, 1, store.sequence(), true) { delivered = "B" }
+        assertEquals("B", delivered)
+        // Another widget's frame of B is rendered; a slot save settles before its dispatch.
+        val held = store.sequence()
+        engine.finishSurfaceSettingsWrite(OWNER, engine.beginSurfaceSettingsWrite(OWNER))
+        mode.deliverIfCurrent(context, preferences, 2, held, true) { delivered = "retired B" }
+        assertEquals("first frame of rows a save retired", "B", delivered)
+        mode.deliverIfCurrent(context, preferences, 1, held, true) { delivered = "retained B" }
+        assertEquals("retained B", delivered)
+        // A frame that shows none of B's rows, such as a no-fit frame, needs only the stored-sequence fence.
+        mode.deliverIfCurrent(context, preferences, 2, held, false) { delivered = "no-fit" }
+        assertEquals("no-fit", delivered)
+        fun recorded(key: String) = preferences.getStringSet(key, null)
+        assertEquals("widgets holding a frame of B", setOf("1", "2"), recorded("publication_framed"))
+        assertEquals("widgets showing B's rows", setOf("1"), recorded("publication_delivered"))
+        // Its frame granted no retained redraw: enlarging it cannot reveal the retired rows.
+        mode.deliverIfCurrent(context, preferences, 2, held, true) { delivered = "resized B" }
+        assertEquals("no-fit", delivered)
+        assertEquals("the refused widget is owed a frame", setOf("1"), recorded("publication_framed"))
+
+        assertNull("late failure", store.markStale(null, headless["observed"] as Long, engine))
+        val failed = begin()
+        assertEquals(edit, failed["observed"])
+        assertEquals(true, store.markStale(null, failed["observed"] as Long, engine))
+        WidgetPublicationFixture.assertStored(context, preferences, b + ("stale" to "1"), "observed STALE")
+        assertEquals(edit + 1, store.sequence())
+        assertTrue(store.publish(a))
+        assertNull("unordered fixture write", store.sequence())
+    }
+
+    fun testExplicitEmptyResultNeedsPublicationAuthority() {
+        val engine = PhoneWidgetPublicationStore.engine(context)
+        val store = PhoneWidgetPublicationStore(preferences)
+        val provider = WardPulseAppWidget()
+        val options = Bundle().apply {
+            putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 360)
+            putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 360)
+            putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 600)
+            putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 600)
+        }
+        // Whether the frame refresh renders from the stored rows needs their authority.
+        fun frame(rows: Map<String, *>) = provider.publication(context, 0, rows, options, PhoneWidgetLayout.MAX_BITMAP_BYTES)
+        fun content(eligible: Boolean) = (if (eligible) preferences.all else emptyMap<String, Any>()).let {
+            provider.ownContent(it, frame(it))
+        }
+        val load = engine.beginWidgetLoad { store.sequence() ?: 0L }
+        val ordinal = load["load"] as Long
+        assertTrue(engine.acceptSnapshotLoad(ordinal, null,
+            null, emptyMap<String, Long>(), emptyMap<String, Map<String, Any>>(), emptyMap<String, String>()))
+        val ticket = engine.issueWidgetPublication(OWNER, ordinal, null, load["settingsRevision"] as Long,
+            store.sequence() ?: 0L,
+            null, emptyMap<String, Long>(), emptyMap<String, Map<String, Any>>(), emptyMap<String, String>())!!
+        // The user cleared every slot; that explicit empty result commits.
+        assertEquals(true, store.publish(WidgetPublicationFixture.payload("empty", 0, 0), null, ticket, engine))
+        assertTrue("explicit empty result", content(true))
+        assertFalse("neutral outgoing-mode clear", content(false))
+        val mode = PhoneWidgetPublicationStore.currentMode(context)
+        val held = store.sequence()
+        var delivered = "none"
+        mode.deliverIfCurrent(context, preferences, 1, held, content(true)) { delivered = "current empty" }
+        assertEquals("current empty", delivered)
+        // Widget 2's empty frame is held while the user saves a nonempty selection.
+        engine.finishSurfaceSettingsWrite(OWNER, engine.beginSurfaceSettingsWrite(OWNER))
+        mode.deliverIfCurrent(context, preferences, 2, held, content(true)) { delivered = "retired empty" }
+        assertEquals("a retired empty result keeps the retained frame", "current empty", delivered)
+        mode.deliverIfCurrent(context, preferences, 2, held, content(false)) { delivered = "clear" }
+        assertEquals("the neutral clear needs no authority", "clear", delivered)
+        // A Claude Plan pause can filter every stored row out of a nonempty publication; that
+        // frame shows none of its content, so it clears the launcher without first-delivery authority.
+        val paused = WidgetPublicationFixture.payload("paused", 2, 10)
+        assertFalse("a frame the pause emptied", provider.ownContent(paused, frame(preferences.all)))
+        assertTrue("its unfiltered rows", provider.ownContent(paused, frame(paused)))
+    }
+
+    fun testEstablishedRequiresCompletePublicationOfSavedSettings() {
+        val engine = ConnectionCacheEngine(object : ConnectionCacheEngine.Backend {
+            override fun read(): Map<String, String> = emptyMap()
+            override fun commit(values: Map<String, String>) = true
+        })
+        val record = engine.initializeMode(false)
+        val mode = PhoneWidgetPublicationStore.Mode(record["installId"] as String, record["generation"] as Long,
+            record["mode"] as String)
+        val store = PhoneWidgetPublicationStore(preferences)
+        fun begin() = engine.beginWidgetLoad { store.sequence() ?: 0L }
+        // Cutover-era rows carry the mode tags but no full ticketed publication.
+        assertTrue(store.publish(WidgetPublicationFixture.payload("A", 2, 10), mode))
+        assertFalse("cutover rows", store.established(mode))
+        assertEquals(true, store.markStale(mode, begin()["observed"] as Long, engine))
+        assertFalse("STALE-only write", store.established(mode))
+
+        val load = begin()
+        val ordinal = load["load"] as Long
+        assertTrue(engine.acceptSnapshotLoad(ordinal, mode.generation,
+            null, emptyMap<String, Long>(), emptyMap<String, Map<String, Any>>(), emptyMap<String, String>()))
+        val ticket = engine.issueWidgetPublication("test", ordinal, mode.generation,
+            load["settingsRevision"] as Long, store.sequence() ?: 0L,
+            null, emptyMap<String, Long>(), emptyMap<String, Map<String, Any>>(), emptyMap<String, String>())!!
+        assertEquals(true, store.publish(WidgetPublicationFixture.payload("B", 3, 70), mode, ticket, engine))
+        assertTrue(store.established(mode))
+        assertTrue("restart", PhoneWidgetPublicationStore(preferences).established(mode))
+        // An installed widget without a frame of B, even after a restart, needs a fresh publication.
+        assertFalse("undelivered widget", store.established(mode, listOf("7")))
+        assertFalse("undelivered widget after restart",
+            PhoneWidgetPublicationStore(preferences).established(mode, listOf("7")))
+
+        // A slot save began; the process may die before its publication.
+        val save = engine.beginSurfaceSettingsWrite("test")
+        assertTrue(store.retireSettings())
+        assertFalse("unpublished save after restart", PhoneWidgetPublicationStore(preferences).established(mode))
+        assertEquals(true, store.markStale(mode, begin()["observed"] as Long, engine))
+        assertFalse("STALE keeps the save unpublished", store.established(mode))
+
+        // The rebuild's disk commit fails after updating memory; the next cadence-denied load rebuilds again.
+        engine.finishSurfaceSettingsWrite("test", save)
+        val failing = PhoneWidgetPublicationStore(editing { editor ->
+            object : SharedPreferences.Editor by editor {
+                // Inject the failure result after a real commit; do not claim a reproduced disk fault.
+                override fun commit(): Boolean { assertTrue(editor.commit()); return false }
+            }
+        })
+        val rebuild = begin()
+        val rebuildLoad = rebuild["load"] as Long
+        assertTrue(engine.acceptSnapshotLoad(rebuildLoad, mode.generation,
+            null, emptyMap<String, Long>(), emptyMap<String, Map<String, Any>>(), emptyMap<String, String>()))
+        val unconfirmed = engine.issueWidgetPublication("test", rebuildLoad, mode.generation,
+            rebuild["settingsRevision"] as Long, store.sequence() ?: 0L,
+            null, emptyMap<String, Long>(), emptyMap<String, Map<String, Any>>(), emptyMap<String, String>())!!
+        val rows = WidgetPublicationFixture.payload("C", 1, 40)
+        assertEquals(false, failing.publish(rows, mode, unconfirmed, engine))
+        WidgetPublicationFixture.assertStored(context, preferences, rows, "memory after failed rebuild")
+        assertFalse("unconfirmed full commit", store.established(mode))
+    }
+
     private fun editing(wrap: (SharedPreferences.Editor) -> SharedPreferences.Editor) =
         object : SharedPreferences by preferences {
             override fun edit() = wrap(preferences.edit())
+        }
+
+    /**
+     * Injects [result] after a real commit of [editor]; do not claim a reproduced disk fault. Each
+     * mutator returns this proxy, so a chained `remove(...).commit()` reaches the injection too.
+     */
+    private fun committing(editor: SharedPreferences.Editor, result: () -> Boolean): SharedPreferences.Editor =
+        object : SharedPreferences.Editor by editor {
+            override fun putString(key: String?, value: String?): SharedPreferences.Editor =
+                also { editor.putString(key, value) }
+            override fun putStringSet(key: String?, values: MutableSet<String>?): SharedPreferences.Editor =
+                also { editor.putStringSet(key, values) }
+            override fun putInt(key: String?, value: Int): SharedPreferences.Editor =
+                also { editor.putInt(key, value) }
+            override fun putLong(key: String?, value: Long): SharedPreferences.Editor =
+                also { editor.putLong(key, value) }
+            override fun putFloat(key: String?, value: Float): SharedPreferences.Editor =
+                also { editor.putFloat(key, value) }
+            override fun putBoolean(key: String?, value: Boolean): SharedPreferences.Editor =
+                also { editor.putBoolean(key, value) }
+            override fun remove(key: String?): SharedPreferences.Editor = also { editor.remove(key) }
+            override fun clear(): SharedPreferences.Editor = also { editor.clear() }
+            override fun commit(): Boolean { assertTrue(editor.commit()); return result() }
         }
 
     private fun afterStaging(field: String, action: () -> Unit) = editing { editor ->
@@ -192,6 +421,8 @@ class PhoneWidgetPublicationTest : InstrumentationTestCase() {
         assertFalse("Publication worker did not retire", worker.isAlive)
     }
 }
+
+private const val OWNER = "publication-test"
 
 /** Shared, fixed inputs and consumer assertions for native and Dart-origin publications. */
 internal object WidgetPublicationFixture {

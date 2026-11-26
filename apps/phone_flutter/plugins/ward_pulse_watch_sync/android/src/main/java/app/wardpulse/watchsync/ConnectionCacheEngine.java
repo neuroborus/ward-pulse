@@ -12,10 +12,14 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
+import java.util.function.Supplier;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -67,6 +71,17 @@ public final class ConnectionCacheEngine {
     private long watchSummaryReserved;
     private long watchSummarySent;
     private long automaticSamples;
+    // Surface publication order. Load ordinals order replacement of the shared
+    // accepted snapshot; each surface orders its own publications. Widget and
+    // alert-rule saves advance the settings revision, retiring every read
+    // tagged before them.
+    private long snapshotLoads;
+    private long acceptedSnapshotLoad;
+    private long widgetIssued;
+    private WidgetTicket widgetPending;
+    private WidgetDelivery widgetDelivery;
+    private final Map<String, String> surfaceSettingsWrites = new HashMap<>();
+    private long surfaceSettingsRevision;
 
     public ConnectionCacheEngine(Backend backend) { this(backend, System::currentTimeMillis); }
     public ConnectionCacheEngine(Backend backend, LongSupplier clock) { this(backend, new MemoryBackend(), clock, true); }
@@ -221,6 +236,42 @@ public final class ConnectionCacheEngine {
                 : record.get("installId").equals(installId) && Long.valueOf(record.get("generation")).equals(generation)) {
             deliver.run();
         }
+    }
+    /**
+     * Delivers views rendered from the publication stored under [sequence] while the mode write is
+     * current and [stored] still reads that sequence. A widget's first frame of ticketed rows
+     * ([rows] shown in the views and not yet [shown] there) also requires everything they committed
+     * under: accepted load, settings revision and selection; otherwise [refused] runs instead. A
+     * widget that already shows them keeps redrawing them, as on resize, until replacement rows
+     * commit; a frame showing none needs no proof. [renewable] reads the durable flags that the
+     * stored rows are a confirmed full publication of the saved settings, which a save clears before
+     * writing, and that no newer load was accepted since they committed.
+     */
+    public synchronized void deliverWidgetIfCurrent(String installId, Long generation, Long sequence, boolean rows,
+            Supplier<Long> stored, BooleanSupplier shown, BooleanSupplier renewable, Runnable deliver,
+            Runnable refused) {
+        deliverWidgetIfModeCurrent(installId, generation, () -> {
+            if (!Objects.equals(stored.get(), sequence)) return;
+            if (rows && !shown.getAsBoolean() && !widgetDeliveryCurrent(sequence, renewable)) refused.run();
+            else deliver.run();
+        });
+    }
+    private boolean widgetDeliveryCurrent(Long sequence, BooleanSupplier renewable) {
+        WidgetDelivery delivery = widgetDelivery;
+        if (sequence == null) return false;
+        if (delivery == null) {
+            // A restart lost the authority. Synthetic rows carry no source proof, so their
+            // confirmed full publication in this generation, unsuperseded before the restart,
+            // renews it until this process accepts a load or begins a save. Live rows wait for
+            // the next publication.
+            Map<String, String> record = modeRecord();
+            return record != null && !"live".equals(record.get("mode")) && acceptedSnapshotLoad == 0
+                && surfaceSettingsWrites.isEmpty() && renewable.getAsBoolean();
+        }
+        if (delivery.sequence != sequence) return false;
+        WidgetTicket authority = delivery.authority;
+        return authority.load == acceptedSnapshotLoad
+            && surfaceCurrent(authority.generation, authority.settingsRevision, authority.selection);
     }
     /** Scoped provider work runs only in the current Live generation. */
     private boolean liveCurrent(Long generation) {
@@ -895,12 +946,142 @@ public final class ConnectionCacheEngine {
     public synchronized boolean recoveryDeliveryCurrent(long revision, Long generation) {
         return recoveryPreferenceWrites.isEmpty() && recoveryPreferenceRevision == revision && liveCurrent(generation);
     }
+    public synchronized String beginSurfaceSettingsWrite(String owner) {
+        String token = unique();
+        surfaceSettingsWrites.put(token, owner);
+        surfaceSettingsRevision++;
+        return token;
+    }
+    /** The settled revision after this save, or null while another save is in flight. */
+    public synchronized Long finishSurfaceSettingsWrite(String owner, String token) {
+        if (owner.equals(surfaceSettingsWrites.get(token))) {
+            surfaceSettingsWrites.remove(token);
+            surfaceSettingsRevision++;
+        }
+        return surfaceSettingsWrites.isEmpty() ? surfaceSettingsRevision : null;
+    }
+    /**
+     * Starts a load before it reads settings or provider data: its ordinal, the settled settings
+     * revision (null while a save is in flight) and the committed launcher publication it observes.
+     * [committed] reads the stored ticket, so the order survives process death.
+     */
+    public synchronized Map<String, Object> beginWidgetLoad(LongSupplier committed) {
+        long observed = committed.getAsLong();
+        widgetIssued = Math.max(widgetIssued, observed);
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("load", ++snapshotLoads);
+        view.put("settingsRevision", surfaceSettingsWrites.isEmpty() ? surfaceSettingsRevision : null);
+        view.put("observed", observed);
+        return view;
+    }
+    /**
+     * Records [load]'s source-validated snapshot as the shared accepted input, whether or not a
+     * surface publishes it. False when a newer load was accepted or its source is retired.
+     */
+    public synchronized boolean acceptSnapshotLoad(long load, Long generation,
+            Map<String, Map<String, String>> versions, Map<String, Long> attemptClockEras,
+            Map<String, ? extends Map<String, ?>> payloadOrders, Map<String, String> emptyCacheOrders) {
+        return acceptSnapshotLoad(load, generation, versions, attemptClockEras, payloadOrders, emptyCacheOrders,
+            () -> true);
+    }
+    /**
+     * As above; [retire] durably records, under this lock and before the acceptance is visible,
+     * that stored rows committed under an older load lost their first-delivery authority, so a
+     * restart cannot renew them. False, without accepting, when it cannot confirm that record.
+     */
+    public synchronized boolean acceptSnapshotLoad(long load, Long generation,
+            Map<String, Map<String, String>> versions, Map<String, Long> attemptClockEras,
+            Map<String, ? extends Map<String, ?>> payloadOrders, Map<String, String> emptyCacheOrders,
+            BooleanSupplier retire) {
+        if (load < acceptedSnapshotLoad || load > snapshotLoads || !surfaceCurrent(generation, null,
+                new WidgetSelection(versions, attemptClockEras, payloadOrders, emptyCacheOrders))) {
+            return false;
+        }
+        if ((widgetDelivery == null || !Objects.equals(widgetDelivery.authority.load, load))
+                && !retire.getAsBoolean()) {
+            return false;
+        }
+        acceptedSnapshotLoad = load;
+        return true;
+    }
+    /**
+     * A launcher ticket for the accepted [load], or null when a newer load was accepted, a
+     * settings save retired [settingsRevision], its mode generation changed or its selection is
+     * stale. The accepted load can take fresh tickets for the same snapshot without loading again.
+     */
+    public synchronized Long issueWidgetPublication(String owner, long load, Long generation,
+            long settingsRevision, long committed, Map<String, Map<String, String>> versions,
+            Map<String, Long> attemptClockEras, Map<String, ? extends Map<String, ?>> payloadOrders,
+            Map<String, String> emptyCacheOrders) {
+        WidgetSelection selection = new WidgetSelection(versions, attemptClockEras, payloadOrders, emptyCacheOrders);
+        if (load != acceptedSnapshotLoad || !surfaceCurrent(generation, settingsRevision, selection)) return null;
+        widgetIssued = Math.max(widgetIssued, committed) + 1;
+        widgetPending = new WidgetTicket(owner, widgetIssued, load, generation, settingsRevision, selection);
+        return widgetIssued;
+    }
+    /** The newest ticket for a publication without a load, such as a fixture write. */
+    public synchronized long reserveWidgetPublication(String owner, long committed) {
+        widgetIssued = Math.max(widgetIssued, committed) + 1;
+        widgetPending = new WidgetTicket(owner, widgetIssued, null, null, null, null);
+        return widgetIssued;
+    }
+    /**
+     * Runs [commit] only for the newest pending ticket while everything it was issued against is
+     * still current: accepted load, mode generation, settings revision and selection. Null when
+     * superseded or retired; either way the ticket is spent.
+     */
+    public synchronized Boolean commitWidgetPublication(long ticket, Long generation, BooleanSupplier commit) {
+        WidgetTicket pending = widgetPending;
+        if (pending == null || pending.ticket != ticket) return null;
+        widgetPending = null;
+        if (generation != null && !operationCurrent(generation)) return null;
+        if (pending.load != null && (pending.load != acceptedSnapshotLoad
+                || !surfaceCurrent(pending.generation, pending.settingsRevision, pending.selection))) return null;
+        // Even a failed disk commit leaves these rows in memory, so their delivery keeps this authority.
+        widgetDelivery = pending.load == null ? null : new WidgetDelivery(pending, ticket);
+        return commit.getAsBoolean();
+    }
+    /** Spends [owner]'s pending [ticket] when its publication exits before the commit attempt. */
+    public synchronized void retireWidgetPublication(String owner, long ticket) {
+        if (widgetPending != null && widgetPending.ticket == ticket && widgetPending.owner.equals(owner)) {
+            widgetPending = null;
+        }
+    }
+    /**
+     * Marks the rows a failed load [observed] stale under a fresh ticket, so an older redraw cannot
+     * hide the flag. Null when those rows were replaced, a newer publication is pending or [mark]
+     * found no rows. [committed] reads the stored ticket under this lock.
+     */
+    public synchronized Boolean markWidgetStale(long observed, Long generation, LongSupplier committed,
+            LongFunction<Boolean> mark) {
+        long stored = committed.getAsLong();
+        widgetIssued = Math.max(widgetIssued, stored);
+        if (observed != stored || widgetPending != null
+                || (generation != null && !operationCurrent(generation))) return null;
+        Boolean marked = mark.apply(widgetIssued + 1);
+        if (marked != null) {
+            widgetIssued++;
+            // The flag-only write keeps the rows, and their delivery authority, under the new ticket.
+            if (widgetDelivery != null && widgetDelivery.sequence == stored) widgetDelivery.sequence = widgetIssued;
+        }
+        return marked;
+    }
+    private boolean surfaceCurrent(Long generation, Long settingsRevision, WidgetSelection selection) {
+        return (generation == null || operationCurrent(generation))
+            && (settingsRevision == null
+                || (surfaceSettingsWrites.isEmpty() && settingsRevision == surfaceSettingsRevision))
+            && (selection == null || selection.versions == null || validAll(selection.versions,
+                selection.attemptClockEras, selection.payloadOrders, selection.emptyCacheOrders));
+    }
     public synchronized List<String> readUnrecordedRecoveries() { return new ArrayList<>(unrecordedRecoveries); }
     public synchronized void recordUnrecordedRecoveries(List<String> occurrences) { unrecordedRecoveries.addAll(occurrences); }
     public synchronized void forgetUnrecordedRecoveries(List<String> occurrences) { unrecordedRecoveries.removeAll(occurrences); }
     public synchronized void detach(String owner) {
         // A detached engine's save can no longer finish; its outcome is unknown.
         if (recoveryPreferenceWrites.values().removeIf(owner::equals)) recoveryPreferenceRevision++;
+        if (surfaceSettingsWrites.values().removeIf(owner::equals)) surfaceSettingsRevision++;
+        // A detached engine can no longer commit its pending ticket.
+        if (widgetPending != null && widgetPending.owner.equals(owner)) widgetPending = null;
         modeAdmissions.removeIf(request -> request.owner.equals(owner));
         modeImports.removeIf(request -> request.owner.equals(owner));
         if (activeModeImport != null && activeModeImport.owner.equals(owner)) {
@@ -1271,6 +1452,35 @@ public final class ConnectionCacheEngine {
         private Map<String, String> values = Collections.emptyMap();
         @Override public Map<String, String> read() { return values; }
         @Override public boolean commit(Map<String, String> next) { values = new LinkedHashMap<>(next); return true; }
+    }
+    private static final class WidgetSelection {
+        final Map<String, Map<String, String>> versions;
+        final Map<String, Long> attemptClockEras;
+        final Map<String, ? extends Map<String, ?>> payloadOrders;
+        final Map<String, String> emptyCacheOrders;
+        WidgetSelection(Map<String, Map<String, String>> versions, Map<String, Long> attemptClockEras,
+                Map<String, ? extends Map<String, ?>> payloadOrders, Map<String, String> emptyCacheOrders) {
+            this.versions = versions; this.attemptClockEras = attemptClockEras;
+            this.payloadOrders = payloadOrders; this.emptyCacheOrders = emptyCacheOrders;
+        }
+    }
+    /** An issued launcher ticket and what it was issued against; a null load is unordered. */
+    private static final class WidgetTicket {
+        final String owner;
+        final long ticket;
+        final Long load, generation, settingsRevision;
+        final WidgetSelection selection;
+        WidgetTicket(String owner, long ticket, Long load, Long generation, Long settingsRevision,
+                WidgetSelection selection) {
+            this.owner = owner; this.ticket = ticket; this.load = load; this.generation = generation;
+            this.settingsRevision = settingsRevision; this.selection = selection;
+        }
+    }
+    /** The authority committed launcher rows need for each widget's first delivery. */
+    private static final class WidgetDelivery {
+        final WidgetTicket authority;
+        long sequence;
+        WidgetDelivery(WidgetTicket authority, long sequence) { this.authority = authority; this.sequence = sequence; }
     }
     private static final class Lease {
         final String owner, connection, ticket, action, fetchTicket;

@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
@@ -268,6 +270,23 @@ void main() {
     );
     // Stored empty stays the user's explicit choice.
     expect(phoneWidgetPreferencesFromStoredIds([]).selectedIds, isEmpty);
+  });
+
+  test('a legacy read in flight cannot overwrite a newer empty save', () async {
+    const key = 'wardpulse.widget.selectedIds';
+    FlutterSecureStorage.setMockInitialValues({
+      key: jsonEncode([claudePlanRingId]),
+    });
+    const storage = FlutterSecureStorage();
+    final store = SecurePhoneWidgetPreferenceStore(storage: storage);
+    final legacy = store.read();
+    await store.write(const PhoneWidgetPreferences(selectedIds: []));
+    expect(
+      (await legacy).selectedIds,
+      migratePhoneWidgetSelectedIds([claudePlanRingId]),
+    );
+    expect(await storage.read(key: key), '[]');
+    expect((await store.read()).selectedIds, isEmpty);
   });
 
   test('phone widget catalog expands Claude windows and purchased meters', () {

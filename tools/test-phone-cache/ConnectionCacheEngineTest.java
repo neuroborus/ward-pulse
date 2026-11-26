@@ -1,8 +1,12 @@
 package app.wardpulse.watchsync;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -63,7 +67,8 @@ public final class ConnectionCacheEngineTest {
         claudePlanRetirement();
         failedClaudePlanRetirementFences();
         dataModeAuthority(); modePolicyWriteFailure(); dataModeFetchFencing(); legacyWatchRefreshAdmission();
-        waitingWearResendCapturesSettledMode(); widgetDeliveryRequiresCurrentMode();
+        waitingWearResendCapturesSettledMode(); widgetDeliveryRequiresCurrentMode(); widgetPublicationOrder();
+        widgetFirstDeliveryRequiresPublicationAuthority();
         recoveryPreferenceAdmission(); unrecordedRecoveriesSpanEngines();
         scopedCredentialAdmission(); scopedSnapshotMaintenance(); unscopedFetchLeavesModeAbsent();
         automaticOwnershipFollowsCredential(); watchSummaryArrivalOrder(); watchSummaryAdmissionFollowsCredential();
@@ -1134,6 +1139,312 @@ public final class ConnectionCacheEngineTest {
         check(Long.valueOf(3L).equals(switched.get().get("generation")), "The drained switch commits.");
         engine.deliverWidgetIfModeCurrent(install, 3L, () -> delivered.set("settled"));
         check("settled".equals(delivered.get()), "A current redraw after the switch settles reaches the launcher.");
+    }
+    static void widgetPublicationOrder() {
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(new Disk());
+        engine.initializeMode(false);
+        Map<String, Map<String, String>> all = new HashMap<>(); all.put(C, version(login(engine)));
+        Map<String, Long> eras = new HashMap<>();
+        Map<String, Map<String, Object>> payloads = new HashMap<>();
+        Map<String, String> empty = new HashMap<>();
+        long[] stored = {0};
+        // Headless starts before the foreground, whose snapshot is accepted first.
+        Map<String, Object> headless = engine.beginWidgetLoad(() -> stored[0]);
+        Map<String, Object> foreground = engine.beginWidgetLoad(() -> stored[0]);
+        long headlessLoad = (Long) headless.get("load"), foregroundLoad = (Long) foreground.get("load");
+        long revision = (Long) headless.get("settingsRevision");
+        check(engine.issueWidgetPublication("fg", foregroundLoad, 0L, revision, stored[0], all, eras, payloads, empty)
+            == null, "An unaccepted load takes no ticket.");
+        check(engine.acceptSnapshotLoad(foregroundLoad, 0L, all, eras, payloads, empty),
+            "The newer snapshot is accepted without a ticket.");
+        check(!engine.acceptSnapshotLoad(headlessLoad, 0L, all, eras, payloads, empty)
+            && engine.issueWidgetPublication("bg", headlessLoad, 0L, revision, stored[0], all, eras, payloads, empty)
+            == null, "A late older load cannot replace accepted input that issued no ticket.");
+        Long first = engine.issueWidgetPublication("fg", foregroundLoad, 0L, revision, stored[0],
+            all, eras, payloads, empty);
+        check(first != null && Boolean.TRUE.equals(
+            engine.commitWidgetPublication(first, 0L, () -> { stored[0] = first; return true; })),
+            "The accepted snapshot publishes.");
+        check(engine.markWidgetStale((Long) headless.get("observed"), 0L, () -> stored[0], ticket -> true) == null,
+            "A late headless failure cannot mark a newer publication stale.");
+        Long edit = engine.issueWidgetPublication("fg", foregroundLoad, 0L, revision, stored[0],
+            all, eras, payloads, empty);
+        check(edit != null && edit > first, "A slot edit re-tickets the still-owned snapshot.");
+        check(engine.commitWidgetPublication(first, 0L, () -> true) == null, "A superseded ticket cannot commit.");
+
+        // A failure while that ticket awaits its commit defers to it.
+        Map<String, Object> failing = engine.beginWidgetLoad(() -> stored[0]);
+        check(engine.markWidgetStale((Long) failing.get("observed"), 0L, () -> stored[0], ticket -> true) == null,
+            "A pending publication is not superseded by STALE.");
+        check(Boolean.TRUE.equals(engine.commitWidgetPublication(edit, 0L, () -> { stored[0] = edit; return true; })),
+            "The pending edit commits.");
+        check(engine.commitWidgetPublication(edit, 0L, () -> true) == null, "A ticket commits once.");
+
+        // A save that settles between issuance and commit retires the ticket.
+        Long saving = engine.issueWidgetPublication("fg", foregroundLoad, 0L, revision, stored[0],
+            all, eras, payloads, empty);
+        String save = engine.beginSurfaceSettingsWrite("foreground");
+        check(engine.beginWidgetLoad(() -> stored[0]).get("settingsRevision") == null, "A save in flight has no revision.");
+        check(engine.finishSurfaceSettingsWrite("headless", save) == null, "Only the saving engine finishes its save.");
+        Long saved = engine.finishSurfaceSettingsWrite("foreground", save);
+        check(saved != null && saved != revision, "A finished save reports its settled revision.");
+        check(engine.commitWidgetPublication(saving, 0L, () -> true) == null,
+            "A save settled after issuance retires the ticket.");
+        check(engine.issueWidgetPublication("fg", foregroundLoad, 0L, revision, stored[0],
+            all, eras, payloads, empty) == null, "A finished save retires an earlier tagged read.");
+        check(engine.issueWidgetPublication("fg", foregroundLoad, 0L, saved, stored[0],
+            all, eras, payloads, empty) != null, "The saved revision re-tickets.");
+
+        // A credential change between issuance and commit retires the ticket.
+        Long retiring = engine.issueWidgetPublication("fg", foregroundLoad, 0L, saved, stored[0],
+            all, eras, payloads, empty);
+        login(engine);
+        check(retiring != null && engine.commitWidgetPublication(retiring, 0L, () -> true) == null,
+            "A retired source cannot commit.");
+
+        Map<String, Object> failed = engine.beginWidgetLoad(() -> stored[0]);
+        check(Long.valueOf(stored[0]).equals(failed.get("observed")), "A load observes the committed publication.");
+        long[] marked = {0};
+        check(Boolean.TRUE.equals(engine.markWidgetStale((Long) failed.get("observed"), 0L, () -> stored[0],
+            ticket -> { marked[0] = ticket; return true; })) && marked[0] > retiring,
+            "A failure marks the rows it observed under a fresh ticket.");
+        stored[0] = marked[0];
+        check(engine.markWidgetStale(stored[0], 0L, () -> stored[0], ticket -> null) == null
+            && engine.reserveWidgetPublication("fixture", stored[0]) == marked[0] + 1, "An empty mark consumes no ticket.");
+        check(engine.markWidgetStale(stored[0], 0L, () -> stored[0], ticket -> true) == null,
+            "A reserved fixture write is pending.");
+        engine.detach("fixture");
+        check(Boolean.TRUE.equals(engine.markWidgetStale(stored[0], 0L, () -> stored[0], ticket -> true)),
+            "Detach releases the engine's pending ticket.");
+
+        // A ticket abandoned before its commit attempt (mode drain, staging failure) is spent.
+        Map<String, Object> owned = engine.beginWidgetLoad(() -> stored[0]);
+        long dropped = engine.reserveWidgetPublication("fg", stored[0]);
+        engine.retireWidgetPublication("bg", dropped);
+        check(engine.markWidgetStale((Long) owned.get("observed"), 0L, () -> stored[0], ticket -> true) == null,
+            "Another engine cannot spend the pending ticket.");
+        engine.retireWidgetPublication("fg", dropped);
+        check(Boolean.TRUE.equals(engine.markWidgetStale((Long) owned.get("observed"), 0L, () -> stored[0],
+            ticket -> { stored[0] = ticket; return true; })),
+            "A failure that still owns the committed rows marks them after an abandoned ticket.");
+        check(engine.commitWidgetPublication(dropped, 0L, () -> true) == null, "A retired ticket cannot commit.");
+
+        // A restarted process continues after the stored ticket.
+        ConnectionCacheEngine restarted = new ConnectionCacheEngine(new Disk());
+        restarted.initializeMode(false);
+        Map<String, Object> resumed = restarted.beginWidgetLoad(() -> 41L);
+        long resumedLoad = (Long) resumed.get("load"), settled = (Long) resumed.get("settingsRevision");
+        check(Long.valueOf(41L).equals(resumed.get("observed")), "A restart observes the stored ticket.");
+        check(restarted.acceptSnapshotLoad(resumedLoad, 0L, null, eras, payloads, empty), "A restart accepts.");
+        Long next = restarted.issueWidgetPublication("fg", resumedLoad, 0L, settled, 41L, null, eras, payloads, empty);
+        check(Long.valueOf(42L).equals(next), "A restart issues after the stored ticket.");
+        check(!restarted.acceptSnapshotLoad(99L, 0L, null, eras, payloads, empty), "An unissued load cannot be accepted.");
+
+        switchMode(restarted, "foreground", "mock");
+        check(restarted.issueWidgetPublication("fg", resumedLoad, 0L, settled, 42L, null, eras, payloads, empty)
+            == null && restarted.commitWidgetPublication(next, 0L, () -> true) == null
+            && restarted.markWidgetStale(42L, 0L, () -> 42L, ticket -> true) == null,
+            "A mode switch retires tickets of the outgoing generation.");
+
+        String abandoned = restarted.beginSurfaceSettingsWrite("ui");
+        restarted.detach("ui");
+        Map<String, Object> released = restarted.beginWidgetLoad(() -> 42L);
+        long releasedLoad = (Long) released.get("load");
+        check(abandoned != null && released.get("settingsRevision") != null
+            && restarted.acceptSnapshotLoad(releasedLoad, 1L, null, eras, payloads, empty)
+            && restarted.issueWidgetPublication("fg", releasedLoad, 1L, (Long) released.get("settingsRevision"),
+                42L, null, eras, payloads, empty) != null,
+            "Detach releases the engine's settings save.");
+    }
+    /** Accepts a new load and commits its launcher rows at the settled revision. */
+    static long commitWidget(ConnectionCacheEngine engine, long[] stored, Map<String, Map<String, String>> versions) {
+        return commitWidget(engine, stored, versions, 0L);
+    }
+    static long commitWidget(ConnectionCacheEngine engine, long[] stored, Map<String, Map<String, String>> versions,
+            long generation) {
+        Map<String, Long> eras = new HashMap<>();
+        Map<String, Map<String, Object>> payloads = new HashMap<>();
+        Map<String, String> empty = new HashMap<>();
+        Map<String, Object> load = engine.beginWidgetLoad(() -> stored[0]);
+        long ordinal = (Long) load.get("load");
+        check(engine.acceptSnapshotLoad(ordinal, generation, versions, eras, payloads, empty), "The load is accepted.");
+        Long ticket = engine.issueWidgetPublication("fg", ordinal, generation, (Long) load.get("settingsRevision"),
+            stored[0], versions, eras, payloads, empty);
+        check(ticket != null && Boolean.TRUE.equals(
+            engine.commitWidgetPublication(ticket, generation, () -> { stored[0] = ticket; return true; })),
+            "The accepted load commits its rows.");
+        return ticket;
+    }
+    /** The durable launcher rows a widget refresh reads: stored sequence and the widgets showing them. */
+    static final class LauncherRows {
+        final long[] stored = {0};
+        final Set<Integer> shown = new HashSet<>();
+        final List<String> delivered = new ArrayList<>();
+        // Widgets refused a first frame of the stored rows; they are owed a fresh publication.
+        final Set<Integer> owed = new HashSet<>();
+        // The durable flags of a confirmed full publication of the saved settings that no newer
+        // accepted load superseded.
+        boolean complete;
+        /** A ticketed commit empties the durable set of widgets showing the stored rows. */
+        long commit(ConnectionCacheEngine engine, Map<String, Map<String, String>> versions) {
+            return commit(engine, versions, 0L);
+        }
+        long commit(ConnectionCacheEngine engine, Map<String, Map<String, String>> versions, long generation) {
+            long ticket = commitWidget(engine, stored, versions, generation);
+            shown.clear();
+            owed.clear();
+            complete = true;
+            return ticket;
+        }
+        /**
+         * A frame rendered for [widget] from the rows stored under [sequence], showing metric rows
+         * when [rows]; dispatch was held until now.
+         */
+        void dispatch(ConnectionCacheEngine engine, String install, long generation, int widget, long sequence,
+                boolean rows) {
+            engine.deliverWidgetIfCurrent(install, generation, sequence, rows, () -> stored[0],
+                () -> shown.contains(widget), () -> complete, () -> {
+                    delivered.add(sequence + ":" + widget);
+                    owed.remove(widget);
+                    if (rows) shown.add(widget);
+                }, () -> owed.add(widget));
+        }
+        List<String> since(int index) { return delivered.subList(index, delivered.size()); }
+    }
+    static void widgetFirstDeliveryRequiresPublicationAuthority() {
+        Disk disk = new Disk(), modes = new Disk();
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(disk, modes, () -> 0L, true);
+        String install = (String) engine.initializeMode(false).get("installId");
+        Map<String, Map<String, String>> all = new HashMap<>(); all.put(C, version(login(engine)));
+        LauncherRows launcher = new LauncherRows();
+
+        long first = launcher.commit(engine, all);
+        launcher.dispatch(engine, install, 0L, 1, first, true);
+        String save = engine.beginSurfaceSettingsWrite("ui");
+        launcher.dispatch(engine, install, 0L, 2, first, true);
+        engine.finishSurfaceSettingsWrite("ui", save);
+        launcher.dispatch(engine, install, 0L, 2, first, true);
+        check(launcher.since(0).equals(Arrays.asList(first + ":1"))
+            && launcher.owed.equals(new HashSet<>(Arrays.asList(2))),
+            "A settings save retires another widget's first frame of the committed rows; it is owed one.");
+        launcher.dispatch(engine, install, 0L, 1, first, true);
+        check(launcher.since(1).equals(Arrays.asList(first + ":1")),
+            "A widget that already shows the rows keeps redrawing them.");
+
+        long replacement = launcher.commit(engine, all);
+        launcher.dispatch(engine, install, 0L, 2, first, true);
+        launcher.dispatch(engine, install, 0L, 1, replacement, true);
+        launcher.dispatch(engine, install, 0L, 2, replacement, true);
+        check(launcher.since(2).equals(Arrays.asList(replacement + ":1", replacement + ":2")),
+            "A current replacement reaches every widget; the replaced rows reach none.");
+
+        // A newer load is accepted while its own replacement has not committed.
+        long superseded = launcher.commit(engine, all);
+        launcher.dispatch(engine, install, 0L, 1, superseded, true);
+        long newer = (Long) engine.beginWidgetLoad(() -> launcher.stored[0]).get("load");
+        Map<String, Long> eras = new HashMap<>();
+        Map<String, Map<String, Object>> payloads = new HashMap<>();
+        Map<String, String> empty = new HashMap<>();
+        check(engine.acceptSnapshotLoad(newer, 0L, all, eras, payloads, empty), "The newer load is accepted.");
+        int accepted = launcher.delivered.size();
+        launcher.dispatch(engine, install, 0L, 2, superseded, true);
+        launcher.dispatch(engine, install, 0L, 1, superseded, true);
+        check(launcher.stored[0] == superseded && launcher.since(accepted).equals(Arrays.asList(superseded + ":1"))
+            && launcher.owed.equals(new HashSet<>(Arrays.asList(2))),
+            "A newer accepted load retires another widget's first frame, not a retained redraw.");
+
+        long owned = launcher.commit(engine, all);
+        // Ingress decodes a fresh selection per message; the reconnect's proof leaves the claimed one intact.
+        Map<String, Map<String, String>> reconnected = new HashMap<>(); reconnected.put(C, version(login(engine)));
+        check(!engine.validAll(all) && engine.validAll(reconnected),
+            "The reconnect retires the owned rows' credential evidence; its own evidence is current.");
+        check(launcher.stored[0] == owned, "The source retires with the same stored sequence.");
+        int retired = launcher.delivered.size();
+        launcher.dispatch(engine, install, 0L, 1, owned, true);
+        launcher.dispatch(engine, install, 0L, 2, owned, true);
+        check(engine.markWidgetStale(owned, 0L, () -> launcher.stored[0],
+            ticket -> { launcher.stored[0] = ticket; return true; }) != null, "A failure marks the observed rows stale.");
+        launcher.dispatch(engine, install, 0L, 1, launcher.stored[0], true);
+        check(launcher.since(retired).isEmpty(), "Rows from a retired source, with or without STALE, reach no widget first.");
+
+        // A settings save retires the rows, then the process dies before widget 2's first frame.
+        long durable = launcher.commit(engine, reconnected);
+        launcher.dispatch(engine, install, 0L, 1, durable, true);
+        engine.finishSurfaceSettingsWrite("ui", engine.beginSurfaceSettingsWrite("ui"));
+        ConnectionCacheEngine cold = new ConnectionCacheEngine(disk, modes, () -> 0L, true);
+        check(install.equals(cold.initializeMode(false).get("installId")), "The restart keeps the install.");
+        int restarted = launcher.delivered.size();
+        launcher.dispatch(cold, install, 0L, 2, durable, true);
+        launcher.dispatch(cold, install, 0L, 1, durable, true);
+        check(launcher.since(restarted).equals(Arrays.asList(durable + ":1")),
+            "After a restart, rows whose authority is gone reach only a widget that already shows them.");
+        long rebuilt = launcher.commit(cold, null);
+        launcher.dispatch(cold, install, 0L, 2, rebuilt, true);
+        check(launcher.since(restarted + 1).equals(Arrays.asList(rebuilt + ":2")), "The next publication reaches it.");
+
+        // A no-fit frame shows no metric rows, so it grants no retained redraw of them.
+        long tiny = launcher.commit(cold, null);
+        int fitted = launcher.delivered.size();
+        launcher.dispatch(cold, install, 0L, 3, tiny, false);
+        cold.finishSurfaceSettingsWrite("ui", cold.beginSurfaceSettingsWrite("ui"));
+        launcher.dispatch(cold, install, 0L, 3, tiny, false);
+        launcher.dispatch(cold, install, 0L, 3, tiny, true);
+        check(launcher.since(fitted).equals(Arrays.asList(tiny + ":3", tiny + ":3"))
+            && launcher.owed.equals(new HashSet<>(Arrays.asList(3))),
+            "Resizing a no-fit widget after a save cannot reveal the retired rows; it is owed a frame.");
+
+        // Widget 1 shows the outgoing generation's latest rows, widget 2 missed them; nothing replaces them.
+        long outgoing = launcher.commit(cold, null);
+        launcher.dispatch(cold, install, 0L, 1, outgoing, true);
+        switchMode(cold, "ui", "mock");
+        int switched = launcher.delivered.size();
+        launcher.dispatch(cold, install, 0L, 2, outgoing, true);
+        launcher.dispatch(cold, install, 1L, 1, outgoing, false);
+        launcher.dispatch(cold, install, 1L, 2, outgoing, false);
+        check(launcher.since(switched).equals(Arrays.asList(outgoing + ":1", outgoing + ":2")),
+            "The incoming generation's empty frame clears the outgoing rows from every widget.");
+
+        // Mock rows commit, then the process restarts before widget 2's first frame.
+        long sample = launcher.commit(cold, null, 1L);
+        launcher.dispatch(cold, install, 1L, 1, sample, true);
+        ConnectionCacheEngine relaunched = new ConnectionCacheEngine(disk, modes, () -> 0L, true);
+        check("mock".equals(relaunched.initializeMode(false).get("mode")), "The restart keeps Mock.");
+        int renewed = launcher.delivered.size();
+        launcher.dispatch(relaunched, install, 1L, 2, sample, true);
+        check(launcher.since(renewed).equals(Arrays.asList(sample + ":2")),
+            "A launcher-only redraw after a restart renews the confirmed synthetic rows locally.");
+        // A save cleared the durable flag before the restart: the rows no longer represent the settings.
+        launcher.complete = false;
+        launcher.dispatch(relaunched, install, 1L, 3, sample, true);
+        launcher.complete = true;
+        // A newer Mock load's retirement of the renewal fails on disk: the load is not accepted, so
+        // after a restart the still-current rows renew for an undelivered widget.
+        Map<String, Object> refusal = relaunched.beginWidgetLoad(() -> launcher.stored[0]);
+        long refused = (Long) refusal.get("load");
+        check(!relaunched.acceptSnapshotLoad(refused, 1L, null, new HashMap<>(), new HashMap<String, Map<String, Object>>(),
+            new HashMap<>(), () -> false) && relaunched.issueWidgetPublication("fg", refused, 1L,
+                (Long) refusal.get("settingsRevision"), launcher.stored[0], null, new HashMap<>(),
+                new HashMap<String, Map<String, Object>>(), new HashMap<>()) == null,
+            "An unconfirmed renewal retirement refuses the acceptance and its ticket.");
+        ConnectionCacheEngine unconfirmed = new ConnectionCacheEngine(disk, modes, () -> 0L, true);
+        check("mock".equals(unconfirmed.initializeMode(false).get("mode")), "The restart keeps Mock.");
+        launcher.dispatch(unconfirmed, install, 1L, 5, sample, true);
+        check(launcher.since(renewed + 1).equals(Arrays.asList(sample + ":5")),
+            "Rows no confirmed acceptance superseded still renew after a restart.");
+        // A retried newer Mock load is accepted before its replacement commits; its acceptance
+        // durably retires the renewal, then the process restarts again with the same stored rows.
+        long reload = (Long) unconfirmed.beginWidgetLoad(() -> launcher.stored[0]).get("load");
+        check(unconfirmed.acceptSnapshotLoad(reload, 1L, null, new HashMap<>(), new HashMap<String, Map<String, Object>>(),
+            new HashMap<>(), () -> { launcher.complete = false; return true; }), "The retried retirement admits the Mock load.");
+        launcher.dispatch(unconfirmed, install, 1L, 4, sample, true);
+        ConnectionCacheEngine retiredRenewal = new ConnectionCacheEngine(disk, modes, () -> 0L, true);
+        check("mock".equals(retiredRenewal.initializeMode(false).get("mode")), "The second restart keeps Mock.");
+        launcher.dispatch(retiredRenewal, install, 1L, 4, sample, true);
+        launcher.dispatch(retiredRenewal, install, 1L, 1, sample, true);
+        check(launcher.stored[0] == sample && launcher.since(renewed + 2).equals(Arrays.asList(sample + ":1"))
+            && launcher.owed.equals(new HashSet<>(Arrays.asList(3, 4))),
+            "Renewal needs the durable full publication that no acceptance superseded before or after the restart;"
+                + " a retained redraw continues.");
     }
     static void recoveryPreferenceAdmission() {
         ConnectionCacheEngine engine = new ConnectionCacheEngine(new Disk());

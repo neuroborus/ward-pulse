@@ -218,7 +218,7 @@ class WardPulseWatchSyncPlugin : FlutterPlugin, MethodChannel.MethodCallHandler 
 
 /** A report or failure's native selection proof, in `validAll` argument form. */
 @Suppress("UNCHECKED_CAST")
-private class SelectionProof(selection: Map<*, *>) {
+internal class SelectionProof(selection: Map<*, *>) {
     val versions = selection["versions"] as? Map<String, Map<String, String>> ?: emptyMap()
     val attemptClockEras =
         (selection["attemptClockEras"] as? Map<String, Number>)?.mapValues { it.value.toLong() }.orEmpty()

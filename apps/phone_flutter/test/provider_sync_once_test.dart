@@ -67,6 +67,31 @@ void main() {
     },
   );
   test(
+    'setup failure marks only the rows claimed before setup began',
+    () async {
+      final calls = _bindSurfaces(
+        replies: {
+          'beginLoad': {
+            'load': 2,
+            'settingsRevision': 0,
+            'observed': 4,
+            'established': true,
+          },
+        },
+      );
+      final observed = <int?>[];
+      await providerSyncOnce(
+        load: (_) async => throw StateError('Synthetic setup failure'),
+        markWidgetStale: ({required isCurrent}) async {
+          observed.add(PhoneWidgetPublicationInput.current?.observed);
+        },
+        logFailure: (_, _, _) {},
+      );
+      expect(calls, ['beginLoad']);
+      expect(observed, [4]);
+    },
+  );
+  test(
     'both registered headless tasks retain their automatic origin',
     () async {
       for (final entry
@@ -1604,6 +1629,118 @@ void main() {
         expect(poll.whollySkipped, isTrue);
       },
     );
+    // The recheck after acceptance decides: a widget refused its first frame
+    // after the claim is owed one, and one framed since needs none.
+    for (final (established, framed) in [
+      (false, false),
+      (true, true),
+      (true, false),
+      (false, true),
+    ]) {
+      final quiet = framed;
+      final effect = switch ((established, framed)) {
+        (true, true) => 'stays quiet',
+        (false, true) => 'stays quiet once a widget was framed during the load',
+        (true, false) => 'publishes for a widget still owed a frame',
+        (false, false) => 'publishes the retained snapshot',
+      };
+      test('a cadence-denied upgrade $effect', () async {
+        const id = ProviderConnections.cursorPlan;
+        final secure = FakeSecureStorage();
+        await SecureProviderCredentialStore(
+          storage: secure,
+          platform: bridge.platform('ui'),
+        ).writeSecret(id, 'synthetic-session');
+        final initial = DateTime.utc(2026, 1, 1);
+        Future<void> setClock(DateTime at) async {
+          await bridge.invoke('test', 'setClock', {
+            'value': at.millisecondsSinceEpoch,
+          });
+        }
+
+        await SecurePhoneWidgetPreferenceStore().write(
+          const PhoneWidgetPreferences(selectedIds: [cursorOwnPoolId]),
+        );
+        final capture = _SurfaceCapture();
+        final replies = <String, Object?>{};
+        final calls = _bindSurfaces(capture: capture, replies: replies);
+        final failures = <(String, Object)>[];
+        var requests = 0;
+        final poll = AutomaticPollContext();
+        Future<void> run(String engine, {AutomaticPollContext? context}) {
+          Future<void> sync() => providerSyncOnce(
+            load:
+                (owner) => loadProviderSyncWork(
+                  owner,
+                  createLive:
+                      () => PhoneLiveBindings.create(
+                        secureStorage: secure,
+                        cachePlatform: bridge.platform(engine),
+                        cursorClient: CursorPlanClient(
+                          http: ProviderReportingHttp(
+                            transport: _CursorPlanTransport(
+                              40,
+                              onRequest: () => requests++,
+                            ),
+                          ),
+                        ),
+                      ),
+                  readWindows: (_) => const [],
+                ),
+            logFailure: (step, error, _) => failures.add((step, error)),
+          );
+          return context == null ? sync() : context.run(sync);
+        }
+
+        await setClock(initial);
+        await run('v9');
+        final provided = requests;
+        expect(provided, greaterThan(0));
+        expect(capture.widgetData['row_0_percent'], '60% left');
+
+        // v10 starts with the v9 untagged rows and no publication record.
+        capture.widgetData
+          ..clear()
+          ..addAll(_priorWidgetRows);
+        capture.redraws.clear();
+        calls.clear();
+        replies.addAll({
+          'beginLoad': {
+            'load': 1,
+            'settingsRevision': 0,
+            'observed': 0,
+            'established': established,
+          },
+          'accept': true,
+          'established': framed,
+          'issue': 1,
+        });
+        await setClock(initial.add(const Duration(minutes: 1)));
+        await run('v10', context: poll);
+        expect(poll.whollySkipped, isTrue);
+        expect(requests, provided);
+        expect(failures, isEmpty);
+        if (quiet) {
+          expect(calls, ['beginLoad', 'accept', 'established']);
+          expect(capture.widgetData, _priorWidgetRows);
+          expect(capture.redraws, isEmpty);
+        } else {
+          expect(calls, [
+            'beginLoad',
+            'accept',
+            'established',
+            'issue',
+            'publish',
+            'updateWidget',
+          ]);
+          expect(capture.widgetData['row_0_percent'], '60% left');
+          expect(capture.widgetData['row_count'], 1);
+          expect(capture.widgetData['stale'], '0');
+          expect(capture.widgetData['ticket'], 1);
+          expect(capture.redraws, [capture.widgetData]);
+        }
+      });
+    }
     for (final change in ['kept', 'removed', 'replaced']) {
       final effect = change == 'kept' ? 'marks rows STALE' : 'skips STALE';
       test('late Live failure with $change credentials $effect', () async {
@@ -3390,7 +3527,20 @@ final class _HeldRepository extends DashboardRepository {
 }
 
 /// Records watch and widget plugin calls; both succeed.
-List<String> _bindSurfaces({_SurfaceCapture? capture}) {
+/// Launcher ordering replies; a method without one has no native authority.
+const _orderingMethods = {
+  'beginLoad',
+  'accept',
+  'established',
+  'issue',
+  'beginSettingsWrite',
+  'finishSettingsWrite',
+};
+
+List<String> _bindSurfaces({
+  _SurfaceCapture? capture,
+  Map<String, Object?> replies = const {},
+}) {
   final output = capture ?? _SurfaceCapture();
   final calls = <String>[];
   final messenger =
@@ -3402,7 +3552,12 @@ List<String> _bindSurfaces({_SurfaceCapture? capture}) {
   ];
   for (final channel in channels) {
     messenger.setMockMethodCallHandler(channel, (call) async {
+      if (!replies.containsKey(call.method) &&
+          _orderingMethods.contains(call.method)) {
+        throw MissingPluginException();
+      }
       calls.add(call.method);
+      if (replies.containsKey(call.method)) return replies[call.method];
       if (call.method == 'syncWatchSummary') {
         output.watchSummaries.add(
           jsonDecode((call.arguments as Map)['payload'] as String)
