@@ -2,8 +2,26 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
+import 'package:ward_pulse_phone/sync/data_mode.dart';
+
+/// Answers the default Wear service's startup claim as Android does when no
+/// launch tap is pending. The app awaits this reply before its first load, and
+/// an unmocked platform reply cannot arrive while a widget test runs in fake
+/// time.
+void answerNoPendingWatchRefresh() {
+  const channel = MethodChannel('app.wardpulse/watch_refresh');
+  final messenger =
+      TestWidgetsFlutterBinding.ensureInitialized().defaultBinaryMessenger;
+  messenger.setMockMethodCallHandler(channel, (call) async {
+    expect(call.method, 'watchRefreshChannelReady');
+    return null;
+  });
+  addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+}
 
 /// Ordinary map storage and the real Java engine: no test-only stronger CAS.
 final class NativeCacheTestBridge {
@@ -14,14 +32,22 @@ final class NativeCacheTestBridge {
         .listen((line) {
           final fields = line.split('\t');
           final completion = _pending.remove(int.parse(fields[0]))!;
+          final value = jsonDecode(utf8.decode(base64Decode(fields[2])));
           if (fields[1] == 'error') {
-            completion.completeError(
-              StateError('Test connection storage unavailable.'),
-            );
+            if (value case {
+              'code': final String code,
+              'details': final details,
+            }) {
+              completion.completeError(
+                PlatformException(code: code, details: details),
+              );
+            } else {
+              completion.completeError(
+                StateError('Test connection storage unavailable.'),
+              );
+            }
           } else {
-            completion.complete(
-              jsonDecode(utf8.decode(base64Decode(fields[2]))),
-            );
+            completion.complete(value);
           }
         });
     _process.stderr.transform(utf8.decoder).listen(_stderr.write);
@@ -117,6 +143,7 @@ final class FakeSecureStorage extends FlutterSecureStorage {
   bool failRead = false;
   bool failWrite = false;
   Future<void> Function(String)? beforeWrite;
+  Future<void> Function(String)? beforeRead;
   Future<void> Function(String)? beforeDelete;
   void Function(String, Future<String?>)? onRead;
   @override
@@ -142,11 +169,22 @@ final class FakeSecureStorage extends FlutterSecureStorage {
     AppleOptions? mOptions,
     WindowsOptions? wOptions,
   }) {
-    final result = Future<String?>.sync(() {
+    String? stored() {
       if (failRead || key == failReadKey)
         throw StateError('Sanitized storage read failure.');
       return values[key];
-    });
+    }
+
+    // A held read returns what was stored when it started.
+    final hold = beforeRead;
+    final read = Future<String?>.sync(stored);
+    final result =
+        hold == null
+            ? read
+            : read.then((value) async {
+              await hold(key);
+              return value;
+            });
     onRead?.call(key, result);
     return result;
   }
@@ -202,5 +240,41 @@ final class ObservingCachePlatform implements ConnectionCachePlatform {
     final result = await delegate.invoke(method, arguments);
     await onComplete?.call(method, arguments, result);
     return result;
+  }
+}
+
+/// Holds one effect request before its same-generation lease is granted.
+final class HeldModeAdmission implements ConnectionCachePlatform {
+  HeldModeAdmission({this.skip = 0});
+
+  final int skip;
+  final entered = Completer<void>();
+  final release = Completer<void>();
+  var _admissions = 0;
+
+  DataModeOperation operation() => DataModeOperation(
+    authority: MethodChannelDataModeAuthority(platform: this),
+    state: const DataModeState(
+      installId: 'install',
+      mode: DataMode.live,
+      generation: 0,
+    ),
+    requestId: 'live-operation',
+  );
+
+  @override
+  Future<Object?> invoke(String method, Map<String, Object?> arguments) async {
+    switch (method) {
+      case 'enterEffect':
+        if (_admissions++ == skip) {
+          entered.complete();
+          await release.future;
+        }
+        return 'effect-lease';
+      case 'exitEffect':
+        return null;
+      default:
+        throw StateError('Unexpected mode request.');
+    }
   }
 }

@@ -8,6 +8,8 @@ import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_theme.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 
+import 'connection_cache_test_support.dart';
+
 void main() {
   // FontLoader registration lasts for the engine, so keep this case isolated.
   testWidgets('full navigation labels fit at 360dp and retain 411dp layout', (
@@ -296,6 +298,7 @@ void main() {
       return measurements;
     }
 
+    answerNoPendingWatchRefresh();
     const app = WardPulseApp(repository: NoProvidersDashboardRepository());
     await tester.pumpWidget(app);
     await tester.pumpAndSettle();

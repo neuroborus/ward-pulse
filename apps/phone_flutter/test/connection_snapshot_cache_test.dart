@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/sync/data_mode.dart';
 import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 import 'package:ward_pulse_phone/app/ward_pulse_app.dart';
 import 'package:ward_pulse_phone/dashboard/apply_alert_settings.dart';
@@ -16,6 +17,7 @@ import 'package:ward_pulse_phone/dashboard/merging_connection_repository.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 import 'package:ward_pulse_phone/providers/codex_account_service.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
+import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_logger.dart';
 import 'package:ward_pulse_phone/sync/automatic_poll.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
@@ -118,6 +120,104 @@ void main() {
   );
   AutomaticPollContext automatic() => AutomaticPollContext(
     readInterval: () async => const Duration(minutes: 5),
+  );
+
+  test(
+    'a positive mode reply delivered after ABA cannot seed the RAM fallback',
+    () async {
+      const id = ProviderConnections.openAiPlatform;
+      final owner = bridge.platform('foreground');
+      final storage = SecureProviderCredentialStore(
+        storage: secure,
+        platform: owner,
+      );
+      await storage.writeSecret(id, 'synthetic-reporting-key');
+      await bridge.invoke('test', 'setClock', {
+        'value': firstAt.millisecondsSinceEpoch,
+      });
+
+      final observed = ObservingCachePlatform(owner);
+      // The first claimant imports the absent Debug choice from this store.
+      final legacy = SecureDebugDataPreferenceStore(
+        storage: FakeSecureStorage(),
+      );
+      final foreground = MethodChannelDataModeAuthority(
+        platform: observed,
+        legacy: legacy,
+      );
+      final switcher = MethodChannelDataModeAuthority(
+        platform: bridge.platform('switcher'),
+        legacy: legacy,
+      );
+      final operation = await foreground.begin();
+      final reply = Completer<void>();
+      final release = Completer<void>();
+      var report = _snapshot('openai', id.storageKey, firstAt, 20);
+      var loads = 0;
+      final repository = owned('foreground', id.storageKey, (_) async {
+        loads++;
+        return report.toJsonString();
+      }, cachePlatform: observed);
+      expect(
+        (await operation.run(repository.load)).todayTotal.spent?.minorUnits,
+        20,
+      );
+
+      // Prove the previously accepted RAM row survives as well as the disk row.
+      report = _snapshot('openai', id.storageKey, nextAt, 40);
+      await bridge.invoke('test', 'setClock', {
+        'value': nextAt.millisecondsSinceEpoch,
+      });
+      await bridge.invoke('test', 'failCommit', {'value': true});
+      expect(
+        (await operation.run(repository.load)).todayTotal.spent?.minorUnits,
+        40,
+      );
+
+      final lateAt = nextAt.add(const Duration(minutes: 1));
+      report = _snapshot('openai', id.storageKey, lateAt, 70);
+      await bridge.invoke('test', 'setClock', {
+        'value': lateAt.millisecondsSinceEpoch,
+      });
+      var failedWrite = false;
+      var selected = false;
+      observed.onComplete = (method, arguments, result) async {
+        if (method == 'writeSnapshot' && result is Map) {
+          failedWrite = result['status'] == 'storageFailure';
+        }
+        if (method == 'validAll' && result == true && failedWrite)
+          selected = true;
+        if (method == 'operationCurrent' &&
+            result == true &&
+            selected &&
+            !reply.isCompleted) {
+          reply.complete();
+          await release.future;
+        }
+      };
+      final pending = CapturedDashboardLoad.capture(
+        () => operation.run(repository.load),
+      );
+      try {
+        await Future.any([
+          reply.future,
+          pending.then(
+            (_) => fail('Refresh did not reach positive mode validation.'),
+          ),
+        ]);
+        await switcher.switchTo(DataMode.mock);
+        await switcher.switchTo(DataMode.live);
+      } finally {
+        release.complete();
+        await pending;
+        await bridge.invoke('test', 'failCommit', {'value': false});
+      }
+      expect((await pending).loadException, isA<DashboardLoadException>());
+      final cacheOnly = await foreground.begin(cacheOnly: true);
+      final retained = await cacheOnly.run(repository.load);
+      expect(retained.todayTotal.spent?.minorUnits, 40);
+      expect(loads, 3);
+    },
   );
 
   group('snapshot clock ordering', () {
@@ -3075,16 +3175,17 @@ void main() {
           firstCodex.accounts.single.accountId,
         );
         expect(wake.booked.last, earlyReset);
-        // Demo cleanup preserves the qualified sibling and cannot establish live history.
+        // Synthetic work preserves qualified sibling history and its wake.
         final bookings = List<DateTime>.of(wake.booked);
-        await syncPlanRecoveries(
-          DashboardSnapshot.empty(generatedAt: at),
-          store,
-          notifier,
-          wake,
-          mockData: true,
-          isCurrent: () async => true,
-          rethrowFailures: true,
+        final demo = await MemoryDataModeAuthority(mode: DataMode.demo).begin();
+        await demo.run(
+          () => syncPlanRecoveries(
+            DashboardSnapshot.empty(generatedAt: at),
+            store,
+            notifier,
+            wake,
+            rethrowFailures: true,
+          ),
         );
         expect(
           (await store.read()).single.accountId,
@@ -4013,6 +4114,7 @@ void main() {
         unawaited(
           loading.then<void>((_) {}).onError<DashboardLoadException>((_, _) {}),
         );
+        answerNoPendingWatchRefresh();
         await tester.pumpWidget(
           WardPulseApp(
             repository: _HeldDashboardRepository(loading),

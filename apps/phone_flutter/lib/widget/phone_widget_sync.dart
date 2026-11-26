@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:home_widget/home_widget.dart';
 
 import '../dashboard/dashboard_models.dart';
+import '../sync/data_mode.dart';
 import 'phone_widget_payload.dart';
 import 'phone_widget_preferences.dart';
 
@@ -131,24 +132,25 @@ final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
     if (!await isCurrent()) {
       return;
     }
-    final saved = await _publication.invokeMethod<bool>('markStale');
+    final operation = DataModeOperation.current;
+    bool? saved;
+    if (!await DataModeOperation.guardCurrent(() async {
+      saved = await _publication.invokeMethod<bool>(
+        'markStale',
+        operation?.fetchArguments,
+      );
+    }))
+      return;
     if (saved == null) {
       return;
     }
-    if (!saved) {
+    if (saved != true) {
       throw StateError('Could not save widget stale status.');
     }
     if (!await isCurrent()) {
       return;
     }
-    final updated = await HomeWidget.updateWidget(
-      name: phoneWidgetProviderName,
-      androidName: phoneWidgetProviderName,
-      qualifiedAndroidName: phoneWidgetQualifiedAndroidName,
-    );
-    if (updated != true) {
-      throw StateError('Could not redraw the stale widget.');
-    }
+    await DataModeOperation.guardCurrent(_redraw);
   }
 
   @override
@@ -202,13 +204,22 @@ final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
     if (!await isCurrent()) {
       return;
     }
-    final saved = await _publication.invokeMethod<bool>('publish', publication);
-    if (saved != true) {
-      throw StateError('Could not save widget publication.');
-    }
+    final operation = DataModeOperation.current;
+    if (!await DataModeOperation.guardCurrent(() async {
+      final saved = await _publication.invokeMethod<bool>('publish', {
+        ...publication,
+        ...?operation?.fetchArguments,
+      });
+      if (saved != true) throw StateError('Could not save widget publication.');
+    }))
+      return;
     if (!await isCurrent()) {
       return;
     }
+    await DataModeOperation.guardCurrent(_redraw);
+  }
+
+  static Future<void> _redraw() async {
     final updated = await HomeWidget.updateWidget(
       name: phoneWidgetProviderName,
       androidName: phoneWidgetProviderName,

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../providers/connection_lifecycle.dart';
 import '../settings/debug_data_preferences.dart';
@@ -60,20 +61,23 @@ final class DataModeRetired extends StateError {
   DataModeRetired() : super('Data mode changed.');
 }
 
-/// A switch committed, but a drained OAuth rotation could not be stored.
-final class DataModeUnresolvedStorage extends StateError {
-  DataModeUnresolvedStorage(this.state)
-    : super('Data mode changed with unresolved account storage.');
+/// The old mode remains authoritative. A drained account write may also have failed.
+final class DataModeWriteFailure extends StateError {
+  DataModeWriteFailure({required this.unresolvedStorageFailure})
+    : super('Could not save data mode.');
 
-  final DataModeState state;
+  final bool unresolvedStorageFailure;
 }
 
 /// One operation's view of the mode authority.
 abstract interface class DataModeAuthority {
   Future<DataModeState> read();
 
-  /// Captures the current mode; throws [DataModeRetired] while a switch drains.
-  Future<DataModeOperation> begin({bool cacheOnly = false});
+  /// Captures the current mode, optionally waiting for a draining switch.
+  Future<DataModeOperation> begin({
+    bool cacheOnly = false,
+    bool waitForSwitch = false,
+  });
 
   Future<bool> isCurrent(int generation);
 
@@ -110,6 +114,14 @@ final class DataModeOperation {
   DataMode get mode => state.mode;
   int get generation => state.generation;
 
+  /// Keeps the captured Wear request and generation for a cache-only read.
+  DataModeOperation asCacheOnly() => DataModeOperation(
+    authority: authority,
+    state: state,
+    requestId: requestId,
+    cacheOnly: true,
+  );
+
   static final _zoneKey = Object();
   static final _leaseKey = Object();
   static final _settlementKey = Object();
@@ -131,6 +143,28 @@ final class DataModeOperation {
       runZoned(body, zoneValues: {_zoneKey: this});
 
   Future<bool> isCurrent() => authority.isCurrent(generation);
+
+  /// Runs an effect in the current operation, or directly for unscoped calls.
+  /// An optional ownership check runs after lease admission.
+  static Future<bool> guardCurrent(
+    Future<void> Function() effect, {
+    Future<bool> Function()? isCurrent,
+  }) async {
+    var ran = false;
+    Future<void> guarded() async {
+      if (isCurrent != null && !await isCurrent()) return;
+      ran = true;
+      await effect();
+    }
+
+    final operation = current;
+    if (operation == null) {
+      await guarded();
+    } else {
+      await operation.guard(guarded);
+    }
+    return ran;
+  }
 
   /// Native fetch admission binds its lease to this generation.
   Map<String, Object?> get fetchArguments => {'generation': generation};
@@ -157,14 +191,14 @@ final class DataModeOperation {
     }
   }
 
-  /// Only current Live work may reach a provider transport.
-  bool get _sendsLive => !cacheOnly && mode == DataMode.live;
+  /// Whether this operation can poll providers and handle real alerts.
+  bool get allowsLiveWork => !cacheOnly && mode == DataMode.live;
 
   /// Denies synthetic and cache-only work before any transport setup.
   ///
   /// Outside an operation (explicit account actions) nothing is checked.
   static void admitTransport() {
-    if (current case final operation? when !operation._sendsLive) {
+    if (current case final operation? when !operation.allowsLiveWork) {
       throw DataModeRetired();
     }
   }
@@ -185,7 +219,7 @@ final class DataModeOperation {
     String? acquired;
     final String lease;
     try {
-      if (!operation._sendsLive || settlement?.closed == true) {
+      if (!operation.allowsLiveWork || settlement?.closed == true) {
         throw DataModeRetired();
       }
       if (held == null) {
@@ -373,11 +407,18 @@ final class MethodChannelDataModeAuthority implements DataModeAuthority {
       });
 
   Future<void> _initialize() async {
-    final view = await _invoke('readMode');
-    if (view['initialized'] == true) return;
-    // An unreadable legacy choice leaves the record absent for a later retry.
-    final legacyMock = policy.debugBuild && await _legacy.readMockDataEnabled();
-    await _invoke('initializeMode', {'legacyMock': legacyMock});
+    final token = await _platform.invoke('beginModeImport', {}) as String?;
+    if (token == null) return;
+    bool? legacyMock;
+    try {
+      // An unreadable choice leaves the record absent for the next claimant.
+      legacyMock = policy.debugBuild && await _legacy.readMockDataEnabled();
+    } finally {
+      await _platform.invoke('finishModeImport', {
+        'token': token,
+        if (legacyMock != null) 'legacyMock': legacyMock,
+      });
+    }
   }
 
   Future<Map<Object?, Object?>> _invoke(
@@ -398,12 +439,18 @@ final class MethodChannelDataModeAuthority implements DataModeAuthority {
   }
 
   @override
-  Future<DataModeOperation> begin({bool cacheOnly = false}) async {
+  Future<DataModeOperation> begin({
+    bool cacheOnly = false,
+    bool waitForSwitch = false,
+  }) async {
     await _ensureInitialized();
     final Map<Object?, Object?> view;
     try {
-      view = await _invoke('beginOperation');
+      view = await _invoke('beginOperation', {
+        if (waitForSwitch) 'waitForSwitch': true,
+      });
     } catch (_, stackTrace) {
+      if (waitForSwitch) rethrow;
       // Admission is closed while a switch drains or the record is unreadable.
       Error.throwWithStackTrace(DataModeRetired(), stackTrace);
     }
@@ -440,7 +487,15 @@ final class MethodChannelDataModeAuthority implements DataModeAuthority {
   Future<DataModeSwitch> switchTo(DataMode mode) async {
     if (!policy.allows(mode)) throw ArgumentError.value(mode, 'mode');
     await _ensureInitialized();
-    final view = await _invoke('switchMode', {'mode': mode.name});
+    final Map<Object?, Object?> view;
+    try {
+      view = await _invoke('switchMode', {'mode': mode.name});
+    } on PlatformException catch (error) {
+      if (error.code != 'data_mode_write_failed') rethrow;
+      throw DataModeWriteFailure(
+        unresolvedStorageFailure: error.details == true,
+      );
+    }
     return (
       state: _state(view),
       unresolvedStorageFailure: view['unresolved'] == true,
@@ -488,7 +543,13 @@ final class MemoryDataModeAuthority implements DataModeAuthority {
   Future<DataModeState> read() async => state;
 
   @override
-  Future<DataModeOperation> begin({bool cacheOnly = false}) async {
+  Future<DataModeOperation> begin({
+    bool cacheOnly = false,
+    bool waitForSwitch = false,
+  }) async {
+    while (waitForSwitch && switching) {
+      await _switches;
+    }
     if (switching) throw DataModeRetired();
     return DataModeOperation(
       authority: this,
@@ -523,8 +584,9 @@ final class MemoryDataModeAuthority implements DataModeAuthority {
     if (!policy.allows(mode)) throw ArgumentError.value(mode, 'mode');
     _switching++;
     final result = _switches.then((_) => _commit(mode));
-    _switches = result.then<void>((_) {}, onError: (_) {});
-    return result.whenComplete(() => _switching--);
+    final settled = result.whenComplete(() => _switching--);
+    _switches = settled.then<void>((_) {}, onError: (_) {});
+    return settled;
   }
 
   Future<DataModeSwitch> _commit(DataMode mode) async {
@@ -541,7 +603,7 @@ final class MemoryDataModeAuthority implements DataModeAuthority {
       if (failWrite) {
         failWrite = false;
         _unresolved = _unresolved || unresolved;
-        throw StateError('Sanitized data mode storage failure.');
+        throw DataModeWriteFailure(unresolvedStorageFailure: unresolved);
       }
       _mode = mode;
       _generation++;

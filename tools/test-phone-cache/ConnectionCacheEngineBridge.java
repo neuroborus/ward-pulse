@@ -24,6 +24,10 @@ public final class ConnectionCacheEngineBridge {
     static ConnectionCacheEngine engine = create();
     static ConnectionCacheEngine create() { return new ConnectionCacheEngine(disk, modes, () -> now, mockAllowed); }
     static Long optionalLong(String value) { return value == null ? null : Long.valueOf(value); }
+    static List<String> occurrences(Map<String, String> args) {
+        String joined = args.getOrDefault("occurrences", "");
+        return joined.isEmpty() ? List.of() : List.of(joined.split("\n"));
+    }
     public static void main(String[] unused) throws Exception {
         BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
         String line;
@@ -63,6 +67,7 @@ public final class ConnectionCacheEngineBridge {
             case "readNotice": response(id, engine.readNotice(connection), false); return;
             case "dismissNotice": response(id, engine.dismissNotice(connection, args.get("eventId")), false); return;
             case "valid": response(id, engine.valid(connection, expected), false); return;
+            case "ownsAutomatic": response(id, engine.ownsAutomatic(connection, expected), false); return;
             case "validAll":
                 Map<String, Map<String, String>> versions = new HashMap<>();
                 Map<String, Long> attemptClockEras = new HashMap<>();
@@ -92,7 +97,8 @@ public final class ConnectionCacheEngineBridge {
                     String suffix = key.substring(9); int dot = suffix.lastIndexOf('.');
                     versions.computeIfAbsent(suffix.substring(0, dot), ignored -> new HashMap<>()).put(suffix.substring(dot + 1), value);
                 });
-                boolean current = engine.validAll(versions, attemptClockEras, payloadOrders, emptyCacheOrders);
+                boolean current = engine.validAll(versions, attemptClockEras, payloadOrders, emptyCacheOrders,
+                    optionalLong(args.get("recoveryPreferenceRevision")), optionalLong(args.get("recoveryModeGeneration")));
                 response(id, current && !Boolean.parseBoolean(args.get("rejectValidation")), false);
                 return;
             case "readSnapshot": {
@@ -113,14 +119,41 @@ public final class ConnectionCacheEngineBridge {
                 Long.parseLong(args.get("generatedAt")), optionalLong(args.get("generation"))), false); return;
             case "clearSnapshot": engine.clearSnapshot(connection, expected, optionalLong(args.get("generation")));
                 response(id, null, false); return;
+            case "beginRecoveryPreferenceWrite": response(id, engine.beginRecoveryPreferenceWrite(owner), false); return;
+            case "finishRecoveryPreferenceWrite": engine.finishRecoveryPreferenceWrite(owner, args.get("token"));
+                response(id, null, false); return;
+            case "readRecoveryPreferenceRevision": response(id, engine.readRecoveryPreferenceRevision(), false); return;
+            case "recoveryDeliveryCurrent": response(id, engine.recoveryDeliveryCurrent(Long.parseLong(args.get("revision")),
+                optionalLong(args.get("generation"))), false); return;
+            case "readUnrecordedRecoveries": response(id, engine.readUnrecordedRecoveries(), false); return;
+            case "recordUnrecordedRecoveries": engine.recordUnrecordedRecoveries(occurrences(args)); response(id, null, false); return;
+            case "forgetUnrecordedRecoveries": engine.forgetUnrecordedRecoveries(occurrences(args)); response(id, null, false); return;
             case "readMode": response(id, engine.readMode(), false); return;
             case "initializeMode": response(id, engine.initializeMode(Boolean.parseBoolean(args.get("legacyMock"))), false); return;
-            case "beginOperation": response(id, engine.beginOperation(), false); return;
+            case "beginModeImport": engine.beginModeImport(owner, token -> response(id, token, false), error -> response(id, null, true)); return;
+            case "finishModeImport":
+                engine.finishModeImport(owner, args.get("token"), args.containsKey("legacyMock") ? Boolean.valueOf(args.get("legacyMock")) : null);
+                response(id, null, false); return;
+            case "beginOperation":
+                if (Boolean.parseBoolean(args.get("waitForSwitch"))) {
+                    engine.beginAfterSwitch(owner, value -> response(id, value, false), error -> response(id, null, true));
+                } else response(id, engine.beginOperation(), false);
+                return;
             case "operationCurrent": response(id, engine.operationCurrent(Long.parseLong(args.get("generation"))), false); return;
             case "enterEffect": response(id, engine.enterEffect(owner, Long.parseLong(args.get("generation")),
                 Boolean.parseBoolean(args.get("settlement"))), false); return;
             case "exitEffect": engine.exitEffect(owner, args.get("lease"), Boolean.parseBoolean(args.get("unresolved"))); response(id, null, false); return;
-            case "switchMode": engine.switchMode(owner, args.get("mode"), value -> response(id, value, false), error -> response(id, null, true)); return;
+            case "switchMode":
+                engine.switchMode(owner, args.get("mode"), value -> response(id, value, false), error -> {
+                    if (error instanceof ConnectionCacheEngine.ModeWriteFailure) {
+                        ConnectionCacheEngine.ModeWriteFailure failure = (ConnectionCacheEngine.ModeWriteFailure) error;
+                        Map<String, Object> details = new HashMap<>();
+                        details.put("code", "data_mode_write_failed");
+                        details.put("details", failure.unresolvedStorageFailure);
+                        response(id, details, true);
+                    } else response(id, null, true);
+                });
+                return;
             case "failModeCommit": modes.fail = Boolean.parseBoolean(args.get("value")); response(id, null, false); return;
             // A Profile or Release process: the same records under the production policy.
             case "setMockAllowed": mockAllowed = Boolean.parseBoolean(args.get("value")); engine = create(); response(id, null, false); return;

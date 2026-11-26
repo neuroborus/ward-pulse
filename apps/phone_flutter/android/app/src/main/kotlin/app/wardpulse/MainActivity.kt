@@ -8,7 +8,8 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private var watchRefreshChannel: MethodChannel? = null
-    private var pendingWatchRefresh = false
+    private var pendingWatchRefresh: PendingWatchRefresh? = null
+    private var watchRefreshReady = false
     private var navigationChannel: MethodChannel? = null
     private val dashboardLaunch = DashboardLaunchRequest()
 
@@ -18,6 +19,7 @@ class MainActivity : FlutterActivity() {
             flutterEngine.plugins.add(CursorSignInPlugin(flutterEngine))
         }
 
+        recordWatchRefresh(intent)
         watchRefreshChannel =
             MethodChannel(
                 flutterEngine.dartExecutor.binaryMessenger,
@@ -26,17 +28,15 @@ class MainActivity : FlutterActivity() {
                 channel.setMethodCallHandler { call, result ->
                     when (call.method) {
                         WATCH_REFRESH_READY_METHOD -> {
-                            // Dart handler is bound; deliver any cold-start refresh tap.
-                            flushPendingWatchRefresh()
-                            result.success(null)
+                            // Dart decides whether startup can poll before creating its first load.
+                            watchRefreshReady = true
+                            result.success(takeWatchRefresh()?.arguments())
                         }
                         else -> result.notImplemented()
                     }
                 }
             }
 
-        // Cold start: stash only. Dart calls watchRefreshChannelReady after binding.
-        markPendingWatchRefresh(intent)
         navigationChannel =
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NAVIGATION_CHANNEL_NAME)
                 .also { channel ->
@@ -57,16 +57,17 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        // Warm start: Dart handler is already bound.
-        if (markPendingWatchRefresh(intent)) {
-            flushPendingWatchRefresh()
-        }
+        recordWatchRefresh(intent)
+        flushPendingWatchRefresh()
         if (markPendingDashboardLaunch(intent)) {
             flushPendingDashboardLaunch()
         }
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        watchRefreshChannel?.setMethodCallHandler(null)
+        watchRefreshChannel = null
+        watchRefreshReady = false
         navigationChannel?.setMethodCallHandler(null)
         navigationChannel = null
         dashboardLaunch.reset()
@@ -87,25 +88,29 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun markPendingWatchRefresh(intent: Intent?): Boolean {
-        if (intent?.action != WatchRefreshListenerService.ACTION_WATCH_REFRESH) {
-            return false
-        }
-        pendingWatchRefresh = true
-        // Avoid re-delivery after rotation / recreate.
-        intent.action = null
-        return true
+    private fun flushPendingWatchRefresh() {
+        if (!watchRefreshReady) return
+        val channel = watchRefreshChannel ?: return
+        val pending = takeWatchRefresh() ?: return
+        Log.i(TAG, "Forwarding watch refresh request to Flutter.")
+        channel.invokeMethod(WATCH_REFRESH_METHOD, pending.arguments())
     }
 
-    private fun flushPendingWatchRefresh() {
-        if (!pendingWatchRefresh) {
-            return
-        }
-        val channel = watchRefreshChannel ?: return
-        pendingWatchRefresh = false
-        Log.i(TAG, "Forwarding watch refresh request to Flutter.")
-        channel.invokeMethod(WATCH_REFRESH_METHOD, null)
+    private fun recordWatchRefresh(intent: Intent?) {
+        if (intent == null) return
+        val request = WatchRefreshListenerService.read(intent) ?: return
+        pendingWatchRefresh?.let { WatchRefreshListenerService.consume(it.source) }
+        pendingWatchRefresh = PendingWatchRefresh(intent, request)
     }
+
+    private fun takeWatchRefresh(): WatchRefreshIntent? {
+        val pending = pendingWatchRefresh ?: return null
+        pendingWatchRefresh = null
+        WatchRefreshListenerService.consume(pending.source)
+        return pending.request
+    }
+
+    private data class PendingWatchRefresh(val source: Intent, val request: WatchRefreshIntent)
 
     private companion object {
         const val TAG = "WardPulseRefresh"

@@ -1,9 +1,17 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/sync/data_mode.dart';
+import 'package:ward_pulse_phone/dashboard/connection_snapshot_cache.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
 import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
+import 'package:ward_pulse_phone/settings/notification_permission_preferences.dart';
+import 'package:ward_pulse_phone/sync/notification_coordinator.dart';
+import 'package:ward_pulse_phone/settings/recovery_notification_preferences.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/poll_cadence.dart';
 import 'package:ward_pulse_phone/sync/recovery_wake.dart';
@@ -12,9 +20,13 @@ import 'package:ward_pulse_phone/sync/recovery_watchlist.dart';
 import 'package:ward_pulse_phone/sync/automatic_poll.dart';
 import 'package:ward_pulse_phone/providers/connection_lifecycle.dart';
 
-import 'connection_cache_test_support.dart' show FakeSecureStorage;
+import 'connection_cache_test_support.dart'
+    show FakeSecureStorage, HeldModeAdmission;
 
 void main() {
+  // Fixtures read the notification platform singleton before replacing it.
+  setUp(AndroidFlutterLocalNotificationsPlugin.registerWith);
+
   test(
     'reconciliation persists context only in observed partitions before reload',
     () async {
@@ -607,30 +619,1033 @@ void main() {
     expect(await const DisabledRecoveryWatchlistStore().read(), isEmpty);
   });
 
-  test('demo data is remembered as nothing at all', () async {
-    final store = _MemoryRecoveryWatchlistStore();
-    await store.write(const [
-      (
-        accountId: 'claude-local',
-        allowanceId: 'claude-weekly',
-        historyOwner: null,
-      ),
-    ]);
+  test(
+    'synthetic observations leave unbound recovery history intact',
+    () async {
+      final store = _MemoryRecoveryWatchlistStore();
+      const history = <WindowKey>[
+        (
+          accountId: 'claude-local',
+          allowanceId: 'claude-weekly',
+          historyOwner: null,
+        ),
+      ];
+      await store.write(history);
+      final mock = await MemoryDataModeAuthority(mode: DataMode.mock).begin();
+      await mock.run(
+        () => syncPlanRecoveries(
+          DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 8, 17)),
+          store,
+          const SilentRecoveryNotifier(),
+          const DisabledRecoveryWakeScheduler(),
+          readWindows:
+              (_) => throw StateError('Synthetic work entered recovery'),
+          rethrowFailures: true,
+        ),
+      );
 
-    // Demo windows are invented: left in the list, they would make the first
-    // live poll after leaving demo mode look like a recovery. The snapshot
-    // below is never read, because demo mode short-circuits before the core is
-    // asked anything.
-    await syncPlanRecoveries(
-      DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 8, 17)),
-      store,
-      const SilentRecoveryNotifier(),
+      expect(await store.read(), history);
+    },
+  );
+
+  for (final effect in ['history', 'wake cancellation']) {
+    test(
+      'ownership lost while admitting recovery $effect suppresses it',
+      () async {
+        final history = [
+          (accountId: 'a', allowanceId: 'weekly', historyOwner: null),
+        ];
+        final store = _MemoryRecoveryWatchlistStore();
+        await store.write(history);
+        final wake = _RecordingWake();
+        final gate = HeldModeAdmission(skip: effect == 'history' ? 0 : 1);
+        var ownsReport = true;
+        final syncing = gate.operation().run(
+          () => syncPlanRecoveries(
+            DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 6)),
+            store,
+            const SilentRecoveryNotifier(),
+            wake,
+            notifications: false,
+            readWindows: (_) => const [],
+            isCurrent: () async => ownsReport,
+            rethrowFailures: true,
+          ),
+        );
+        try {
+          await Future.any([
+            gate.entered.future,
+            syncing.then(
+              (_) => fail('Recovery did not reach the lease request.'),
+            ),
+          ]);
+          ownsReport = false;
+        } finally {
+          gate.release.complete();
+          await syncing;
+        }
+        expect(await store.read(), effect == 'history' ? history : isEmpty);
+        expect(wake.cancelled, 0);
+      },
+    );
+  }
+
+  test(
+    'saving Plan recovery Off during admission suppresses only the post',
+    () async {
+      final preferences = SecureRecoveryNotificationPreferenceStore(
+        storage: FakeSecureStorage(),
+      );
+      final history = _MemoryRecoveryWatchlistStore();
+      await history.write(const [
+        (accountId: 'claude-local', allowanceId: 'weekly', historyOwner: null),
+      ]);
+      final gate = HeldModeAdmission();
+      final notifier = _RecordingRecoveryNotifier();
+      final wake = _RecordingWake();
+      final notifications = await preferences.read();
+      expect(notifications, isTrue);
+      final syncing = gate.operation().run(
+        () => syncPlanRecoveries(
+          DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 6)),
+          history,
+          notifier,
+          wake,
+          notifications: notifications,
+          isDeliveryEnabled: preferences.read,
+          readWindows: (_) => const [],
+          readRecoveries: _recoverEvery,
+          rethrowFailures: true,
+        ),
+      );
+      try {
+        await Future.any([
+          gate.entered.future,
+          syncing.then(
+            (_) => fail('Recovery did not reach the posting lease.'),
+          ),
+        ]);
+        await preferences.write(false);
+      } finally {
+        gate.release.complete();
+        await syncing;
+      }
+      expect(notifier.reported, isEmpty);
+      expect(await history.read(), isEmpty);
+      expect(wake.cancelled, 1);
+    },
+  );
+
+  testWidgets(
+    'a submission held across a switch is remembered and its sibling stays pending',
+    (tester) async {
+      final previousPlatform = FlutterLocalNotificationsPlatform.instance;
+      AndroidFlutterLocalNotificationsPlugin.registerWith();
+      const channel = MethodChannel(
+        'dexterous.com/flutter/local_notifications',
+      );
+      final messenger = tester.binding.defaultBinaryMessenger;
+      addTearDown(() {
+        try {
+          messenger.setMockMethodCallHandler(channel, null);
+        } finally {
+          FlutterLocalNotificationsPlatform.instance = previousPlatform;
+        }
+      });
+      final shown = <String>[];
+      final entered = Completer<void>();
+      final release = Completer<void>();
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'initialize') return true;
+        if (call.method != 'show') return null;
+        shown.add((call.arguments as Map)['title'] as String);
+        if (!entered.isCompleted) {
+          entered.complete();
+          await release.future;
+        }
+        return null;
+      });
+      final notifier = LocalRecoveryNotifier(
+        coordinator: PhoneNotificationCoordinator(
+          attempts: SecureNotificationPermissionAttemptStore(
+            storage: FakeSecureStorage(),
+          ),
+        ),
+      );
+      final authority = MemoryDataModeAuthority();
+      final history = _MemoryRecoveryWatchlistStore();
+      const weekly = (
+        accountId: 'claude-local',
+        allowanceId: 'weekly',
+        historyOwner: null,
+      );
+      const session = (
+        accountId: 'claude-local',
+        allowanceId: 'session',
+        historyOwner: null,
+      );
+      await history.write(const [weekly, session]);
+      Future<void> observe(DataModeOperation operation) => operation.run(
+        () => syncPlanRecoveries(
+          DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 6)),
+          history,
+          notifier,
+          const DisabledRecoveryWakeScheduler(),
+          readWindows: (_) => const [],
+          readRecoveries: _recoverEvery,
+          isCurrent: operation.isCurrent,
+          rethrowFailures: true,
+        ),
+      );
+
+      final syncing = observe(await authority.begin());
+      Future<DataModeSwitch>? switching;
+      try {
+        await Future.any([
+          entered.future,
+          syncing.then((_) => fail('Recovery did not reach Android.')),
+        ]);
+        switching = authority.switchTo(DataMode.mock);
+        await tester.pump();
+        expect(authority.writes, isEmpty);
+      } finally {
+        release.complete();
+        await syncing;
+        await switching;
+      }
+      expect(authority.writes, [DataMode.mock]);
+      expect(shown, ['Claude · weekly']);
+      // The switch interrupted the sibling before submission.
+      expect(await history.read(), [session]);
+
+      await authority.switchTo(DataMode.live);
+      await observe(await authority.begin());
+      expect(shown, ['Claude · weekly', 'Claude · session']);
+      expect(await history.read(), isEmpty);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  test(
+    'a submitted recovery whose history write fails is not posted again',
+    () async {
+      final storage = FakeSecureStorage();
+      await SecureRecoveryWatchlistStore(storage: storage).write(const [
+        (accountId: 'claude-local', allowanceId: 'weekly', historyOwner: null),
+      ]);
+      final notifier = _RecordingRecoveryNotifier();
+      // Each look reads through a fresh store over the same storage, as a
+      // later headless refresh does.
+      Future<void> observe() => syncPlanRecoveries(
+        DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 6)),
+        SecureRecoveryWatchlistStore(storage: storage),
+        notifier,
+        const DisabledRecoveryWakeScheduler(),
+        readWindows: (_) => const [],
+        readRecoveries: _recoverEvery,
+        rethrowFailures: true,
+      );
+
+      storage.failWrite = true;
+      await expectLater(observe(), throwsStateError);
+      expect(notifier.reported, hasLength(1));
+      expect(
+        await SecureRecoveryWatchlistStore(storage: storage).read(),
+        hasLength(1),
+      );
+
+      storage.failWrite = false;
+      await observe();
+      expect(notifier.reported, hasLength(1));
+      expect(
+        await SecureRecoveryWatchlistStore(storage: storage).read(),
+        isEmpty,
+      );
+    },
+  );
+
+  test('a post that fails before Android accepts it cannot suppress a healthy '
+      'retry', () async {
+    const weekly = (
+      accountId: 'claude-local',
+      allowanceId: 'weekly',
+      historyOwner: null,
+    );
+    final engine = _RecoveryEngine();
+    final storage = FakeSecureStorage();
+    Future<void> observe(RecoveryNotifier notifier) => syncPlanRecoveries(
+      DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 6)),
+      SecureRecoveryWatchlistStore(
+        storage: storage,
+        postLedger: NativeRecoveryPostLedger(platform: engine),
+      ),
+      notifier,
       const DisabledRecoveryWakeScheduler(),
-      mockData: true,
+      readWindows: (_) => const [],
+      readRecoveries: _recoverEvery,
+      rethrowFailures: true,
     );
 
-    expect(await store.read(), isEmpty);
+    await SecureRecoveryWatchlistStore(storage: storage).write(const [weekly]);
+    // Admission allows the post, the notifier fails before posting, and the
+    // history write fails too.
+    final failing = _RecordingRecoveryNotifier(refuse: 'weekly');
+    storage.failWrite = true;
+    await expectLater(observe(failing), throwsStateError);
+    storage.failWrite = false;
+    expect(failing.reported, isEmpty);
+    expect(engine.posts, isEmpty);
+    expect(await SecureRecoveryWatchlistStore(storage: storage).read(), const [
+      weekly,
+    ]);
+
+    final healthy = _RecordingRecoveryNotifier();
+    await observe(healthy);
+    expect(healthy.reported.map((item) => item.allowanceId), ['weekly']);
+    expect(
+      await SecureRecoveryWatchlistStore(storage: storage).read(),
+      isEmpty,
+    );
   });
+
+  test('a sibling whose ownership proof throws stays pending', () async {
+    const weekly = (
+      accountId: 'claude-local',
+      allowanceId: 'weekly',
+      historyOwner: null,
+    );
+    const session = (
+      accountId: 'claude-local',
+      allowanceId: 'session',
+      historyOwner: null,
+    );
+    final history = _MemoryRecoveryWatchlistStore();
+    await history.write(const [weekly, session]);
+    final notifier = _RecordingRecoveryNotifier();
+    var thrown = false;
+    await syncPlanRecoveries(
+      DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 6)),
+      history,
+      notifier,
+      const DisabledRecoveryWakeScheduler(),
+      readWindows: (_) => const [],
+      readRecoveries: _recoverEvery,
+      isCurrent: () async {
+        // The proof after the first post is the sibling's.
+        if (notifier.reported.length == 1 && !thrown) {
+          thrown = true;
+          throw StateError('proof unavailable');
+        }
+        return true;
+      },
+      rethrowFailures: true,
+    );
+    expect(thrown, isTrue);
+    expect(notifier.reported.map((item) => item.allowanceId), ['weekly']);
+    expect(await history.read(), [session]);
+  });
+
+  test('a failed history write is not posted again by a fresh engine after a '
+      'switch', () async {
+    final engine = _RecoveryEngine();
+    final authority = MemoryDataModeAuthority();
+    final notifier = _RecordingRecoveryNotifier();
+    Future<void> observe(FakeSecureStorage storage) async {
+      final operation = await authority.begin();
+      await operation.run(
+        () => syncPlanRecoveries(
+          DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 6)),
+          SecureRecoveryWatchlistStore(
+            storage: storage,
+            postLedger: NativeRecoveryPostLedger(platform: engine),
+          ),
+          notifier,
+          const DisabledRecoveryWakeScheduler(),
+          readWindows: (_) => const [],
+          readRecoveries: _recoverEvery,
+          isCurrent: operation.isCurrent,
+          rethrowFailures: true,
+        ),
+      );
+    }
+
+    final storage = FakeSecureStorage();
+    await SecureRecoveryWatchlistStore(storage: storage).write(const [
+      (accountId: 'claude-local', allowanceId: 'weekly', historyOwner: null),
+    ]);
+    storage.failWrite = true;
+    await expectLater(observe(storage), throwsStateError);
+    expect(notifier.reported, hasLength(1));
+    await authority.switchTo(DataMode.mock);
+    await authority.switchTo(DataMode.live);
+    // Another engine opens the same durable history with no shared Dart
+    // state.
+    final reopened = FakeSecureStorage()..values.addAll(storage.values);
+    await observe(reopened);
+    expect(notifier.reported, hasLength(1));
+    expect(
+      await SecureRecoveryWatchlistStore(storage: reopened).read(),
+      isEmpty,
+    );
+    expect(engine.posts, isEmpty);
+  });
+
+  test('a partial history write cannot silence a later recovery of the owner '
+      'whose write succeeded', () async {
+    final engine = _RecoveryEngine();
+    final storage = FakeSecureStorage();
+    SecureRecoveryWatchlistStore store() => SecureRecoveryWatchlistStore(
+      storage: storage,
+      postLedger: NativeRecoveryPostLedger(platform: engine),
+    );
+    final versions = {
+      for (final (connection, identity) in [
+        ('anthropic.plan', 'owner-a'),
+        ('cursor.plan', 'owner-b'),
+      ])
+        connection: CredentialVersion({
+          'generation': '1',
+          'revision': '1',
+          'epoch': '0',
+          'identity': identity,
+          'committedConnection': 'accepted-$identity',
+        }),
+    };
+    final owners = {
+      for (final entry in versions.entries)
+        HistoryOwner.fromVersion(entry.key, entry.value)!,
+    };
+    final keys = <WindowKey>[
+      for (final owner in owners)
+        (
+          accountId: 'account-${owner.identity}',
+          allowanceId: 'weekly',
+          historyOwner: owner,
+        ),
+    ];
+    await store().writeObserved(keys, owners);
+    final snapshot = DashboardSnapshot.empty(
+      generatedAt: DateTime.utc(2026, 11, 6),
+    ).withConnectionVersions({
+      for (final entry in versions.entries) entry.key: entry.value.values,
+    });
+    final notifier = _RecordingRecoveryNotifier();
+    var recover = <WindowKey>{...keys};
+    var spent = <WindowKey>[];
+    Future<void> observe() => syncPlanRecoveries(
+      snapshot,
+      store(),
+      notifier,
+      const DisabledRecoveryWakeScheduler(),
+      readWindows: (_) => spent,
+      readRecoveries:
+          (observed, exhausted) => _recoverEvery(
+            observed,
+            exhausted.where(recover.contains).toList(),
+          ),
+      rethrowFailures: true,
+    );
+
+    // The second owner's partition write fails after the first succeeds.
+    var partitions = 0;
+    storage.beforeWrite = (key) async {
+      if (key.startsWith('wardpulse.recovery.exhaustedWindows.owner.') &&
+          ++partitions == 2) {
+        throw StateError('Sanitized partition write failure.');
+      }
+    };
+    await expectLater(observe(), throwsStateError);
+    storage.beforeWrite = null;
+    expect(notifier.reported, hasLength(2));
+    final durable = (await store().readOwners(owners)).keys;
+    final cleared = keys.singleWhere((key) => !durable.contains(key));
+    final failed = keys.singleWhere(durable.contains);
+
+    // The cleared window runs out again while the failed one is consumed
+    // without another post.
+    spent = [cleared];
+    recover = {failed};
+    await observe();
+    expect(notifier.reported, hasLength(2));
+    expect((await store().readOwners(owners)).keys, [cleared]);
+
+    // That new exhaustion is a new occurrence and must sound.
+    spent = [];
+    recover = {cleared};
+    await observe();
+    expect(notifier.reported, hasLength(3));
+    expect(notifier.reported.last.historyOwner, cleared.historyOwner);
+    expect((await store().readOwners(owners)).keys, isEmpty);
+    expect(engine.posts, isEmpty);
+  });
+
+  test('a report retired during the headless switch read leaves its window '
+      'pending', () async {
+    const weekly = (
+      accountId: 'claude-local',
+      allowanceId: 'weekly',
+      historyOwner: null,
+    );
+    final engine = _RecoveryEngine();
+    final storage = FakeSecureStorage();
+    final preferences = SecureRecoveryNotificationPreferenceStore(
+      storage: storage,
+      platform: engine,
+    );
+    final admission = RecoveryDeliveryAdmission(
+      preferences: preferences,
+      platform: engine,
+    );
+    final snapshot = DashboardSnapshot.empty(
+      generatedAt: DateTime.utc(2026, 11, 6),
+    );
+    Future<(List<PlanRecovery>, List<WindowKey>)> observe({
+      required bool retire,
+    }) async {
+      final history = _MemoryRecoveryWatchlistStore();
+      await history.write(const [weekly]);
+      final notifier = _RecordingRecoveryNotifier();
+      final notifications = await preferences.read();
+      engine.current = true;
+      // A credential replacement or newer report lands during the read.
+      if (retire) storage.onRead = (_, _) => engine.current = false;
+      try {
+        await syncPlanRecoveries(
+          snapshot,
+          history,
+          notifier,
+          _RecordingWake(),
+          notifications: notifications,
+          admitDelivery:
+              () => admission.admit(
+                () => validateSnapshotSelection(snapshot, engine),
+              ),
+          readWindows: (_) => const [],
+          readRecoveries: _recoverEvery,
+          rethrowFailures: true,
+        );
+      } finally {
+        storage.onRead = null;
+      }
+      return (notifier.reported, await history.read());
+    }
+
+    final (posted, consumed) = await observe(retire: false);
+    expect(posted, hasLength(1));
+    expect(consumed, isEmpty);
+    expect(
+      engine.proofs.last,
+      containsPair('recoveryPreferenceRevision', engine.revision),
+    );
+    final (retired, pending) = await observe(retire: true);
+    expect(retired, isEmpty);
+    expect(pending, [weekly]);
+  });
+
+  test('Plan recovery Off saved during the headless admission proof suppresses '
+      'the post', () async {
+    final engine = _RecoveryEngine();
+    final preferences = SecureRecoveryNotificationPreferenceStore(
+      storage: FakeSecureStorage(),
+      platform: engine,
+    );
+    final admission = RecoveryDeliveryAdmission(
+      preferences: preferences,
+      platform: engine,
+    );
+    final snapshot = DashboardSnapshot.empty(
+      generatedAt: DateTime.utc(2026, 11, 6),
+    );
+    final history = _MemoryRecoveryWatchlistStore();
+    await history.write(const [
+      (accountId: 'claude-local', allowanceId: 'weekly', historyOwner: null),
+    ]);
+    final notifier = _RecordingRecoveryNotifier();
+    final wake = _RecordingWake();
+    Future<void> observe({bool turnOff = false}) async => syncPlanRecoveries(
+      snapshot,
+      history,
+      notifier,
+      wake,
+      notifications: await preferences.read(),
+      admitDelivery:
+          () => admission.admit(() async {
+            // The foreground saves Off while provenance is proven.
+            if (turnOff) await preferences.write(false);
+            return validateSnapshotSelection(snapshot, engine);
+          }),
+      readWindows: (_) => const [],
+      readRecoveries: _recoverEvery,
+      rethrowFailures: true,
+    );
+
+    await observe(turnOff: true);
+    expect(notifier.reported, isEmpty);
+    // A later look decides with the saved choice.
+    expect(await history.read(), hasLength(1));
+    // The interrupted window stays pending, so its wake stays booked.
+    expect(wake.cancelled, 0);
+    await observe();
+    // Muted delivery still consumes the window and reconciles the wake.
+    expect(notifier.reported, isEmpty);
+    expect(await history.read(), isEmpty);
+    expect(wake.cancelled, 1);
+  });
+
+  test(
+    'a run retired during its history read cannot erase a newer receipt',
+    () async {
+      const weekly = (
+        accountId: 'claude-local',
+        allowanceId: 'weekly',
+        historyOwner: null,
+      );
+      final engine = _RecoveryEngine();
+      final authority = MemoryDataModeAuthority();
+      final storage = FakeSecureStorage();
+      final notifier = _RecordingRecoveryNotifier();
+      Future<void> observe(DataModeOperation operation) => operation.run(
+        () => syncPlanRecoveries(
+          DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 6)),
+          SecureRecoveryWatchlistStore(
+            storage: storage,
+            postLedger: NativeRecoveryPostLedger(platform: engine),
+          ),
+          notifier,
+          const DisabledRecoveryWakeScheduler(),
+          readWindows: (_) => const [],
+          readRecoveries: _recoverEvery,
+          rethrowFailures: true,
+        ),
+      );
+
+      // The older run reads history before the window is remembered.
+      final read = Completer<void>();
+      final release = Completer<void>();
+      storage.beforeRead = (_) async {
+        storage.beforeRead = null;
+        read.complete();
+        await release.future;
+      };
+      final older = observe(await authority.begin());
+      await read.future;
+      await SecureRecoveryWatchlistStore(
+        storage: storage,
+      ).write(const [weekly]);
+      // A newer run posts it and fails to remember that.
+      storage.failWrite = true;
+      await expectLater(observe(await authority.begin()), throwsStateError);
+      storage.failWrite = false;
+      expect(notifier.reported, hasLength(1));
+      expect(engine.posts, hasLength(1));
+      await authority.switchTo(DataMode.mock);
+      await authority.switchTo(DataMode.live);
+      release.complete();
+      await older;
+      expect(engine.posts, hasLength(1));
+
+      await observe(await authority.begin());
+      expect(notifier.reported, hasLength(1));
+      expect(
+        await SecureRecoveryWatchlistStore(storage: storage).read(),
+        isEmpty,
+      );
+      expect(engine.posts, isEmpty);
+    },
+  );
+
+  test('a recovery another run consumes after this run reads history is not '
+      'posted again', () async {
+    const weekly = (
+      accountId: 'claude-local',
+      allowanceId: 'weekly',
+      historyOwner: null,
+    );
+    final engine = _RecoveryEngine();
+    final authority = MemoryDataModeAuthority();
+    final storage = FakeSecureStorage();
+    final notifier = _RecordingRecoveryNotifier();
+    Future<void> observe({bool notifications = true}) async {
+      final operation = await authority.begin();
+      await operation.run(
+        () => syncPlanRecoveries(
+          DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 6)),
+          SecureRecoveryWatchlistStore(
+            storage: storage,
+            postLedger: NativeRecoveryPostLedger(platform: engine),
+          ),
+          notifier,
+          const DisabledRecoveryWakeScheduler(),
+          notifications: notifications,
+          readWindows: (_) => const [],
+          readRecoveries: _recoverEvery,
+          rethrowFailures: true,
+        ),
+      );
+    }
+
+    await SecureRecoveryWatchlistStore(storage: storage).write(const [weekly]);
+    // A run posts it and fails to remember that, leaving a receipt.
+    storage.failWrite = true;
+    await expectLater(observe(), throwsStateError);
+    storage.failWrite = false;
+    expect(engine.posts, hasLength(1));
+
+    // This run reads history while the window is still pending.
+    final read = Completer<void>();
+    final release = Completer<void>();
+    storage.beforeRead = (_) async {
+      storage.beforeRead = null;
+      read.complete();
+      await release.future;
+    };
+    final older = observe();
+    await read.future;
+    // Another engine consumes it with delivery muted.
+    await observe(notifications: false);
+    expect(
+      await SecureRecoveryWatchlistStore(storage: storage).read(),
+      isEmpty,
+    );
+    release.complete();
+    await older;
+    expect(notifier.reported, hasLength(1));
+    expect(engine.posts, isEmpty);
+  });
+
+  for (final cleared in [true, false]) {
+    test('a run whose read another run replaced with a new reset neither posts '
+        'nor overwrites it (receipt cleared: $cleared)', () async {
+      final version = CredentialVersion({
+        'generation': '1',
+        'revision': '1',
+        'epoch': '0',
+        'identity': 'owner-a',
+        'committedConnection': 'accepted-owner-a',
+      });
+      final owner = HistoryOwner.fromVersion('anthropic.plan', version)!;
+      final weekly = (
+        accountId: 'account-owner-a',
+        allowanceId: 'weekly',
+        historyOwner: owner,
+      );
+      final at = DateTime.utc(2026, 11, 6);
+      final original = at.add(const Duration(minutes: 30));
+      final replacement = at.add(const Duration(hours: 2));
+      final snapshot = DashboardSnapshot.empty(
+        generatedAt: at,
+      ).withConnectionVersions({'anthropic.plan': version.values});
+      final engine = _RecoveryEngine();
+      final authority = MemoryDataModeAuthority();
+      final storage = FakeSecureStorage();
+      SecureRecoveryWatchlistStore store() => SecureRecoveryWatchlistStore(
+        storage: storage,
+        postLedger: NativeRecoveryPostLedger(platform: engine),
+      );
+      final notifier = _RecordingRecoveryNotifier();
+      final wake = _RecordingWake();
+      Future<void> observe() async {
+        final operation = await authority.begin();
+        await operation.run(
+          () => syncPlanRecoveries(
+            snapshot,
+            store(),
+            notifier,
+            wake,
+            readWindows: (_) => const [],
+            readRecoveries: _recoverEvery,
+            now: () => at,
+            isCurrent: operation.isCurrent,
+            rethrowFailures: true,
+          ),
+        );
+      }
+
+      await store().writeObserved(
+        [weekly],
+        {owner},
+        resets: {weekly: original},
+      );
+      // A run posts the original occurrence and fails to remember that.
+      storage.failWrite = true;
+      await expectLater(observe(), throwsStateError);
+      storage.failWrite = false;
+      expect(notifier.reported, hasLength(1));
+      expect(engine.posts, hasLength(1));
+
+      // This run's owner-qualified read holds the original occurrence.
+      final read = Completer<void>();
+      final release = Completer<void>();
+      storage.beforeRead = (key) async {
+        if (!key.startsWith('wardpulse.recovery.exhaustedWindows.owner.')) {
+          return;
+        }
+        storage.beforeRead = null;
+        read.complete();
+        await release.future;
+      };
+      final older = observe();
+      await read.future;
+      // Another reader consumes it, possibly clearing its receipt, and
+      // records the same window spent again with a different reset and its
+      // own wake.
+      if (cleared) engine.posts.clear();
+      await store().writeObserved(
+        [weekly],
+        {owner},
+        resets: {weekly: replacement},
+      );
+      await wake.scheduleAt(replacement);
+      release.complete();
+      await older;
+      expect(notifier.reported, hasLength(1));
+      expect((await store().readOwners({owner})).resets, {weekly: replacement});
+      expect(wake.cancelled, 0);
+      expect(wake.booked, [replacement]);
+      // A stale receipt matched only the consumed occurrence.
+      expect(engine.posts, isEmpty);
+
+      // The replacement is its own occurrence and still sounds.
+      await observe();
+      expect(notifier.reported, hasLength(2));
+      expect((await store().readOwners({owner})).keys, isEmpty);
+    });
+  }
+
+  test('a switch closing admission during the headless proof leaves the next '
+      'recovery pending', () async {
+    const weekly = (
+      accountId: 'claude-local',
+      allowanceId: 'weekly',
+      historyOwner: null,
+    );
+    const session = (
+      accountId: 'claude-local',
+      allowanceId: 'session',
+      historyOwner: null,
+    );
+    final engine = _RecoveryEngine();
+    final admission = RecoveryDeliveryAdmission(
+      preferences: SecureRecoveryNotificationPreferenceStore(
+        storage: FakeSecureStorage(),
+        platform: engine,
+      ),
+      platform: engine,
+    );
+    final snapshot = DashboardSnapshot.empty(
+      generatedAt: DateTime.utc(2026, 11, 6),
+    );
+    final history = _MemoryRecoveryWatchlistStore();
+    await history.write(const [weekly, session]);
+    final notifier = _RecordingRecoveryNotifier();
+    final authority = MemoryDataModeAuthority();
+    final operation = await authority.begin();
+    engine.liveGeneration = operation.generation;
+    await operation.run(
+      () => syncPlanRecoveries(
+        snapshot,
+        history,
+        notifier,
+        const DisabledRecoveryWakeScheduler(),
+        admitDelivery:
+            () => admission.admit(() async {
+              // The mode reply was current; the switch begins after it.
+              if (!await operation.isCurrent()) return false;
+              if (notifier.reported.isNotEmpty) engine.modeOpen = false;
+              return validateSnapshotSelection(snapshot, engine);
+            }),
+        readWindows: (_) => const [],
+        readRecoveries: _recoverEvery,
+        isCurrent: operation.isCurrent,
+        rethrowFailures: true,
+      ),
+    );
+    expect(
+      engine.proofs.last,
+      containsPair('recoveryModeGeneration', operation.generation),
+    );
+    // The submitted post still finishes its bookkeeping.
+    expect(notifier.reported.map((item) => item.allowanceId), ['weekly']);
+    expect(await history.read(), [session]);
+  });
+
+  test(
+    'an interrupted recovery keeps its reset wake until a muted pass consumes '
+    'it',
+    () async {
+      const weekly = (
+        accountId: 'claude-local',
+        allowanceId: 'weekly',
+        historyOwner: null,
+      );
+      final at = DateTime.utc(2026, 11, 6);
+      final reset = at.add(const Duration(minutes: 30));
+      final engine = _RecoveryEngine();
+      final storage = FakeSecureStorage();
+      final preferences = SecureRecoveryNotificationPreferenceStore(
+        storage: storage,
+        platform: engine,
+      );
+      final admission = RecoveryDeliveryAdmission(
+        preferences: preferences,
+        platform: engine,
+      );
+      final history = SecureRecoveryWatchlistStore(storage: storage);
+      await history.writeObserved([weekly], {null}, resets: {weekly: reset});
+      final notifier = _RecordingRecoveryNotifier();
+      final wake = _RecordingWake();
+      Future<void> observe() async => syncPlanRecoveries(
+        DashboardSnapshot.empty(generatedAt: at),
+        history,
+        notifier,
+        wake,
+        notifications: await preferences.read(),
+        admitDelivery:
+            () => admission.admit(
+              () => validateSnapshotSelection(
+                DashboardSnapshot.empty(generatedAt: at),
+                engine,
+              ),
+            ),
+        readWindows: (_) => const [],
+        readRecoveries: _recoverEvery,
+        now: () => at,
+        rethrowFailures: true,
+      );
+
+      // A save still in flight interrupts admission.
+      final save = await engine.invoke('beginRecoveryPreferenceWrite', {});
+      await observe();
+      expect(notifier.reported, isEmpty);
+      expect((await history.readOwners({null})).resets, {weekly: reset});
+      expect(wake.cancelled, 0);
+      expect(wake.booked, [reset]);
+
+      await engine.invoke('finishRecoveryPreferenceWrite', {'token': save});
+      await preferences.write(false);
+      await observe();
+      expect(notifier.reported, isEmpty);
+      expect(await history.read(), isEmpty);
+      expect(wake.cancelled, 1);
+    },
+  );
+
+  test(
+    'a failed notification setup is not retried inside the switch lease',
+    () async {
+      final authority = MemoryDataModeAuthority();
+      final retried = Completer<void>();
+      final retry = Completer<void>();
+      var initializations = 0;
+      final notifier = LocalRecoveryNotifier(
+        coordinator: PhoneNotificationCoordinator(
+          attempts: SecureNotificationPermissionAttemptStore(
+            storage: FakeSecureStorage(),
+          ),
+          initialize: () async {
+            if (++initializations == 1) throw StateError('plugin unavailable');
+            // A retry would hold the lease on readiness I/O.
+            if (!retried.isCompleted) retried.complete();
+            await retry.future;
+          },
+        ),
+      );
+      final history = _MemoryRecoveryWatchlistStore();
+      await history.write(const [
+        (accountId: 'claude-local', allowanceId: 'weekly', historyOwner: null),
+      ]);
+      final wake = _RecordingWake();
+      final operation = await authority.begin();
+      final syncing = operation.run(
+        () => syncPlanRecoveries(
+          DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 6)),
+          history,
+          notifier,
+          wake,
+          readWindows: (_) => const [],
+          readRecoveries: _recoverEvery,
+          isCurrent: operation.isCurrent,
+          rethrowFailures: true,
+        ),
+      );
+      try {
+        await Future.any([
+          syncing,
+          retried.future.then(
+            (_) => fail('Notification setup was retried inside the lease.'),
+          ),
+        ]);
+      } finally {
+        if (!retry.isCompleted) retry.complete();
+        await syncing;
+      }
+      expect(initializations, 1);
+      // A failed setup fails the post, as a refused post does.
+      expect(await history.read(), isEmpty);
+      expect(wake.cancelled, 1);
+      expect(authority.openLeases, 0);
+      await authority.switchTo(DataMode.mock);
+      expect(authority.writes, [DataMode.mock]);
+    },
+  );
+
+  test(
+    'Plan recovery Off saved during any proof before the post suppresses it',
+    () async {
+      Future<int> observe({int? turnOffAt}) async {
+        final preferences = SecureRecoveryNotificationPreferenceStore(
+          storage: FakeSecureStorage(),
+        );
+        final history = _MemoryRecoveryWatchlistStore();
+        await history.write(const [
+          (
+            accountId: 'claude-local',
+            allowanceId: 'weekly',
+            historyOwner: null,
+          ),
+        ]);
+        final notifier = _RecordingRecoveryNotifier();
+        final wake = _RecordingWake();
+        var proofs = 0;
+        var beforePost = 0;
+        await syncPlanRecoveries(
+          DashboardSnapshot.empty(generatedAt: DateTime.utc(2026, 11, 6)),
+          history,
+          notifier,
+          wake,
+          notifications: await preferences.read(),
+          isDeliveryEnabled: preferences.read,
+          readWindows: (_) => const [],
+          readRecoveries: _recoverEvery,
+          isCurrent: () async {
+            // The write lands while this repository proof is in progress.
+            if (++proofs == turnOffAt) await preferences.write(false);
+            if (notifier.reported.isEmpty) beforePost = proofs;
+            return true;
+          },
+          rethrowFailures: true,
+        );
+        if (turnOffAt == null) {
+          expect(notifier.reported, hasLength(1));
+          return beforePost;
+        }
+        expect(
+          notifier.reported,
+          isEmpty,
+          reason: 'Off saved during proof $turnOffAt',
+        );
+        expect(await history.read(), isEmpty);
+        expect(wake.cancelled, 1);
+        return proofs;
+      }
+
+      final beforePost = await observe();
+      expect(beforePost, greaterThan(0));
+      for (var proof = 1; proof <= beforePost; proof++) {
+        await observe(turnOffAt: proof);
+      }
+    },
+  );
 
   test('a later look replaces the list rather than adding to it', () async {
     final store = _MemoryRecoveryWatchlistStore();
@@ -1092,6 +2107,73 @@ class _RecordingRecoveryNotifier implements RecoveryNotifier {
 
   @override
   Future<bool> requestPermission() async => true;
+}
+
+/// Reports every remembered window as usable again.
+List<PlanRecovery> _recoverEvery(
+  DashboardSnapshot _,
+  List<WindowKey> exhausted,
+) => [
+  for (final key in exhausted)
+    (
+      accountId: key.accountId,
+      historyOwner: key.historyOwner,
+      provider: 'claude',
+      allowanceId: key.allowanceId,
+      label: key.allowanceId,
+      resetsAt: null,
+    ),
+];
+
+/// The native recovery delivery state every engine in a process shares.
+final class _RecoveryEngine implements ConnectionCachePlatform {
+  var revision = 0;
+  var current = true;
+
+  /// The Live generation, and whether a switch has closed its admission.
+  var liveGeneration = 0;
+  var modeOpen = true;
+  final _saves = <String>{};
+  final posts = <String>{};
+  final proofs = <Map<String, Object?>>[];
+
+  @override
+  Future<Object?> invoke(String method, Map<String, Object?> arguments) async {
+    switch (method) {
+      case 'beginRecoveryPreferenceWrite':
+        revision++;
+        final token = 'save-$revision';
+        _saves.add(token);
+        return token;
+      case 'finishRecoveryPreferenceWrite':
+        if (_saves.remove(arguments['token'])) revision++;
+        return null;
+      case 'readRecoveryPreferenceRevision':
+        return _saves.isEmpty ? revision : null;
+      case 'recoveryDeliveryCurrent':
+        return _delivery(arguments['revision'], arguments['generation']);
+      case 'validAll':
+        proofs.add(Map.of(arguments));
+        final expected = arguments['recoveryPreferenceRevision'];
+        return current &&
+            (expected == null ||
+                _delivery(expected, arguments['recoveryModeGeneration']));
+      case 'readUnrecordedRecoveries':
+        return posts.toList();
+      case 'recordUnrecordedRecoveries':
+        posts.addAll((arguments['occurrences']! as List).cast<String>());
+        return null;
+      case 'forgetUnrecordedRecoveries':
+        posts.removeAll(arguments['occurrences']! as List);
+        return null;
+    }
+    throw MissingPluginException();
+  }
+
+  bool _delivery(Object? expected, Object? generation) =>
+      _saves.isEmpty &&
+      expected == revision &&
+      (generation == null || (modeOpen && generation == liveGeneration));
 }
 
 class _RecordingWake implements RecoveryWakeScheduler {

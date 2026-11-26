@@ -11,6 +11,7 @@ import '../settings/alert_notification_preferences.dart';
 import '../settings/alert_threshold_preferences.dart';
 import 'notification_coordinator.dart';
 import 'automatic_poll.dart';
+import 'data_mode.dart';
 
 abstract interface class AlertConditionStore {
   Future<bool> read(AlertConditionKey key);
@@ -239,14 +240,16 @@ final class AlertNotificationDelivery {
   Future<void> sync(
     DashboardSnapshot snapshot, {
     AlertThresholdPreferences? alertThresholds,
-    bool mockData = false,
     Future<bool> Function() isCurrent = _alwaysCurrent,
     bool Function() isAccepted = _alwaysAccepted,
     bool Function() isDeliveryEnabled = _alwaysAccepted,
     AutomaticPollContext? poll,
   }) async {
-    if (mockData) return;
+    if (DataModeOperation.current?.allowsLiveWork == false) return;
     if (poll?.whollySkipped == true) return;
+    Future<bool> ownsObservation() async =>
+        isAccepted() && await isCurrent() && isAccepted();
+
     final previous = _pending;
     final done = Completer<void>();
     _pending = done.future;
@@ -256,26 +259,41 @@ final class AlertNotificationDelivery {
         if (poll?.observes(condition.key.connection) == false) continue;
         if (condition.state == AlertConditionState.unknown) continue;
         try {
-          if (!isAccepted() || !await isCurrent() || !isAccepted()) return;
+          if (!await ownsObservation()) return;
           if (condition.state == AlertConditionState.clear) {
-            await conditions.write(condition.key, false);
+            if (!await DataModeOperation.guardCurrent(
+              () => conditions.write(condition.key, false),
+              isCurrent: ownsObservation,
+            ))
+              return;
             continue;
           }
           if (await conditions.read(condition.key)) continue;
-          if (!await isCurrent() || !isAccepted()) return;
-          await conditions.write(condition.key, true);
+          if (!await ownsObservation()) return;
+          if (!await DataModeOperation.guardCurrent(
+            () => conditions.write(condition.key, true),
+            isCurrent: ownsObservation,
+          ))
+            return;
           // Muted/denied crossings are consumed too: enabling delivery later
           // never replays a backlog. A preference read failure cannot post.
           if (!await notifier.canPost()) continue;
           if (!await preferences.read() ||
-              !await isCurrent() ||
-              !isDeliveryEnabled() ||
-              !isAccepted())
+              !await ownsObservation() ||
+              !isDeliveryEnabled())
             continue;
-          await notifier.notify(
-            condition.key,
-            title: alertNotificationTitle(snapshot, condition.key),
-            body: alertNotificationBodyFor(condition.key, alertThresholds),
+          await DataModeOperation.guardCurrent(
+            () => notifier.notify(
+              condition.key,
+              title: alertNotificationTitle(snapshot, condition.key),
+              body: alertNotificationBodyFor(condition.key, alertThresholds),
+            ),
+            isCurrent:
+                () async =>
+                    (DataModeOperation.current == null ||
+                        await preferences.read()) &&
+                    await ownsObservation() &&
+                    isDeliveryEnabled(),
           );
         } catch (_) {
           // A failed read/claim suppresses this condition; siblings still run.

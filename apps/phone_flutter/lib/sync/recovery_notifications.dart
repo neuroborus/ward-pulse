@@ -53,6 +53,9 @@ final class LocalRecoveryNotifier implements RecoveryNotifier {
     await notifyIfCurrent(recovery, () async => true);
   }
 
+  /// Initializes the plugin ahead of a guarded [notifyIfCurrent].
+  Future<void> prepare() => _coordinator.ensureReady();
+
   /// Initialization can await platform work; validate again before submitting.
   Future<void> notifyIfCurrent(
     PlanRecovery recovery,

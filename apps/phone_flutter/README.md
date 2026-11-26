@@ -23,14 +23,16 @@ The verified Flutter and Android SDK baseline is documented in
 Mock dashboards are available only in debug builds and remain disabled until explicitly enabled
 in Settings. Release builds never select the mock repository.
 
-Headless WorkManager sync leaves Mock publications alone. In debug builds, each
-`providerSyncOnce` invocation reads the saved Mock choice before creating Live bindings.
-Mock, or a choice that cannot be read, skips the run without collection, admission,
-watch/widget writes, recovery, alerts or STALE, and never loads or reseeds Demo data. The
-invocation asks again after awaited setup and loads, before each effect, inside recovery
-and alert currentness checks and before every pending widget write or redraw. Once it sees
-Mock it retires; the next Mock-off run starts normally. Queued widget requests carry their
-own guard. A failed load marks STALE only while its stamps and the credentials the run
+Headless WorkManager sync leaves Mock publications alone. Each `providerSyncOnce`
+invocation begins one operation from the shared data-mode record before creating Live
+bindings; a debug build imports the legacy saved Mock choice into that record once. A
+synthetic mode, a pending switch or a record that cannot be read skips the run without
+collection, admission, watch/widget writes, recovery, alerts or STALE, and never loads or
+reseeds Demo data. A switch closes admission, waits for open effect leases, then commits a
+new generation. The invocation proves its generation again after awaited setup and loads,
+before each effect, inside recovery and alert currentness checks and before every pending
+widget write or redraw. Once retired it stops; the next run starts from the committed
+mode. Queued widget requests carry their own guard. A failed load marks STALE only while its stamps and the credentials the run
 admitted stay current; obsolete failures and rejected snapshots leave rows unmarked. A
 plugin call that was already dispatched cannot be retracted. Technical correction
 (2026-11-09): native widget publication commits one complete six-slot cache across engines;
@@ -163,13 +165,11 @@ Before enabling Mock, freshly qualify the established ordinary-Mock custody/rest
 route: actual normal package/preferences, secure/core recovery watchlist and future wake,
 notification bookkeeping, no eligible or in-flight background work, temporary polling cadence
 **15→60 minutes**, a hard Mock cutoff and a restoration reserve. HOLD if custody is unproved.
-Ordinary Mock clears unbound recovery history. It cancels the wake only when no qualified
-live history remains. Qualified live recovery partitions, stored reset evidence and their
-pending wake survive Mock cleanup. Mock-off alone cannot restore discarded unbound history
-or a cancelled wake. Persistent connection snapshot cleanup is separate: changing Mock mode
-clears those snapshots, and Mock-off does not restore them.
-Debug headless runs skip while Mock is saved, so they neither restore discarded history nor
-overwrite Mock frames; an already-dispatched background write still needs custody.
+Changing Mock mode retires older work instead of cleaning up: recovery history, stored reset
+evidence, the pending wake and persistent connection snapshots stay as they were, and
+synthetic observations never write them. Mock-off reloads Live against that retained state.
+Debug headless runs skip while Mock is the committed mode, so they cannot overwrite Mock
+frames; an already-dispatched background write still needs custody.
 Restore the actual normal package/preferences, cadence **15 minutes**, selections, OS/bridge
 state and genuine newer Live data, including derived widget/watch frames. Preserve newer
 data and real errors; never restore old secrets or snapshots to manufacture equality.
@@ -489,10 +489,37 @@ without rereading credentials. `SecureRecoveryWatchlistStore` writes separate ow
 including empty observed partitions, so a delayed old-owner write or clear cannot replace a
 sibling's history. Alert consumed markers use the complete typed condition key; recovery
 notification addressing includes the owner too. Owner metadata stays in local normalized
-data and bookkeeping, outside watch/widget payloads and notification text. Mock cleanup is
-currentness guarded and clears only unbound history, preserving qualified live partitions,
-stored reset evidence and their pending wake; cancellation during cleanup requires no
-qualified live history to remain.
+data and bookkeeping, outside watch/widget payloads and notification text. Synthetic and
+cache-only operations skip recovery entirely, so a Mock switch leaves every partition,
+stored reset evidence and the pending wake untouched. One effect lease covers the recovery
+posts and the history write that remembers them, so a switch pending during a post cannot
+leave that recovery to sound again on the next Live refresh; a sibling the switch stopped,
+or whose ownership proof failed, before submission stays pending. The foreground marks a Mock
+switch before it closes admission, so a switch that begins during the final repository proof
+also leaves the window pending. Plugin setup runs before
+that lease, and a failed setup fails the posts as a refused post does. If the history write
+fails after Android acknowledged a post, the native engine every Flutter engine in the process
+shares keeps that recovery occurrence (its window and saved reset), so a later foreground or
+headless engine consumes it without posting again; a post that failed before Android accepted
+it leaves no receipt, so a healthy retry still posts. Receipts are pruned only under the effect
+lease, against history read there: a partition that no longer holds the occurrence forgets it,
+so a partial write cannot silence that window's next recovery, and a run a switch retired cannot
+erase a newer run's receipt. The lease rereads history even with no receipt outstanding; when
+that read no longer holds the occurrences this run read earlier, because another run consumed
+or replaced one, even with a new reset for the same window, the run neither posts nor writes,
+leaving the newer record and its wake in place. A later process relies on the stable
+notification id, as notify-first allows. A window whose post was interrupted keeps its pending
+history and its reset wake.
+
+Headless recovery delivery does not own the Plan recovery switch, which the foreground saves.
+Each save advances a native revision before and after its secure-storage write. Headless
+reads a settled revision, then the switch, then proves the report's provenance in the same
+`validAll` step that requires the revision to be unchanged and the posting operation's Live
+generation to be current with admission open. Off saved during that proof therefore
+suppresses the post, and a credential or report change during the switch read, or a switch
+that begins before that step, leaves the window pending for a later look while posts already
+submitted finish their bookkeeping. Muted delivery still consumes recovered windows and
+reconciles the reset wake.
 
 `ContextualRecoveryWatchlistStore` adds pending requirements without changing the key-only
 store API. `syncPlanRecoveries` sends eligible observed history to the shared Rust reconciler,

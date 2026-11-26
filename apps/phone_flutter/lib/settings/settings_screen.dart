@@ -40,8 +40,10 @@ class SettingsScreen extends StatefulWidget {
     required this.androidNotificationsEnabled,
     required this.onOpenNotificationSettings,
     required this.debugDataAvailable,
+    this.mockDataReady = true,
     required this.mockDataEnabled,
     required this.onMockDataEnabledChanged,
+    this.accountStorageUnresolved = false,
     required this.onRefresh,
   });
 
@@ -65,7 +67,9 @@ class SettingsScreen extends StatefulWidget {
   final PhoneWidgetPreferences? widgetPreferences;
   final Future<void> Function() onSyncWatch;
   final bool debugDataAvailable;
+  final bool mockDataReady;
   final bool mockDataEnabled;
+  final bool accountStorageUnresolved;
   final Future<void> Function(bool value) onMockDataEnabledChanged;
 
   /// Pull-to-refresh reload, shared with the app-bar action.
@@ -77,6 +81,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _settingNotification = false;
+  bool _settingMockData = false;
   bool _openingNotificationSettings = false;
   bool _isSyncing = false;
   String? _syncResult;
@@ -183,6 +188,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _setMockDataEnabled(bool value) async {
+    if (_settingMockData) return;
+    setState(() => _settingMockData = true);
     try {
       await widget.onMockDataEnabledChanged(value);
     } catch (_) {
@@ -191,6 +198,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SnackBar(content: Text('Could not update mock data setting')),
         );
       }
+    } finally {
+      if (mounted) setState(() => _settingMockData = false);
     }
   }
 
@@ -383,6 +392,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const SizedBox(height: 16),
+        if (widget.accountStorageUnresolved) ...[
+          const ListTile(
+            leading: Icon(Icons.warning_amber_outlined),
+            title: Text('Could not save an updated account session'),
+            subtitle: Text(
+              'Check the connection under Providers before using live data.',
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         if (widget.debugDataAvailable) ...[
           const _SettingsSectionHeader(title: 'Debug'),
           Card(
@@ -393,7 +412,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Debug only · full multi-provider demo; refresh draws a new scenario',
               ),
               value: widget.mockDataEnabled,
-              onChanged: _setMockDataEnabled,
+              onChanged:
+                  widget.mockDataReady && !_settingMockData
+                      ? _setMockDataEnabled
+                      : null,
             ),
           ),
           const SizedBox(height: 16),

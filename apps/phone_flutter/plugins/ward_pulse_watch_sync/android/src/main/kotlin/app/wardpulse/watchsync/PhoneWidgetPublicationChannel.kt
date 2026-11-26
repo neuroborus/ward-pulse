@@ -6,12 +6,14 @@ import android.os.Looper
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
+import java.util.UUID
 import java.util.concurrent.Executors
 
 internal class PhoneWidgetPublicationChannel(context: Context, messenger: BinaryMessenger) : MethodChannel.MethodCallHandler {
     // home_widget 0.9.3 HomeWidgetPlugin.getData uses this same flat-cache file.
     private val store = PhoneWidgetPublicationStore(
         context.applicationContext.getSharedPreferences("HomeWidgetPreferences", Context.MODE_PRIVATE))
+    private val engine = ConnectionCacheChannel.engine(context.applicationContext)
     private val main = Handler(Looper.getMainLooper())
     private val channel = MethodChannel(messenger, "app.wardpulse/widget_publication")
     private var attached = true
@@ -24,9 +26,22 @@ internal class PhoneWidgetPublicationChannel(context: Context, messenger: Binary
         }
         executor.execute {
             try {
-                val saved = if (call.method == "publish") {
-                    store.publish(call.arguments as? Map<*, *> ?: throw IllegalArgumentException())
-                } else store.markStale()
+                val arguments = call.arguments as? Map<*, *>
+                val generation = (arguments?.get("generation") as? Number)?.toLong()
+                val owner = UUID.randomUUID().toString()
+                val lease = generation?.let { engine.enterEffect(owner, it) }
+                if (generation != null && lease == null) {
+                    main.post { if (attached) result.error("widget_publication_retired", "Data mode changed.", null) }
+                    return@execute
+                }
+                val saved = try {
+                    val mode = lease?.let { PhoneWidgetPublicationStore.modeFrom(engine.readMode()) }
+                    if (call.method == "publish") {
+                        store.publish(arguments ?: throw IllegalArgumentException(), mode)
+                    } else store.markStale(mode)
+                } finally {
+                    if (lease != null) engine.exitEffect(owner, lease, false)
+                }
                 main.post { if (attached) result.success(saved) }
             } catch (_: IllegalArgumentException) {
                 main.post { if (attached) result.error("invalid_widget_publication", "Invalid widget publication.", null) }

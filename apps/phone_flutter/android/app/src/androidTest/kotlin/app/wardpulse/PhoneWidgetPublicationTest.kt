@@ -140,6 +140,30 @@ class PhoneWidgetPublicationTest : InstrumentationTestCase() {
         WidgetPublicationFixture.assertStored(context, preferences, next + ("stale" to "1"), "failed STALE commit")
     }
 
+    fun testRetiredRowsAndStaleFlagAreIneligibleForRedraw() {
+        val initial = PhoneWidgetPublicationStore.Mode("install", 0L, "live")
+        val mock = PhoneWidgetPublicationStore.Mode("install", 1L, "mock")
+        val returned = PhoneWidgetPublicationStore.Mode("install", 2L, "live")
+        val store = PhoneWidgetPublicationStore(preferences)
+        val rows = WidgetPublicationFixture.payload("old", 2, 10)
+
+        assertTrue(store.publish(rows))
+        assertEquals(2, initial.eligibleRows(preferences.all)["row_count"])
+        assertTrue(mock.eligibleRows(preferences.all).isEmpty())
+        assertTrue(store.publish(rows, mock))
+        assertEquals(true, store.markStale(mock))
+        val retired = preferences.all
+        assertEquals("1", mock.eligibleRows(retired)["stale"])
+        assertTrue(returned.eligibleRows(retired).isEmpty())
+        assertTrue(mock.copy(installId = "other-install").eligibleRows(retired).isEmpty())
+        assertNull(store.markStale(returned))
+        assertEquals(retired, preferences.all)
+
+        assertTrue(store.publish(rows, returned))
+        assertEquals("0", returned.eligibleRows(preferences.all)["stale"])
+        assertEquals(2, returned.eligibleRows(preferences.all)["row_count"])
+    }
+
     private fun editing(wrap: (SharedPreferences.Editor) -> SharedPreferences.Editor) =
         object : SharedPreferences by preferences {
             override fun edit() = wrap(preferences.edit())

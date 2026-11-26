@@ -1,6 +1,5 @@
 import 'dart:developer' as developer;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../dashboard/apply_alert_settings.dart';
@@ -11,11 +10,12 @@ import '../dashboard/plan_recoveries.dart';
 import '../providers/connection_lifecycle.dart';
 import '../settings/alert_notification_preferences.dart';
 import '../settings/alert_threshold_preferences.dart';
-import '../settings/debug_data_preferences.dart';
 import '../settings/recovery_notification_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
 import '../widget/phone_widget_preferences.dart';
 import '../widget/phone_widget_sync.dart';
+import 'data_mode.dart';
+import 'manual_refresh_window.dart';
 import 'alert_notifications.dart';
 import 'recovery_notifications.dart';
 import 'recovery_wake.dart';
@@ -34,56 +34,40 @@ typedef ProviderSyncFailureLogger =
 typedef ProviderSyncStaleMarker =
     Future<void> Function({required PhoneWidgetSyncGuard isCurrent});
 
-/// Whether one headless invocation still owns Live publications.
-///
-/// Debug Mock data belongs to the foreground app. A saved Mock choice, or one
-/// that cannot be read, retires the invocation for good. Release builds never
-/// read the debug preference. Failed validation of bound credential/snapshot
-/// provenance also retires the invocation. The next invocation checks again.
+/// One Live operation, with credential/snapshot provenance bound after loading.
 final class HeadlessLiveOwner {
-  HeadlessLiveOwner({
-    bool debugBuild = kDebugMode,
-    DebugDataPreferenceStore? debugData,
-  }) : _debugData =
-           debugBuild ? debugData ?? SecureDebugDataPreferenceStore() : null;
+  HeadlessLiveOwner(this.operation);
 
-  final DebugDataPreferenceStore? _debugData;
-  var _retired = false;
+  final DataModeOperation operation;
+  var _modeRetired = false;
+  var _provenanceRetired = false;
   Future<bool> Function()? _provenance;
 
-  /// Binds later currentness to the repository result now being handled.
   void bindProvenance(Future<bool> Function() provenance) {
     _provenance = provenance;
   }
 
-  /// Mode first: the bound provenance stays the final validation.
   Future<bool> isCurrent() async =>
       await isLive() && await _isProvenanceCurrent();
 
   Future<bool> _isProvenanceCurrent() async {
-    if (_retired) return false;
+    if (_provenanceRetired) return false;
     final provenance = _provenance;
     if (provenance == null) return true;
     try {
-      if (await provenance()) return !_retired;
+      if (await provenance()) return !_provenanceRetired;
     } catch (_) {
-      _retired = true;
+      _provenanceRetired = true;
       rethrow;
     }
-    _retired = true;
+    _provenanceRetired = true;
     return false;
   }
 
   Future<bool> isLive() async {
-    final debugData = _debugData;
-    if (_retired) return false;
-    if (debugData == null) return true;
-    try {
-      if (!await debugData.readMockDataEnabled()) return !_retired;
-    } catch (_) {
-      // An unreadable choice may be Mock: never publish Live data over it.
-    }
-    _retired = true;
+    if (_modeRetired || operation.mode.synthetic) return false;
+    if (await operation.isCurrent()) return !_modeRetired;
+    _modeRetired = true;
     return false;
   }
 }
@@ -115,44 +99,56 @@ Future<void> providerSyncOnce({
   ProviderSyncFailureLogger logFailure = _logProviderSyncFailure,
   ProviderSyncStaleMarker markWidgetStale =
       HomeWidgetPhoneWidgetSyncService.markExistingRowsStale,
-  bool debugBuild = kDebugMode,
-  DebugDataPreferenceStore? debugData,
+  DataModeAuthority? modeAuthority,
 }) async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final owner = HeadlessLiveOwner(debugBuild: debugBuild, debugData: debugData);
-  final poll = AutomaticPollContext.current ?? AutomaticPollContext();
-  final ProviderSyncWork? loaded;
+  final DataModeOperation operation;
   try {
-    loaded = await poll.run(() => load(owner));
+    operation =
+        await (modeAuthority ?? MethodChannelDataModeAuthority()).begin();
+  } on DataModeRetired {
+    return;
   } catch (error, stackTrace) {
     logFailure('setup', error, stackTrace);
-    // Obsolete failures and rejected snapshots cannot mark newer rows STALE.
-    if (!poll.whollySkipped)
-      await _attemptProviderSyncStep('widget', () async {
-        if (await owner.isCurrent())
-          await markWidgetStale(isCurrent: owner.isCurrent);
-      }, logFailure);
     return;
   }
-  if (loaded == null) return;
-  // Effect closures lose the deferred local's promotion: capture non-null work.
-  final work = loaded;
+  if (operation.mode.synthetic) return;
 
-  await _attemptProviderSyncStep('watch', () async {
-    if (await work.isCurrent()) await work.syncWatch();
-  }, logFailure);
-  await _attemptProviderSyncStep('widget', () async {
-    if (await work.isCurrent()) await work.syncWidget();
-  }, logFailure);
-  // Bookkeeping last: reader-visible surfaces are pushed first, but neither
-  // surface can prevent the recovery state from advancing.
-  await _attemptProviderSyncStep('recovery', () async {
-    if (await work.isCurrent()) await work.syncRecoveries();
-  }, logFailure);
-  await _attemptProviderSyncStep('alerts', () async {
-    if (await work.isCurrent()) await work.syncAlerts();
-  }, logFailure);
+  final owner = HeadlessLiveOwner(operation);
+  final poll = AutomaticPollContext.current ?? AutomaticPollContext();
+  await operation.run(() async {
+    final ProviderSyncWork? loaded;
+    try {
+      loaded = await poll.run(() => load(owner));
+    } catch (error, stackTrace) {
+      await _attemptProviderSyncStep('setup', () async {
+        if (!await owner.isLive()) return;
+        logFailure('setup', error, stackTrace);
+        if (!poll.whollySkipped) {
+          await _attemptProviderSyncStep('widget', () async {
+            if (await owner.isCurrent()) {
+              await markWidgetStale(isCurrent: owner.isCurrent);
+            }
+          }, logFailure);
+        }
+      }, logFailure);
+      return;
+    }
+    if (loaded == null) return;
+    final work = loaded;
+
+    Future<void> step(String name, Future<void> Function() effect) =>
+        _attemptProviderSyncStep(name, () async {
+          if (await owner.isLive() && await work.isCurrent()) await effect();
+        }, logFailure);
+
+    // Surfaces first, then bookkeeping. A failed surface never blocks its sibling.
+    await step('watch', work.syncWatch);
+    await step('widget', work.syncWidget);
+    await step('recovery', work.syncRecoveries);
+    await step('alerts', work.syncAlerts);
+  });
 }
 
 /// Asks [owner] before Live bindings exist and again after each awaited stage.
@@ -166,7 +162,7 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
   if (!await owner.isLive()) return null;
   final live = (createLive ?? PhoneLiveBindings.create)();
   // Paused builds retire saved Claude plan credentials before provider work.
-  await live.retirePausedClaudePlan();
+  if (!await owner.operation.guard(live.retirePausedClaudePlan)) return null;
   final poll = AutomaticPollContext.current ?? AutomaticPollContext();
   final alertThresholds = await SecureAlertThresholdPreferenceStore().read();
   if (!await owner.isLive()) return null;
@@ -192,7 +188,7 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
               error is DashboardLoadException ? error.snapshotOrdering : null,
         );
     owner.bindProvenance(() => live.repository.isSnapshotCurrent(failure));
-    // A load that ends after Mock took over is retired, not a Live failure.
+    // A load that ends after its generation retires cannot mark STALE.
     if (!await owner.isLive()) return null;
     rethrow;
   }
@@ -205,15 +201,48 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
     throw StateError('Connection changed during refresh.');
   }
   return ProviderSyncWork(
-    isCurrent: isCurrent,
+    isCurrent: owner._isProvenanceCurrent,
     syncWatch: () async {
       if (poll.whollySkipped) return;
       final ringPreferences =
           await (watchRingStore ?? SecureWatchRingPreferenceStore()).read();
+      // A claim whose credential retired during the poll no longer owns its
+      // cadence and cannot hold the healthy siblings in cooldown.
+      final owned = <DateTime>[];
+      for (final MapEntry(key: connection, value: at)
+          in poll.automaticAt.entries.toList()) {
+        final version =
+            poll.admittedVersions[connection] ??
+            poll.skipped[connection]?.version;
+        if (version == null) continue;
+        try {
+          if (!await live.repository.ownsAutomaticCadence(
+            connection,
+            version,
+          )) {
+            continue;
+          }
+        } catch (_) {
+          // Unavailable proof keeps the floor.
+        }
+        owned.add(at);
+      }
       if (!await isCurrent()) return;
       await MethodChannelWatchSyncService(
         claudePlanPaused: live.claudePlanPaused,
-      ).sync(snapshot, ringPreferences);
+      ).sync(
+        snapshot,
+        ringPreferences,
+        // A publication that is not wholly skipped follows an admitted claim.
+        // Its confirmed anchor, which native corrects after a clock rollback,
+        // is the owned attempt; a retained report's time may predate the
+        // rollback.
+        manualRefreshAnchorAt: ManualRefreshWindow.anchorAt(
+          reportAt: owned.isEmpty ? snapshot.generatedAt : null,
+          attempts: owned,
+        ),
+        isCurrent: isCurrent,
+      );
     },
     syncWidget: () async {
       if (poll.whollySkipped) return;
@@ -227,20 +256,35 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
       );
     },
     syncRecoveries: () async {
+      final preferences = SecureRecoveryNotificationPreferenceStore();
       var notifications = false;
       try {
-        notifications =
-            await SecureRecoveryNotificationPreferenceStore().read();
+        notifications = await preferences.read();
       } catch (_) {
         // Delivery preferences cannot block publication or recovery tracking.
       }
       if (!await isCurrent()) return;
+      final delivery = RecoveryDeliveryAdmission(
+        preferences: preferences,
+        platform: live.cachePlatform,
+      );
       await syncPlanRecoveries(
         snapshot,
-        SecureRecoveryWatchlistStore(),
+        SecureRecoveryWatchlistStore(
+          postLedger: NativeRecoveryPostLedger(platform: live.cachePlatform),
+        ),
         LocalRecoveryNotifier(),
         const WorkmanagerRecoveryWakeScheduler(),
         notifications: notifications,
+        // The foreground saves the switch. Its revision and this report's
+        // provenance are proven in one native step; the owner's sticky proof
+        // is not retired by a save.
+        admitDelivery:
+            () => delivery.admit(
+              () async =>
+                  await owner.isLive() &&
+                  await live.repository.isSnapshotCurrent(snapshot),
+            ),
         readWindows: readWindows,
         rethrowFailures: true,
         poll: poll,

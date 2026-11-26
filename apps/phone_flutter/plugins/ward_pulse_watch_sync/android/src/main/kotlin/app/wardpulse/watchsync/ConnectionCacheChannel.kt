@@ -28,10 +28,13 @@ internal class ConnectionCacheChannel(context: Context, messenger: BinaryMesseng
                         ?.mapValues { it.value.toLong() }.orEmpty()
                     val payloadOrders = call.argument<Map<String, Map<String, Any>>>("payloadOrders").orEmpty()
                     val emptyOrders = call.argument<Map<String, String>>("emptyCacheOrders").orEmpty()
-                    deliver(result, engine.validAll(versions, attemptEras, payloadOrders, emptyOrders))
+                    val recoveryRevision = call.argument<Number>("recoveryPreferenceRevision")?.toLong()
+                    val recoveryGeneration = call.argument<Number>("recoveryModeGeneration")?.toLong()
+                    deliver(result, engine.validAll(versions, attemptEras, payloadOrders, emptyOrders,
+                        recoveryRevision, recoveryGeneration))
                     return@execute
                 }
-                if (dataMode(call, result)) return@execute
+                if (dataMode(call, result) || recoveryDelivery(call, result)) return@execute
                 val connection = call.argument<String>("connection") ?: error("Connection required.")
                 val expected = call.argument<Map<String, String>>("expected")
                 val generation = call.argument<Number>("generation")?.toLong()
@@ -61,6 +64,7 @@ internal class ConnectionCacheChannel(context: Context, messenger: BinaryMesseng
                     "readNotice" -> deliver(result, engine.readNotice(connection))
                     "dismissNotice" -> deliver(result, engine.dismissNotice(connection, call.argument<String>("eventId") ?: error("Event required.")))
                     "valid" -> deliver(result, engine.valid(connection, expected ?: error("Version required.")))
+                    "ownsAutomatic" -> deliver(result, engine.ownsAutomatic(connection, expected ?: error("Version required.")))
                     "readSnapshot" -> {
                         val version = expected ?: error("Version required.")
                         val ordered = call.argument<Boolean>("ordered") == true
@@ -91,8 +95,17 @@ internal class ConnectionCacheChannel(context: Context, messenger: BinaryMesseng
         fun generation() = call.argument<Number>("generation")?.toLong() ?: error("Generation required.")
         when (call.method) {
             "readMode" -> deliver(result, engine.readMode())
-            "initializeMode" -> deliver(result, engine.initializeMode(call.argument<Boolean>("legacyMock") == true))
-            "beginOperation" -> deliver(result, engine.beginOperation())
+            "beginModeImport" -> engine.beginModeImport(owner, { token -> deliver(result, token) }, { fail(result) })
+            "finishModeImport" -> {
+                engine.finishModeImport(owner, call.argument<String>("token") ?: error("Import token required."),
+                    call.argument<Boolean>("legacyMock"))
+                deliver(result, null)
+            }
+            "beginOperation" -> if (call.argument<Boolean>("waitForSwitch") == true) {
+                engine.beginAfterSwitch(owner, { value -> deliver(result, value) }, { fail(result) })
+            } else {
+                deliver(result, engine.beginOperation())
+            }
             "operationCurrent" -> deliver(result, engine.operationCurrent(generation()))
             "enterEffect" -> deliver(result, engine.enterEffect(owner, generation(), call.argument<Boolean>("settlement") == true))
             "exitEffect" -> {
@@ -101,7 +114,34 @@ internal class ConnectionCacheChannel(context: Context, messenger: BinaryMesseng
                 deliver(result, null)
             }
             "switchMode" -> engine.switchMode(owner, call.argument<String>("mode") ?: error("Mode required."),
-                { value -> deliver(result, value) }, { fail(result) })
+                { value -> deliver(result, value) }, { error ->
+                    if (error is ConnectionCacheEngine.ModeWriteFailure) {
+                        main.post {
+                            if (attached) result.error("data_mode_write_failed", "Could not save data mode.",
+                                error.unresolvedStorageFailure)
+                        }
+                    } else fail(result)
+                })
+            else -> return false
+        }
+        return true
+    }
+    /** Recovery delivery state is process-wide and carries no connection. */
+    private fun recoveryDelivery(call: MethodCall, result: MethodChannel.Result): Boolean {
+        fun occurrences() = call.argument<List<String>>("occurrences") ?: error("Occurrences required.")
+        when (call.method) {
+            "beginRecoveryPreferenceWrite" -> deliver(result, engine.beginRecoveryPreferenceWrite(owner))
+            "finishRecoveryPreferenceWrite" -> {
+                engine.finishRecoveryPreferenceWrite(owner, call.argument<String>("token") ?: error("Token required."))
+                deliver(result, null)
+            }
+            "readRecoveryPreferenceRevision" -> deliver(result, engine.readRecoveryPreferenceRevision())
+            "recoveryDeliveryCurrent" -> deliver(result, engine.recoveryDeliveryCurrent(
+                call.argument<Number>("revision")?.toLong() ?: error("Revision required."),
+                call.argument<Number>("generation")?.toLong()))
+            "readUnrecordedRecoveries" -> deliver(result, engine.readUnrecordedRecoveries())
+            "recordUnrecordedRecoveries" -> { engine.recordUnrecordedRecoveries(occurrences()); deliver(result, null) }
+            "forgetUnrecordedRecoveries" -> { engine.forgetUnrecordedRecoveries(occurrences()); deliver(result, null) }
             else -> return false
         }
         return true
@@ -120,13 +160,22 @@ internal class ConnectionCacheChannel(context: Context, messenger: BinaryMesseng
     companion object {
         private val executor = Executors.newSingleThreadExecutor()
         private var shared: ConnectionCacheEngine? = null
-        @Synchronized private fun engine(context: Context): ConnectionCacheEngine {
+        @Synchronized internal fun engine(context: Context): ConnectionCacheEngine {
             shared?.let { return it }
             // Only Flutter Debug may honor Debug Mock data. Profile is debuggable
             // too, so the embedding's per-mode build constant decides.
             val mockAllowed = io.flutter.BuildConfig.DEBUG
             return ConnectionCacheEngine(backend(context, "wardpulse.connection-cache.v1"),
                 backend(context, "wardpulse.data-mode.v1"), { System.currentTimeMillis() }, mockAllowed).also { shared = it }
+        }
+        fun captureLegacyWatchRefresh(context: Context, payload: ByteArray?, captured: (Map<String, Any>?) -> Unit) {
+            executor.execute {
+                val operation = runCatching { engine(context.applicationContext).captureLegacyWatchRefresh(payload) }.getOrNull()
+                Handler(Looper.getMainLooper()).post { captured(operation) }
+            }
+        }
+        fun finishPublication(engine: ConnectionCacheEngine, owner: String, lease: String) {
+            executor.execute { engine.exitEffect(owner, lease, false) }
         }
         private fun backend(context: Context, name: String): ConnectionCacheEngine.Backend {
             // Opened on first use: unscoped work never loads the mode file.

@@ -24,14 +24,3 @@ final class SecureDebugDataPreferenceStore implements DebugDataPreferenceStore {
     return _storage.write(key: _key, value: value.toString());
   }
 }
-
-final class DisabledDebugDataPreferenceStore
-    implements DebugDataPreferenceStore {
-  const DisabledDebugDataPreferenceStore();
-
-  @override
-  Future<bool> readMockDataEnabled() async => false;
-
-  @override
-  Future<void> writeMockDataEnabled(bool value) async {}
-}

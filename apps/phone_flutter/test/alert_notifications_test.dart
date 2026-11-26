@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ward_pulse_phone/sync/data_mode.dart';
 import 'package:ward_pulse_phone/dashboard/apply_alert_settings.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/settings/alert_notification_preferences.dart';
@@ -681,8 +682,11 @@ void main() {
       conditions: store,
       notifier: notifier,
     );
-    await delivery.sync(_snapshot([_clear]), mockData: true);
-    await delivery.sync(_snapshot([_crossed]), mockData: true);
+    final mock = await MemoryDataModeAuthority(mode: DataMode.mock).begin();
+    await mock.run(() async {
+      await delivery.sync(_snapshot([_clear]));
+      await delivery.sync(_snapshot([_crossed]));
+    });
     expect(store.reads, 0);
     expect(store.writes, 0);
     expect(store.values, {_key: true});
@@ -732,12 +736,15 @@ void main() {
     },
   );
 
-  test(
-    'retirement during the final preference read suppresses headless posting',
-    () async {
+  for (final switchMode in [false, true]) {
+    final loss =
+        switchMode ? 'a mode switch' : 'same-mode headless ownership loss';
+    test('$loss during the final preference read suppresses posting', () async {
       final entered = Completer<void>();
       final release = Completer<void>();
-      var current = true;
+      final authority = MemoryDataModeAuthority();
+      final live = await authority.begin();
+      var ownsReport = true;
       final preferences =
           _Preferences()
             ..beforeRead = () async {
@@ -746,22 +753,66 @@ void main() {
             };
       final store = _Conditions();
       final notifier = _Notifier();
-      final syncing = AlertNotificationDelivery(
-        preferences: preferences,
-        conditions: store,
-        notifier: notifier,
-      ).sync(_snapshot([_crossed]), isCurrent: () async => current);
+      final syncing = live.run(
+        () => AlertNotificationDelivery(
+          preferences: preferences,
+          conditions: store,
+          notifier: notifier,
+        ).sync(_snapshot([_crossed]), isCurrent: () async => ownsReport),
+      );
       try {
         await entered.future;
-        current = false;
+        if (switchMode) {
+          await authority.switchTo(DataMode.mock);
+        } else {
+          ownsReport = false;
+        }
       } finally {
         release.complete();
         await syncing;
       }
+      expect(await live.isCurrent(), !switchMode);
       expect(store.values[_key], isTrue);
       expect(notifier.posts, isEmpty);
-    },
-  );
+    });
+  }
+
+  for (final effect in ['clear', 'consume', 'post']) {
+    test(
+      'headless ownership lost while admitting alert $effect suppresses it',
+      () async {
+        final gate = HeldModeAdmission(skip: effect == 'post' ? 1 : 0);
+        var ownsReport = true;
+        final store = _Conditions();
+        if (effect == 'clear') store.values[_key] = true;
+        final notifier = _Notifier();
+        final delivery = AlertNotificationDelivery(
+          preferences: _Preferences(),
+          conditions: store,
+          notifier: notifier,
+        );
+        final syncing = gate.operation().run(
+          () => delivery.sync(
+            _snapshot([effect == 'clear' ? _clear : _crossed]),
+            isCurrent: () async => ownsReport,
+          ),
+        );
+        try {
+          await Future.any([
+            gate.entered.future,
+            syncing.then((_) => fail('Alert did not reach the lease request.')),
+          ]);
+          ownsReport = false;
+        } finally {
+          gate.release.complete();
+          await syncing;
+        }
+        expect(store.writes, effect == 'post' ? 1 : 0);
+        expect(store.values[_key], effect == 'consume' ? isNull : isTrue);
+        expect(notifier.posts, isEmpty);
+      },
+    );
+  }
 
   test('separate service instances serialize within one isolate', () async {
     final entered = Completer<void>();

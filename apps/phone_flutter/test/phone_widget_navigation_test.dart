@@ -301,8 +301,21 @@ class _WatchSync implements WatchSyncService {
   void Function()? refresh;
 
   @override
-  void bindWatchRefreshListener(void Function() onRefresh) =>
-      refresh = onRefresh;
+  Future<WatchRefreshIntent?> bindWatchRefreshListener(
+    void Function(WatchRefreshIntent) onRefresh,
+  ) async {
+    refresh =
+        () => onRefresh(
+          WatchRefreshIntent.fromMessage({
+            'kind': 'refresh',
+            'installId': 'memory-install',
+            'generation': 0,
+            'mode': 'live',
+            'requestId': 'legacy-tap',
+          }),
+        );
+    return null;
+  }
 
   @override
   void unbindWatchRefreshListener() => refresh = null;
@@ -313,6 +326,7 @@ class _WatchSync implements WatchSyncService {
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,
+    Future<bool> Function()? isCurrent,
   }) async {}
 }
 

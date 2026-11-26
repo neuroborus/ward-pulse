@@ -46,14 +46,27 @@ public final class ConnectionCacheEngine {
     private final Backend modeBackend;
     private final boolean mockAllowed;
     private Map<String, String> confirmedModeRecord;
+    private final ArrayDeque<ModeImport> modeImports = new ArrayDeque<>();
+    private ModeImport activeModeImport;
     private final Map<String, ModeLease> modeLeases = new HashMap<>();
     private final ArrayDeque<ModeSwitch> modeSwitches = new ArrayDeque<>();
+    private final ArrayDeque<ModeAdmission> modeAdmissions = new ArrayDeque<>();
     private boolean unresolvedModeEffect;
     // A failed first mode write can stay visible in SharedPreferences memory; never adopt it.
     private boolean modeUnconfirmed;
     // SharedPreferences can expose failed commits in memory. Keep the whole
     // confirmed map so a sibling commit cannot persist any part of a failed write.
     private Map<String, String> confirmedAfterFailure;
+    // Plan recovery switch saves, by token and owner. Each start and finish
+    // advances the revision, so a reader in any engine can prove its choice.
+    private final Map<String, String> recoveryPreferenceWrites = new HashMap<>();
+    private long recoveryPreferenceRevision;
+    // Recovery occurrences Android accepted before their history write failed.
+    private final Set<String> unrecordedRecoveries = new HashSet<>();
+    // Watch summaries by arrival: the newest reserved and the newest sent.
+    private long watchSummaryReserved;
+    private long watchSummarySent;
+    private long automaticSamples;
 
     public ConnectionCacheEngine(Backend backend) { this(backend, System::currentTimeMillis); }
     public ConnectionCacheEngine(Backend backend, LongSupplier clock) { this(backend, new MemoryBackend(), clock, true); }
@@ -111,6 +124,44 @@ public final class ConnectionCacheEngine {
         }
         return readMode();
     }
+    /** Serializes the secure-storage read as well as the first mode write. */
+    public synchronized void beginModeImport(String owner, Consumer<String> ready, Consumer<Exception> failure) {
+        modeImports.addLast(new ModeImport(owner, ready, failure));
+        advanceModeImport();
+    }
+
+    public synchronized void finishModeImport(String owner, String token, Boolean legacyMock) {
+        if (activeModeImport == null || !activeModeImport.owner.equals(owner)
+                || !activeModeImport.token.equals(token)) {
+            throw new IllegalStateException("Data mode import unavailable.");
+        }
+        try {
+            if (legacyMock != null) initializeMode(legacyMock);
+        } finally {
+            activeModeImport = null;
+            advanceModeImport();
+        }
+    }
+
+    private void advanceModeImport() {
+        while (activeModeImport == null && !modeImports.isEmpty()) {
+            ModeImport request = modeImports.removeFirst();
+            try {
+                if (modeRecord() != null) {
+                    request.ready.accept(null);
+                } else if (!mockAllowed) {
+                    initializeMode(false);
+                    request.ready.accept(null);
+                } else {
+                    activeModeImport = request;
+                    request.ready.accept(request.token);
+                }
+            } catch (RuntimeException error) {
+                activeModeImport = null;
+                request.failure.accept(error);
+            }
+        }
+    }
     private boolean commitMode(Map<String, String> record) {
         boolean committed;
         try { committed = modeBackend.commit(record); } catch (RuntimeException error) { committed = false; }
@@ -133,8 +184,43 @@ public final class ConnectionCacheEngine {
         view.put("requestId", unique());
         return view;
     }
+
+    public synchronized void beginAfterSwitch(String owner, Consumer<Map<String, Object>> success,
+            Consumer<Exception> failure) {
+        modeAdmissions.addLast(new ModeAdmission(owner, success, failure));
+        admitWaitingOperations();
+    }
+
+    private void admitWaitingOperations() {
+        while (modeSwitches.isEmpty() && !modeAdmissions.isEmpty()) {
+            ModeAdmission request = modeAdmissions.removeFirst();
+            try {
+                request.success.accept(beginOperation());
+            } catch (RuntimeException error) {
+                request.failure.accept(error);
+            }
+        }
+    }
+
+    /** v9 has no ownership fields. Only its empty tap in the initial mode may refresh. */
+    public synchronized Map<String, Object> captureLegacyWatchRefresh(byte[] payload) {
+        if (payload == null || payload.length != 0 || !modeSwitches.isEmpty()) return null;
+        Long generation = modeGeneration();
+        if (generation == null || generation != 0L) return null;
+        return beginOperation();
+    }
     public synchronized boolean operationCurrent(long generation) {
         return modeSwitches.isEmpty() && generationCurrent(generation);
+    }
+
+    /** Orders a launcher delivery against the durable mode write; a draining switch closes it. */
+    public synchronized void deliverWidgetIfModeCurrent(String installId, Long generation, Runnable deliver) {
+        Map<String, String> record = modeRecord();
+        if (!modeSwitches.isEmpty()) return;
+        if (record == null ? installId == null && generation == null
+                : record.get("installId").equals(installId) && Long.valueOf(record.get("generation")).equals(generation)) {
+            deliver.run();
+        }
     }
     /** Scoped provider work runs only in the current Live generation. */
     private boolean liveCurrent(Long generation) {
@@ -177,14 +263,25 @@ public final class ConnectionCacheEngine {
                 // The old record and generation stay authoritative, and a
                 // drained storage failure stays pending for the next switch.
                 unresolvedModeEffect |= unresolved;
-                request.failure.accept(new IllegalStateException("Data mode storage failed."));
+                request.failure.accept(new ModeWriteFailure(unresolved));
                 continue;
             }
             Map<String, Object> view = readMode();
             view.put("unresolved", unresolved);
             request.success.accept(view);
         }
+        admitWaitingOperations();
     }
+
+    public static final class ModeWriteFailure extends IllegalStateException {
+        public final boolean unresolvedStorageFailure;
+
+        ModeWriteFailure(boolean unresolvedStorageFailure) {
+            super("Data mode storage failed.");
+            this.unresolvedStorageFailure = unresolvedStorageFailure;
+        }
+    }
+
     private Map<String, String> readAll() {
         Map<String, String> all = new LinkedHashMap<>(
             confirmedAfterFailure == null ? backend.read() : confirmedAfterFailure);
@@ -403,6 +500,8 @@ public final class ConnectionCacheEngine {
             throw new IllegalArgumentException("Invalid automatic interval.");
         long now = clock.getAsLong();
         Map<String, Object> result = new LinkedHashMap<>();
+        // Orders competing loads' cadence observations by when this engine made them.
+        result.put("sample", ++automaticSamples);
         // Both decisions report the confirmed anchor that reset wakes count from.
         boolean anchored = state.get("generation").equals(state.get("automaticGeneration"))
                 && state.get("identity").equals(state.get("automaticIdentity"));
@@ -429,6 +528,42 @@ public final class ConnectionCacheEngine {
         }
         persistAutomaticAnchor(connection, state, now);
         result.put("admitted", true); result.put("automaticAt", now); return result;
+    }
+    /**
+     * Whether cadence claimed under [expected] still belongs to the confirmed credential.
+     * Like the claim's own anchor, it follows generation and identity, so a snapshot epoch
+     * change keeps it. Unreadable or fenced state throws instead of proving retirement.
+     */
+    public synchronized boolean ownsAutomatic(String connection, Map<String, String> expected) {
+        if (fenced.contains(connection)) throw new IllegalStateException("Credential lifecycle unavailable.");
+        Map<String, String> state = state(connection);
+        return state.get("identity") != null && state.get("generation").equals(expected.get("generation"))
+            && state.get("identity").equals(expected.get("identity"));
+    }
+    /** Orders watch summaries by arrival across engines in this process. */
+    public synchronized long reserveWatchSummary() {
+        return ++watchSummaryReserved;
+    }
+    /** Whether [ticket] may still be sent; a later arrival that was already sent supersedes it. */
+    public synchronized boolean claimWatchSummary(long ticket) {
+        if (ticket <= watchSummarySent) return false;
+        watchSummarySent = ticket;
+        return true;
+    }
+    public synchronized Boolean admitWatchSummary(long ticket, Map<String, Map<String, String>> versions) {
+        return admitWatchSummary(ticket, versions, Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+    }
+    /**
+     * Admits the send of [ticket] in the same step that proves its report or failure selection,
+     * as {@link #validAll} would, so a credential retirement or cache write in this mode
+     * generation orders before or after the send. Null [versions] carry no selection proof,
+     * leaving arrival order alone; null means the proof is stale, and consumes no ticket.
+     */
+    public synchronized Boolean admitWatchSummary(long ticket, Map<String, Map<String, String>> versions,
+            Map<String, Long> attemptClockEras, Map<String, ? extends Map<String, ?>> payloadOrders,
+            Map<String, String> emptyCacheOrders) {
+        if (versions != null && !validAll(versions, attemptClockEras, payloadOrders, emptyCacheOrders)) return null;
+        return claimWatchSummary(ticket);
     }
     private void persistAutomaticAnchor(String connection, Map<String, String> state, long anchor) {
         Map<String, String> all = readAll();
@@ -742,7 +877,36 @@ public final class ConnectionCacheEngine {
         all.put(connection + ".retired", state.get("retired"));
         return commit(all);
     }
+    public synchronized String beginRecoveryPreferenceWrite(String owner) {
+        String token = UUID.randomUUID().toString();
+        recoveryPreferenceWrites.put(token, owner);
+        recoveryPreferenceRevision++;
+        return token;
+    }
+    public synchronized void finishRecoveryPreferenceWrite(String owner, String token) {
+        if (!owner.equals(recoveryPreferenceWrites.get(token))) return;
+        recoveryPreferenceWrites.remove(token);
+        recoveryPreferenceRevision++;
+    }
+    /** Null while a save is in flight: its outcome is not yet readable. */
+    public synchronized Long readRecoveryPreferenceRevision() {
+        return recoveryPreferenceWrites.isEmpty() ? recoveryPreferenceRevision : null;
+    }
+    public synchronized boolean recoveryDeliveryCurrent(long revision, Long generation) {
+        return recoveryPreferenceWrites.isEmpty() && recoveryPreferenceRevision == revision && liveCurrent(generation);
+    }
+    public synchronized List<String> readUnrecordedRecoveries() { return new ArrayList<>(unrecordedRecoveries); }
+    public synchronized void recordUnrecordedRecoveries(List<String> occurrences) { unrecordedRecoveries.addAll(occurrences); }
+    public synchronized void forgetUnrecordedRecoveries(List<String> occurrences) { unrecordedRecoveries.removeAll(occurrences); }
     public synchronized void detach(String owner) {
+        // A detached engine's save can no longer finish; its outcome is unknown.
+        if (recoveryPreferenceWrites.values().removeIf(owner::equals)) recoveryPreferenceRevision++;
+        modeAdmissions.removeIf(request -> request.owner.equals(owner));
+        modeImports.removeIf(request -> request.owner.equals(owner));
+        if (activeModeImport != null && activeModeImport.owner.equals(owner)) {
+            activeModeImport = null;
+            advanceModeImport();
+        }
         modeSwitches.removeIf(request -> request.owner.equals(owner));
         // A detached engine's sent OAuth refresh can no longer store its rotation.
         modeLeases.values().removeIf(lease -> {
@@ -778,6 +942,18 @@ public final class ConnectionCacheEngine {
     }
     public synchronized boolean validAll(Map<String, Map<String, String>> versions) {
         return validAll(versions, Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+    }
+    /**
+     * Also admits a recovery post, when {@code recoveryPreferenceRevision} is given: the saved
+     * choice must be settled at that revision and {@code recoveryModeGeneration}, if given, the
+     * Live generation with admission open.
+     */
+    public synchronized boolean validAll(Map<String, Map<String, String>> versions,
+            Map<String, Long> attemptClockEras, Map<String, ? extends Map<String, ?>> payloadOrders,
+            Map<String, String> emptyCacheOrders, Long recoveryPreferenceRevision, Long recoveryModeGeneration) {
+        if (recoveryPreferenceRevision != null
+                && !recoveryDeliveryCurrent(recoveryPreferenceRevision, recoveryModeGeneration)) return false;
+        return validAll(versions, attemptClockEras, payloadOrders, emptyCacheOrders);
     }
     public synchronized boolean validAll(Map<String, Map<String, String>> versions,
             Map<String, Long> attemptClockEras, Map<String, ? extends Map<String, ?>> payloadOrders,
@@ -1057,6 +1233,16 @@ public final class ConnectionCacheEngine {
             this.failure = failure;
         }
     }
+    private static final class ModeImport {
+        final String owner;
+        final String token = unique();
+        final Consumer<String> ready;
+        final Consumer<Exception> failure;
+        ModeImport(String owner, Consumer<String> ready, Consumer<Exception> failure) {
+            this.owner = owner; this.ready = ready; this.failure = failure;
+        }
+    }
+
     private static final class ModeLease {
         final String owner;
         final long generation;
@@ -1065,6 +1251,15 @@ public final class ConnectionCacheEngine {
             this.owner = owner; this.generation = generation; this.settlement = settlement;
         }
     }
+    private static final class ModeAdmission {
+        final String owner;
+        final Consumer<Map<String, Object>> success;
+        final Consumer<Exception> failure;
+        ModeAdmission(String owner, Consumer<Map<String, Object>> success, Consumer<Exception> failure) {
+            this.owner = owner; this.success = success; this.failure = failure;
+        }
+    }
+
     private static final class ModeSwitch {
         final String owner, mode; final Consumer<Map<String, Object>> success; final Consumer<Exception> failure;
         ModeSwitch(String owner, String mode, Consumer<Map<String, Object>> success, Consumer<Exception> failure) {

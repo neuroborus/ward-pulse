@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -6,26 +5,92 @@ import 'package:ward_pulse_bindings/ward_pulse_bindings.dart'
     show mergeDashboardSnapshotsJson;
 import 'package:ward_pulse_watch_sync/ward_pulse_watch_sync.dart';
 
+import '../dashboard/connection_snapshot_cache.dart';
 import '../dashboard/dashboard_models.dart';
 import '../providers/claude_plan_pause.dart';
 import '../providers/provider_connection.dart';
 import '../settings/watch_ring_preferences.dart';
+import 'data_mode.dart';
 import 'manual_refresh_window.dart';
 import 'selected_data_freshness.dart';
 import 'watch_credits_glance.dart';
 
 abstract interface class WatchSyncService {
+  /// Queues [snapshot] for Wear. [isCurrent] proves its load and credential
+  /// ownership again at the native send boundary, after Google Play services
+  /// is ready; a `false` answer drops the summary for its newer owner. In
+  /// Live, Android then admits the send with [snapshot]'s native selection
+  /// proof, its credential versions and cache ordering, in one step. A
+  /// credential retirement or cache write after that answer throws
+  /// [DataModeRetired] instead of publishing.
   Future<void> sync(
     DashboardSnapshot snapshot,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,
+    Future<bool> Function()? isCurrent,
   });
 
-  /// Native → Dart: Wear Glance asked the phone to sync providers.
-  void bindWatchRefreshListener(void Function() onRefresh);
+  /// Binds warm requests and claims the pending launch request before loading.
+  Future<WatchRefreshIntent?> bindWatchRefreshListener(
+    void Function(WatchRefreshIntent) onRefresh,
+  );
 
   void unbindWatchRefreshListener();
+}
+
+/// A v9 tap can refresh only the operation captured at native ingress.
+final class WatchRefreshIntent {
+  const WatchRefreshIntent.resend() : _state = null, _requestId = null;
+
+  const WatchRefreshIntent._(this._state, this._requestId);
+
+  factory WatchRefreshIntent.fromMessage(Object? message) {
+    if (message case {
+      'kind': 'refresh',
+      'generation': final int generation,
+      'installId': final String installId,
+      'requestId': final String requestId,
+      'mode': final String mode,
+    } when generation == 0 && installId.isNotEmpty && requestId.isNotEmpty) {
+      try {
+        return WatchRefreshIntent._(
+          DataModeState(
+            installId: installId,
+            generation: generation,
+            mode: DataMode.parse(mode),
+          ),
+          requestId,
+        );
+      } on StateError {
+        // Unknown ownership can only request a resend.
+      }
+    }
+    return const WatchRefreshIntent.resend();
+  }
+
+  /// The owner and request captured at native ingress; `null` for a resend.
+  final DataModeState? _state;
+  final String? _requestId;
+
+  /// Starts a cache-only resend if the captured owner is no longer current.
+  Future<DataModeOperation> operation(DataModeAuthority authority) async {
+    final state = _state;
+    if (state != null) {
+      final current = await authority.read();
+      if (current.installId == state.installId &&
+          current.generation == state.generation &&
+          current.mode == state.mode &&
+          await authority.isCurrent(state.generation)) {
+        return DataModeOperation(
+          authority: authority,
+          state: state,
+          requestId: _requestId!,
+        );
+      }
+    }
+    return authority.begin(cacheOnly: true, waitForSwitch: true);
+  }
 }
 
 class MethodChannelWatchSyncService implements WatchSyncService {
@@ -47,6 +112,7 @@ class MethodChannelWatchSyncService implements WatchSyncService {
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,
+    Future<bool> Function()? isCurrent,
   }) async {
     // Keep the last valid publication while the owner corrects saved choices.
     if (watchRingCapacityReason(
@@ -60,30 +126,48 @@ class MethodChannelWatchSyncService implements WatchSyncService {
         null) {
       return;
     }
-    await WardPulseWatchSync.syncSummary(
-      WatchDashboardSummaryPayload.fromSnapshot(
-        snapshot,
-        ringPreferences,
-        manualRefreshAnchorAt: manualRefreshAnchorAt,
-        mockDataMode: mockDataMode,
-        claudePlanPaused: claudePlanPaused,
-      ).encode(),
-    );
+    final operation = DataModeOperation.current;
+    try {
+      await WardPulseWatchSync.syncSummary(
+        WatchDashboardSummaryPayload.fromSnapshot(
+          snapshot,
+          ringPreferences,
+          manualRefreshAnchorAt: manualRefreshAnchorAt,
+          mockDataMode: mockDataMode,
+          claudePlanPaused: claudePlanPaused,
+        ).encode(),
+        generation: operation?.generation,
+        isCurrent: isCurrent,
+        selection:
+            operation?.mode == DataMode.live
+                ? snapshotSelectionProof(snapshot)
+                : null,
+      );
+    } on PlatformException catch (error) {
+      if (error.code == 'watch_summary_retired') throw DataModeRetired();
+      rethrow;
+    }
   }
 
   @override
-  void bindWatchRefreshListener(void Function() onRefresh) {
+  Future<WatchRefreshIntent?> bindWatchRefreshListener(
+    void Function(WatchRefreshIntent) onRefresh,
+  ) async {
     _watchRefreshChannel.setMethodCallHandler((call) async {
       if (call.method == _watchRefreshMethod) {
-        onRefresh();
+        onRefresh(WatchRefreshIntent.fromMessage(call.arguments));
       }
     });
-    // Flush a refresh tap that arrived before the Dart handler was bound.
-    unawaited(
-      _watchRefreshChannel
-          .invokeMethod<void>(_watchRefreshReadyMethod)
-          .catchError((_) {}),
-    );
+    try {
+      final pending = await _watchRefreshChannel.invokeMethod<Object?>(
+        _watchRefreshReadyMethod,
+      );
+      return pending == null ? null : WatchRefreshIntent.fromMessage(pending);
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return const WatchRefreshIntent.resend();
+    }
   }
 
   @override

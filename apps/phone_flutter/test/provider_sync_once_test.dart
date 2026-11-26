@@ -23,11 +23,14 @@ import 'package:ward_pulse_phone/dashboard/dashboard_models.dart';
 import 'package:ward_pulse_phone/dashboard/dashboard_repository.dart';
 import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
 import 'package:ward_pulse_phone/settings/alert_threshold_preferences.dart';
-import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
 import 'package:ward_pulse_phone/settings/recovery_notification_preferences.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/headless_provider_sync.dart';
-import 'package:ward_pulse_phone/sync/provider_sync_once.dart';
+import 'package:ward_pulse_phone/sync/data_mode.dart';
+import 'package:ward_pulse_phone/sync/provider_sync_once.dart' as worker;
+import 'package:ward_pulse_phone/sync/provider_sync_once.dart'
+    hide providerSyncOnce;
+import 'package:ward_pulse_phone/sync/manual_refresh_window.dart';
 import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/sync/automatic_poll.dart';
 import 'package:ward_pulse_phone/sync/recovery_notifications.dart';
@@ -40,7 +43,6 @@ import 'connection_cache_test_support.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  // Debug test builds read the saved Mock choice; absent means Live.
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   test(
     'setup failure after wholly skipped work cannot mark the widget stale',
@@ -96,6 +98,7 @@ void main() {
     setUp(() async {
       FlutterSecureStorage.setMockInitialValues({});
       await bridge.reset();
+      await bridge.invoke('mode-authority', 'initializeMode', {});
     });
     for (final boundary in [
       'cache capture',
@@ -165,7 +168,7 @@ void main() {
               reconnect = await foreground.beginReconnect(id);
             if (finalLeaseFails) secure.failReadKey = secure.values.keys.single;
           }
-          if (finalLeaseFails && method == 'validFetch') {
+          if (finalLeaseFails && _isFinalFetchCheck(method, arguments)) {
             finalLeaseReply = result;
             secure.failReadKey = null;
             if (finalLeaseThrows) {
@@ -192,7 +195,7 @@ void main() {
         };
         older.beforeInvoke = (method, arguments) async {
           if (arguments['connection'] != id.storageKey) return;
-          if (finalLeaseRejects && method == 'validFetch') {
+          if (finalLeaseRejects && _isFinalFetchCheck(method, arguments)) {
             // Retire only this fetch; the final check sees the native rejection.
             await bridge.invoke('older', 'releaseFetch', arguments);
           }
@@ -250,7 +253,6 @@ void main() {
           ),
         );
         Future<void> run(PhoneLiveBindings live) => providerSyncOnce(
-          debugBuild: false,
           load:
               (owner) => loadProviderSyncWork(
                 owner,
@@ -331,11 +333,46 @@ void main() {
                   : null;
           final published = Map.of(capture.widgetData);
           final dispatched = List.of(calls);
+          // The older run resumes against the newer saved choices and
+          // notification bookkeeping, with Android notifications enabled.
+          const storage = FlutterSecureStorage();
+          // The test platform returns its live backing map; keep a copy.
+          final savedState =
+              finalLeaseFails ? Map.of(await storage.readAll()) : null;
+          final posted = <MethodCall>[];
+          if (finalLeaseFails) {
+            const notifications = MethodChannel(
+              'dexterous.com/flutter/local_notifications',
+            );
+            final messenger =
+                TestDefaultBinaryMessengerBinding
+                    .instance
+                    .defaultBinaryMessenger;
+            addTearDown(
+              () => messenger.setMockMethodCallHandler(notifications, null),
+            );
+            messenger.setMockMethodCallHandler(notifications, (call) async {
+              if (call.method == 'show') posted.add(call);
+              return true;
+            });
+          }
           release.complete();
           await pending;
 
           expect(calls, dispatched);
           expect(capture.widgetData, published);
+          if (finalLeaseFails) {
+            expect(posted, isEmpty);
+            expect(await storage.readAll(), savedState);
+            expect(
+              (await SecureWatchRingPreferenceStore().read()).selectedIds,
+              [cursorOwnPoolId],
+            );
+            expect(
+              (await SecurePhoneWidgetPreferenceStore().read()).selectedIds,
+              [cursorOwnPoolId],
+            );
+          }
           expect(failedPairs, pairedReadFails ? 1 : 0);
           expect(
             credentialReads,
@@ -448,7 +485,6 @@ void main() {
         final calls = _bindSurfaces();
         final failures = <(String, Object)>[];
         await providerSyncOnce(
-          debugBuild: false,
           load:
               (owner) => loadProviderSyncWork(
                 owner,
@@ -522,7 +558,6 @@ void main() {
           ),
         );
         await providerSyncOnce(
-          debugBuild: false,
           load: (owner) => loadProviderSyncWork(owner, createLive: () => live),
           logFailure: (step, error, _) => failures.add((step, error)),
         );
@@ -626,7 +661,6 @@ void main() {
           final failures = <(String, Object)>[];
           Future<void> run(ConnectionCachePlatform native, int usedPercent) =>
               providerSyncOnce(
-                debugBuild: false,
                 load:
                     (owner) => loadProviderSyncWork(
                       owner,
@@ -817,7 +851,6 @@ void main() {
         final calls = _bindSurfaces(capture: capture);
         final failures = <(String, Object)>[];
         Future<void> run(PhoneLiveBindings live) => providerSyncOnce(
-          debugBuild: false,
           load:
               (owner) => loadProviderSyncWork(
                 owner,
@@ -995,7 +1028,6 @@ void main() {
           ),
         );
         Future<void> run(PhoneLiveBindings live) => providerSyncOnce(
-          debugBuild: false,
           load:
               (owner) => loadProviderSyncWork(
                 owner,
@@ -1125,7 +1157,6 @@ void main() {
           ConnectionCachePlatform platform, {
           bool hold = false,
         }) => providerSyncOnce(
-          debugBuild: false,
           load: (owner) async {
             try {
               return await loadProviderSyncWork(
@@ -1240,7 +1271,6 @@ void main() {
           final failures = <(String, Object)>[];
           Future<void> run(ConnectionCachePlatform platform, int usage) =>
               providerSyncOnce(
-                debugBuild: false,
                 load:
                     (owner) => loadProviderSyncWork(
                       owner,
@@ -1267,6 +1297,14 @@ void main() {
           expect(priorWidget['row_0_percent'], '60% left');
           expect(priorWidget['stale'], '0');
           expect(_watchUsage(priorWatch), {cursorOwnPoolId: 40});
+          // Android admits the send with the published report's credential
+          // and cache ordering.
+          final sendProof = Map<String, Object?>.from(
+            capture.watchSelections.single!,
+          );
+          expect((sendProof['versions'] as Map)[key], version.values);
+          expect(sendProof['payloadOrders'], contains(key));
+          expect(await bridge.invoke('reader', 'validAll', sendProof), isTrue);
           calls.clear();
           await bridge.invoke('test', 'setClock', {'value': 3600000});
 
@@ -1392,7 +1430,6 @@ void main() {
         final failures = <(String, Object)>[];
         Future<void> run(ConnectionCachePlatform platform, int usedPercent) =>
             providerSyncOnce(
-              debugBuild: false,
               load:
                   (owner) => loadProviderSyncWork(
                     owner,
@@ -1487,7 +1524,6 @@ void main() {
         var staleWrites = 0;
         final failures = <String>[];
         final run = providerSyncOnce(
-          debugBuild: false,
           load: (owner) async {
             try {
               return await loadProviderSyncWork(
@@ -1544,9 +1580,10 @@ void main() {
           CredentialVersion({}),
           DateTime.utc(2026, 11, 6),
         );
+        final operation = await MemoryDataModeAuthority().begin();
         final work = await poll.run(
           () => loadProviderSyncWork(
-            HeadlessLiveOwner(),
+            HeadlessLiveOwner(operation),
             watchRingStore: _WatchRead(() async => throw StateError('Skipped')),
             widgetStore: _WidgetRead(() async => throw StateError('Skipped')),
             createLive:
@@ -1588,7 +1625,6 @@ void main() {
               http: ProviderReportingHttp(transport: transport),
             ),
           ),
-          debugData: _DebugData(false),
         );
         await transport.started.future;
         switch (change) {
@@ -1941,7 +1977,6 @@ void main() {
             HeadlessProviderSync.taskName,
             sync:
                 () => providerSyncOnce(
-                  debugBuild: false,
                   load:
                       (owner) => loadProviderSyncWork(
                         owner,
@@ -2044,7 +2079,6 @@ void main() {
         );
         final failures = <Object>[];
         await providerSyncOnce(
-          debugBuild: false,
           load:
               (owner) =>
                   loadProviderSyncWork(owner, createLive: () => headless),
@@ -2438,6 +2472,91 @@ void main() {
       },
     );
 
+    for (final crossed in [false, true]) {
+      test(
+        'headless Wear cooldown follows the claim, not a report dated before a clock rollback${crossed ? ' once the clock passes it' : ''}',
+        () async {
+          final now = DateTime.now().toUtc();
+          final claimedAt = now.subtract(const Duration(minutes: 1));
+          // The retained report predates the rollback. Once crossed, the clock
+          // passed its time between the claim and publication.
+          final reportAt =
+              crossed
+                  ? now.subtract(const Duration(seconds: 30))
+                  : now.add(const Duration(hours: 1));
+          final snapshot = DashboardSnapshot.fromJson({
+            ..._surfaceSnapshot().toJson(),
+            'generatedAt': reportAt.toIso8601String(),
+          });
+          await SecureWatchRingPreferenceStore().write(
+            const WatchRingPreferences(selectedIds: [claudePlanRingId]),
+          );
+          final capture = _SurfaceCapture();
+          _bindSurfaces(capture: capture);
+          final headless = _HeadlessRun();
+          final live = _LiveFixture(snapshot: snapshot)
+            ..claims['anthropic.plan'] = (
+              at: claimedAt,
+              version: CredentialVersion({'generation': 'plan-1'}),
+            );
+          live.release.complete();
+          await headless.sync(live.create);
+
+          expect(headless.failures, isNot(contains('watch')));
+          final published = capture.watchSummaries.single;
+          // Display keeps the report's own time.
+          expect(published['generatedAt'], reportAt.toIso8601String());
+          expect(published['manualRefreshAllowed'], isFalse);
+          expect(
+            published['manualRefreshAvailableAt'],
+            claimedAt.add(ManualRefreshWindow.floor).toIso8601String(),
+          );
+        },
+      );
+    }
+
+    test(
+      'headless Wear cooldown ignores a claim whose credential retired during the poll',
+      () async {
+        final now = DateTime.now().toUtc();
+        final healthyAt = now.subtract(const Duration(minutes: 1));
+        final reportAt = now.subtract(const Duration(seconds: 30));
+        final snapshot = DashboardSnapshot.fromJson({
+          ..._surfaceSnapshot().toJson(),
+          'generatedAt': reportAt.toIso8601String(),
+        });
+        await SecureWatchRingPreferenceStore().write(
+          const WatchRingPreferences(selectedIds: [claudePlanRingId]),
+        );
+        final capture = _SurfaceCapture();
+        _bindSurfaces(capture: capture);
+        final headless = _HeadlessRun();
+        final live =
+            _LiveFixture(snapshot: snapshot)
+              ..claims['anthropic.plan'] = (
+                at: healthyAt,
+                version: CredentialVersion({'generation': 'plan-1'}),
+              )
+              // A future claim recorded before its credential was replaced.
+              ..claims['anthropic.platform'] = (
+                at: now.add(const Duration(hours: 1)),
+                version: CredentialVersion({'generation': 'platform-1'}),
+              )
+              ..retiredGenerations.add('platform-1');
+        live.release.complete();
+        await headless.sync(live.create);
+
+        expect(headless.failures, isNot(contains('watch')));
+        final published = capture.watchSummaries.single;
+        expect(published['generatedAt'], reportAt.toIso8601String());
+        expect(published['manualRefreshAllowed'], isFalse);
+        expect(
+          published['manualRefreshAvailableAt'],
+          healthyAt.add(ManualRefreshWindow.floor).toIso8601String(),
+        );
+      },
+    );
+
     test(
       'headless widget removal publishes only the saved Fable row',
       () async {
@@ -2509,11 +2628,13 @@ void main() {
         final live = _LiveFixture(snapshot: _surfaceSnapshot())
           ..release.complete();
         final headless = _HeadlessRun();
+        final mode = MemoryDataModeAuthority();
         final run = runHeadlessProviderTask(
           HeadlessProviderSync.taskName,
           sync:
               () => headless.sync(
                 live.create,
+                modeAuthority: mode,
                 watchRingStore: _WatchRead(() async {
                   reading.complete();
                   await releaseRead.future;
@@ -2528,7 +2649,7 @@ void main() {
         await reading.future;
         expect(live.loads, 1);
         expect(calls, isEmpty);
-        await SecureDebugDataPreferenceStore().writeMockDataEnabled(true);
+        await mode.switchTo(DataMode.mock);
         releaseRead.complete();
         expect(await run, isTrue);
         expect(calls, isEmpty);
@@ -2730,34 +2851,23 @@ void main() {
     }
   });
 
-  group('debug Mock ownership', () {
-    final tasks = [
+  group('headless data mode ownership', () {
+    for (final task in [
       HeadlessProviderSync.taskName,
       WorkmanagerRecoveryWakeScheduler.taskName,
-    ];
-    for (final task in tasks) {
-      for (final unreadable in [false, true]) {
-        final choice = unreadable ? 'an unreadable' : 'a saved';
-        test('$task with $choice Mock choice skips before Live', () async {
-          // Saved by the production store, whose exact `true` means Mock.
-          if (!unreadable)
-            await SecureDebugDataPreferenceStore().writeMockDataEnabled(true);
-          final debugData = unreadable ? _DebugData(null) : null;
+    ]) {
+      for (final mode in [DataMode.mock, DataMode.demo]) {
+        test('$task skips Live setup in ${mode.name}', () async {
+          final authority = MemoryDataModeAuthority(mode: mode);
           final surfaces = _bindSurfaces();
           final headless = _HeadlessRun();
-          var created = 0;
-          PhoneLiveBindings createLive() {
-            created++;
-            // No credentials: Live would publish an empty dashboard.
-            return PhoneLiveBindings.create(secureStorage: FakeSecureStorage());
-          }
-
+          final live = _LiveFixture()..release.complete();
           final succeeded = await runHeadlessProviderTask(
             task,
-            sync: () => headless.sync(createLive, debugData: debugData),
+            sync: () => headless.sync(live.create, modeAuthority: authority),
           );
           expect(succeeded, isTrue);
-          expect(created, 0);
+          expect(live.created, 0);
           expect(surfaces, isEmpty);
           expect(headless.failures, isEmpty);
           expect(headless.staleWrites, 0);
@@ -2765,42 +2875,28 @@ void main() {
       }
     }
 
-    test('Mock saved during awaited setup retires before collection', () async {
-      final debugData = _DebugData(false);
-      debugData.beforeRead = () {
-        if (debugData.reads == 2) debugData.mock = true;
-      };
-      final surfaces = _bindSurfaces();
-      final live = _LiveFixture()..release.complete();
-      final headless = _HeadlessRun();
-      await headless.sync(live.create, debugData: debugData);
-      expect(live.created, 1);
-      expect(live.loads, 0);
-      expect(surfaces, isEmpty);
-      expect(headless.failures, isEmpty);
-      expect(headless.staleWrites, 0);
-    });
-
     for (final fail in [false, true]) {
       final outcome = fail ? 'failing' : 'successful';
-      test('held $outcome Live load crossing into Mock is retired', () async {
-        final debugData = _DebugData(false);
+      test('held $outcome Live load crossing a mode ABA is retired', () async {
+        final authority = MemoryDataModeAuthority();
         final surfaces = _bindSurfaces();
         final headless = _HeadlessRun();
         final held = _LiveFixture(fail: fail);
-        final run = headless.sync(held.create, debugData: debugData);
-        await held.started.future;
-        debugData.mock = true;
-        held.release.complete();
-        await run;
+        final run = headless.sync(held.create, modeAuthority: authority);
+        try {
+          await held.started.future;
+          await authority.switchTo(DataMode.mock);
+          await authority.switchTo(DataMode.live);
+        } finally {
+          held.release.complete();
+          await run;
+        }
         expect(surfaces, isEmpty);
         expect(headless.failures, isEmpty);
         expect(headless.staleWrites, 0);
 
-        // Retirement belongs to that invocation; Mock-off work starts afresh.
-        debugData.mock = false;
         final next = _LiveFixture(fail: fail)..release.complete();
-        await headless.sync(next.create, debugData: debugData);
+        await headless.sync(next.create, modeAuthority: authority);
         expect(next.loads, 1);
         if (fail) {
           expect(headless.failures, ['setup']);
@@ -2812,14 +2908,14 @@ void main() {
     }
 
     test('credentials replaced after a held failure skip STALE', () async {
-      final debugData = _DebugData(false);
+      final inner = MemoryDataModeAuthority();
+      final authority = _ObservedMode(inner);
       final headless = _HeadlessRun();
       final held = _LiveFixture(fail: true);
-      // The first mode check after the failed load observes the replacement.
-      debugData.beforeRead = () {
+      authority.beforeCheck = () async {
         if (held.release.isCompleted) held.current = false;
       };
-      final run = headless.sync(held.create, debugData: debugData);
+      final run = headless.sync(held.create, modeAuthority: authority);
       await held.started.future;
       held.release.complete();
       await run;
@@ -2849,7 +2945,6 @@ void main() {
             );
           },
           logFailure: (step, _, _) => failures.add(step),
-          debugData: _DebugData(false),
         );
         expect(failures, ['setup']);
         expect(capture.widgetData['stale'], replaced ? '0' : '1');
@@ -2879,7 +2974,6 @@ void main() {
         await providerSyncOnce(
           load: (owner) => loadProviderSyncWork(owner, createLive: live.create),
           logFailure: (step, error, _) => failures.add((step, error)),
-          debugData: _DebugData(false),
         );
         expect(live.loads, 1);
         expect(checks, 1);
@@ -2903,61 +2997,44 @@ void main() {
       });
     }
 
-    test('Mock saved between surfaces stops the remaining effects', () async {
-      final debugData = _DebugData(false);
+    test('mode switch between surfaces stops the remaining effects', () async {
+      final mode = MemoryDataModeAuthority();
+      final authority = _ObservedMode(mode);
       final surfaces = _bindSurfaces();
-      debugData.beforeRead = () {
-        if (surfaces.isNotEmpty) debugData.mock = true;
+      authority.beforeCheck = () async {
+        if (surfaces.isNotEmpty && mode.state.mode == DataMode.live) {
+          await mode.switchTo(DataMode.mock);
+        }
       };
       final headless = _HeadlessRun();
       final live = _LiveFixture()..release.complete();
-      await headless.sync(live.create, debugData: debugData);
+      await headless.sync(live.create, modeAuthority: authority);
       expect(surfaces, ['syncWatchSummary']);
       expect(headless.failures, isEmpty);
       expect(headless.staleWrites, 0);
     });
 
-    // After the redraw: the recovery step's guard, then its own checks after
-    // the awaited preference and watchlist reads.
+    // After redraw: step admission, then the reads of preferences and history.
     for (final check in [2, 3]) {
-      test('Mock seen at recovery check $check stops bookkeeping', () async {
-        final debugData = _DebugData(false);
+      test('mode switch at recovery check $check stops bookkeeping', () async {
+        final mode = MemoryDataModeAuthority();
+        final authority = _ObservedMode(mode);
         final surfaces = _bindSurfaces();
         var sinceRedraw = 0;
-        debugData.beforeRead = () {
-          if (surfaces.contains('updateWidget') && ++sinceRedraw == check)
-            debugData.mock = true;
+        authority.beforeCheck = () async {
+          if (surfaces.contains('updateWidget') && ++sinceRedraw == check) {
+            await mode.switchTo(DataMode.mock);
+          }
         };
         final headless = _HeadlessRun();
         final live = _LiveFixture()..release.complete();
-        await headless.sync(live.create, debugData: debugData);
+        await headless.sync(live.create, modeAuthority: authority);
         expect(surfaces, containsAll(['syncWatchSummary', 'updateWidget']));
         expect(headless.failures, isEmpty);
-        // A Live write would leave even an empty watchlist behind.
         final watchlist = await const FlutterSecureStorage().read(
           key: 'wardpulse.recovery.exhaustedWindows',
         );
         expect(watchlist, isNull);
-      });
-    }
-
-    final modes = <(bool, bool?)>[(true, false), (false, true), (false, null)];
-    for (final (debugBuild, saved) in modes) {
-      final build = debugBuild ? 'debug' : 'release';
-      final choice = saved == null ? 'unreadable' : 'saved $saved';
-      test('$build Live publishes with a $choice Mock choice', () async {
-        final debugData = _DebugData(saved);
-        final surfaces = _bindSurfaces();
-        final headless = _HeadlessRun();
-        final live = _LiveFixture()..release.complete();
-        await headless.sync(
-          live.create,
-          debugData: debugData,
-          debugBuild: debugBuild,
-        );
-        expect(live.loads, 1);
-        expect(surfaces, containsAll(['syncWatchSummary', 'updateWidget']));
-        expect(debugData.reads, debugBuild ? isPositive : 0);
       });
     }
   });
@@ -3158,8 +3235,7 @@ final class _HeadlessRun {
 
   Future<void> sync(
     PhoneLiveBindings Function() createLive, {
-    DebugDataPreferenceStore? debugData,
-    bool debugBuild = true,
+    DataModeAuthority? modeAuthority,
     WatchRingPreferenceStore? watchRingStore,
     PhoneWidgetPreferenceStore? widgetStore,
   }) {
@@ -3177,34 +3253,75 @@ final class _HeadlessRun {
       markWidgetStale: ({required isCurrent}) async {
         staleWrites++;
       },
-      debugBuild: debugBuild,
-      debugData: debugData,
+      modeAuthority: modeAuthority,
     );
   }
 }
 
-final class _DebugData implements DebugDataPreferenceStore {
-  _DebugData(this.mock);
+final class _ObservedMode implements DataModeAuthority {
+  _ObservedMode(this.inner);
 
-  /// `null` makes the saved choice unreadable.
-  bool? mock;
-  void Function()? beforeRead;
-  var reads = 0;
+  final MemoryDataModeAuthority inner;
+  Future<void> Function()? beforeCheck;
 
   @override
-  Future<bool> readMockDataEnabled() async {
-    reads++;
-    beforeRead?.call();
-    final value = mock;
-    if (value == null) throw StateError('Sanitized debug preference failure.');
-    return value;
+  Future<DataModeOperation> begin({
+    bool cacheOnly = false,
+    bool waitForSwitch = false,
+  }) async {
+    final operation = await inner.begin(
+      cacheOnly: cacheOnly,
+      waitForSwitch: waitForSwitch,
+    );
+    return DataModeOperation(
+      authority: this,
+      state: operation.state,
+      requestId: operation.requestId,
+      cacheOnly: cacheOnly,
+    );
   }
 
   @override
-  Future<void> writeMockDataEnabled(bool value) async {
-    mock = value;
+  Future<bool> isCurrent(int generation) async {
+    await beforeCheck?.call();
+    return inner.isCurrent(generation);
   }
+
+  @override
+  Future<DataModeState> read() => inner.read();
+
+  @override
+  Future<String?> enter(int generation, {bool settlement = false}) =>
+      inner.enter(generation, settlement: settlement);
+
+  @override
+  Future<void> exit(String lease, {bool unresolved = false}) =>
+      inner.exit(lease, unresolved: unresolved);
+
+  @override
+  Future<DataModeSwitch> switchTo(DataMode mode) => inner.switchTo(mode);
 }
+
+void _unexpectedFailure(String step, Object error, StackTrace stackTrace) =>
+    fail('Unexpected $step failure: $error');
+
+Future<void> providerSyncOnce({
+  required ProviderSyncWorkLoader load,
+  ProviderSyncFailureLogger logFailure = _unexpectedFailure,
+  ProviderSyncStaleMarker markWidgetStale =
+      HomeWidgetPhoneWidgetSyncService.markExistingRowsStale,
+  DataModeAuthority? modeAuthority,
+}) => worker.providerSyncOnce(
+  load: load,
+  logFailure: logFailure,
+  markWidgetStale: markWidgetStale,
+  modeAuthority: modeAuthority ?? MemoryDataModeAuthority(),
+);
+
+/// The fetch's final validation; its admission check precedes the credential
+/// read under a data-mode operation.
+bool _isFinalFetchCheck(String method, Map<String, Object?> arguments) =>
+    method == 'validFetch' && arguments['forAdmission'] != true;
 
 /// Production bindings whose one repository load can be held or failed.
 final class _LiveFixture {
@@ -3220,6 +3337,13 @@ final class _LiveFixture {
   /// Repository provenance; `false` models replaced credentials.
   var current = true;
   bool Function(DashboardSnapshot)? validate;
+
+  /// Corrected native anchors admitted claims report for this load, with
+  /// each claiming credential.
+  final claims = <String, ({DateTime at, CredentialVersion version})>{};
+
+  /// Credential generations retired while the load runs.
+  final retiredGenerations = <String>{};
 
   PhoneLiveBindings create() {
     created++;
@@ -3241,6 +3365,12 @@ final class _HeldRepository extends DashboardRepository {
   @override
   Future<DashboardSnapshot> load() async {
     _fixture.loads++;
+    final poll = AutomaticPollContext.current;
+    for (final MapEntry(key: connection, value: claim)
+        in _fixture.claims.entries) {
+      poll?.automaticAt[connection] = claim.at;
+      poll?.admittedVersions[connection] = claim.version;
+    }
     if (!_fixture.started.isCompleted) _fixture.started.complete();
     await _fixture.release.future;
     if (_fixture.fail) throw const DashboardLoadException();
@@ -3250,6 +3380,13 @@ final class _HeldRepository extends DashboardRepository {
   @override
   Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) async =>
       _fixture.validate?.call(snapshot) ?? _fixture.current;
+
+  @override
+  Future<bool> ownsAutomaticCadence(
+    String connection,
+    CredentialVersion version,
+  ) async =>
+      !_fixture.retiredGenerations.contains(version.values['generation']);
 }
 
 /// Records watch and widget plugin calls; both succeed.
@@ -3268,14 +3405,19 @@ List<String> _bindSurfaces({_SurfaceCapture? capture}) {
       calls.add(call.method);
       if (call.method == 'syncWatchSummary') {
         output.watchSummaries.add(
-          jsonDecode(call.arguments as String) as Map<String, dynamic>,
+          jsonDecode((call.arguments as Map)['payload'] as String)
+              as Map<String, dynamic>,
+        );
+        output.watchSelections.add(
+          (call.arguments as Map)['selection'] as Map<Object?, Object?>?,
         );
         return null;
       }
       switch (call.method) {
         case 'publish':
           output.widgetData.addAll(
-            Map<String, Object?>.from(call.arguments as Map),
+            Map<String, Object?>.from(call.arguments as Map)
+              ..remove('generation'),
           );
           return true;
         case 'markStale':
@@ -3299,6 +3441,9 @@ List<String> _bindSurfaces({_SurfaceCapture? capture}) {
 
 final class _SurfaceCapture {
   final watchSummaries = <Map<String, dynamic>>[];
+
+  /// The selection proof Android checks with each watch send claim.
+  final watchSelections = <Map<Object?, Object?>?>[];
   final widgetData = <String, Object?>{};
   final redraws = <Map<String, Object?>>[];
 }

@@ -20,6 +20,7 @@ import 'package:ward_pulse_phone/sync/claude_account_client.dart';
 import 'package:ward_pulse_phone/sync/codex_account_client.dart';
 import 'package:ward_pulse_phone/providers/connection_rejection_notice.dart';
 import 'package:ward_pulse_phone/providers/cursor_plan_row.dart';
+import 'package:ward_pulse_phone/providers/credential_dialog.dart';
 import 'package:ward_pulse_phone/sync/provider_reporting.dart';
 import 'package:ward_pulse_phone/dashboard/plan_recoveries.dart';
 import 'package:ward_pulse_phone/dashboard/provider_status_color.dart';
@@ -39,14 +40,16 @@ import 'package:ward_pulse_phone/settings/settings_screen.dart';
 import 'package:ward_pulse_phone/sync/alert_notifications.dart';
 import 'package:ward_pulse_phone/sync/notification_coordinator.dart';
 import 'package:ward_pulse_phone/sync/headless_provider_sync.dart';
+import 'package:ward_pulse_phone/sync/manual_refresh_window.dart';
 import 'package:ward_pulse_phone/sync/automatic_poll.dart';
 import 'package:ward_pulse_phone/settings/alert_percent_threshold_editor.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
-import 'package:ward_pulse_phone/settings/debug_data_preferences.dart';
+import 'package:ward_pulse_phone/sync/data_mode.dart';
 import 'package:ward_pulse_phone/settings/refresh_interval_preferences.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_payload.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_sync.dart';
+import 'package:ward_pulse_phone/widget/widget_screen.dart';
 import 'package:ward_pulse_phone/sync/poll_cadence.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_scheduler.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_logger.dart';
@@ -60,11 +63,17 @@ import 'package:ward_pulse_phone/watchface/watchface_screen.dart';
 import 'connection_cache_test_support.dart';
 
 void main() {
+  // Cases that keep the default Wear service still need its startup reply.
+  setUp(answerNoPendingWatchRefresh);
+
   group('plan retirement reconciliation', () {
     late NativeCacheTestBridge bridge;
     setUpAll(() async => bridge = await NativeCacheTestBridge.start());
     tearDownAll(() => bridge.close());
-    setUp(() => bridge.reset());
+    setUp(() async {
+      await bridge.reset();
+      await bridge.invoke('authority', 'initializeMode', {});
+    });
 
     testWidgets(
       'paused Claude stays out of manual, scheduled, and Wear-request refreshes',
@@ -217,7 +226,9 @@ void main() {
           final messenger = tester.binding.defaultBinaryMessenger;
           final payloads = <Map>[];
           messenger.setMockMethodCallHandler(channel, (call) async {
-            payloads.add(jsonDecode(call.arguments as String) as Map);
+            payloads.add(
+              jsonDecode((call.arguments as Map)['payload'] as String) as Map,
+            );
             if (!initialSync.isCompleted) {
               initialSync.complete();
             } else if (!removalSync.isCompleted) {
@@ -469,7 +480,10 @@ void main() {
               var removing = false;
               messenger.setMockMethodCallHandler(channel, (call) async {
                 expect(call.method, 'syncWatchSummary');
-                payloads.add(jsonDecode(call.arguments as String) as Map);
+                payloads.add(
+                  jsonDecode((call.arguments as Map)['payload'] as String)
+                      as Map,
+                );
                 final signal = removing ? removalSync : initialSync;
                 if (!signal.isCompleted) signal.complete();
                 if (failSync) {
@@ -2270,7 +2284,7 @@ void main() {
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(channel, (call) async {
       expect(call.method, 'syncWatchSummary');
-      published.add(call.arguments as String);
+      published.add((call.arguments as Map)['payload'] as String);
       return null;
     });
     addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
@@ -4493,35 +4507,26 @@ void main() {
     final first = _surfaceSelectionSnapshot();
     final newer = _surfaceSelectionSnapshot(spent: 350);
     final polls = <AutomaticPollContext>[];
-    final watchValidation = Completer<bool>();
-    var newerValidations = 0;
     var source = first;
-    final repository = _CountingDashboardRepository(
-      () {
-        if (AutomaticPollContext.current case final poll?) {
-          polls.add(poll);
-          if (polls.length > 1) {
-            const connection = 'openai.platform';
-            poll.skipped[connection] = AutomaticPollSkipped(
-              connection,
-              CredentialVersion({}),
-              DateTime.utc(2026, 11, 6),
-            );
-          }
+    final repository = _CountingDashboardRepository(() {
+      if (AutomaticPollContext.current case final poll?) {
+        polls.add(poll);
+        if (polls.length > 1) {
+          const connection = 'openai.platform';
+          poll.skipped[connection] = AutomaticPollSkipped(
+            connection,
+            CredentialVersion({}),
+            DateTime.utc(2026, 11, 6),
+          );
         }
-        return source;
-      },
-      validateSnapshot: (snapshot) async {
-        // After load and acceptance validate, hold the watch dispatch check.
-        if (identical(snapshot, newer) && ++newerValidations == 3) {
-          return watchValidation.future;
-        }
-        return true;
-      },
-    );
+      }
+      return source;
+    });
     final scheduler = _ManualProviderSyncScheduler();
     addTearDown(scheduler.dispose);
     final firstWrite = Completer<void>();
+    var sendEntered = false;
+    final releaseSend = Completer<void>();
     final watch = _FakeWatchSyncService();
     final spent = <int?>[];
     final launcher = _QueuedPhoneWidgetSyncService(
@@ -4553,8 +4558,15 @@ void main() {
       expect(watch.syncedSnapshots, [same(first)]);
 
       source = newer;
+      // Hold the refresh's Wear send at readiness, before its ownership check.
+      watch.beforeSync = () async {
+        watch.beforeSync = null;
+        sendEntered = true;
+        await releaseSend.future;
+      };
       await tester.tap(find.byTooltip('Refresh'));
       await tester.pumpAndSettle();
+      expect(sendEntered, isTrue);
       expect(launcher.requests, hasLength(2));
       expect(spent, [100]);
       expect(watch.syncedSnapshots, [same(first)]);
@@ -4566,11 +4578,18 @@ void main() {
       expect(launcher.requests, hasLength(3));
       expect(spent, [100]);
       expect(watch.syncedSnapshots, [same(first), same(newer)]);
+      expect(watch.dropped, isEmpty);
 
-      watchValidation.complete(true);
+      releaseSend.complete();
       firstWrite.complete();
       await tester.pumpAndSettle();
+      // The superseded send cannot publish the reading a second time.
+      expect(watch.dropped, [same(newer)]);
+      expect(watch.syncedSnapshots, [same(first), same(newer)]);
       expect(spent, [100, 350]);
+      final displayed =
+          tester.widget<DashboardScreen>(find.byType(DashboardScreen)).snapshot;
+      expect(displayed.accounts.single.today.spent?.minorUnits, 350);
 
       scheduler.tick();
       await tester.pumpAndSettle();
@@ -4580,7 +4599,7 @@ void main() {
       expect(watch.syncedSnapshots, [same(first), same(newer)]);
     } finally {
       await tester.pumpWidget(const SizedBox());
-      if (!watchValidation.isCompleted) watchValidation.complete(true);
+      if (!releaseSend.isCompleted) releaseSend.complete();
       if (!firstWrite.isCompleted) firstWrite.complete();
       await tester.pumpAndSettle();
       await Future.wait(launcher.requests);
@@ -7300,259 +7319,1485 @@ void main() {
     );
   });
 
-  testWidgets('enables mock data only from the debug setting', (tester) async {
-    final liveFixture = DashboardSnapshot.fromJsonString(
-      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+  testWidgets(
+    'Debug Mock restarts from the authority and leaves recovery history alone',
+    (tester) async {
+      final source = _alertTestSnapshot();
+      final live = _PublicationRepository(source);
+      final mock = _PublicationRepository(
+        DashboardSnapshot.fromJson({
+          ..._alertTestSnapshot(windowLabel: 'Sample').toJson(),
+          'alertConditions': [
+            const AlertCondition.crossed(
+              key: _expenseAlertKey,
+              alert: AlertSummary(severity: 'warning', message: 'Sample alert'),
+            ).toJson(),
+          ],
+        }),
+      );
+      final authority = MemoryDataModeAuthority();
+      final watch = _FakeWatchSyncService();
+      final widgetSync = _FakePhoneWidgetSyncService();
+      final watchlist = _MemoryRecoveryWatchlistStore();
+      final notifications = _FakeAlertNotifier();
+      final markers = _MemoryAlertConditions();
+      final credentials = _MemoryCredentialStore();
+
+      Widget app() => WardPulseApp(
+        repository: live,
+        applyAlertSettings: (snapshot, _) => snapshot,
+        mockRepository: mock,
+        modeAuthority: authority,
+        debugDataAvailable: true,
+        watchSyncService: watch,
+        phoneWidgetSyncService: widgetSync,
+        recoveryWatchlistStore: watchlist,
+        readExhaustedWindows: (_) => const [],
+        readPlanRecoveries: (_, _) => const [],
+        alertNotifier: notifications,
+        alertConditionStore: markers,
+        credentialStore: credentials,
+      );
+
+      await tester.pumpWidget(app());
+      await tester.pumpAndSettle();
+      final toggle = await _openMockToggle(tester);
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+      final keptHistory = <WindowKey>[
+        (
+          accountId: 'cached-account',
+          allowanceId: 'weekly',
+          historyOwner: null,
+        ),
+      ];
+      watchlist.keys = keptHistory;
+      final priorNotifications = notifications.posts.length;
+
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(authority.writes, [DataMode.mock]);
+      expect(watch.mockModes.last, isTrue);
+      expect(widgetSync.syncedSnapshots.last, same(mock.snapshot));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(app());
+      await tester.pumpAndSettle();
+      expect(find.text('Mock data'), findsOneWidget);
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+      expect(mock.loads, 3);
+      expect(live.loads, 1);
+      expect(watchlist.keys, keptHistory);
+      expect(notifications.posts.length, priorNotifications);
+      expect(markers.values, isEmpty);
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      await tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onSaveReportingCredential!(
+        ProviderConnections.openAiPlatform,
+        const CredentialChange.save('synthetic-reporting-key'),
+      );
+      await tester.pumpAndSettle();
+      expect(credentials.openAiSecret, 'synthetic-reporting-key');
+      expect(live.loads, 1);
+
+      await tester.tap(await _openMockToggle(tester));
+      await tester.pumpAndSettle();
+      expect(authority.writes, [DataMode.mock, DataMode.live]);
+      expect(live.loads, 2);
+      expect(watch.mockModes.last, isFalse);
+      expect(widgetSync.syncedSnapshots.last, same(source));
+    },
+  );
+
+  for (final (fail, owned) in [(false, true), (true, true), (true, false)]) {
+    testWidgets(
+      'a held mode write survives an overlapping scheduled tick (failure: $fail, retained: $owned)',
+      (tester) async {
+        final source = _alertTestSnapshot();
+        final live = _PublicationRepository(source);
+        final mock = _PublicationRepository(
+          _alertTestSnapshot(windowLabel: 'Sample'),
+        );
+        final authority = MemoryDataModeAuthority()..failWrite = fail;
+        final scheduler = _ManualProviderSyncScheduler();
+        addTearDown(scheduler.dispose);
+        final watch = _FakeWatchSyncService();
+        final widgetSync = _FakePhoneWidgetSyncService();
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: live,
+            applyAlertSettings: (snapshot, _) => snapshot,
+            mockRepository: mock,
+            modeAuthority: authority,
+            debugDataAvailable: true,
+            syncScheduler: scheduler,
+            watchSyncService: watch,
+            phoneWidgetSyncService: widgetSync,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final toggle = await _openMockToggle(tester);
+        final release = Completer<void>();
+        authority.pendingWrite = release;
+        live.current = owned;
+        try {
+          await tester.tap(toggle);
+          await tester.pumpAndSettle();
+          expect(authority.switching, isTrue);
+          scheduler.tick();
+          await tester.pumpAndSettle();
+          expect(live.loads, 1);
+        } finally {
+          release.complete();
+        }
+        await tester.pumpAndSettle();
+        expect(tester.widget<SwitchListTile>(toggle).value, !fail);
+        expect(watch.mockModes.last, !fail);
+        expect(live.cacheOnlyLoads, owned ? [false] : [false, true]);
+        expect(mock.loads, fail ? 0 : 1);
+        if (fail) {
+          expect(
+            find.text('Could not update mock data setting'),
+            findsOneWidget,
+          );
+          final settings = tester.widget<SettingsScreen>(
+            find.byType(SettingsScreen),
+          );
+          if (!owned) {
+            await expectLater(settings.onSyncWatch(), throwsStateError);
+            expect(watch.syncedSnapshots, [source]);
+            expect(widgetSync.syncedSnapshots, [source]);
+            return;
+          }
+          await settings.onSyncWatch();
+          await tester.pumpAndSettle();
+          expect(watch.syncedSnapshots, [source, source]);
+          await tester.tap(find.text('Widget'));
+          await tester.pumpAndSettle();
+          await tester
+              .widget<WidgetScreen>(find.byType(WidgetScreen))
+              .onPreferencesChanged(
+                (_) => const PhoneWidgetPreferences(selectedIds: []),
+              );
+          await tester.pumpAndSettle();
+          expect(widgetSync.syncedSnapshots, [source, source]);
+        }
+        expect(tester.takeException(), isNull);
+      },
     );
-    final liveJson = liveFixture.toJson();
-    (liveJson['accounts'] as List).first['provider'] = 'openai';
-    final live = DashboardSnapshot.fromJson(liveJson);
-    final mockJson = liveFixture.toJson();
-    final accounts = mockJson['accounts'] as List<dynamic>;
-    accounts.first
-      ..['provider'] = 'codex'
-      ..['accountId'] = 'codex-demo';
-    accounts.add({
-      ...Map<String, dynamic>.from(accounts.first as Map),
-      'provider': 'cursor',
-      'accountId': 'cursor-demo',
-    });
-    final mock = DashboardSnapshot.fromJson(mockJson);
-    final preferences = _MemoryDebugDataPreferenceStore();
+  }
+
+  for (final failWrite in [false, true]) {
+    testWidgets(
+      'Settings surfaces failed OAuth settlement (mode write failed: $failWrite)',
+      (tester) async {
+        final authority = MemoryDataModeAuthority()..failWrite = failWrite;
+        final live = _PublicationRepository(_alertTestSnapshot());
+        final watch = _FakeWatchSyncService();
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: live,
+            mockRepository: const NoProvidersDashboardRepository(),
+            applyAlertSettings: (snapshot, _) => snapshot,
+            modeAuthority: authority,
+            debugDataAvailable: true,
+            watchSyncService: watch,
+          ),
+        );
+        await tester.pumpAndSettle();
+        final toggle = await _openMockToggle(tester);
+        final lease = (await authority.enter(0, settlement: true))!;
+        try {
+          await tester.tap(toggle);
+          await tester.pumpAndSettle();
+          expect(authority.switching, isTrue);
+        } finally {
+          await authority.exit(lease, unresolved: true);
+        }
+        await tester.pumpAndSettle();
+        expect(tester.widget<SwitchListTile>(toggle).value, !failWrite);
+        final warning = find.text('Could not save an updated account session');
+        await tester.scrollUntilVisible(
+          warning,
+          -120,
+          scrollable: find.byType(Scrollable).first,
+        );
+        expect(warning, findsOneWidget);
+        expect(authority.writes, failWrite ? isEmpty : [DataMode.mock]);
+        if (failWrite) {
+          await tester
+              .widget<SettingsScreen>(find.byType(SettingsScreen))
+              .onSyncWatch();
+          await tester.pumpAndSettle();
+          expect(live.loads, 1);
+          expect(watch.syncedSnapshots, [live.snapshot, live.snapshot]);
+        }
+      },
+    );
+  }
+
+  for (final fail in [false, true]) {
+    testWidgets(
+      'an in-flight Live result cannot replace Mock (failure: $fail)',
+      (tester) async {
+        final authority = MemoryDataModeAuthority();
+        final live = _PublicationRepository(_alertTestSnapshot());
+        final sample = _PublicationRepository(
+          _alertTestSnapshot(windowLabel: 'Sample'),
+        );
+        final watch = _FakeWatchSyncService();
+        final widgetSync = _FakePhoneWidgetSyncService();
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: live,
+            applyAlertSettings: (snapshot, _) => snapshot,
+            mockRepository: sample,
+            modeAuthority: authority,
+            debugDataAvailable: true,
+            watchSyncService: watch,
+            phoneWidgetSyncService: widgetSync,
+          ),
+        );
+        await tester.pumpAndSettle();
+        final toggle = await _openMockToggle(tester);
+        final held = Completer<DashboardSnapshot>();
+        live.response = held.future;
+        try {
+          await tester.tap(find.byTooltip('Refresh'));
+          await tester.pumpAndSettle();
+          expect(live.loads, 2);
+          await tester.tap(toggle);
+          await tester.pumpAndSettle();
+          expect(authority.writes, [DataMode.mock]);
+        } finally {
+          if (fail) {
+            held.completeError(const DashboardLoadException());
+          } else {
+            held.complete(_alertTestSnapshot(windowLabel: 'Retired'));
+          }
+        }
+        await tester.pumpAndSettle();
+        expect(watch.syncedSnapshots, [live.snapshot, sample.snapshot]);
+        expect(widgetSync.syncedSnapshots, [live.snapshot, sample.snapshot]);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('a cold Wear tap queued across an ABA switch starts cache-only', (
+    tester,
+  ) async {
+    final authority = MemoryDataModeAuthority();
+    final captured = _legacyWatchIntent(authority.state);
+    final pending = Completer<WatchRefreshIntent?>();
+    final watch = _FakeWatchSyncService()..initialRequest = pending.future;
+    final launcher = _FakePhoneWidgetSyncService();
+    final foreground = _ManualProviderSyncScheduler();
+    addTearDown(foreground.dispose);
+    final headlessRegistrations = <Duration>[];
+    final live = _PublicationRepository(_alertTestSnapshot());
 
     await tester.pumpWidget(
       WardPulseApp(
-        repository: DebugDashboardRepository(
-          live: ValueDashboardRepository(live),
-          mock: ValueDashboardRepository(mock),
-          preferences: preferences,
-        ),
-        debugDataAvailable: true,
-        debugDataPreferenceStore: preferences,
+        modeAuthority: authority,
+        repository: live,
+        applyAlertSettings: (snapshot, _) => snapshot,
+        watchSyncService: watch,
+        phoneWidgetSyncService: launcher,
+        syncScheduler: foreground,
+        scheduleHeadlessSync:
+            (interval) async => headlessRegistrations.add(interval),
       ),
     );
+    expect(live.loads, 0);
+    await authority.switchTo(DataMode.mock);
+    await authority.switchTo(DataMode.live);
+    pending.complete(captured);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Settings'));
-    await tester.pumpAndSettle();
+    expect(live.cacheOnlyLoads, [true]);
+    expect(watch.syncedSnapshots, [live.snapshot]);
 
-    final toggle = find.widgetWithText(SwitchListTile, 'Mock data');
-    await tester.scrollUntilVisible(
-      toggle,
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
+    watch.receive!(captured);
     await tester.pumpAndSettle();
-    expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
-
-    await tester.tap(toggle);
-    await tester.pumpAndSettle();
-
-    expect(preferences.value, isTrue);
-    await tester.tap(find.text('Providers'));
-    await tester.pumpAndSettle();
-    // Which family sits where is the tab's own business
-    // (providers_screen_test.dart); this test only asks that the catalog
-    // opened, so it scrolls to the row instead of assuming a position.
-    await tester.scrollUntilVisible(
-      find.text('Codex plan'),
-      300,
-      scrollable: find.byType(Scrollable).first,
-    );
-    expect(find.text('Codex plan'), findsOneWidget);
+    expect(live.cacheOnlyLoads, [true]);
+    expect(watch.syncedSnapshots, [live.snapshot, live.snapshot]);
+    expect(launcher.syncedSnapshots, isEmpty);
+    expect(foreground.scheduledInterval, isNotNull);
+    // Fresh install: registering the absent job would permit an immediate tick.
+    expect(headlessRegistrations, isEmpty);
   });
 
-  for (final failure in ['cache clear', 'preference write']) {
-    for (final owned in [true, false]) {
-      testWidgets('mock $failure failure retains only owned data ($owned)', (
-        tester,
-      ) async {
-        final source = _alertTestSnapshot();
-        final repository = _PublicationRepository(source);
-        final preferences = _MemoryDebugDataPreferenceStore();
-        final watch = _FakeWatchSyncService();
-        final phoneWidget = _FakePhoneWidgetSyncService();
-        final inputs = <DashboardSnapshot>[];
-        await tester.pumpWidget(
-          WardPulseApp(
-            repository: repository,
-            debugDataAvailable: true,
-            debugDataPreferenceStore: preferences,
-            watchSyncService: watch,
-            phoneWidgetSyncService: phoneWidget,
-            applyAlertSettings: (snapshot, _) {
-              inputs.add(snapshot);
-              return snapshot;
-            },
-          ),
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Settings'));
-        await tester.pumpAndSettle();
-        final toggle = find.widgetWithText(SwitchListTile, 'Mock data');
-        await tester.scrollUntilVisible(
-          toggle,
-          300,
-          scrollable: find.byType(Scrollable).first,
-        );
-        await tester.pumpAndSettle();
-        expect(toggle.hitTestable(), findsOneWidget);
-        repository.failClear = failure == 'cache clear';
-        preferences.failWrite = failure == 'preference write';
-        repository.current = owned;
-        await tester.tap(toggle);
-        await tester.pumpAndSettle();
-        expect(find.text('Could not update mock data setting'), findsOneWidget);
-        expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
-        expect(preferences.value, isFalse);
-        expect(preferences.writes, failure == 'cache clear' ? 0 : 1);
-        expect(repository.loads, 1);
-
-        await tester.tap(find.text('Providers'));
-        await tester.pumpAndSettle();
-        await tester
-            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
-            .onAlertThresholdsChanged(
-              (current) => current.withConnection(
-                ProviderConnections.codexPlan,
-                const ConnectionAlertThresholds(
-                  plan: AlertPercentThreshold(at: 70),
-                ),
-              ),
+  testWidgets(
+    'an owned cold Wear tap within the retained refresh floor only resends',
+    (tester) async {
+      final authority = MemoryDataModeAuthority();
+      final watch =
+          _FakeWatchSyncService()
+            ..initialRequest = Future.value(
+              _legacyWatchIntent(authority.state),
             );
-        await tester.pumpAndSettle();
-        expect(inputs, owned ? [source, source] : [source]);
-        expect(watch.syncedSnapshots, owned ? [source, source] : [source]);
-        expect(
-          phoneWidget.syncedSnapshots,
-          owned ? [source, source] : [source],
-        );
-        await tester.tap(find.text('Dashboard'));
-        await tester.pumpAndSettle();
-        if (owned) {
-          expect(
-            tester
-                .widget<DashboardScreen>(find.byType(DashboardScreen))
-                .snapshot
-                .toJson(),
-            source.toJson(),
-          );
-        } else {
-          expect(find.byType(DashboardScreen), findsNothing);
-        }
-        expect(repository.loads, 1);
-        expect(tester.takeException(), isNull);
+      final report = DashboardSnapshot.fromJson({
+        ..._alertTestSnapshot().toJson(),
+        'generatedAt': DateTime.now().toUtc().toIso8601String(),
       });
-    }
-  }
-
-  for (final trigger in ['scheduled', 'foreground']) {
-    testWidgets('mock mode write survives an overlapping $trigger refresh', (
-      tester,
-    ) async {
-      final live = _PublicationRepository(_alertTestSnapshot());
-      final mock = _PublicationRepository(
-        _alertTestSnapshot(windowLabel: 'Mock data'),
-      );
-      final preferences = _MemoryDebugDataPreferenceStore();
-      final scheduler = _ManualProviderSyncScheduler();
-      addTearDown(scheduler.dispose);
-      final watch = _FakeWatchSyncService();
-      final phoneWidget = _FakePhoneWidgetSyncService();
+      final live = _PublicationRepository(report);
+      final registrations = <Duration>[];
       await tester.pumpWidget(
         WardPulseApp(
-          repository: DebugDashboardRepository(
-            live: live,
-            mock: mock,
-            preferences: preferences,
-          ),
-          debugDataAvailable: true,
-          debugDataPreferenceStore: preferences,
-          syncScheduler: scheduler,
+          repository: live,
+          modeAuthority: authority,
           watchSyncService: watch,
-          phoneWidgetSyncService: phoneWidget,
+          applyAlertSettings: (snapshot, _) => snapshot,
+          scheduleHeadlessSync: (interval) async => registrations.add(interval),
         ),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Settings'));
-      await tester.pumpAndSettle();
-      final toggle = find.widgetWithText(SwitchListTile, 'Mock data');
-      await tester.scrollUntilVisible(
-        toggle,
-        300,
-        scrollable: find.byType(Scrollable).first,
+      expect(live.cacheOnlyLoads, [true]);
+      expect(registrations, isEmpty);
+      expect(watch.syncedSnapshots, [report]);
+      expect(watch.payload['manualRefreshAllowed'], isFalse);
+      expect(
+        watch.payload['manualRefreshAvailableAt'],
+        report.generatedAt.add(ManualRefreshWindow.floor).toIso8601String(),
       );
-      await tester.pumpAndSettle();
-      expect(toggle.hitTestable(), findsOneWidget);
-      final release = Completer<void>();
-      preferences.pendingWrite = release.future;
-      await tester.tap(toggle);
-      await tester.pumpAndSettle();
-      expect(preferences.writes, 1);
-      expect(preferences.value, isFalse);
-      if (trigger == 'scheduled') {
-        scheduler.tick();
-      } else {
-        await tester.tap(find.byTooltip('Refresh'));
-      }
-      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets('Dashboard revalidates report ownership during acceptance', (
+    tester,
+  ) async {
+    final inner = MemoryDataModeAuthority();
+    final entered = Completer<void>();
+    final release = Completer<void>();
+    final authority = _StartupModeAuthority(inner)
+      ..beforeEnter = () async {
+        if (!entered.isCompleted) entered.complete();
+        await release.future;
+      };
+    final repository = _PublicationRepository(_alertTestSnapshot());
+    final watch = _FakeWatchSyncService();
+    final launcher = _FakePhoneWidgetSyncService();
+    try {
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          modeAuthority: authority,
+          watchSyncService: watch,
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pump();
+      expect(entered.isCompleted, isTrue);
+      expect(repository.loads, 1);
+      expect(await inner.isCurrent(0), isTrue);
+      repository.current = false;
+    } finally {
       release.complete();
-      await tester.pumpAndSettle();
-      expect(preferences.value, isTrue);
-      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
-      expect(watch.mockModes.last, isTrue);
-      await tester.tap(find.text('Dashboard'));
-      await tester.pumpAndSettle();
-      final displayed =
-          tester.widget<DashboardScreen>(find.byType(DashboardScreen)).snapshot;
-      expect(displayed.accounts.first.allowances.single.label, 'Mock data');
-      expect(displayed.toJson(), mock.snapshot.toJson());
-      expect(displayed.toJson(), watch.syncedSnapshots.last.toJson());
-      expect(displayed.toJson(), phoneWidget.syncedSnapshots.last.toJson());
-      expect(live.loads, trigger == 'scheduled' ? 2 : 1);
-      expect(mock.loads, 1);
-      expect(tester.takeException(), isNull);
-    });
+    }
+    await tester.pumpAndSettle();
+    expect(find.byType(DashboardScreen), findsNothing);
+    expect(watch.syncedSnapshots, isEmpty);
+    expect(launcher.syncedSnapshots, isEmpty);
+    await tester.tap(find.text('Providers'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .reportingUpdates,
+      isEmpty,
+    );
+  });
+
+  testWidgets(
+    'a Wear resend waiting on an old load lets a newer phone refresh answer',
+    (tester) async {
+      final authority = MemoryDataModeAuthority();
+      final retired = _legacyWatchIntent(authority.state);
+      await authority.switchTo(DataMode.mock);
+      await authority.switchTo(DataMode.live);
+      final older = Completer<DashboardSnapshot>();
+      final newer = Completer<DashboardSnapshot>();
+      final report = _alertTestSnapshot(windowLabel: 'New refresh');
+      final live = _PublicationRepository(_alertTestSnapshot())
+        ..response = older.future;
+      final watch = _FakeWatchSyncService();
+      try {
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: live,
+            modeAuthority: authority,
+            watchSyncService: watch,
+            applyAlertSettings: (snapshot, _) => snapshot,
+          ),
+        );
+        await tester.pump();
+        expect(live.cacheOnlyLoads, [false]);
+        watch.receive!(retired);
+        await tester.pump();
+        live.response = newer.future;
+        await tester.tap(find.byTooltip('Refresh'));
+        await tester.pump();
+        expect(live.cacheOnlyLoads, [false, false]);
+        older.complete(live.snapshot);
+        await tester.pump();
+        expect(live.cacheOnlyLoads, [false, false]);
+        expect(watch.syncedSnapshots, isEmpty);
+      } finally {
+        if (!older.isCompleted) older.complete(live.snapshot);
+        newer.complete(report);
+        await tester.pumpAndSettle();
+      }
+      expect(live.cacheOnlyLoads, [false, false]);
+      expect(watch.syncedSnapshots, [report, report]);
+      expect(
+        tester
+            .widget<DashboardScreen>(find.byType(DashboardScreen))
+            .snapshot
+            .accounts
+            .first
+            .allowances
+            .single
+            .label,
+        'New refresh',
+      );
+    },
+  );
+
+  for (final (scheduled, fails) in [
+    (false, false),
+    (true, false),
+    (false, true),
+  ]) {
+    testWidgets(
+      'a Wear resend leaves a newer ${scheduled ? 'scheduled' : 'explicit'} load in charge (fails: $fails)',
+      (tester) async {
+        final accepted = _alertTestSnapshot();
+        final retained = _alertTestSnapshot(windowLabel: 'Retained');
+        final report = _alertTestSnapshot(windowLabel: 'New refresh');
+        final live = _PublicationRepository(accepted);
+        final scheduler = _ManualProviderSyncScheduler();
+        addTearDown(scheduler.dispose);
+        final watch = _FakeWatchSyncService();
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: live,
+            modeAuthority: MemoryDataModeAuthority(),
+            watchSyncService: watch,
+            syncScheduler: scheduler,
+            applyAlertSettings: (snapshot, _) => snapshot,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(live.cacheOnlyLoads, [false]);
+        final held = Completer<DashboardSnapshot>();
+        live.response = held.future;
+        try {
+          if (scheduled) {
+            scheduler.tick();
+          } else {
+            await tester.tap(find.byTooltip('Refresh'));
+          }
+          await tester.pump();
+          expect(live.cacheOnlyLoads, [false, false]);
+          live.response = null;
+          // Wear's resend cannot reuse the old acceptance once it retires.
+          live.retired = accepted;
+          live.snapshot = retained;
+          watch.receive!(const WatchRefreshIntent.resend());
+          await tester.pump();
+          expect(live.cacheOnlyLoads, [false, false]);
+        } finally {
+          if (fails) {
+            held.completeError(const DashboardLoadException());
+          } else {
+            held.complete(report);
+          }
+        }
+        await tester.pumpAndSettle();
+        if (fails) {
+          // The watch-only reply leaves Dashboard on the failure.
+          expect(live.cacheOnlyLoads, [false, false, true]);
+          expect(watch.syncedSnapshots.last, same(retained));
+          expect(find.text('Dashboard unavailable'), findsOneWidget);
+          expect(find.byType(DashboardScreen), findsNothing);
+          return;
+        }
+        expect(live.cacheOnlyLoads, [false, false]);
+        expect(watch.syncedSnapshots.last, same(report));
+        expect(
+          tester
+              .widget<DashboardScreen>(find.byType(DashboardScreen))
+              .snapshot
+              .accounts
+              .first
+              .allowances
+              .single
+              .label,
+          'New refresh',
+        );
+      },
+    );
   }
 
   testWidgets(
-    'demo data leaves nothing for a recovery to be measured against',
+    'a cold Wear tap retired before its probe leaves the repository to the newer load',
     (tester) async {
-      final source = DashboardSnapshot.fromJsonString(
-        File(
-          '../../fixtures/snapshots/dashboard_today.json',
-        ).readAsStringSync(),
+      final authority = MemoryDataModeAuthority();
+      final watch =
+          _FakeWatchSyncService()
+            ..initialRequest = Future.value(
+              _legacyWatchIntent(authority.state),
+            );
+      final interval = _HeldRefreshIntervalStore();
+      final report = _alertTestSnapshot(windowLabel: 'New refresh');
+      final live = _PublicationRepository(report);
+      try {
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: live,
+            modeAuthority: authority,
+            watchSyncService: watch,
+            refreshIntervalStore: interval,
+            applyAlertSettings: (snapshot, _) => snapshot,
+          ),
+        );
+        await tester.pump();
+        expect(interval.entered.isCompleted, isTrue);
+        await tester.pump();
+        await tester.tap(find.byTooltip('Refresh'));
+        await tester.pump();
+      } finally {
+        interval.release.complete();
+      }
+      await tester.pumpAndSettle();
+      // A cache probe from the retired tap would retire the newer collection.
+      expect(live.cacheOnlyLoads, [false]);
+      expect(watch.syncedSnapshots, isNotEmpty);
+      expect(watch.syncedSnapshots, everyElement(same(report)));
+      expect(
+        tester
+            .widget<DashboardScreen>(find.byType(DashboardScreen))
+            .snapshot
+            .accounts
+            .first
+            .allowances
+            .single
+            .label,
+        'New refresh',
       );
-      final preferences = _MemoryDebugDataPreferenceStore();
-      await preferences.writeMockDataEnabled(true);
-      final watchlist =
-          _MemoryRecoveryWatchlistStore()
-            ..keys = const [
-              (
-                accountId: 'codex-demo',
-                allowanceId: 'weekly',
-                historyOwner: null,
-              ),
-            ];
+    },
+  );
 
+  testWidgets(
+    'an admitted cold Wear refresh that only keeps an old report holds the floor',
+    (tester) async {
+      final authority = MemoryDataModeAuthority();
+      final watch =
+          _FakeWatchSyncService()
+            ..initialRequest = Future.value(
+              _legacyWatchIntent(authority.state),
+            );
+      final old = DateTime.now().toUtc().subtract(const Duration(hours: 1));
+      // Provider work failed, so the load falls back to the old report.
+      final report = DashboardSnapshot.fromJson({
+        ..._alertTestSnapshot().toJson(),
+        'generatedAt': old.toIso8601String(),
+      });
+      final live = _PublicationRepository(report);
       await tester.pumpWidget(
         WardPulseApp(
-          repository: DebugDashboardRepository(
-            live: ValueDashboardRepository(source),
-            mock: ValueDashboardRepository(source),
-            preferences: preferences,
+          repository: live,
+          modeAuthority: authority,
+          watchSyncService: watch,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(live.cacheOnlyLoads, [true, false]);
+      // An explicit tap neither claims nor advances the automatic anchor.
+      expect(live.livePolls, [null]);
+      expect(watch.syncedSnapshots.last, same(report));
+      final anchor = watch.anchors.last!;
+      expect(anchor.isAfter(old), isTrue);
+      expect(
+        ManualRefreshWindow.fromLastSync(lastSyncAt: anchor).allowed,
+        isFalse,
+      );
+
+      watch.receive!(_legacyWatchIntent(authority.state));
+      await tester.pumpAndSettle();
+      expect(live.cacheOnlyLoads, [true, false]);
+      expect(watch.anchors.last, anchor);
+    },
+  );
+
+  testWidgets('a failed cold Wear probe keeps only the foreground timer', (
+    tester,
+  ) async {
+    final authority = MemoryDataModeAuthority();
+    final watch =
+        _FakeWatchSyncService()
+          ..initialRequest = Future.value(_legacyWatchIntent(authority.state));
+    final scheduler = _ManualProviderSyncScheduler();
+    addTearDown(scheduler.dispose);
+    final registrations = <Duration>[];
+    var failRegistration = false;
+    final live = _PublicationRepository(_alertTestSnapshot())..failLoad = true;
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: live,
+        modeAuthority: authority,
+        watchSyncService: watch,
+        syncScheduler: scheduler,
+        scheduleHeadlessSync: (interval) async {
+          registrations.add(interval);
+          if (failRegistration) throw StateError('WorkManager unavailable');
+        },
+        applyAlertSettings: (snapshot, _) => snapshot,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(live.cacheOnlyLoads, [true]);
+    expect(find.text('Dashboard unavailable'), findsOneWidget);
+    expect(
+      scheduler.scheduledInterval,
+      const Duration(minutes: PollCadence.defaultRefreshMinutes),
+    );
+    // A resend-only launch registers no network-capable background work.
+    expect(registrations, isEmpty);
+
+    const cadence = Duration(minutes: PollCadence.defaultRefreshMinutes);
+    live.failLoad = false;
+    failRegistration = true;
+    scheduler.tick();
+    await tester.pumpAndSettle();
+    expect(live.cacheOnlyLoads, [true, false]);
+    expect(find.byType(DashboardScreen), findsOneWidget);
+    expect(registrations, [cadence]);
+    expect(tester.takeException(), isNull);
+
+    // A failed registration stays eligible for the next ordinary Live tick.
+    failRegistration = false;
+    scheduler.tick();
+    await tester.pumpAndSettle();
+    expect(registrations, [cadence, cadence]);
+
+    // Ordinary Live polling restored the deferred periodic registration.
+    scheduler.tick();
+    await tester.pumpAndSettle();
+    expect(live.cacheOnlyLoads, [true, false, false, false]);
+    expect(registrations, [cadence, cadence]);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final (fails, rejected) in [
+    (false, false),
+    (true, false),
+    (true, true),
+  ]) {
+    testWidgets(
+      'a recent native dispatch keeps an older retained report in Wear cooldown${fails ? (rejected ? ' after a sibling retires its failed load' : ' after its load fails') : ''}',
+      (tester) async {
+        final authority = MemoryDataModeAuthority();
+        final scheduler = _ManualProviderSyncScheduler();
+        addTearDown(scheduler.dispose);
+        final watch = _FakeWatchSyncService();
+        final report = DashboardSnapshot.fromJson({
+          ..._alertTestSnapshot().toJson(),
+          'generatedAt':
+              DateTime.now()
+                  .toUtc()
+                  .subtract(const Duration(hours: 1))
+                  .toIso8601String(),
+        });
+        final live = _PublicationRepository(report);
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: live,
+            modeAuthority: authority,
+            watchSyncService: watch,
+            syncScheduler: scheduler,
+            applyAlertSettings: (snapshot, _) => snapshot,
           ),
-          debugDataAvailable: true,
-          debugDataPreferenceStore: preferences,
-          recoveryWatchlistStore: watchlist,
+        );
+        await tester.pumpAndSettle();
+        expect(live.loads, 1);
+
+        // Automatic collection failed after dispatch; the old report remains.
+        final dispatched = DateTime.now().toUtc().subtract(
+          const Duration(minutes: 1),
+        );
+        live
+          ..dispatchedAt = dispatched
+          // The native claim precedes transport, so a failed load keeps it,
+          // even when its aggregate is rejected while the claim is owned.
+          ..failPolling = fails
+          ..failureCurrent = !rejected;
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(live.loads, 2);
+        expect(live.livePolls.last, isNotNull);
+        final polls = live.livePolls.length;
+
+        watch.receive!(_legacyWatchIntent(authority.state));
+        await tester.pumpAndSettle();
+        expect(live.loads, 2);
+        expect(watch.syncedSnapshots.last, same(report));
+        expect(watch.anchors.last, dispatched);
+        expect(
+          ManualRefreshWindow.fromLastSync(lastSyncAt: dispatched).allowed,
+          isFalse,
+        );
+        // The refused tap neither claims nor advances the automatic anchor.
+        expect(live.livePolls, hasLength(polls));
+      },
+    );
+  }
+
+  testWidgets(
+    'a native dispatch correction after a clock rollback replaces the Wear floor',
+    (tester) async {
+      final authority = MemoryDataModeAuthority();
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final watch = _FakeWatchSyncService();
+      final now = DateTime.now().toUtc();
+      final report = DashboardSnapshot.fromJson({
+        ..._alertTestSnapshot().toJson(),
+        'generatedAt': now.subtract(const Duration(hours: 1)).toIso8601String(),
+      });
+      final live = _PublicationRepository(report);
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: authority,
+          watchSyncService: watch,
+          syncScheduler: scheduler,
+          applyAlertSettings: (snapshot, _) => snapshot,
         ),
       );
       await tester.pumpAndSettle();
 
-      // Invented windows must not survive the demo: kept, they would make the
-      // first live poll afterwards look like a recovery.
-      expect(watchlist.keys, isEmpty);
+      // Native recorded this dispatch before the device clock moved back.
+      final superseded = now.add(const Duration(hours: 1));
+      live.dispatchedAt = superseded;
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      watch.receive!(_legacyWatchIntent(authority.state));
+      await tester.pumpAndSettle();
+      expect(live.loads, 2);
+      expect(watch.anchors.last, superseded);
+
+      // Native corrects the same connection's anchor to the current clock.
+      final corrected = now.subtract(const Duration(minutes: 10));
+      live.dispatchedAt = corrected;
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(live.loads, 3);
+      expect(watch.anchors.last, corrected);
+
+      watch.receive!(_legacyWatchIntent(authority.state));
+      await tester.pumpAndSettle();
+      expect(live.loads, 4);
+      // The explicit refresh neither claims nor advances the automatic anchor.
+      expect(live.livePolls.last, isNull);
+      expect(watch.syncedSnapshots.last, same(report));
+      expect(watch.anchors.last!.isAfter(corrected), isTrue);
+      expect(watch.anchors.last!.isBefore(superseded), isTrue);
     },
   );
+
+  testWidgets(
+    'a report dated before a clock rollback stays out of Wear cooldown once the clock passes it',
+    (tester) async {
+      final authority = MemoryDataModeAuthority();
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final watch = _FakeWatchSyncService();
+      var now = DateTime.now().toUtc();
+      // The report was written while the device clock ran ahead.
+      final reportAt = now.add(const Duration(hours: 1));
+      final report = DashboardSnapshot.fromJson({
+        ..._alertTestSnapshot().toJson(),
+        'generatedAt': reportAt.toIso8601String(),
+      });
+      final live = _PublicationRepository(report);
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: authority,
+          watchSyncService: watch,
+          syncScheduler: scheduler,
+          applyAlertSettings: (snapshot, _) => snapshot,
+          clock: () => now,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(live.loads, 1);
+      watch.receive!(const WatchRefreshIntent.resend());
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots.last, same(report));
+      expect(watch.anchors.last, ManualRefreshWindow.open);
+
+      // The clock reaches the report's time again without a new attempt.
+      now = reportAt.add(const Duration(minutes: 1));
+      watch.receive!(const WatchRefreshIntent.resend());
+      await tester.pumpAndSettle();
+      expect(live.loads, 1);
+      expect(watch.syncedSnapshots.last, same(report));
+      expect(watch.anchors.last, ManualRefreshWindow.open);
+
+      // The same retained report still cannot refuse a manual refresh.
+      watch.receive!(_legacyWatchIntent(authority.state));
+      await tester.pumpAndSettle();
+      expect(live.loads, 2);
+      expect(live.livePolls.last, isNull);
+      // Display keeps the report's own time.
+      expect(watch.syncedSnapshots.last.generatedAt, reportAt);
+    },
+  );
+
+  testWidgets(
+    'overlapping automatic loads keep the later native cadence sample',
+    (tester) async {
+      final authority = MemoryDataModeAuthority();
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final watch = _FakeWatchSyncService();
+      final now = DateTime.now().toUtc();
+      final report = DashboardSnapshot.fromJson({
+        ..._alertTestSnapshot().toJson(),
+        'generatedAt': now.subtract(const Duration(hours: 1)).toIso8601String(),
+      });
+      final corrected = now.subtract(const Duration(minutes: 10));
+      final superseded = now.add(const Duration(hours: 1));
+      final startup = Completer<DashboardSnapshot>();
+      // The startup load starts first in Dart, but Android claims its sample
+      // after the clock rollback correction.
+      final live =
+          _PublicationRepository(report)
+            ..response = startup.future
+            ..dispatchedAt = corrected
+            ..dispatchSample = 2;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: authority,
+          watchSyncService: watch,
+          syncScheduler: scheduler,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      for (var i = 0; i < 20 && live.loads < 1; i++) {
+        await tester.pump();
+      }
+      expect(live.loads, 1);
+
+      // The tick starts later, yet observed the earlier, superseded sample.
+      live
+        ..response = null
+        ..dispatchedAt = superseded
+        ..dispatchSample = 1;
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      expect(live.loads, 2);
+      startup.complete(report);
+      await tester.pumpAndSettle();
+
+      watch.receive!(_legacyWatchIntent(authority.state));
+      await tester.pumpAndSettle();
+      // The correction, not the tick's late evidence, sets the floor.
+      expect(live.loads, 3);
+      expect(watch.anchors.last!.isAfter(corrected), isTrue);
+      expect(watch.anchors.last!.isBefore(superseded), isTrue);
+    },
+  );
+
+  for (final replacedHere in [false, true]) {
+    testWidgets(
+      'a source ${replacedHere ? 'replaced here' : 'retired elsewhere'} after a clock rollback frees the remaining source',
+      (tester) async {
+        final authority = MemoryDataModeAuthority();
+        final scheduler = _ManualProviderSyncScheduler();
+        addTearDown(scheduler.dispose);
+        final watch = _FakeWatchSyncService();
+        final now = DateTime.now().toUtc();
+        final codex = ProviderConnections.codexPlan.storageKey;
+        final superseded = now.add(const Duration(hours: 1));
+        final healthy = now.subtract(const Duration(minutes: 10));
+        // Codex reported while the device clock ran an hour ahead.
+        final report = DashboardSnapshot.fromJson({
+          ..._alertTestSnapshot().toJson(),
+          'generatedAt': superseded.toIso8601String(),
+        }).withConnectionVersions({
+          codex: {'generation': 'codex-1', 'epoch': '1'},
+        });
+        // The remaining source's retained report also predates the rollback.
+        final remaining = DashboardSnapshot.fromJson({
+          ..._alertTestSnapshot().toJson(),
+          'generatedAt': now.add(const Duration(minutes: 30)).toIso8601String(),
+        });
+        final live = _PublicationRepository(report);
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: live,
+            modeAuthority: authority,
+            watchSyncService: watch,
+            syncScheduler: scheduler,
+            applyAlertSettings: (snapshot, _) => snapshot,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Native admitted Codex under the same clock.
+        live.dispatches
+          ..[codex] = (
+            at: superseded,
+            version: CredentialVersion({'generation': 'codex-1', 'epoch': '1'}),
+          )
+          ..[ProviderConnections.anthropicPlatform.storageKey] = (
+            at: healthy,
+            version: CredentialVersion({
+              'generation': 'platform-1',
+              'epoch': '1',
+            }),
+          );
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        watch.receive!(_legacyWatchIntent(authority.state));
+        await tester.pumpAndSettle();
+        expect(live.loads, 2);
+        expect(watch.anchors.last, superseded);
+
+        // The clock is corrected, then Codex loses its credential before
+        // native can correct its anchor. Its accepted report retires too.
+        live
+          ..dispatches.remove(codex)
+          ..retiredGenerations.add('codex-1')
+          ..snapshot = remaining;
+        if (replacedHere) {
+          await tester.tap(find.text('Providers'));
+          await tester.pumpAndSettle();
+          final before = live.loads;
+          tester
+              .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+              .onCredentialsChanged();
+          await tester.pumpAndSettle();
+          expect(live.loads, before + 1);
+          expect(live.livePolls.last, isNull);
+        } else {
+          watch.receive!(const WatchRefreshIntent.resend());
+          await tester.pumpAndSettle();
+          // The retired acceptance cannot answer; the retained read does.
+          expect(live.cacheOnlyLoads, [false, false, true]);
+          expect(watch.syncedSnapshots.last, same(remaining));
+          // Wear no longer advertises the retired source's cooldown.
+          expect(watch.anchors.last, healthy);
+        }
+        final loads = live.loads;
+
+        // The healthy remaining source can refresh manually. A retired
+        // acceptance first yields to a probe of current retained evidence.
+        watch.receive!(_legacyWatchIntent(authority.state));
+        await tester.pumpAndSettle();
+        expect(
+          live.cacheOnlyLoads.sublist(loads),
+          replacedHere ? [false] : [true, false],
+        );
+        expect(live.livePolls.last, isNull);
+        expect(watch.syncedSnapshots.last, same(remaining));
+        expect(watch.anchors.last!.isAfter(healthy), isTrue);
+        expect(watch.anchors.last!.isBefore(superseded), isTrue);
+      },
+    );
+  }
+
+  for (final fallback in [false, true]) {
+    testWidgets(
+      'a Wear ${fallback ? 'fallback clear' : 'summary'} retired while readiness is pending is not submitted',
+      (tester) async {
+        final accepted = _alertTestSnapshot();
+        final retained = _alertTestSnapshot(windowLabel: 'Retained');
+        final live = _PublicationRepository(accepted);
+        final watch = _FakeWatchSyncService();
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: live,
+            modeAuthority: MemoryDataModeAuthority(),
+            watchSyncService: watch,
+            applyAlertSettings: (snapshot, _) => snapshot,
+          ),
+        );
+        await tester.pumpAndSettle();
+        final sent = watch.syncedSnapshots.length;
+        if (fallback) {
+          // Only a confirmed absence may clear Wear.
+          live
+            ..retired = accepted
+            ..failLoad = true;
+        }
+        final waiting = Completer<void>();
+        final ready = Completer<void>();
+        watch.beforeSync = () async {
+          watch.beforeSync = null;
+          waiting.complete();
+          await ready.future;
+        };
+        watch.receive!(const WatchRefreshIntent.resend());
+        await tester.pumpAndSettle();
+        expect(waiting.isCompleted, isTrue);
+
+        // Work outside this isolate retires the proof in the same generation.
+        if (fallback) {
+          live.failureCurrent = false;
+        } else {
+          live
+            ..retired = accepted
+            ..snapshot = retained;
+        }
+        ready.complete();
+        await tester.pumpAndSettle();
+        if (fallback) {
+          expect(watch.dropped.single.accounts, isEmpty);
+          expect(watch.syncedSnapshots, hasLength(sent));
+          expect(live.cacheOnlyLoads, [false, true, true, true]);
+          return;
+        }
+        expect(watch.dropped.single, same(accepted));
+        // The replacement reply reads the current retained report.
+        expect(watch.syncedSnapshots.sublist(sent).single, same(retained));
+        expect(live.cacheOnlyLoads, [false, true]);
+      },
+    );
+  }
+
+  testWidgets(
+    'a Wear resend with no retained report clears the watch summary',
+    (tester) async {
+      final live = _PublicationRepository(_alertTestSnapshot())
+        ..failLoad = true;
+      final watch = _FakeWatchSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Dashboard unavailable'), findsOneWidget);
+      final sent = watch.syncedSnapshots.length;
+
+      watch.receive!(const WatchRefreshIntent.resend());
+      await tester.pumpAndSettle();
+      expect(live.cacheOnlyLoads, [false, true]);
+      expect(live.livePolls, hasLength(1));
+      expect(watch.syncedSnapshots, hasLength(sent + 1));
+      expect(watch.syncedSnapshots.last.accounts, isEmpty);
+      expect(watch.mockModes.last, isFalse);
+      // The Dashboard keeps its own failure.
+      expect(find.text('Dashboard unavailable'), findsOneWidget);
+    },
+  );
+
+  for (final request in ['stale', 'unowned', 'resend-only']) {
+    testWidgets(
+      'a cold $request Wear request clears the watch when its read fails',
+      (tester) async {
+        final authority = MemoryDataModeAuthority();
+        final intent = switch (request) {
+          'stale' => _legacyWatchIntent(authority.state),
+          'unowned' => WatchRefreshIntent.fromMessage({
+            'kind': 'refresh',
+            'installId': 'earlier-install',
+            'generation': 0,
+            'mode': 'live',
+            'requestId': 'unowned-tap',
+          }),
+          _ => const WatchRefreshIntent.resend(),
+        };
+        if (request == 'stale') {
+          await authority.switchTo(DataMode.mock);
+          await authority.switchTo(DataMode.live);
+        }
+        final watch =
+            _FakeWatchSyncService()..initialRequest = Future.value(intent);
+        final rings =
+            _MemoryWatchRingStore()
+              ..value = const WatchRingPreferences(
+                selectedIds: [claudePlanRingId],
+              );
+        final registrations = <Duration>[];
+        final live = _PublicationRepository(_alertTestSnapshot())
+          ..failLoad = true;
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: live,
+            modeAuthority: authority,
+            watchSyncService: watch,
+            watchRingPreferenceStore: rings,
+            scheduleHeadlessSync:
+                (interval) async => registrations.add(interval),
+            applyAlertSettings: (snapshot, _) => snapshot,
+          ),
+        );
+        await tester.pumpAndSettle();
+        // The startup read and the watch-only reply both stay cache-only.
+        expect(live.cacheOnlyLoads, [true, true]);
+        expect(live.livePolls, isEmpty);
+        expect(registrations, isEmpty);
+        expect(watch.syncedSnapshots, hasLength(1));
+        expect(watch.syncedSnapshots.single.accounts, isEmpty);
+        expect(watch.syncedPreferences.single.selectedIds, [claudePlanRingId]);
+        expect(watch.mockModes, [false]);
+        // The Dashboard keeps its own failure.
+        expect(find.text('Dashboard unavailable'), findsOneWidget);
+      },
+    );
+  }
+
+  testWidgets(
+    'a Wear reply reads again when work outside the Dashboard retires its proof',
+    (tester) async {
+      final accepted = _alertTestSnapshot();
+      final retained = _alertTestSnapshot(windowLabel: 'Retained');
+      final live = _PublicationRepository(accepted);
+      final watch = _FakeWatchSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      live.retired = accepted;
+      live.snapshot = retained;
+      // Headless work replaces the first cache read before it is proven.
+      live.staleValidations = 1;
+      watch.receive!(const WatchRefreshIntent.resend());
+      await tester.pumpAndSettle();
+      expect(live.staleValidations, 0);
+      expect(live.cacheOnlyLoads, [false, true, true]);
+      expect(watch.syncedSnapshots.last, same(retained));
+      expect(
+        tester
+            .widget<DashboardScreen>(find.byType(DashboardScreen))
+            .snapshot
+            .accounts
+            .first
+            .allowances
+            .single
+            .label,
+        'Window A',
+      );
+    },
+  );
+
+  testWidgets(
+    'a Wear resend answers once a newer load settles while an older one is held',
+    (tester) async {
+      final live = _PublicationRepository(_alertTestSnapshot());
+      final watch = _FakeWatchSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final older = Completer<DashboardSnapshot>();
+      final newer = Completer<DashboardSnapshot>();
+      final report = _alertTestSnapshot(windowLabel: 'New refresh');
+      try {
+        live.response = older.future;
+        await tester.tap(find.byTooltip('Refresh'));
+        await tester.pump();
+        watch.receive!(const WatchRefreshIntent.resend());
+        await tester.pump();
+        live.response = newer.future;
+        await tester.tap(find.byTooltip('Refresh'));
+        await tester.pump();
+        final sent = watch.syncedSnapshots.length;
+        newer.complete(report);
+        await tester.pumpAndSettle();
+        expect(older.isCompleted, isFalse);
+        // Ordinary publication and the pending reply both carry the newer
+        // report while the older load is still held.
+        expect(watch.syncedSnapshots, hasLength(sent + 2));
+        expect(watch.syncedSnapshots[sent], same(report));
+        expect(watch.syncedSnapshots[sent + 1], same(report));
+      } finally {
+        if (!older.isCompleted) older.complete(live.snapshot);
+        if (!newer.isCompleted) newer.complete(report);
+        await tester.pumpAndSettle();
+      }
+      expect(live.cacheOnlyLoads, [false, false, false]);
+    },
+  );
+
+  testWidgets(
+    'a Wear fallback yields to a load started during its mode proof',
+    (tester) async {
+      final accepted = _alertTestSnapshot();
+      final report = _alertTestSnapshot(windowLabel: 'New refresh');
+      final live = _PublicationRepository(accepted);
+      final watch = _FakeWatchSyncService();
+      final authority = _StartupModeAuthority(MemoryDataModeAuthority());
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: authority,
+          watchSyncService: watch,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      // The resend operation begins first, then the fallback's own operation.
+      var begins = 0;
+      final held = Completer<void>();
+      final release = Completer<void>();
+      final newer = Completer<DashboardSnapshot>();
+      authority.beforeBegin = () async {
+        begins++;
+      };
+      authority.beforeCurrent = () async {
+        if (begins < 2 || held.isCompleted) return;
+        held.complete();
+        await release.future;
+      };
+      live.retired = accepted;
+      try {
+        watch.receive!(const WatchRefreshIntent.resend());
+        await tester.pump();
+        expect(held.isCompleted, isTrue);
+        live.response = newer.future;
+        await tester.tap(find.byTooltip('Refresh'));
+        await tester.pump();
+        release.complete();
+        await tester.pump();
+        // The shared repository never served the fallback a cache read.
+        expect(live.cacheOnlyLoads, [false, false]);
+        newer.complete(report);
+        await tester.pumpAndSettle();
+      } finally {
+        if (!release.isCompleted) release.complete();
+        if (!newer.isCompleted) newer.complete(report);
+        await tester.pumpAndSettle();
+      }
+      expect(live.cacheOnlyLoads, [false, false]);
+      expect(watch.syncedSnapshots.last, same(report));
+      expect(
+        tester
+            .widget<DashboardScreen>(find.byType(DashboardScreen))
+            .snapshot
+            .accounts
+            .first
+            .allowances
+            .single
+            .label,
+        'New refresh',
+      );
+    },
+  );
+
+  testWidgets(
+    'a Wear resend with only an obsolete acceptance replies without Dashboard',
+    (tester) async {
+      final accepted = _alertTestSnapshot();
+      final retained = _alertTestSnapshot(windowLabel: 'Retained');
+      final live = _PublicationRepository(accepted);
+      final watch = _FakeWatchSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      live.retired = accepted;
+      live.snapshot = retained;
+      watch.receive!(const WatchRefreshIntent.resend());
+      await tester.pumpAndSettle();
+      expect(live.cacheOnlyLoads, [false, true]);
+      expect(watch.syncedSnapshots.last, same(retained));
+      expect(
+        tester
+            .widget<DashboardScreen>(find.byType(DashboardScreen))
+            .snapshot
+            .accounts
+            .first
+            .allowances
+            .single
+            .label,
+        'Window A',
+      );
+    },
+  );
+
+  testWidgets(
+    'an admitted Wear refresh replies from cache when its send retires and Live fails',
+    (tester) async {
+      final authority = MemoryDataModeAuthority();
+      final sendEntered = Completer<void>();
+      final releaseSend = Completer<void>();
+      final live = _PublicationRepository(_alertTestSnapshot());
+      final sample = _PublicationRepository(
+        _alertTestSnapshot(windowLabel: 'Sample'),
+      );
+      final watch =
+          _FakeWatchSyncService()
+            ..initialRequest = Future.value(_legacyWatchIntent(authority.state))
+            ..beforeSync = () async {
+              final operation = DataModeOperation.current!;
+              if (operation.generation != 0 || sendEntered.isCompleted) return;
+              sendEntered.complete();
+              await releaseSend.future;
+              if (!await operation.isCurrent()) throw DataModeRetired();
+            };
+      try {
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: live,
+            mockRepository: sample,
+            modeAuthority: authority,
+            debugDataAvailable: true,
+            watchSyncService: watch,
+            applyAlertSettings: (snapshot, _) => snapshot,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(sendEntered.isCompleted, isTrue);
+        expect(live.cacheOnlyLoads, [true, false]);
+
+        final toggle = await _openMockToggle(tester);
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        expect(watch.syncedSnapshots, [sample.snapshot]);
+        live.failPolling = true;
+        await tester.tap(toggle);
+        await tester.pumpAndSettle();
+        expect(authority.writes, [DataMode.mock, DataMode.live]);
+        expect(live.cacheOnlyLoads, [true, false, false]);
+        expect(watch.syncedSnapshots, [sample.snapshot]);
+      } finally {
+        releaseSend.complete();
+        await tester.pumpAndSettle();
+      }
+      expect(live.cacheOnlyLoads, [true, false, false, true]);
+      expect(watch.syncedSnapshots, [sample.snapshot, live.snapshot]);
+      expect(watch.mockModes, [true, false]);
+    },
+  );
+
+  for (final cold in [false, true]) {
+    testWidgets(
+      'a switch draining during ${cold ? 'cold' : 'warm'} Wear handoff resends',
+      (tester) async {
+        final inner = MemoryDataModeAuthority();
+        final authority = _StartupModeAuthority(inner);
+        final request = _legacyWatchIntent(inner.state);
+        final readEntered = Completer<void>();
+        final releaseRead = Completer<void>();
+        final releaseSwitch = Completer<void>();
+        authority.beforeRead = () async {
+          readEntered.complete();
+          await releaseRead.future;
+        };
+        final watch = _FakeWatchSyncService();
+        if (cold) watch.initialRequest = Future.value(request);
+        final live = _PublicationRepository(_alertTestSnapshot());
+        final sample = _PublicationRepository(
+          _alertTestSnapshot(windowLabel: 'Sample'),
+        );
+        Future<DataModeSwitch>? switching;
+        try {
+          await tester.pumpWidget(
+            WardPulseApp(
+              repository: live,
+              mockRepository: sample,
+              modeAuthority: authority,
+              watchSyncService: watch,
+              applyAlertSettings: (snapshot, _) => snapshot,
+            ),
+          );
+          if (!cold) {
+            await tester.pumpAndSettle();
+            watch.receive!(request);
+          }
+          await tester.pump();
+          expect(readEntered.isCompleted, isTrue);
+          inner.pendingWrite = releaseSwitch;
+          switching = inner.switchTo(DataMode.mock);
+          expect(inner.switching, isTrue);
+          releaseRead.complete();
+          await tester.pump();
+          expect(sample.loads, 0);
+          expect(live.loads, cold ? 0 : 1);
+        } finally {
+          if (!releaseRead.isCompleted) releaseRead.complete();
+          releaseSwitch.complete();
+          await switching;
+        }
+        await tester.pumpAndSettle();
+        expect(live.cacheOnlyLoads, cold ? isEmpty : [false]);
+        expect(sample.cacheOnlyLoads, [true]);
+        expect(watch.syncedSnapshots, [
+          if (!cold) live.snapshot,
+          sample.snapshot,
+        ]);
+        expect(watch.mockModes.last, isTrue);
+      },
+    );
+  }
+
+  testWidgets('the Mock switch waits until startup has read the saved mode', (
+    tester,
+  ) async {
+    final inner = MemoryDataModeAuthority(mode: DataMode.mock);
+    final opened = Completer<void>();
+    final release = Completer<void>();
+    final authority = _StartupModeAuthority(inner)
+      ..beforeBegin = () async {
+        if (!opened.isCompleted) opened.complete();
+        await release.future;
+      };
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: const NoProvidersDashboardRepository(),
+        mockRepository: const NoProvidersDashboardRepository(),
+        applyAlertSettings: (snapshot, _) => snapshot,
+        debugDataAvailable: true,
+        modeAuthority: authority,
+      ),
+    );
+    try {
+      expect(opened.isCompleted, isTrue);
+      final toggle = await _openMockToggle(tester);
+      expect(tester.widget<SwitchListTile>(toggle).onChanged, isNull);
+      await tester.tap(toggle);
+      await tester.pump();
+      expect(inner.writes, isEmpty);
+    } finally {
+      release.complete();
+    }
+    await tester.pumpAndSettle();
+    final toggle = find.widgetWithText(SwitchListTile, 'Mock data');
+    expect(tester.widget<SwitchListTile>(toggle).onChanged, isNotNull);
+    expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(inner.writes, [DataMode.live]);
+  });
 
   testWidgets('the recovery switch is on, and says when Android blocks it', (
     tester,
@@ -8012,6 +9257,112 @@ void main() {
         expect(watchlist.keys, isEmpty);
         expect(wake.cancelled, 2);
         expect(wake.booked, isEmpty);
+      } finally {
+        if (!repository.validation.isCompleted)
+          repository.validation.complete(true);
+        try {
+          await tester.pumpWidget(const SizedBox());
+        } finally {
+          await tester.pumpAndSettle();
+        }
+      }
+    },
+  );
+
+  testWidgets(
+    'a Mock switch during the final recovery proof leaves the window pending',
+    (tester) async {
+      const window = (
+        accountId: 'account-a',
+        allowanceId: 'weekly',
+        historyOwner: null,
+      );
+      final repository = _PublicationRepository(DashboardSnapshot.empty());
+      final authority = MemoryDataModeAuthority();
+      final watchlist = _MemoryRecoveryWatchlistStore();
+      final notifier = _BlockedRecoveryNotifier();
+      final wake = _RecordingRecoveryWake();
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      // Repository proofs since the latest history read; the last one before
+      // a post is that post's final proof.
+      var proofs = 0;
+      var finalProof = 0;
+      int? holdAt;
+      watchlist.beforeRead = () async {
+        proofs = 0;
+      };
+      repository.beforeValidation = () {
+        if (++proofs == holdAt) {
+          holdAt = null;
+          repository.delayNextValidation = true;
+        }
+        if (notifier.reported.isEmpty) finalProof = proofs;
+      };
+      try {
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            modeAuthority: authority,
+            debugDataAvailable: true,
+            recoveryNotificationStore: _MemoryRecoveryNotificationStore(),
+            recoveryWatchlistStore: watchlist,
+            recoveryNotifier: notifier,
+            recoveryWake: wake,
+            watchSyncService: _FakeWatchSyncService(),
+            readExhaustedWindows: (_) => const [],
+            readPlanRecoveries:
+                (_, remembered) => [
+                  for (final key in remembered)
+                    (
+                      accountId: key.accountId,
+                      historyOwner: null,
+                      provider: 'claude',
+                      allowanceId: key.allowanceId,
+                      label: 'Weekly plan',
+                      resetsAt: null,
+                    ),
+                ],
+            syncScheduler: scheduler,
+          ),
+        );
+        await tester.pumpAndSettle();
+        final toggle = await _openMockToggle(tester);
+
+        // An ordinary same-mode pass posts and consumes the window.
+        watchlist.keys = const [window];
+        scheduler.tick();
+        await tester.pumpAndSettle();
+        expect(notifier.reported, hasLength(1));
+        expect(watchlist.keys, isEmpty);
+        expect(finalProof, greaterThan(0));
+        final cancelled = wake.cancelled;
+
+        // The switch begins after the mode reply, while the last repository
+        // proof is held under the recovery lease.
+        watchlist.keys = const [window];
+        holdAt = finalProof;
+        scheduler.tick();
+        await tester.pump();
+        await repository.validationEntered.future;
+        await tester.tap(toggle);
+        await tester.pump();
+        expect(authority.switching, isTrue);
+        expect(authority.writes, isEmpty);
+        repository.validation.complete(true);
+        await tester.pumpAndSettle();
+        expect(authority.writes, [DataMode.mock]);
+        expect(notifier.reported, hasLength(1));
+        expect(watchlist.keys, const [window]);
+        expect(wake.cancelled, cancelled);
+        expect(wake.booked, isEmpty);
+
+        // Live observes the still-pending window again.
+        await tester.tap(await _openMockToggle(tester));
+        await tester.pumpAndSettle();
+        expect(authority.writes, [DataMode.mock, DataMode.live]);
+        expect(notifier.reported, hasLength(2));
+        expect(watchlist.keys, isEmpty);
       } finally {
         if (!repository.validation.isCompleted)
           repository.validation.complete(true);
@@ -8531,6 +9882,81 @@ class _FakeAlertNotifier implements AlertNotifier {
   }
 }
 
+Future<Finder> _openMockToggle(WidgetTester tester) async {
+  await tester.tap(find.text('Settings'));
+  await tester.pumpAndSettle();
+  final toggle = find.widgetWithText(SwitchListTile, 'Mock data');
+  await tester.scrollUntilVisible(
+    toggle,
+    300,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+  return toggle;
+}
+
+WatchRefreshIntent _legacyWatchIntent(DataModeState state) =>
+    WatchRefreshIntent.fromMessage({
+      'kind': 'refresh',
+      'installId': state.installId,
+      'generation': state.generation,
+      'mode': state.mode.name,
+      'requestId': 'legacy-tap',
+    });
+
+class _StartupModeAuthority implements DataModeAuthority {
+  _StartupModeAuthority(this.inner);
+
+  final DataModeAuthority inner;
+  Future<void> Function()? beforeRead;
+  Future<void> Function()? beforeBegin;
+  Future<void> Function()? beforeEnter;
+  Future<void> Function()? beforeCurrent;
+
+  @override
+  Future<DataModeState> read() async {
+    await beforeRead?.call();
+    return inner.read();
+  }
+
+  @override
+  Future<DataModeOperation> begin({
+    bool cacheOnly = false,
+    bool waitForSwitch = false,
+  }) async {
+    await beforeBegin?.call();
+    final operation = await inner.begin(
+      cacheOnly: cacheOnly,
+      waitForSwitch: waitForSwitch,
+    );
+    return DataModeOperation(
+      authority: this,
+      state: operation.state,
+      requestId: operation.requestId,
+      cacheOnly: operation.cacheOnly,
+    );
+  }
+
+  @override
+  Future<bool> isCurrent(int generation) async {
+    await beforeCurrent?.call();
+    return inner.isCurrent(generation);
+  }
+
+  @override
+  Future<String?> enter(int generation, {bool settlement = false}) async {
+    await beforeEnter?.call();
+    return inner.enter(generation, settlement: settlement);
+  }
+
+  @override
+  Future<void> exit(String lease, {bool unresolved = false}) =>
+      inner.exit(lease, unresolved: unresolved);
+
+  @override
+  Future<DataModeSwitch> switchTo(DataMode mode) => inner.switchTo(mode);
+}
+
 class _FakeWatchSyncService implements WatchSyncService {
   final syncedSnapshots = <DashboardSnapshot>[];
   final syncedPreferences = <WatchRingPreferences>[];
@@ -8543,9 +9969,23 @@ class _FakeWatchSyncService implements WatchSyncService {
           )
           as Map<String, dynamic>;
   final mockModes = <bool>[];
+
+  /// The refresh anchor each summary advertised.
+  final anchors = <DateTime?>[];
   bool fail = false;
-  void Function()? refreshHandler;
+  void Function(WatchRefreshIntent)? receive;
+  Future<WatchRefreshIntent?>? initialRequest;
+  void Function()? get refreshHandler =>
+      receive == null
+          ? null
+          : () => receive!(_legacyWatchIntent(MemoryDataModeAuthority().state));
   void Function(DashboardSnapshot)? onSync;
+
+  /// Holds a send as Google Play services readiness would.
+  Future<void> Function()? beforeSync;
+
+  /// Summaries the native ownership check dropped after readiness.
+  final dropped = <DashboardSnapshot>[];
 
   @override
   Future<void> sync(
@@ -8553,22 +9993,33 @@ class _FakeWatchSyncService implements WatchSyncService {
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,
+    Future<bool> Function()? isCurrent,
   }) async {
+    final before = beforeSync;
+    if (before != null) await before();
+    if (isCurrent != null && !await isCurrent()) {
+      dropped.add(snapshot);
+      return;
+    }
     syncedSnapshots.add(snapshot);
     syncedPreferences.add(ringPreferences);
     mockModes.add(mockDataMode);
+    anchors.add(manualRefreshAnchorAt);
     onSync?.call(snapshot);
     if (fail) throw StateError('Watch unavailable');
   }
 
   @override
-  void bindWatchRefreshListener(void Function() onRefresh) {
-    refreshHandler = onRefresh;
+  Future<WatchRefreshIntent?> bindWatchRefreshListener(
+    void Function(WatchRefreshIntent) onRefresh,
+  ) async {
+    receive = onRefresh;
+    return await initialRequest;
   }
 
   @override
   void unbindWatchRefreshListener() {
-    refreshHandler = null;
+    receive = null;
   }
 }
 
@@ -8582,6 +10033,7 @@ class _HoldingWatchSyncService extends _FakeWatchSyncService {
     WatchRingPreferences preferences, {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,
+    Future<bool> Function()? isCurrent,
   }) async {
     if (hold) {
       if (!entered.isCompleted) entered.complete();
@@ -8592,6 +10044,7 @@ class _HoldingWatchSyncService extends _FakeWatchSyncService {
       preferences,
       manualRefreshAnchorAt: manualRefreshAnchorAt,
       mockDataMode: mockDataMode,
+      isCurrent: isCurrent,
     );
   }
 }
@@ -8646,12 +10099,15 @@ class _FailingWatchSyncService implements WatchSyncService {
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,
+    Future<bool> Function()? isCurrent,
   }) {
     return Future.error(StateError('Watch unavailable'));
   }
 
   @override
-  void bindWatchRefreshListener(void Function() onRefresh) {}
+  Future<WatchRefreshIntent?> bindWatchRefreshListener(
+    void Function(WatchRefreshIntent) onRefresh,
+  ) async => null;
 
   @override
   void unbindWatchRefreshListener() {}
@@ -8929,25 +10385,6 @@ class _MemoryCredentialStore
   }
 }
 
-class _MemoryDebugDataPreferenceStore implements DebugDataPreferenceStore {
-  bool value = false;
-  bool failWrite = false;
-  int writes = 0;
-  Future<void>? pendingWrite;
-
-  @override
-  Future<bool> readMockDataEnabled() async => value;
-
-  @override
-  Future<void> writeMockDataEnabled(bool value) async {
-    writes++;
-    if (failWrite) throw StateError('Debug preferences unavailable');
-    final pending = pendingWrite;
-    if (pending != null) await pending;
-    this.value = value;
-  }
-}
-
 class _MemoryRefreshIntervalPreferenceStore
     implements RefreshIntervalPreferenceStore {
   RefreshIntervalPreference value = const RefreshIntervalPreference();
@@ -8958,6 +10395,19 @@ class _MemoryRefreshIntervalPreferenceStore
   @override
   Future<void> write(RefreshIntervalPreference value) async {
     this.value = value;
+  }
+}
+
+/// Holds every read until [release].
+class _HeldRefreshIntervalStore extends _MemoryRefreshIntervalPreferenceStore {
+  final entered = Completer<void>();
+  final release = Completer<void>();
+
+  @override
+  Future<RefreshIntervalPreference> read() async {
+    if (!entered.isCompleted) entered.complete();
+    await release.future;
+    return super.read();
   }
 }
 
@@ -8987,40 +10437,101 @@ class _PublicationRepository extends DashboardRepository {
   DashboardSnapshot snapshot;
   int loads = 0;
   bool failLoad = false;
-  bool failClear = false;
+  bool failPolling = false;
+  final cacheOnlyLoads = <bool>[];
   Future<DashboardSnapshot>? response;
   bool current = true;
+
+  /// A report that has lost ownership while others stay current.
+  DashboardSnapshot? retired;
+
+  /// The automatic poll context each provider-capable load ran under.
+  final livePolls = <AutomaticPollContext?>[];
+
+  /// A native automatic dispatch an automatic load reports.
+  DateTime? dispatchedAt;
+
+  /// Further native dispatches by connection, with the claiming credential.
+  final dispatches = <String, ({DateTime at, CredentialVersion version})>{};
+
+  /// Native observation order the next load's platform claim reports.
+  int? dispatchSample;
+
+  /// Credential generations that a removal or replacement retired.
+  final retiredGenerations = <String>{};
+
+  static final _dispatchCredential = CredentialVersion({
+    'generation': 'platform-1',
+    'epoch': '1',
+  });
+
+  /// Validations of current reports that work elsewhere retires first.
+  int staleValidations = 0;
   bool delayNextValidation = false;
   bool validationStarted = false;
   final validationEntered = Completer<void>();
   final validation = Completer<bool>();
+
+  /// Runs as each snapshot validation starts, before [delayNextValidation].
+  void Function()? beforeValidation;
   @override
   Future<DashboardSnapshot> load() async {
     loads++;
-    if (failLoad) throw const DashboardLoadException();
+    final cacheOnly = DataModeOperation.current?.cacheOnly ?? false;
+    cacheOnlyLoads.add(cacheOnly);
+    if (!cacheOnly) livePolls.add(AutomaticPollContext.current);
+    final poll = AutomaticPollContext.current;
+    for (final MapEntry(key: connection, value: (:at, :version))
+        in {
+          if (dispatchedAt case final at?)
+            'anthropic.platform': (at: at, version: _dispatchCredential),
+          ...dispatches,
+        }.entries) {
+      poll?.automaticAt[connection] = at;
+      poll?.admittedVersions[connection] = version;
+    }
+    if (dispatchSample case final sample? when dispatchedAt != null) {
+      poll?.samples['anthropic.platform'] = sample;
+    }
+    if (failLoad || (failPolling && !cacheOnly))
+      throw const DashboardLoadException();
     if (response != null) return response!;
     return snapshot;
   }
 
-  @override
-  Future<void> clearPersistentSnapshots() async {
-    if (failClear) throw StateError('Snapshot cache unavailable');
-    await super.clearPersistentSnapshots();
-  }
+  /// Whether a failed load stays current; a sibling retirement rejects it.
+  bool failureCurrent = true;
 
   // The failed request can be current after its previous data loses ownership.
   @override
-  Future<bool> isFailureCurrent(DashboardLoadException failure) async => true;
+  Future<bool> isFailureCurrent(DashboardLoadException failure) async =>
+      failureCurrent;
+
+  @override
+  Future<bool> ownsAutomaticCadence(
+    String connection,
+    CredentialVersion version,
+  ) async => !retiredGenerations.contains(version.generation);
 
   @override
   Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) async {
+    beforeValidation?.call();
+    if (snapshot.connectionVersions.values.any(
+      (values) => retiredGenerations.contains(values['generation']),
+    )) {
+      return false;
+    }
     if (delayNextValidation) {
       delayNextValidation = false;
       validationStarted = true;
       if (!validationEntered.isCompleted) validationEntered.complete();
       return validation.future;
     }
-    return current;
+    if (staleValidations > 0 && !identical(snapshot, retired)) {
+      staleValidations--;
+      return false;
+    }
+    return current && !identical(snapshot, retired);
   }
 }
 

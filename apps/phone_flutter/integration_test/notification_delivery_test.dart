@@ -1141,7 +1141,9 @@ final class _Recoveries implements RecoveryNotifier {
 
 final class _NoWatch implements WatchSyncService {
   @override
-  void bindWatchRefreshListener(void Function() onRefresh) {}
+  Future<WatchRefreshIntent?> bindWatchRefreshListener(
+    void Function(WatchRefreshIntent) onRefresh,
+  ) async => null;
   @override
   void unbindWatchRefreshListener() {}
   @override
@@ -1150,6 +1152,7 @@ final class _NoWatch implements WatchSyncService {
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,
+    Future<bool> Function()? isCurrent,
   }) async {}
 }
 

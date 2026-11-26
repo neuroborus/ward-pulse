@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.util.SizeF
 import android.view.View
 import android.widget.RemoteViews
+import app.wardpulse.watchsync.PhoneWidgetPublicationStore
 import es.antonborri.home_widget.HomeWidgetPlugin
 import java.time.ZoneId
 import kotlin.math.ceil
@@ -41,6 +42,11 @@ class WardPulseAppWidget : AppWidgetProvider() {
     private fun refresh(
         context: Context, manager: AppWidgetManager, id: Int, data: SharedPreferences,
     ) {
+        val mode = try {
+            PhoneWidgetPublicationStore.currentMode(context)
+        } catch (_: IllegalStateException) {
+            return
+        }
         val display = context.resources.displayMetrics
         // The platform's bitmap allowance is 1.5 screen-sized ARGB images. Keep a lower hard cap.
         val bytes = minOf(
@@ -48,9 +54,10 @@ class WardPulseAppWidget : AppWidgetProvider() {
             display.widthPixels.toLong() * display.heightPixels * 6L,
         ).coerceAtLeast(0)
         // Fresh full updates replace the previous bitmap set; no accumulated partial updates/cache.
-        manager.updateAppWidget(id, publication(
-            context, id, data.all, manager.getAppWidgetOptions(id), bytes,
-        ).views)
+        val views = publication(
+            context, id, mode.eligibleRows(data.all), manager.getAppWidgetOptions(id), bytes,
+        ).views
+        mode.deliverIfCurrent(context) { manager.updateAppWidget(id, views) }
     }
 
     internal data class Sizes(val values: List<SizeF>, val responsive: Boolean)

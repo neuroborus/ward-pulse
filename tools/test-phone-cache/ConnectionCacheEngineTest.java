@@ -62,9 +62,65 @@ public final class ConnectionCacheEngineTest {
         failedFirstLegacyCleanupRetainsEmptyState();
         claudePlanRetirement();
         failedClaudePlanRetirementFences();
-        dataModeAuthority(); modePolicyWriteFailure(); dataModeFetchFencing();
+        dataModeAuthority(); modePolicyWriteFailure(); dataModeFetchFencing(); legacyWatchRefreshAdmission();
+        waitingWearResendCapturesSettledMode(); widgetDeliveryRequiresCurrentMode();
+        recoveryPreferenceAdmission(); unrecordedRecoveriesSpanEngines();
         scopedCredentialAdmission(); scopedSnapshotMaintenance(); unscopedFetchLeavesModeAbsent();
+        automaticOwnershipFollowsCredential(); watchSummaryArrivalOrder(); watchSummaryAdmissionFollowsCredential();
         System.out.println("Connection cache engine: " + assertions + " assertions passed.");
+    }
+    static void automaticOwnershipFollowsCredential() {
+        Disk disk = new Disk(); ConnectionCacheEngine engine = new ConnectionCacheEngine(disk);
+        Map<String, String> v = version(login(engine));
+        check(engine.ownsAutomatic(C, v), "Confirmed credential owns its cadence.");
+        engine.clearSnapshot(C, v);
+        check(!engine.valid(C, v) && engine.ownsAutomatic(C, v), "Snapshot epoch change keeps cadence ownership.");
+        Map<String, String> reconnected = version(login(engine));
+        check(!engine.ownsAutomatic(C, v), "Reconnect retires prior cadence.");
+        check(engine.ownsAutomatic(C, reconnected), "Reconnected credential owns its cadence.");
+        finish(engine, "ui", acquire(engine, "ui", "delete", null), "release");
+        check(!engine.ownsAutomatic(C, reconnected), "Deletion retires cadence.");
+        check(!new ConnectionCacheEngine(new Disk()).ownsAutomatic(C, reconnected), "Absent credential owns no cadence.");
+    }
+    static void watchSummaryArrivalOrder() {
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(new Disk());
+        long older = engine.reserveWatchSummary(), newer = engine.reserveWatchSummary();
+        check(engine.claimWatchSummary(newer), "Newest arrival is sent.");
+        check(!engine.claimWatchSummary(older), "Late-ready older arrival cannot replace a newer summary.");
+        check(!engine.claimWatchSummary(newer), "A summary is sent once.");
+        check(engine.claimWatchSummary(engine.reserveWatchSummary()), "A later arrival is sent.");
+    }
+    static void watchSummaryAdmissionFollowsCredential() {
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(new Disk());
+        Map<String, String> v = version(login(engine));
+        // Dart confirmed this report; the credential is replaced in the same mode generation.
+        long confirmed = engine.reserveWatchSummary();
+        Map<String, String> reconnected = version(login(engine));
+        check(engine.admitWatchSummary(confirmed, Map.of(C, v)) == null, "A retired credential's summary is not sent.");
+        check(Boolean.TRUE.equals(engine.admitWatchSummary(confirmed, Map.of(C, reconnected))),
+            "A stale proof consumes no arrival, so the current report is sent.");
+        long cleared = engine.reserveWatchSummary();
+        finish(engine, "ui", acquire(engine, "ui", "delete", null), "release");
+        check(engine.admitWatchSummary(cleared, Map.of(C, reconnected)) == null, "Deletion retires the confirmed summary.");
+        check(Boolean.TRUE.equals(engine.admitWatchSummary(cleared, null)), "A summary without credential proof keeps arrival order.");
+        check(Boolean.FALSE.equals(engine.admitWatchSummary(cleared, Map.of())), "A summary is admitted once.");
+
+        // Dart confirmed a retained report; the same credential then writes a newer row.
+        ConnectionCacheEngine cache = new ConnectionCacheEngine(new MemoryUpdatingDisk());
+        Map<String, String> current = version(login(cache));
+        check(cache.writeSnapshot(C, current, "retained", 1001), "Retained row persists.");
+        Map<String, Map<String, Object>> retained = Map.of(C,
+            Map.of("era", 0L, "generatedAt", 1001L, "rowId", cache.readSnapshotPair(C, current).get("rowId")));
+        Map<String, Map<String, String>> versions = Map.of(C, current);
+        check(cache.validAll(versions, Map.of(), retained, Map.of()), "The confirmed row proof is current.");
+        long report = cache.reserveWatchSummary();
+        check(cache.writeSnapshot(C, current, "replacement", 1002), "A same-credential write replaces the row.");
+        check(cache.admitWatchSummary(report, versions, Map.of(), retained, Map.of()) == null,
+            "A replaced row's summary is not sent though its credential is current.");
+        Map<String, Map<String, Object>> replacement = Map.of(C,
+            Map.of("era", 0L, "generatedAt", 1002L, "rowId", cache.readSnapshotPair(C, current).get("rowId")));
+        check(Boolean.TRUE.equals(cache.admitWatchSummary(report, versions, Map.of(), replacement, Map.of())),
+            "The replacement row's summary is sent.");
     }
     static void restartPartialAndMonotonic() {
         Disk disk = new Disk(); ConnectionCacheEngine first = new ConnectionCacheEngine(disk);
@@ -1019,6 +1075,121 @@ public final class ConnectionCacheEngineTest {
             && Long.valueOf(1).equals(live.get("generation")), "Only a successful write admits the next generation.");
         check(!production.operationCurrent(0L), "The migrated record retires the original Mock generation.");
     }
+    static void legacyWatchRefreshAdmission() {
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(new Disk());
+        byte[] empty = new byte[0];
+        check(engine.captureLegacyWatchRefresh(empty) == null, "An uninitialized phone resends only.");
+        Map<String, Object> initial = engine.initializeMode(false);
+        check(engine.captureLegacyWatchRefresh(new byte[]{1}) == null, "An unknown payload resends only.");
+        Map<String, Object> tap = engine.captureLegacyWatchRefresh(empty);
+        check(initial.get("installId").equals(tap.get("installId")) && Long.valueOf(0).equals(tap.get("generation"))
+            && tap.get("requestId") instanceof String, "An owned empty tap captures its operation before launch.");
+        String held = engine.enterEffect("headless", 0L);
+        check(held != null && switchMode(engine, "foreground", "mock") == null, "A held effect delays the switch.");
+        check(engine.captureLegacyWatchRefresh(empty) == null, "Draining admission makes a tap resend-only.");
+        engine.exitEffect("headless", held, false);
+        switchMode(engine, "foreground", "live");
+        check(engine.captureLegacyWatchRefresh(empty) == null && !engine.operationCurrent(0L),
+            "Returning to Live cannot renew legacy refresh authority.");
+    }
+
+    static void waitingWearResendCapturesSettledMode() {
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(new Disk());
+        engine.initializeMode(false);
+        String lease = engine.enterEffect("headless", 0L);
+        switchMode(engine, "foreground", "mock");
+        switchMode(engine, "foreground", "live");
+        AtomicReference<Map<String, Object>> result = new AtomicReference<>();
+        engine.beginAfterSwitch("watch", result::set, error -> { throw new AssertionError(error); });
+        engine.beginAfterSwitch("detaching", ignored -> { throw new AssertionError("Detached wait was delivered."); },
+            error -> { throw new AssertionError(error); });
+        engine.detach("detaching");
+        check(result.get() == null, "A resend waits through the drain.");
+        engine.exitEffect("headless", lease, false);
+        check("live".equals(result.get().get("mode")) && Long.valueOf(2L).equals(result.get().get("generation")),
+            "Queued admission captures the generation after both switches settle.");
+    }
+
+    static void widgetDeliveryRequiresCurrentMode() {
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(new Disk());
+        Map<String, Object> mode = engine.initializeMode(false);
+        String install = (String) mode.get("installId");
+        AtomicReference<String> delivered = new AtomicReference<>();
+        engine.deliverWidgetIfModeCurrent(install, 0L, () -> delivered.set("initial"));
+        check("initial".equals(delivered.get()), "Current launcher rows can be delivered.");
+        switchMode(engine, "foreground", "mock");
+        switchMode(engine, "foreground", "live");
+        engine.deliverWidgetIfModeCurrent(install, 0L, () -> delivered.set("retired"));
+        engine.deliverWidgetIfModeCurrent("other-install", 2L, () -> delivered.set("unowned"));
+        check("initial".equals(delivered.get()), "Retired rendered rows cannot reach the launcher.");
+        engine.deliverWidgetIfModeCurrent(install, 2L, () -> delivered.set("replacement"));
+        check("replacement".equals(delivered.get()), "Current replacement reaches the launcher.");
+        String lease = engine.enterEffect("headless", 2L);
+        AtomicReference<Map<String, Object>> switched = new AtomicReference<>();
+        engine.switchMode("foreground", "mock", switched::set, error -> { throw new AssertionError(error); });
+        engine.deliverWidgetIfModeCurrent(install, 2L, () -> delivered.set("draining"));
+        check(switched.get() == null && "replacement".equals(delivered.get()),
+            "A redraw during a held drain cannot publish the outgoing generation.");
+        engine.exitEffect("headless", lease, false);
+        check(Long.valueOf(3L).equals(switched.get().get("generation")), "The drained switch commits.");
+        engine.deliverWidgetIfModeCurrent(install, 3L, () -> delivered.set("settled"));
+        check("settled".equals(delivered.get()), "A current redraw after the switch settles reaches the launcher.");
+    }
+    static void recoveryPreferenceAdmission() {
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(new Disk());
+        Map<String, String> v = version(login(engine));
+        Map<String, Map<String, String>> all = new HashMap<>(); all.put(C, v);
+        Map<String, Long> eras = new HashMap<>();
+        Map<String, Map<String, Object>> payloads = new HashMap<>();
+        Map<String, String> empty = new HashMap<>();
+        Long settled = engine.readRecoveryPreferenceRevision();
+        check(settled != null && engine.validAll(all, eras, payloads, empty, settled, null),
+            "A settled recovery choice admits with current provenance.");
+        String save = engine.beginRecoveryPreferenceWrite("foreground");
+        check(engine.readRecoveryPreferenceRevision() == null, "A save in flight has no readable revision.");
+        check(!engine.validAll(all, eras, payloads, empty, settled, null), "A save in flight refuses admission.");
+        engine.finishRecoveryPreferenceWrite("headless", save);
+        check(engine.readRecoveryPreferenceRevision() == null, "Only the saving engine finishes its save.");
+        engine.finishRecoveryPreferenceWrite("foreground", save);
+        Long saved = engine.readRecoveryPreferenceRevision();
+        check(saved != null && !saved.equals(settled) && !engine.validAll(all, eras, payloads, empty, settled, null),
+            "A finished save retires an earlier read.");
+        check(engine.validAll(all, eras, payloads, empty, saved, null) && engine.recoveryDeliveryCurrent(saved, null),
+            "A read after the save admits.");
+        Map<String, String> wrong = new HashMap<>(v); wrong.put("identity", "b".repeat(64)); all.put(C, wrong);
+        check(!engine.validAll(all, eras, payloads, empty, saved, null), "Retired provenance refuses a current choice.");
+        engine.beginRecoveryPreferenceWrite("foreground");
+        engine.detach("foreground");
+        Long detached = engine.readRecoveryPreferenceRevision();
+        check(detached != null && !detached.equals(saved), "A detached save releases readers with a new revision.");
+        all.put(C, v);
+        engine.initializeMode(false);
+        check(engine.validAll(all, eras, payloads, empty, detached, 0L), "The current Live generation admits.");
+        String lease = engine.enterEffect("headless", 0L);
+        AtomicReference<Map<String, Object>> switched = new AtomicReference<>();
+        engine.switchMode("foreground", "mock", switched::set, error -> { throw new AssertionError(error); });
+        check(!engine.validAll(all, eras, payloads, empty, detached, 0L)
+                && !engine.recoveryDeliveryCurrent(detached, 0L),
+            "A switch draining the batch lease refuses a new recovery post.");
+        check(engine.validAll(all, eras, payloads, empty, detached, null),
+            "Provenance alone is unchanged by the switch.");
+        engine.exitEffect("headless", lease, false);
+        check(switched.get() != null && !engine.validAll(all, eras, payloads, empty, detached, 1L),
+            "A synthetic generation refuses recovery posts.");
+        switchMode(engine, "foreground", "live");
+        check(!engine.validAll(all, eras, payloads, empty, detached, 0L)
+                && engine.validAll(all, eras, payloads, empty, detached, 2L),
+            "Only the new Live generation admits.");
+    }
+    static void unrecordedRecoveriesSpanEngines() {
+        ConnectionCacheEngine engine = new ConnectionCacheEngine(new Disk());
+        engine.recordUnrecordedRecoveries(List.of("first", "second"));
+        engine.detach("foreground");
+        check(engine.readUnrecordedRecoveries().containsAll(List.of("first", "second")),
+            "Unrecorded posts outlive the engine that submitted them.");
+        engine.forgetUnrecordedRecoveries(List.of("first"));
+        check(engine.readUnrecordedRecoveries().equals(List.of("second")), "A recorded occurrence is forgotten alone.");
+    }
     static void dataModeFetchFencing() {
         long[] now = {1000};
         ConnectionCacheEngine engine = new ConnectionCacheEngine(new Disk(), new Disk(), () -> now[0], true);
@@ -1035,6 +1206,9 @@ public final class ConnectionCacheEngineTest {
         Map<String, Object> denied = engine.claimAutomatic("headless", C, ticket, v, 300000, false);
         check(Boolean.FALSE.equals(denied.get("admitted")) && Long.valueOf(301000).equals(denied.get("nextEligible")),
             "Cadence denial follows an admitted connection failure.");
+        // Cache-only, admitted and denied claims share one native observation order.
+        check((Long) cacheOnly.get("sample") < (Long) denied.get("sample") - 1L,
+            "Native cadence samples follow claim order.");
         engine.releaseFetch("headless", C, ticket, null);
 
         now[0] += 300000;

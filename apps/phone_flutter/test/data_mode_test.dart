@@ -758,6 +758,62 @@ void main() {
       expect(laterLegacy.reads, 0);
     });
 
+    for (final enabled in [false, true]) {
+      test(
+        'simultaneous engines import the pre-cutover Debug choice ($enabled)',
+        () async {
+          final reading = Completer<void>();
+          final release = Completer<void>();
+          final queued = Completer<void>();
+          final first = _Legacy(!enabled)
+            ..beforeRead = () async {
+              reading.complete();
+              await release.future;
+            };
+          final second = _Legacy(!enabled);
+          final workerPlatform = _Observed(bridge.platform('worker'));
+          workerPlatform.onInvoke = (method) {
+            if (method == 'beginModeImport' && !queued.isCompleted)
+              queued.complete();
+          };
+
+          final foreground = authority('ui', legacy: first);
+          final worker = authority(
+            'worker',
+            legacy: second,
+            platform: workerPlatform,
+          );
+          final start = foreground.begin();
+          Future<DataModeOperation>? background;
+          try {
+            await reading.future;
+            background = worker.begin();
+            await queued.future;
+            await first.writeMockDataEnabled(enabled);
+            expect(second.reads, 0);
+          } finally {
+            release.complete();
+          }
+          final initial = await start;
+          final joined = await background;
+          expect(initial.mode, enabled ? DataMode.mock : DataMode.live);
+          expect(joined.mode, initial.mode);
+          expect(joined.state.installId, initial.state.installId);
+          expect(joined.generation, 0);
+          expect(first.reads, 1);
+          expect(second.reads, 0);
+
+          final changed = await worker.switchTo(
+            enabled ? DataMode.live : DataMode.mock,
+          );
+          expect(first.mock, enabled);
+          expect((await foreground.read()).mode, changed.state.mode);
+          expect(first.reads, 1);
+          expect(second.reads, 0);
+        },
+      );
+    }
+
     test('an unreadable legacy key leaves the record absent', () async {
       final legacy = _Legacy(null);
       final foreground = authority('ui', legacy: legacy);
@@ -981,14 +1037,37 @@ void main() {
     });
 
     test('a failed mode write keeps the old generation', () async {
-      final foreground = authority('ui');
+      final observed = _Observed(bridge.platform('ui'));
+      final foreground = authority('ui', platform: observed);
+      final worker = authority('worker');
       final operation = await foreground.begin();
+      final lease =
+          (await worker.enter(operation.generation, settlement: true))!;
       await bridge.invoke('test', 'failModeCommit', {'value': true});
-      await expectLater(foreground.switchTo(DataMode.demo), throwsStateError);
+      final rejection = expectLater(
+        foreground.switchTo(DataMode.demo),
+        throwsA(
+          isA<DataModeWriteFailure>().having(
+            (error) => error.unresolvedStorageFailure,
+            'unresolvedStorageFailure',
+            isTrue,
+          ),
+        ),
+      );
+      try {
+        await observed.switchSubmitted.future;
+      } finally {
+        await worker.exit(lease, unresolved: true);
+      }
+      await rejection;
       await bridge.invoke('test', 'failModeCommit', {'value': false});
       expect((await foreground.read()).mode, DataMode.live);
       expect(await operation.isCurrent(), isTrue);
       expect((await foreground.begin()).generation, 0);
+      expect(
+        (await foreground.switchTo(DataMode.demo)).unresolvedStorageFailure,
+        isTrue,
+      );
     });
 
     test('Demo survives a restart under production policy', () async {
@@ -1368,11 +1447,13 @@ final class _Legacy implements DebugDataPreferenceStore {
 
   /// `null` makes the legacy key unreadable.
   bool? mock;
+  Future<void> Function()? beforeRead;
   var reads = 0;
 
   @override
   Future<bool> readMockDataEnabled() async {
     reads++;
+    await beforeRead?.call();
     final value = mock;
     if (value == null) throw StateError('Sanitized legacy preference failure.');
     return value;
@@ -1401,8 +1482,14 @@ final class _Held implements DataModeAuthority {
   Future<DataModeState> read() => _inner.read();
 
   @override
-  Future<DataModeOperation> begin({bool cacheOnly = false}) async {
-    final operation = await _inner.begin(cacheOnly: cacheOnly);
+  Future<DataModeOperation> begin({
+    bool cacheOnly = false,
+    bool waitForSwitch = false,
+  }) async {
+    final operation = await _inner.begin(
+      cacheOnly: cacheOnly,
+      waitForSwitch: waitForSwitch,
+    );
     return DataModeOperation(
       authority: this,
       state: operation.state,
@@ -1441,10 +1528,12 @@ final class _Observed implements ConnectionCachePlatform {
 
   final ConnectionCachePlatform _inner;
   final switchSubmitted = Completer<void>();
+  void Function(String)? onInvoke;
 
   @override
   Future<Object?> invoke(String method, Map<String, Object?> arguments) {
     final result = _inner.invoke(method, arguments);
+    onInvoke?.call(method);
     if (method == 'switchMode' && !switchSubmitted.isCompleted) {
       switchSubmitted.complete();
     }

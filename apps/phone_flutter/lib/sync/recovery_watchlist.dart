@@ -9,6 +9,7 @@ import 'poll_cadence.dart';
 import 'recovery_notifications.dart';
 import 'recovery_wake.dart';
 import 'automatic_poll.dart';
+import 'data_mode.dart';
 
 /// The plan windows that were spent when the phone last looked.
 ///
@@ -51,12 +52,18 @@ abstract interface class ContextualRecoveryWatchlistStore
 
 final class SecureRecoveryWatchlistStore
     implements ContextualRecoveryWatchlistStore {
-  SecureRecoveryWatchlistStore({FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage();
+  /// [postLedger] shares failed-write posts with every engine in the process;
+  /// without it they are shared per [storage] within this isolate.
+  SecureRecoveryWatchlistStore({
+    FlutterSecureStorage? storage,
+    RecoveryPostLedger? postLedger,
+  }) : _storage = storage ?? const FlutterSecureStorage(),
+       _postLedger = postLedger;
 
   static const _key = 'wardpulse.recovery.exhaustedWindows';
 
   final FlutterSecureStorage _storage;
+  final RecoveryPostLedger? _postLedger;
 
   String _ownerKey(HistoryOwner? owner) =>
       owner == null
@@ -232,6 +239,142 @@ final class DisabledRecoveryWatchlistStore implements RecoveryWatchlistStore {
   Future<void> write(List<WindowKey> keys) async {}
 }
 
+/// Recovery occurrences submitted to Android whose history write then failed.
+///
+/// An occurrence names its window and saved reset, so it matches only the
+/// pending entry the failed write left behind, never a later exhaustion.
+abstract interface class RecoveryPostLedger {
+  Future<Set<String>> read();
+
+  Future<void> record(Iterable<String> occurrences);
+
+  Future<void> forget(Iterable<String> occurrences);
+}
+
+/// Native memory every engine in this process shares, so a later engine or
+/// headless isolate consumes the occurrence without posting it again.
+///
+/// A later process still relies on the stable notification id, as
+/// notify-first allows.
+final class NativeRecoveryPostLedger implements RecoveryPostLedger {
+  const NativeRecoveryPostLedger({
+    this.platform = const MethodChannelConnectionCachePlatform(),
+  });
+
+  final ConnectionCachePlatform platform;
+
+  @override
+  Future<Set<String>> read() async => <String>{
+    ...((await platform.invoke('readUnrecordedRecoveries', {}) as List?) ??
+            const [])
+        .cast<String>(),
+  };
+
+  @override
+  Future<void> record(Iterable<String> occurrences) => platform.invoke(
+    'recordUnrecordedRecoveries',
+    {'occurrences': occurrences.toList()},
+  );
+
+  @override
+  Future<void> forget(Iterable<String> occurrences) => platform.invoke(
+    'forgetUnrecordedRecoveries',
+    {'occurrences': occurrences.toList()},
+  );
+}
+
+/// The fallback: per backing storage within this isolate.
+final class _LocalRecoveryPostLedger implements RecoveryPostLedger {
+  _LocalRecoveryPostLedger(Object scope)
+    : _posts = _localPosts[scope] ??= <String>{};
+
+  static final _localPosts = Expando<Set<String>>();
+
+  final Set<String> _posts;
+
+  @override
+  Future<Set<String>> read() async => <String>{..._posts};
+
+  @override
+  Future<void> record(Iterable<String> occurrences) async =>
+      _posts.addAll(occurrences);
+
+  @override
+  Future<void> forget(Iterable<String> occurrences) async =>
+      _posts.removeAll(occurrences);
+}
+
+Future<(RecoveryPostLedger, Set<String>)> _openPostLedger(
+  RecoveryWatchlistStore store,
+) async {
+  if (store is SecureRecoveryWatchlistStore) {
+    if (store._postLedger case final ledger?) {
+      try {
+        return (ledger, await ledger.read());
+      } catch (_) {
+        // A host with no native engine keeps this isolate's evidence.
+      }
+    }
+  }
+  final local = _LocalRecoveryPostLedger(
+    store is SecureRecoveryWatchlistStore ? store._storage : store,
+  );
+  return (local, await local.read());
+}
+
+/// Forgets [receipts] in [partitions] whose occurrence history read now no
+/// longer holds: that window has moved on, so its next recovery must post.
+/// Also returns the occurrences still pending, so a run whose earlier read
+/// another run has since consumed or replaced neither posts nor writes from it.
+///
+/// Call under the mode-effect lease. A receipt is recorded only after its
+/// failed write left the occurrence durable, so a read after the receipt
+/// cannot miss it.
+Future<({Set<String> receipts, Set<String> pending})> _pruneReceipts(
+  RecoveryPostLedger ledger,
+  Set<String> receipts,
+  RecoveryWatchlistStore store,
+  Set<HistoryOwner?> partitions,
+) async {
+  final history = await _readPendingHistory(store, partitions);
+  final durable = _pendingOccurrences(history);
+  final read = {for (final owner in partitions) _historyPartition(owner)};
+  final settled = {
+    for (final receipt in receipts)
+      if (read.contains(receipt.substring(0, receipt.indexOf('|'))) &&
+          !durable.contains(receipt))
+        receipt,
+  };
+  if (settled.isEmpty) return (receipts: receipts, pending: durable);
+  try {
+    await ledger.forget(settled.toList());
+  } catch (_) {
+    // A later look retries; unmatched evidence still cannot suppress a post.
+  }
+  return (receipts: receipts.difference(settled), pending: durable);
+}
+
+Set<String> _pendingOccurrences(
+  ({List<PendingRecovery> pending, Map<WindowKey, DateTime> resets}) history,
+) => {
+  for (final entry in history.pending)
+    _postOccurrence(entry.key, history.resets[entry.key]),
+};
+
+String _historyPartition(HistoryOwner? owner) =>
+    owner == null
+        ? ''
+        : base64Url.encode(utf8.encode(jsonEncode(owner.toJson())));
+
+String _postOccurrence(WindowKey key, DateTime? reset) {
+  final window = jsonEncode([
+    key.accountId,
+    key.allowanceId,
+    reset?.toUtc().toIso8601String(),
+  ]);
+  return '${_historyPartition(key.historyOwner)}|$window';
+}
+
 /// Tells the reader about windows that came back, then remembers what is spent
 /// now.
 ///
@@ -249,8 +392,17 @@ final class DisabledRecoveryWatchlistStore implements RecoveryWatchlistStore {
 /// still tracked and the wake is still booked, because the switch turns off an
 /// interruption, not an eye.
 ///
-/// [mockData] clears only unbound demo/legacy history and reports nothing.
-/// Qualified live partitions survive; demo observations never bind an owner.
+/// [isDeliveryEnabled] checks the latest choice just before posting, after the
+/// final [isCurrent] proof. A caller whose choice changes in its own isolate
+/// answers without awaiting, so ownership cannot move before submission.
+/// [admitDelivery] instead answers in one step after that proof: `true` posts,
+/// `false` mutes, and `null` leaves the window pending. A caller in another
+/// isolate proves the observation there; the foreground answers `null` once a
+/// mode switch has begun.
+/// A recovery whose post retirement interrupted stays pending and keeps its
+/// reset wake; muted, refused and submitted ones are remembered as consumed. An
+/// acknowledged post whose history write fails is kept in the store's
+/// [RecoveryPostLedger] so a later look consumes it without posting again.
 ///
 /// [rethrowFailures] lets a caller with its own per-step guard record an outer
 /// storage or scheduling failure. Foreground callers retain the best-effort
@@ -260,8 +412,9 @@ Future<void> syncPlanRecoveries(
   RecoveryWatchlistStore store,
   RecoveryNotifier notifier,
   RecoveryWakeScheduler wake, {
-  bool mockData = false,
   bool notifications = true,
+  Future<bool> Function()? isDeliveryEnabled,
+  Future<bool?> Function()? admitDelivery,
   ReadPlanRecoveries readRecoveries = planRecoveries,
   ReadExhaustedWindows readWindows = exhaustedWindows,
   ReconcilePlanRecoveries? reconcile,
@@ -270,24 +423,9 @@ Future<void> syncPlanRecoveries(
   AutomaticPollContext? poll,
   Future<bool> Function()? isCurrent,
 }) async {
+  if (DataModeOperation.current?.allowsLiveWork == false) return;
   try {
     if (isCurrent != null && !await isCurrent()) return;
-    if (mockData) {
-      // Demo data cannot establish or clear a qualified live owner's history.
-      final liveHistory =
-          (await store.read())
-              .where((key) => key.historyOwner != null)
-              .toList();
-      if (isCurrent != null && !await isCurrent()) return;
-      if (store is PartitionedRecoveryWatchlistStore) {
-        await store.writeObserved(const [], {null});
-      } else {
-        await store.write(liveHistory);
-      }
-      if (isCurrent != null && !await isCurrent()) return;
-      if (liveHistory.isEmpty) await wake.cancel();
-      return;
-    }
     final owners = _capturedOwners(snapshot, poll);
     final observedOwners = <HistoryOwner?>{
       for (final entry in owners.entries)
@@ -412,27 +550,6 @@ Future<void> syncPlanRecoveries(
               )),
             )
             .toList();
-    if (notifications &&
-        observedHistory.isNotEmpty &&
-        poll?.whollySkipped != true) {
-      for (final recovery in recoveries) {
-        if (isCurrent != null && !await isCurrent()) return;
-        try {
-          if (notifier is LocalRecoveryNotifier) {
-            await notifier.notifyIfCurrent(
-              recovery,
-              isCurrent ?? () async => true,
-            );
-          } else {
-            await notifier.notify(recovery);
-          }
-        } catch (_) {
-          // Each window is reported on its own: a notifier that refuses one
-          // must not silence the rest, and must not stop the list below from
-          // moving on. A stuck list would go on missing every later window.
-        }
-      }
-    }
     final protected =
         remembered
             .where(
@@ -487,21 +604,160 @@ Future<void> syncPlanRecoveries(
       }
     }
     if (isCurrent != null && !await isCurrent()) return;
+    final interrupted = <WindowKey>{};
     if (poll?.whollySkipped != true) {
-      if (store is ContextualRecoveryWatchlistStore) {
-        await store.writeObserved(
-          spent,
-          observedOwners,
-          resets: resets,
-          requirements: {
-            for (final entry in pending)
-              if (entry.requirements != null) entry.key: entry.requirements!,
-          },
-        );
-      } else if (store is PartitionedRecoveryWatchlistStore) {
-        await store.writeObserved(spent, observedOwners, resets: resets);
-      } else {
-        await store.write(spent);
+      var posting =
+          notifications && observedHistory.isNotEmpty && recoveries.isNotEmpty;
+      if (posting && notifier is LocalRecoveryNotifier) {
+        try {
+          // Plugin setup and its retries stay outside the lease a switch
+          // waits for.
+          await notifier.prepare();
+        } catch (_) {
+          // An unready plugin fails every post, as a refused post does; the
+          // history and wake still move on.
+          posting = false;
+        }
+      }
+      String occurrence(WindowKey key) =>
+          _postOccurrence(key, capturedHistory.resets[key]);
+      final submitted = <WindowKey>{};
+      var written = false;
+      // One lease covers the posts and the write that remembers them, so a
+      // switch cannot leave a submitted recovery pending to sound again.
+      await DataModeOperation.guardCurrent(() async {
+        // Receipts change only under the lease, so a run a switch retired
+        // cannot erase one a newer run recorded.
+        final (ledger, receipts) = await _openPostLedger(store);
+        // A store that saves resets can hold a replacement occurrence of the
+        // same window, so it is reread even when no receipt is outstanding.
+        final refreshed =
+            receipts.isEmpty && store is! PartitionedRecoveryWatchlistStore
+                ? null
+                : await _pruneReceipts(ledger, receipts, store, {
+                  null,
+                  ...owners.values,
+                });
+        final unrecorded = refreshed?.receipts ?? receipts;
+        if (refreshed != null) {
+          // Another run consumed or replaced an occurrence after this run's
+          // history read. That read can authorize no post and no write; the
+          // newer record and its wake stay as they are.
+          final captured = _pendingOccurrences(capturedHistory);
+          if (refreshed.pending.length != captured.length ||
+              !refreshed.pending.containsAll(captured)) {
+            return;
+          }
+        }
+        for (final recovery in posting ? recoveries : const <PlanRecovery>[]) {
+          final key = (
+            accountId: recovery.accountId,
+            historyOwner: recovery.historyOwner,
+            allowanceId: recovery.allowanceId,
+          );
+          // Already submitted by a run whose history write failed.
+          if (unrecorded.contains(occurrence(key))) {
+            submitted.add(key);
+            continue;
+          }
+          var owned = true;
+          var allowed = false;
+          Future<bool> canPost() async {
+            // A proof that throws before submission leaves the window pending.
+            owned = false;
+            owned = isCurrent == null || await isCurrent();
+            if (!owned) return false;
+            if (admitDelivery != null) {
+              owned = false;
+              final admitted = await admitDelivery();
+              owned = admitted != null;
+              allowed = admitted == true;
+            } else {
+              // The choice is read after the final repository proof, so one
+              // saved while that proof runs still suppresses the post.
+              allowed = isDeliveryEnabled == null || await isDeliveryEnabled();
+            }
+            return allowed;
+          }
+
+          try {
+            if (notifier is LocalRecoveryNotifier) {
+              await notifier.notifyIfCurrent(recovery, canPost);
+            } else if (await canPost()) {
+              await notifier.notify(recovery);
+            }
+            // Only a post Android acknowledged may suppress a later one.
+            if (allowed) submitted.add(key);
+          } catch (_) {
+            // Each window is reported on its own: a notifier that refuses
+            // one must not silence the rest, and must not stop the list
+            // below from moving on. A stuck list would go on missing every
+            // later window.
+          }
+          // Retirement, unlike muting or refusal, leaves the window pending.
+          if (!owned) interrupted.add(key);
+        }
+        // The lease keeps the generation current; a submitted post is
+        // remembered even while a pending switch makes ownership read stale.
+        if (submitted.isEmpty && isCurrent != null && !await isCurrent()) {
+          return;
+        }
+        final kept = [
+          ...pending,
+          for (final entry in eligiblePending)
+            if (interrupted.contains(entry.key)) entry,
+        ];
+        final keys = [for (final entry in kept) entry.key].toSet().toList();
+        final keptResets = {
+          ...resets,
+          for (final key in interrupted)
+            if (capturedHistory.resets[key] != null)
+              key: capturedHistory.resets[key]!,
+        };
+        try {
+          if (store is ContextualRecoveryWatchlistStore) {
+            await store.writeObserved(
+              keys,
+              observedOwners,
+              resets: keptResets,
+              requirements: {
+                for (final entry in kept)
+                  if (entry.requirements != null)
+                    entry.key: entry.requirements!,
+              },
+            );
+          } else if (store is PartitionedRecoveryWatchlistStore) {
+            await store.writeObserved(keys, observedOwners, resets: keptResets);
+          } else {
+            await store.write(keys);
+          }
+        } catch (_) {
+          // Android already has these; a later look must not post them again.
+          if (submitted.isNotEmpty) {
+            try {
+              await ledger.record(submitted.map(occurrence).toList());
+            } catch (_) {
+              // The stable notification id remains the fallback.
+            }
+          }
+          rethrow;
+        }
+        // This write consumed every submitted occurrence.
+        final recorded = submitted.map(occurrence).where(unrecorded.contains);
+        if (recorded.isNotEmpty) {
+          try {
+            await ledger.forget(recorded.toList());
+          } catch (_) {
+            // A later look forgets occurrences its history no longer holds.
+          }
+        }
+        written = true;
+      }, isCurrent: isCurrent);
+      if (!written) return;
+      // A window the post left pending keeps its wake, as its history does.
+      for (final key in interrupted) {
+        if (!spent.contains(key)) spent.add(key);
+        if (capturedHistory.resets[key] case final reset?) resets[key] = reset;
       }
     }
     // Booked from the reset instant rather than left to the next poll, which
@@ -595,12 +851,17 @@ Future<void> syncPlanRecoveries(
       // Cancelling an obsolete wake leaves recovery history intact.
       if (poll?.whollySkipped != true &&
           unresolved.isEmpty &&
+          interrupted.isEmpty &&
           !protectedWakePending)
-        await wake.cancel();
+        await DataModeOperation.guardCurrent(wake.cancel, isCurrent: isCurrent);
     } else {
       // Natural resets use the floor above; denied work keeps its native due
       // time rather than adding another full floor after a skipped load.
-      await wake.scheduleAt(soonest);
+      final due = soonest;
+      await DataModeOperation.guardCurrent(
+        () => wake.scheduleAt(due),
+        isCurrent: isCurrent,
+      );
     }
   } catch (error, stackTrace) {
     if (rethrowFailures) {

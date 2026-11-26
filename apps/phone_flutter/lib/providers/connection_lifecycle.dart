@@ -342,6 +342,9 @@ final class ConnectionCredentialStorage
         isUtc: true,
       );
     }
+    if (result['sample'] case final num sample) {
+      context.samples[connection] = sample.toInt();
+    }
     if (result['admitted'] != true) {
       final skipped = AutomaticPollSkipped(
         connection,

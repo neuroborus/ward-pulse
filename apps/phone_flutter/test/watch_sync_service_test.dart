@@ -12,6 +12,7 @@ import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/manual_refresh_window.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_once.dart';
+import 'package:ward_pulse_phone/sync/data_mode.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_payload.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
 
@@ -19,6 +20,40 @@ import 'selected_data_freshness_test_support.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('only a current initial-generation Wear intent can poll', () async {
+    final authority = MemoryDataModeAuthority();
+    final arguments = {
+      'kind': 'refresh',
+      'mode': 'live',
+      'installId': authority.installId,
+      'generation': 0,
+      'requestId': 'tap',
+    };
+    final owned = WatchRefreshIntent.fromMessage(arguments);
+    expect((await owned.operation(authority)).requestId, 'tap');
+    expect((await owned.operation(authority)).cacheOnly, isFalse);
+    for (final unowned in [
+      null,
+      const {'kind': 'resend'},
+      {...arguments, 'kind': 'unknown'},
+      {...arguments, 'requestId': ''},
+      {...arguments, 'mode': 'unknown'},
+      {...arguments, 'mode': 'mock'},
+      {...arguments, 'generation': '0'},
+      {...arguments, 'generation': 1},
+      {...arguments, 'installId': 'earlier-install'},
+    ]) {
+      final intent = WatchRefreshIntent.fromMessage(unowned);
+      expect((await intent.operation(authority)).cacheOnly, isTrue);
+    }
+    await authority.switchTo(DataMode.mock);
+    await authority.switchTo(DataMode.live);
+    final retired = await owned.operation(authority);
+    expect(retired.cacheOnly, isTrue);
+    expect(retired.generation, authority.generation);
+    expect(retired.requestId, isNot('tap'));
+  });
 
   test(
     'paused rings keep their saved IDs and free publication capacity',
@@ -557,6 +592,7 @@ void main() {
       );
       final localUpdates = <String>[];
       await providerSyncOnce(
+        modeAuthority: MemoryDataModeAuthority(),
         load:
             (_) async => ProviderSyncWork(
               syncWatch: () => service.sync(dashboard, invalid),
