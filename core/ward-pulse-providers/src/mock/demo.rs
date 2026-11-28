@@ -129,7 +129,8 @@ pub fn product_demo_dashboard_json_at(
 /// included. The Claude plan connection is paused in the Play build, so the canonical
 /// `anthropic.plan` source is removed by connection identity before aggregation; totals,
 /// status and the watch summary never contain it. The Anthropic Organization source and
-/// the other public sources stay.
+/// the other public sources stay. The sample is never [`ProviderStatus::Stale`]: each
+/// account keeps the status computed from its readings.
 pub fn product_demo_dashboard_at(
     seed: u64,
     capture_anchor: &str,
@@ -164,7 +165,7 @@ fn multi_provider_dashboard(
     }
     let mut accounts: Vec<_> = accounts
         .into_iter()
-        .map(|(account, mode)| scramble_account(&mut rng, account, mode, anchor.is_some()))
+        .map(|(account, mode)| scramble_account(&mut rng, account, mode, anchor.is_some(), variant))
         .collect();
     if matches!(variant, DemoVariant::Product) {
         accounts.retain(|account| {
@@ -240,6 +241,7 @@ fn scramble_account(
     mut account: ProviderSnapshot,
     mode: ScrambleMode,
     preserve_unknowns: bool,
+    variant: DemoVariant,
 ) -> ProviderSnapshot {
     match mode {
         ScrambleMode::Allowances => {
@@ -263,8 +265,11 @@ fn scramble_account(
         }
     }
 
-    // Occasional stale chrome so Wear / phone refresh UI can be exercised.
-    if rng.next_u32() % 11 == 0 {
+    // Occasional stale chrome lets Debug Mock data exercise the Wear / phone refresh UI.
+    // Both variants consume the draw so each seed keeps its values; the product sample is
+    // never stale.
+    let stale = rng.next_u32() % 11 == 0;
+    if stale && matches!(variant, DemoVariant::Debug) {
         account.status = ProviderStatus::Stale;
     }
 
@@ -1363,11 +1368,15 @@ mod tests {
                 .iter()
                 .filter(|account| account.source.explicit_connection() != Some("anthropic.plan"))
                 .collect();
-            assert_eq!(
-                snapshot.accounts[..4].iter().collect::<Vec<_>>(),
-                shared,
-                "seed {seed}"
-            );
+            assert_eq!(shared.len(), 4, "seed {seed}");
+            for (product, debug) in snapshot.accounts[..4].iter().zip(shared) {
+                let mut product = product.clone();
+                // Only Debug applies its stale draw; every other field still matches.
+                if debug.status == ProviderStatus::Stale {
+                    product.status = ProviderStatus::Stale;
+                }
+                assert_eq!(&product, debug, "seed {seed}");
+            }
         }
         assert!(
             claude_would_change_status,
@@ -1377,6 +1386,43 @@ mod tests {
             product_demo_dashboard_at(1, anchor).unwrap(),
             product_demo_dashboard_at(2, anchor).unwrap()
         );
+    }
+
+    #[test]
+    fn product_sample_is_never_stale() {
+        for anchor in [
+            "2026-11-02T12:00:00Z",
+            "2028-02-29T23:59:59Z",
+            "2027-01-01T00:00:00Z",
+            "2026-06-01T00:00:00Z",
+        ] {
+            let mut debug_draws_stale = false;
+            for seed in (0..48).chain([280]) {
+                let snapshot = product_demo_dashboard_at(seed, anchor).unwrap();
+                assert_ne!(
+                    snapshot.overall_status,
+                    ProviderStatus::Stale,
+                    "seed {seed} at {anchor}"
+                );
+                assert!(
+                    snapshot
+                        .accounts
+                        .iter()
+                        .all(|account| account.status != ProviderStatus::Stale),
+                    "seed {seed} at {anchor}"
+                );
+                // A shared source drawn stale in Debug would be stale here without the gate.
+                debug_draws_stale |= debug_multi_provider_dashboard_at(seed, Some(anchor))
+                    .unwrap()
+                    .accounts
+                    .iter()
+                    .any(|account| {
+                        account.status == ProviderStatus::Stale
+                            && account.source.explicit_connection() != Some("anthropic.plan")
+                    });
+            }
+            assert!(debug_draws_stale, "no Debug seed draws stale at {anchor}");
+        }
     }
 
     #[test]
@@ -1468,8 +1514,13 @@ mod tests {
         purchased.remaining = Some(credits(400));
         account.allowances.push(purchased);
         let unknowns = account.allowances.clone();
-        let scrambled =
-            scramble_account(&mut SeedRng(280), account, ScrambleMode::Allowances, true);
+        let scrambled = scramble_account(
+            &mut SeedRng(280),
+            account,
+            ScrambleMode::Allowances,
+            true,
+            DemoVariant::Debug,
+        );
         assert_eq!(scrambled.allowances[0], unknowns[0]);
         assert_eq!(scrambled.allowances.last(), unknowns.last());
     }
