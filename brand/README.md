@@ -6,6 +6,8 @@ reserved for assets that define the official WardPulse product identity.
 ## Directories
 
 - `icons/`: shared OpenPencil `.fig` sources and exported app and product identity icons.
+  `icons/wardpulse-play-icon-512-transparent.png` is an owner-supplied Google Play listing
+  raster, not exported from the `.fig` source.
 - `store/`: reserved for store copy and supporting brand artwork. The tracked store covers
   and screenshots are in the [phone](../docs/assets/store-phone/README.md) and
   [Wear OS and watch face](../docs/assets/store-wear/README.md) galleries.
