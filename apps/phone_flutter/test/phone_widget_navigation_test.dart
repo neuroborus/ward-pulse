@@ -321,6 +321,12 @@ class _WatchSync implements WatchSyncService {
   void unbindWatchRefreshListener() => refresh = null;
 
   @override
+  Future<bool> isEstablished() async => true;
+
+  @override
+  Future<void> resume() async {}
+
+  @override
   Future<void> sync(
     DashboardSnapshot snapshot,
     WatchRingPreferences ringPreferences, {

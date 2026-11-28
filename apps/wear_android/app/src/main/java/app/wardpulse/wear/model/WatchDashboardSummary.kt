@@ -23,8 +23,10 @@ enum class PulseStatus(
     }
 }
 
+/** Summary provenance: provider readings, product Demo samples, or Debug-only Mock samples. */
 enum class WatchDataMode(val wireName: String) {
     LIVE("live"),
+    DEMO("demo"),
     MOCK("mock"),
     ;
 

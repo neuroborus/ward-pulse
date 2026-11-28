@@ -211,6 +211,21 @@ transaction over network waits.
   `manualRefreshAvailableAt`, driven by the PollCadence hard floor). Ring entries and credits
   glance carry labels and counts — never credentials, account identifiers, raw provider
   payloads, or LLM token totals.
+- The same Data Item carries the ordered v10 `summary`
+  (`schemas/watch_dashboard_summary_v10.schema.json`): the v9 body plus live/demo/mock
+  provenance, the random data-mode `installId`, its `generation` and a publication `sequence`
+  — never an account identifier. Its v9 `payload` projection never carries product Demo: during
+  Demo older watches receive a neutral empty Live summary with refresh disabled. Wear accepts a
+  v10 summary only after a fresh nonce reply on `/wardpulse/summary-owner` from the same phone
+  names the same install and generation at or below its order; the request carries only the
+  nonce and the install, generation and sequence Wear already stores from that phone, or the
+  bare nonce without one, and after a commit Wear names its new order the same way. Wear never
+  falls back from malformed v10 to the projection. While a ring or alert-rule save has retired the desired item
+  and no replacement exists, the phone gives no owner reply; a launcher-only save leaves it. A v10 refresh request is one complete
+  strict JSON object naming only that install and generation; any other non-empty body, or one
+  from a retired generation, resends the current summary without provider work. An empty body
+  is the v9 legacy tap: in generation 0 it still requests a provider refresh under the cadence
+  rules, and in a later generation it only resends.
 - Mock payloads are produced only by debug builds after the user explicitly enables mock data.
   Debug Mock data is a seeded multi-provider demo (OpenAI, Codex, Claude, Cursor), not the
   legacy single `provider: mock` golden fixture. Release Wear builds reject mock payloads.

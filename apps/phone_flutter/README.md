@@ -18,7 +18,73 @@ The verified Flutter and Android SDK baseline is documented in
 - On-device Codex account sign-in and read-only usage transport.
 - Secure credential storage integration.
 - Local persistence and sync scheduling.
-- Wear Data Layer sender.
+- Wear Data Layer sender. Each publication puts one `/wardpulse/watch-summary` item holding the
+  v10 `summary`, with its install, generation and an order allocated on arrival, and its v9
+  `payload` projection, which shows a neutral empty Live summary during Demo. Each order is
+  issued for the shared accepted load and settled settings revision it was built from; ring,
+  widget and alert-rule saves advance that revision, so a newer acceptance or a later ring or
+  alert-rule save refuses an older summary in any engine, including a held headless one. The
+  newest admitted item is desired at once, even while an earlier put settles, and only a
+  confirmed write is desired: a failed commit restores the previous item and order floor.
+  Puts settle through one
+  process-wide queue, each under a mode lease that proves its generation, selection, accepted
+  load and settings revision again; only the matching order is acknowledged, in memory, and
+  transient failures retry with bounded backoff. A new process, or Wear's route proof finding
+  this node's item overwritten, puts the desired item again. While a ring or alert-rule save
+  has retired the desired item and nothing replaces it yet, a route proof gets no reply, in
+  this process or after a restart, so Wear verifies neither that item nor the Data Item still
+  holding it; the proof still requests reconciliation. A launcher-only save leaves the watch
+  content, and so the durable desired item, standing. `WardPulseSync` logs only a new
+  order's first successful put, the paired gate's publication marker; reassertions and other
+  diagnostics log as `WardPulseWatch`. Whenever the mode record owes a
+  replacement (a committed switch, or startup after death between the commit and its
+  replacement), an empty summary of the current generation is published, so Demo clears even
+  when Live fails or ring choices are invalid; it stays owed, also across a restart, until
+  Wear proves it stores an item of that generation: a route proof naming, as the order Wear
+  has stored, any item of the current install and generation, in this process or a new one,
+  even below the desired order or for a retired item that gets no reply. This record is
+  phone-wide, not per watch, so only a single paired watch is supported: one watch's proof also
+  ends the fallback a second one still showing the previous mode is owed. Wear names its
+  stored order before a commit and its new one after it. Neither a completed put, this node's
+  own copy nor an order Wear read but did not store ends it, since a disconnected watch
+  receives only the latest item, and a bare nonce is answered but names no held item. A watch
+  that speaks only v9 sends no proof, so after a
+  transition a retired item with no replacement becomes the empty summary, an empty Live v9
+  projection, until real input arrives; generation 0 keeps ordinary capacity handling.
+  Any engine start, a warm resume, a sync, Wear's route proof on `/wardpulse/summary-owner` or a worker run resumes pending work. A
+  cadence-skipped load seeds the first v10 summary from retained input, asking Wear's state only
+  after its acceptance, so the Dashboard never waits on it. A submission whose
+  put never starts, because a newer one replaced it, readiness let a newer one in first or its
+  input was retired first, or whose owner the readiness confirmation refused, reports
+  superseded, and one whose send cannot start for any other reason reports unavailable. Settings Sync reports a queued summary only for a submission that
+  reached the queue; ring choices over capacity are not queued. A ring or alert-rule save that
+  advances the shared revision replaces the watch item and the launcher frame under it, also
+  when it overlaps another save, its write fails or native cannot begin it, through whichever
+  save settles the revision, or when the Dashboard has no acceptance that can publish it. A
+  launcher-only save keeps the watch item and the authority of any summary built since the last
+  ring or alert-rule save began, in flight and settled, so it republishes the launcher and
+  replaces the watch only while a publication is still owed;
+  unread ring choices leave the watch unavailable, and the accepted load still publishes the
+  launcher. A headless summary or frame refused only by a save is rebuilt from its report with
+  the saved settings and sent again, at most twice, under the revision saves settle, after a bounded wait
+  for any in flight; a launcher retry's own acceptance asks Wear's state, which adopts a
+  still-valid pending watch item, or otherwise sends Wear that acceptance too. A ring or
+  alert-rule save whose
+  accepted load work elsewhere retired, at its source or natively, and a load whose source
+  work elsewhere retired just after native accepted it, republish the watch item and the
+  launcher frame from one retained acceptance, so neither retires the other's ticket.
+  Like any send, a retained reply also covers the publication the accepted load still owed,
+  unless a ring or alert-rule save began after it read its input. A Wear
+  resend, warm from retained input or cold through a cache-only load, republishes a launcher
+  only when native, asked after its acceptance, still holds committed rows awaiting a widget's
+  first delivery, which that acceptance retired, and only under the settings its input was
+  read with; a launcher with no such frame is left to its own loads. A v10
+  refresh request counts only as one complete strict JSON object, in valid UTF-8 with only JSON
+  string escapes, with exactly one `installId` and one `generation`; any other non-empty body
+  only resends the current summary. An empty body is the v9 legacy tap: in generation 0 it
+  still requests a provider refresh under the cadence rules, and otherwise it only resends. The plugin's
+  `wardpulse_phone` capability array has no code reference, so
+  `res/raw/ward_pulse_watch_sync_keep.xml` keeps it through release resource shrinking.
 
 Mock dashboards are available only in debug builds and remain disabled until explicitly enabled
 in Settings. Release builds never select the mock repository.
@@ -276,6 +342,82 @@ cold/warm Dashboard taps, joining the active artifact/widget/data/options/varian
 root/card/paint to untouched original frames. Include the existing Pixel case; physical
 cause/acceptance remains Pending until renewed physical access. This case does not replace
 that bounded proof or make HOST acceptance a Native commit prerequisite.
+
+## Watch publication storage case (HOST only)
+
+`android/app/src/androidTest/kotlin/app/wardpulse/WatchPublicationStoreTest.kt` covers the
+desired watch publication over real isolated preferences: a commit reported as failed, after
+a confirmed item or as the first write, leaves the confirmed item and order floor for the
+next resume, owner reply and a store opened afterwards. A ring or alert-rule save marks the
+stored item as retired by settings, durably, before it settles; a failed mark fails the save.
+A widget (launcher-only) save leaves it standing. A retired item is never put again and never
+counts as established, in this process or after a restart, until a summary built from the
+saved settings replaces it. Empty placeholders carry no settings and are never retired. The
+failure result is injected after a real commit, as in `PhoneWidgetPublicationTest`; it does
+not reproduce a disk fault.
+
+`android/app/src/androidTest/kotlin/app/wardpulse/WatchPublisherTest.kt` drives the actual
+`WatchPublisher` queue over that store in its own isolated preferences, with its own engine and
+a held Data Layer: puts wait for the test, and the local-item lookup answers from the puts it
+settled, so no test reaches Google Play services. The installed app's publication record, its order floor
+and the process queue stay untouched; a restart is a fresh queue and engine over the same
+records. It covers:
+
+- a replacement persisted while an earlier put is held, which only its own put acknowledges
+- a process death with a held put, after which the replacement is reasserted
+- startup after a mode commit, which rebuilds the empty item of the current generation
+- an established summary that a cadence-denied load adopts, until a save retires it, also
+  across a restart
+- a save between admission and the write, which refuses the write as superseded
+- a submission replaced before its put starts, which settles as superseded without a put
+- a Settings Sync held behind a put and retired by a save before its own send, which settles
+  as superseded without a put
+- an owner request after a save and a restart, before a replacement, which gets no reply
+  until the rebuilt summary is answered
+- readiness settling out of order, which supersedes the older send
+- a launcher-only save, after which the owner proof still names the delivered item, also
+  across a restart, while a ring or alert-rule save retires it
+- a revision-bound summary waiting behind a put while a launcher-only save settles, whose own
+  put still starts and is named, while an overlapping ring save or a newer load retires such
+  authority
+- an empty put that succeeds once a newer Live summary is desired, so Wear cannot verify it:
+  when a save retires that summary before its send, the empty item is owed again after a
+  restart
+- a mode transition's empty item, owed again after its failed put and a restart even though a
+  waiting Live summary retired it, until an owner proof names an item of its generation that
+  Wear stores
+- a first Live summary a save retires while its own put is in flight: the put's success records
+  no delivery, so an empty item Wear can verify is owed at once and again after a restart
+- a first Live summary a save retires after its put and the empty put completed, with the watch
+  away: after a restart the reconnecting watch's proof gets no reply and an empty Live item is
+  owed, which a later proof names
+- a reconnecting watch's proof naming the stored empty item below the desired Live order, or
+  the retired desired order itself, which records the delivery even without a reply, so a
+  save with no replacement puts no fallback, while a bare nonce or an older generation's item
+  records nothing
+- a proof naming the stored Live order that reaches a new process, which has acknowledged
+  nothing, still records the delivery, so a later save with no replacement puts nothing
+- a watch that speaks only v9, whose retired item stays in generation 0 while after a
+  transition the same save owes the empty item with its empty Live projection
+
+`android/app/src/androidTest/kotlin/app/wardpulse/WatchRefreshBodyTest.kt` covers the v10
+refresh body parser over the platform's strict JSON reader: trailing content, duplicate or
+extra members, malformed values and escapes JSON does not define stay on the resend-only path.
+Wear's owner request is read the same way: exactly a nonce and the stored install, generation
+and sequence, or a bare nonce; its free-text nonce also rejects raw control characters and
+malformed UTF-8.
+
+A summary's accepted load and settings authority last until a replacement is durably written;
+a failed write keeps it. Transient sender failures are logged under the `WardPulseWatch` tag.
+Build and install as for the geometry case on the same qualified phone AVD, then run:
+
+```bash
+adb -s "$PHONE_SERIAL" shell am instrument -w -r -e class app.wardpulse.WatchPublicationStoreTest app.wardpulse.test/android.test.InstrumentationTestRunner
+adb -s "$PHONE_SERIAL" shell am instrument -w -r -e class app.wardpulse.WatchPublisherTest app.wardpulse.test/android.test.InstrumentationTestRunner
+adb -s "$PHONE_SERIAL" shell am instrument -w -r -e class app.wardpulse.WatchRefreshBodyTest app.wardpulse.test/android.test.InstrumentationTestRunner
+```
+
+Adding or reviewing these tests does not establish a runtime result.
 
 ## Persistent Connection Recovery
 

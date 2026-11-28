@@ -21,8 +21,9 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewModelScope
 import app.wardpulse.wear.complication.WatchComplicationUpdater
+import app.wardpulse.wear.data.BoundSummary
 import app.wardpulse.wear.data.WatchSummaryStore
-import app.wardpulse.wear.model.WatchDashboardSummary
+import app.wardpulse.wear.sync.WatchSummaryReconciler
 import app.wardpulse.wear.ui.WardPulseApp
 import app.wardpulse.wear.ui.theme.WardPulseTheme
 import app.wardpulse.wear.watchface.AndroidWatchFacePushClient
@@ -38,6 +39,10 @@ internal interface MainActivityDependencies {
     fun summaryStore(context: Context): WatchSummaryStore = WatchSummaryStore(context)
     fun consentStore(context: Context): WatchFaceConsentStore = WatchFaceConsentStore(context)
     fun requestComplicationRefresh(context: Context) = WatchComplicationUpdater.requestUpdate(context)
+
+    /** Resolves the phone route off the main thread; an unchanged accepted item costs nothing. */
+    fun reconcileSummary(context: Context, store: WatchSummaryStore) =
+        WatchSummaryReconciler.reconcileAsync(context, store)
 }
 
 private object DefaultMainActivityDependencies : MainActivityDependencies
@@ -47,7 +52,8 @@ private val Application.mainActivityDependencies: MainActivityDependencies
 
 class MainActivity : ComponentActivity() {
     private lateinit var store: WatchSummaryStore
-    private var summary by mutableStateOf<WatchDashboardSummary?>(null)
+    // The rendered summary and the binding its refresh names, replaced together.
+    private var rendered by mutableStateOf<BoundSummary?>(null)
     private var storeObserver: AutoCloseable? = null
     private val watchFace by lazy { ViewModelProvider(this)[WatchFaceViewModel::class.java] }
     private val faceEntry by lazy { ViewModelProvider(this)[FaceEntryViewModel::class.java] }
@@ -61,7 +67,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         store = application.mainActivityDependencies.summaryStore(this)
-        summary = currentSummary()
+        rendered = currentSummary()
         if (savedInstanceState == null && intent.action == null) faceEntry.request()
 
         // A request belongs to the retained explicit action, independent of summary/navigation.
@@ -82,7 +88,8 @@ class MainActivity : ComponentActivity() {
             val faceEntryRequest by faceEntry.pending.collectAsState()
             WardPulseTheme {
                 WardPulseApp(
-                    summary = summary,
+                    summary = rendered?.summary,
+                    refreshBinding = rendered?.binding,
                     watchFaceState = watchFaceState,
                     onCheckWatchFace = watchFace::check,
                     onInstallWatchFace = watchFace::install,
@@ -110,6 +117,8 @@ class MainActivity : ComponentActivity() {
         storeObserver = store.observe(::reloadSummary)
         reloadSummary()
         application.mainActivityDependencies.requestComplicationRefresh(this)
+        // The stored summary renders first; reconciliation replaces it only once verified.
+        application.mainActivityDependencies.reconcileSummary(this, store)
     }
 
     override fun onStop() {
@@ -121,12 +130,13 @@ class MainActivity : ComponentActivity() {
     private fun reloadSummary() {
         // Prefs listeners can run off the main thread; Compose state must not.
         runOnUiThread {
-            summary = currentSummary()
+            rendered = currentSummary()
         }
     }
 
-    private fun currentSummary() = store.load()?.let { saved ->
-        saved.copy(isStale = saved.isStaleAt(Instant.now()))
+    private fun currentSummary() = store.loadBound()?.let { bound ->
+        val saved = bound.summary
+        bound.copy(summary = saved.copy(isStale = saved.isStaleAt(Instant.now())))
     }
 }
 

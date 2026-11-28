@@ -17,9 +17,18 @@ SOURCE = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("validate_json", Path(__file__).with_name("validate_json.py"))
 validator = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(validator)
+SOURCE_FIXTURE_SCHEMAS = dict(validator.FIXTURE_SCHEMAS)
 
 SUMMARY = "snapshots/watch_dashboard_summary.json"
 SCHEMA = "watch_dashboard_summary.schema.json"
+ORDERED = "snapshots/watch_dashboard_summary_v10_demo.json"
+ORDERED_SCHEMA = "watch_dashboard_summary_v10.schema.json"
+WEAR_STORE = "apps/wear_android/app/src/main/java/app/wardpulse/wear/data/WatchSummaryStore.kt"
+PHONE_SENDER = "apps/phone_flutter/lib/sync/watch_sync_service.dart"
+NATIVE_SENDER = (
+    "apps/phone_flutter/plugins/ward_pulse_watch_sync/android/src/main/kotlin/"
+    "app/wardpulse/watchsync/WatchPublication.kt"
+)
 CONSTANTS = ("NaN", "Infinity", "-Infinity")
 
 
@@ -61,7 +70,9 @@ class ArrayConstraintTests(unittest.TestCase):
         )
 
 
-class FixtureValidatorTests(unittest.TestCase):
+class ScratchValidatorCase(unittest.TestCase):
+    """Owned external inputs for the actual validator; see FixtureValidatorTests."""
+
     def setUp(self):
         scratch = tempfile.TemporaryDirectory(prefix="wardpulse-fixture-test-")
 
@@ -88,6 +99,7 @@ class FixtureValidatorTests(unittest.TestCase):
         for relative in (
             f"fixtures/{SUMMARY}",
             f"schemas/{SCHEMA}",
+            f"schemas/{ORDERED_SCHEMA}",
             "schemas/dashboard_snapshot.schema.json",
             "schemas/budget_state.schema.json",
         ):
@@ -98,14 +110,31 @@ class FixtureValidatorTests(unittest.TestCase):
         self.sample = self.summary_path.read_bytes()
         self.schema_path = self.root / "schemas" / SCHEMA
         self.schema_sample = self.schema_path.read_bytes()
-        version = json.loads(self.schema_sample)["properties"]["schemaVersion"]["const"]
+        self.legacy_version = json.loads(self.schema_sample)["properties"]["schemaVersion"]["const"]
+        self.ordered_version = json.loads(
+            (SOURCE / "schemas" / ORDERED_SCHEMA).read_bytes()
+        )["properties"]["schemaVersion"]["const"]
+        self.write_versions(self.legacy_version, self.ordered_version)
+
+    def write_versions(self, legacy, ordered, native=None):
+        # The legacy declarations come first, and the phone keeps a v9 literal,
+        # so the pinned OLD module still reads only the v9 number. [native]
+        # overrides the native sender's pair alone.
         self.write(
-            "apps/wear_android/app/src/main/java/app/wardpulse/wear/data/WatchSummaryStore.kt",
-            f"const val SCHEMA_VERSION = {version}\n",
+            WEAR_STORE,
+            f"const val LEGACY_SCHEMA_VERSION = {legacy}\nconst val SCHEMA_VERSION = {ordered}\n",
+        )
+        native_legacy, native_ordered = native or (legacy, ordered)
+        self.write(
+            NATIVE_SENDER,
+            f"internal const val LEGACY_SCHEMA_VERSION = {native_legacy}\n"
+            f"internal const val SCHEMA_VERSION = {native_ordered}\n",
         )
         self.write(
-            "apps/phone_flutter/lib/sync/watch_sync_service.dart",
-            f"final summary = {{'schemaVersion': {version}}};\n",
+            PHONE_SENDER,
+            f"const legacyWatchSummarySchemaVersion = {legacy};\n"
+            f"const watchSummarySchemaVersion = {ordered};\n"
+            f"final summary = {{'schemaVersion': {legacy}}};\n",
         )
 
     def write(self, relative, text):
@@ -163,6 +192,9 @@ class FixtureValidatorTests(unittest.TestCase):
         for diagnostic in diagnostics:
             self.assertIn(diagnostic, output)
 
+
+
+class FixtureValidatorTests(ScratchValidatorCase):
     def test_mapped_summary_rejects_raw_constants(self):
         for token in CONSTANTS:
             with self.subTest(token=token):
@@ -292,9 +324,118 @@ class FixtureValidatorTests(unittest.TestCase):
         self.assert_invalid("unused schema keyword", f"{SCHEMA}/$defs/unused", "unsupported keywords")
         self.schema_path.write_bytes(self.schema_sample)
 
-        relative = "apps/phone_flutter/lib/sync/watch_sync_service.dart"
-        self.write(relative, "final summary = {'schemaVersion': 0};\n")
-        self.assert_invalid("shell version mismatch", relative, "schema version 0, contract says")
+        self.write_versions(0, self.ordered_version)
+        self.assert_invalid("shell version mismatch", PHONE_SENDER, "schema version 0, contract says")
+
+
+class OrderedSummaryContractTests(ScratchValidatorCase):
+    """The v10 contract beside the retained v9 projection. OLD predates both guards."""
+
+    def setUp(self):
+        super().setUp()
+        validator.FIXTURE_SCHEMAS = {
+            SUMMARY: validator.FIXTURE_SCHEMAS[SUMMARY],
+            ORDERED: ORDERED_SCHEMA,
+        }
+        self.ordered_path = self.root / "fixtures" / ORDERED
+        shutil.copyfile(SOURCE / "fixtures" / ORDERED, self.ordered_path)
+        self.ordered_sample = self.ordered_path.read_bytes()
+
+    def ordered_value(self, field, value, *, remove=False):
+        summary = json.loads(self.ordered_sample)
+        if remove:
+            del summary[field]
+        else:
+            summary[field] = value
+        self.ordered_path.write_text(json.dumps(summary), encoding="utf-8")
+
+    def assert_valid(self, case):
+        result, output = self.run_main(case)
+        self.assertEqual(result, 0, output)
+        self.assertIn("2 against schemas", output)
+
+    def test_ordered_example_is_mapped_and_valid(self):
+        self.assertEqual(validator.FIXTURE_SCHEMAS[ORDERED], ORDERED_SCHEMA)
+        self.assertIn(ORDERED, SOURCE_FIXTURE_SCHEMAS)
+        self.assert_valid("ordered example")
+        for mode in ("live", "demo", "mock"):
+            with self.subTest(mode=mode):
+                self.ordered_value("dataMode", mode)
+                self.assert_valid(mode)
+
+    def test_ordered_contract_is_strict(self):
+        for field, value, diagnostic in (
+            ("schemaVersion", 9, "expected 10"),
+            ("dataMode", "unknown", "is not one of"),
+            ("installId", "install-1", "does not match"),
+            ("installId", "00000000-0000-4000-8000-00000000000A", "does not match"),
+            ("generation", -1, "below minimum"),
+            ("generation", 1.0, "expected integer"),
+            ("sequence", 0, "below minimum"),
+            ("sequence", True, "expected integer"),
+            ("payload", "{}", "unexpected property 'payload'"),
+        ):
+            with self.subTest(field=field, value=value):
+                self.ordered_value(field, value)
+                self.assert_invalid(f"{field}={value!r}", f"{ORDERED}", diagnostic)
+        for field in ("installId", "generation", "sequence"):
+            with self.subTest(missing=field):
+                self.ordered_value(field, None, remove=True)
+                self.assert_invalid(f"missing {field}", f"missing required '{field}'")
+
+    def test_ordered_body_follows_the_v9_contract(self):
+        self.ordered_value("today", {"period": "week"})
+        self.assert_invalid("ordered body", f"{ORDERED}.today")
+
+    def test_legacy_projection_keeps_live_and_mock_only(self):
+        self.summary_value(("dataMode",), "demo")
+        self.assert_invalid("legacy demo", f"{SUMMARY}.dataMode", "is not one of")
+
+    def test_ordered_mapping_guard_remains_active(self):
+        validator.FIXTURE_SCHEMAS = {SUMMARY: validator.FIXTURE_SCHEMAS[SUMMARY]}
+        self.assert_invalid("unmapped ordered example", ORDERED, "not listed in FIXTURE_SCHEMAS")
+
+    def test_each_shell_declares_both_versions(self):
+        for legacy, ordered, relative, diagnostic in (
+            (self.legacy_version, self.legacy_version, WEAR_STORE, ORDERED_SCHEMA),
+            (self.ordered_version, self.ordered_version, PHONE_SENDER, SCHEMA),
+        ):
+            with self.subTest(legacy=legacy, ordered=ordered):
+                self.write_versions(legacy, ordered)
+                self.assert_invalid("swapped versions", relative, "contract says", diagnostic)
+        self.write_versions(self.legacy_version, self.ordered_version)
+        self.write(WEAR_STORE, f"const val LEGACY_SCHEMA_VERSION = {self.legacy_version}\n")
+        self.assert_invalid("missing ordered version", WEAR_STORE, "no schema version found")
+
+    def test_native_sender_versions_are_guarded(self):
+        # The native sender's empty replacement drifts alone; Dart and Wear stay correct.
+        for native, diagnostic in (
+            ((self.legacy_version + 1, self.ordered_version), SCHEMA),
+            ((self.legacy_version, self.ordered_version + 1), ORDERED_SCHEMA),
+        ):
+            with self.subTest(native=native):
+                self.write_versions(self.legacy_version, self.ordered_version, native)
+                self.assert_invalid("native sender drift", NATIVE_SENDER, "contract says", diagnostic)
+        self.write_versions(self.legacy_version, self.ordered_version)
+        self.write(NATIVE_SENDER, f"internal const val SCHEMA_VERSION = {self.ordered_version}\n")
+        self.assert_invalid("missing native legacy version", NATIVE_SENDER, "no schema version found")
+
+    def test_missing_ordered_contract_is_reported(self):
+        # The example and its mapping stay in place, as in production.
+        (self.root / "schemas" / ORDERED_SCHEMA).unlink()
+        self.assert_invalid("missing ordered contract", f"schemas/{ORDERED_SCHEMA}: missing")
+        self.assert_invalid("missing mapped contract", ORDERED, f"schema {ORDERED_SCHEMA} is missing")
+
+    def test_missing_legacy_contract_is_reported_through_ordered_references(self):
+        # Both mappings and both examples stay in place; v10 reaches v9 by `$ref`.
+        (self.root / "schemas" / SCHEMA).unlink()
+        self.assert_invalid(
+            "missing legacy contract",
+            f"schemas/{SCHEMA}: missing",
+            f"{SUMMARY}: schema {SCHEMA} is missing",
+            f"{ORDERED}",
+            f"names missing schema {SCHEMA}",
+        )
 
 
 if __name__ == "__main__":

@@ -424,10 +424,17 @@ Leave phone forwarding, jobs, settings and pairing alone. Neither route applies 
 
 **2026-11-03 paired Round alternative — exclude the single listener.** A qualified own-UID
 PackageManager round trip on normal DEBUG Main can support this manual XML route while the
-actual peer remains connected. Requalify installed Source: the sole normal summary writer is
+actual peer remains connected. Requalify installed Source. On 2026-11-03 the sole normal
+summary writer was
 [`WatchSummaryListenerService`](../apps/wear_android/app/src/main/java/app/wardpulse/wear/sync/WatchSummaryListenerService.kt)
-calling `WatchSummaryStore.saveEncoded`; Main startup and complication providers only read.
-If another writer exists, HOLD. Preserve OS/bridge state and record the exact raw component
+calling `WatchSummaryStore.saveEncoded`, and Main startup only read. Current Source has two
+normal writers, that listener and
+[`MainActivity`](../apps/wear_android/app/src/main/java/app/wardpulse/wear/MainActivity.kt)
+`onStart`, both through
+[`WatchSummaryReconciler`](../apps/wear_android/app/src/main/java/app/wardpulse/wear/sync/WatchSummaryReconciler.kt)
+into `WatchSummaryStore.accept`; `saveEncoded` serves only tests, and complication providers
+only read. Excluding the listener alone therefore leaves Main start-up as a writer: while
+another writer exists, HOLD. Preserve OS/bridge state and record the exact raw component
 override separately from application state. DEFAULT inferred from a complete per-user override
 block must be labelled inferred; it is not a typed pre-getter. Do not normalize it to ENABLED.
 

@@ -153,6 +153,11 @@ final class _IsolatedWatch extends MethodChannelWatchSyncService {
   ) async => null;
   @override
   void unbindWatchRefreshListener() {}
+  // Never resumes the ordinary app's pending native publication.
+  @override
+  Future<bool> isEstablished() async => true;
+  @override
+  Future<void> resume() async {}
 }
 
 final class _NoNavigation implements PhoneWidgetNavigationService {

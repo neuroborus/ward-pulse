@@ -266,8 +266,24 @@ final class _SnapshotAcceptance {
   final PhoneWidgetPublicationInput publication;
 }
 
+/// How one watch reply attempt ended.
+enum _WatchReply {
+  /// A summary was handed to the native sender.
+  queued,
+
+  /// Nothing current could be sent, which cannot authorize provider work.
+  unavailable,
+
+  /// A newer load, acceptance or mode should answer instead.
+  superseded,
+}
+
 final class _RetiredDashboardLoad implements Exception {
-  const _RetiredDashboardLoad();
+  const _RetiredDashboardLoad({this.accepted = false});
+
+  /// Whether native accepted the load before its source retired, which
+  /// refuses the publications of the work that retired it.
+  final bool accepted;
 }
 
 class _DashboardHostState extends State<DashboardHost>
@@ -358,6 +374,10 @@ class _DashboardHostState extends State<DashboardHost>
   // Held exports survive a skipped poll that replaces their acceptance.
   var _watchPublicationPending = false;
   var _widgetPublicationPending = false;
+
+  /// Watch-affecting saves begun; a send whose input predates one cannot
+  /// cover the watch item that save retired.
+  var _watchSettingsSaves = 0;
   var _widgetPublicationRevision = 0;
   var _widgetRepublishing = false;
 
@@ -489,7 +509,10 @@ class _DashboardHostState extends State<DashboardHost>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _queueNotificationFrame();
-    if (state == AppLifecycleState.resumed) unawaited(_readRejectionNotices());
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_readRejectionNotices());
+      unawaited(_resumeWatchPublication());
+    }
     if (state == AppLifecycleState.resumed &&
         _selectedIndex == _settingsIndex) {
       unawaited(_refreshNotificationStatus());
@@ -773,7 +796,8 @@ class _DashboardHostState extends State<DashboardHost>
     final acceptance = _acceptance;
     if (acceptance != null) {
       if (!_refreshAllowed(acceptance.snapshot)) {
-        if (!await _queueWatchSummaryIfAvailable(acceptance)) {
+        if (await _queueWatchSummaryIfAvailable(acceptance) ==
+            _WatchReply.superseded) {
           await _resendWatchSummary();
         }
         return;
@@ -784,7 +808,27 @@ class _DashboardHostState extends State<DashboardHost>
     _reload(operation: operation);
   }
 
-  Future<void> _resendWatchSummary() async {
+  /// Whether the resend handed a current summary to the native sender.
+  ///
+  /// With [launcher], a save also owes the launcher frame, which publishes
+  /// from the same acceptance, so neither surface retires the other's ticket.
+  /// Without an acceptance to share, the launcher republishes on its own.
+  Future<bool> _resendWatchSummary({bool launcher = false}) async {
+    final launcherRevision = _widgetPublicationRevision;
+    try {
+      return await _answerWatch(launcher: launcher);
+    } finally {
+      if (launcher &&
+          mounted &&
+          _widgetPublicationPending &&
+          launcherRevision == _widgetPublicationRevision) {
+        unawaited(_republishPhoneWidget());
+      }
+    }
+  }
+
+  /// [_resendWatchSummary] without its launcher fallback.
+  Future<bool> _answerWatch({required bool launcher}) async {
     // This may be a different settings transaction from the one present at
     // handoff. Let its replacement load supply a summary if it already can.
     await _snapshotSettingsWork;
@@ -796,15 +840,20 @@ class _DashboardHostState extends State<DashboardHost>
         continue;
       }
       final acceptance = _acceptance;
-      if (acceptance != null &&
-          await _queueWatchSummaryIfAvailable(acceptance)) {
-        return;
+      if (acceptance != null) {
+        final reply = await _queueWatchSummaryIfAvailable(acceptance);
+        if (reply != _WatchReply.superseded) {
+          if (launcher) unawaited(_syncPhoneWidget(acceptance));
+          return reply == _WatchReply.queued;
+        }
       }
-      if (!mounted) return;
+      if (!mounted) return false;
       if (_activeLoad != null || !identical(acceptance, _acceptance)) continue;
       // No eligible load or acceptance answers. Dashboard keeps its own state.
-      if (await _replyFromRetained(acceptance)) return;
+      final reply = await _replyFromRetained(acceptance, launcher: launcher);
+      if (reply != _WatchReply.superseded) return reply == _WatchReply.queued;
     }
+    return false;
   }
 
   /// Cache reads a Wear reply may make when work outside this isolate, such as
@@ -812,12 +861,19 @@ class _DashboardHostState extends State<DashboardHost>
   static const _retainedReplyAttempts = 3;
 
   /// Sends Wear the current retained or empty summary without a Dashboard load.
+  /// With [launcher], its acceptance publishes the launcher frame a save owes
+  /// too, where that input supplies launcher rows.
   ///
-  /// Returns `false` when a newer load, acceptance or mode should answer.
-  Future<bool> _replyFromRetained(_SnapshotAcceptance? acceptance) async {
+  /// Returns [_WatchReply.superseded] when a newer load, acceptance or mode
+  /// should answer.
+  Future<_WatchReply> _replyFromRetained(
+    _SnapshotAcceptance? acceptance, {
+    bool launcher = false,
+  }) async {
     final preferences = _ringPreferences;
     final rules = _alertThresholds;
-    if (preferences == null || rules == null) return true;
+    final launcherPreferences = _widgetPreferences;
+    if (preferences == null || rules == null) return _WatchReply.unavailable;
     final DataModeOperation operation;
     try {
       operation = await _modeAuthority.begin(
@@ -826,7 +882,7 @@ class _DashboardHostState extends State<DashboardHost>
       );
     } catch (_) {
       // Unavailable mode storage cannot authorize a publication.
-      return true;
+      return _WatchReply.unavailable;
     }
     bool superseded() =>
         !mounted ||
@@ -835,24 +891,70 @@ class _DashboardHostState extends State<DashboardHost>
         !identical(preferences, _ringPreferences) ||
         !identical(rules, _alertThresholds);
     // [proof] runs again at the native send boundary, once Google Play
-    // services is ready; a retired proof reads again.
+    // services is ready; a retired proof reads again, as does a summary whose
+    // accepted [publication] or settings revision native already replaced.
     Future<bool> send(
+      PhoneWidgetPublicationInput publication,
+      int? settingsRevision,
+      int saves,
       DashboardSnapshot snapshot,
-      Future<bool> Function() proof,
-    ) async {
-      bool? owned;
-      await operation.run(
-        () => widget.watchSyncService.sync(
+      Future<bool> Function() proof, {
+      bool absence = false,
+    }) async {
+      final owed =
+          launcher &&
+          launcherPreferences != null &&
+          _suppliesLauncherRows(
+            operation,
+            absence ? null : snapshot,
+            launcherPreferences,
+          );
+      // Choices beyond capacity send Wear nothing; unless a launcher frame is
+      // owed, accepting this read would only retire one.
+      if (!owed) await _requireWatchRingCapacity(snapshot, preferences);
+      if (!await operation.run(() => publication.accept(snapshot))) {
+        return false;
+      }
+      unawaited(
+        _replaceRetiredLauncherFrame(
+          operation,
+          publication,
+          settingsRevision,
+          rules,
           snapshot,
-          preferences,
-          manualRefreshAnchorAt: _manualRefreshAnchorAt(snapshot),
-          mockDataMode: operation.mode == DataMode.mock,
-          isCurrent:
-              () async =>
-                  owned = !superseded() && await proof() && !superseded(),
+          proof,
+          owed: owed,
         ),
       );
-      return owned != false;
+      if (owed) await _requireWatchRingCapacity(snapshot, preferences);
+      bool? owned;
+      try {
+        await operation.run(
+          () => publication
+              .withSettingsRevision(settingsRevision)
+              .run(
+                () => widget.watchSyncService.sync(
+                  snapshot,
+                  preferences,
+                  manualRefreshAnchorAt: _manualRefreshAnchorAt(snapshot),
+                  mockDataMode: operation.mode == DataMode.mock,
+                  isCurrent:
+                      () async =>
+                          owned =
+                              !superseded() && await proof() && !superseded(),
+                ),
+              ),
+        );
+      } on WatchSummarySuperseded {
+        return false;
+      }
+      if (owned == false) return false;
+      // The publication the accepted load still owed is covered too, unless
+      // a save began after this input was read.
+      if (!superseded() && saves == _watchSettingsSaves) {
+        _watchPublicationPending = false;
+      }
+      return true;
     }
 
     try {
@@ -860,58 +962,142 @@ class _DashboardHostState extends State<DashboardHost>
       // the cache is read again rather than awaiting one.
       for (var attempt = 0; attempt < _retainedReplyAttempts; attempt++) {
         // A cache read through the shared repository would retire a newer load.
-        if (superseded()) return false;
-        if (!await operation.isCurrent()) return false;
+        if (superseded()) return _WatchReply.superseded;
+        if (!await operation.isCurrent()) return _WatchReply.superseded;
         // A load may start while the mode proof is pending.
-        if (superseded()) return false;
+        if (superseded()) return _WatchReply.superseded;
+        // Ordered before the cache read; a newer load's acceptance wins. A
+        // save that settled since an earlier attempt, such as a launcher-only
+        // one, tags these unchanged choices with its revision.
+        final settingsRevision = _surfaceSettingsRevision;
+        final saves = _watchSettingsSaves;
+        final publication = await widget.phoneWidgetSyncService.beginLoad();
+        if (superseded()) return _WatchReply.superseded;
         final DashboardSnapshot loaded;
         try {
           loaded = await operation.run(_source(operation).load);
         } on DashboardLoadException catch (failure) {
-          if (superseded()) return false;
+          if (superseded()) return _WatchReply.superseded;
           if (!await _source(operation).isFailureCurrent(failure)) continue;
-          if (superseded()) return false;
+          if (superseded()) return _WatchReply.superseded;
           // Confirmed absence clears Wear instead of leaving an obsolete
           // summary. Its failure's selection is the native send proof.
           final cleared = await send(
+            publication,
+            settingsRevision,
+            saves,
             failure.selection,
             () async =>
                 await operation.isCurrent() &&
                 await _source(operation).isFailureCurrent(failure),
+            absence: true,
           );
-          if (cleared) return true;
-          if (superseded()) return false;
+          if (cleared) return _WatchReply.queued;
+          if (superseded()) return _WatchReply.superseded;
           continue;
         }
         final snapshot = widget.applyAlertSettings(loaded, rules);
-        if (superseded()) return false;
+        if (superseded()) return _WatchReply.superseded;
         if (!await _isSourceCurrent(operation, snapshot)) continue;
-        if (superseded()) return false;
+        if (superseded()) return _WatchReply.superseded;
         final sent = await send(
+          publication,
+          settingsRevision,
+          saves,
           snapshot,
           () => _isSourceCurrent(operation, snapshot),
         );
-        if (sent) return true;
-        if (superseded()) return false;
+        if (sent) return _WatchReply.queued;
+        if (superseded()) return _WatchReply.superseded;
       }
     } on DataModeRetired {
-      return false;
+      return _WatchReply.superseded;
     } catch (_) {
       // An unavailable cache or watch cannot authorize provider work.
     }
-    return true;
+    return _WatchReply.unavailable;
   }
 
-  Future<bool> _queueWatchSummaryIfAvailable(
+  /// A Wear resend's acceptance, warm or cold, retires the first delivery of
+  /// launcher rows a widget has not received yet, so the launcher publishes
+  /// the same accepted input; publishing under a newer load would retire the
+  /// resend in turn. Native is asked after that acceptance, since rows may
+  /// commit after the load began. A launcher with no such frame then was not
+  /// retired by it and is left to its own loads, unless [owed], for a save
+  /// whose pending frame this acceptance publishes. The frame carries
+  /// the [settingsRevision] its input was read under and is refused once
+  /// [rules] are replaced, so a newer save's own reply publishes; unread
+  /// [rules] build none. A refused publication stays pending for the next
+  /// load.
+  Future<void> _replaceRetiredLauncherFrame(
+    DataModeOperation operation,
+    PhoneWidgetPublicationInput publication,
+    int? settingsRevision,
+    AlertThresholdPreferences? rules,
+    DashboardSnapshot snapshot,
+    Future<bool> Function() proof, {
+    bool owed = false,
+  }) async {
+    final preferences = _widgetPreferences;
+    try {
+      if (preferences == null) return;
+      if (!owed || !_widgetPublicationPending) {
+        if (!await publication.isAwaitingDelivery()) return;
+        if (await publication.isEstablished()) return;
+      }
+      if (!mounted ||
+          !identical(preferences, _widgetPreferences) ||
+          rules == null ||
+          !identical(rules, _alertThresholds)) {
+        return;
+      }
+      _widgetPublicationPending = true;
+      final publicationRevision = ++_widgetPublicationRevision;
+      await _dispatchPhoneWidget(
+        operation,
+        snapshot,
+        publication,
+        preferences,
+        settingsRevision,
+        accepted:
+            () =>
+                mounted &&
+                publicationRevision == _widgetPublicationRevision &&
+                identical(preferences, _widgetPreferences) &&
+                identical(rules, _alertThresholds),
+        proof: proof,
+      );
+    } catch (_) {
+      developer.log(
+        'Wear resend could not update the widget.',
+        name: phoneWidgetLogName,
+      );
+    }
+  }
+
+  Future<_WatchReply> _queueWatchSummaryIfAvailable(
     _SnapshotAcceptance acceptance,
   ) async {
     try {
-      return await _queueWatchSummary(acceptance);
+      if (_ringPreferences == null) {
+        // Unread ring choices build no summary from any input. While this
+        // acceptance can still publish the launcher, nothing newer answers;
+        // otherwise the retained reply and its launcher fallback do.
+        final publishes =
+            _hasCurrentRules(acceptance) &&
+            await _isSourceCurrent(acceptance.operation, acceptance.snapshot);
+        return publishes ? _WatchReply.unavailable : _WatchReply.superseded;
+      }
+      return await _queueWatchSummary(acceptance)
+          ? _WatchReply.queued
+          : _WatchReply.superseded;
     } on DataModeRetired {
-      return false;
+      return _WatchReply.superseded;
+    } on WatchSummarySuperseded {
+      return _WatchReply.superseded;
     } catch (_) {
       // An unavailable watch does not turn a resend into a provider poll.
-      return true;
+      return _WatchReply.unavailable;
     }
   }
 
@@ -1164,8 +1350,13 @@ class _DashboardHostState extends State<DashboardHost>
     final store = widget.watchRingPreferenceStore;
     setState(() => _pendingRingPreferences = value);
     final work = _ringPreferenceWork.then((_) async {
+      final int? settled;
       try {
-        await store.write(value);
+        // A summary read before this save, in any engine, cannot follow it.
+        settled = await _saveSurfaceSettings(
+          () => store.write(value),
+          retired: () => _replaceRetiredSurfaces(launcher: true),
+        );
       } catch (_) {
         if (mounted && revision == _ringPreferenceRevision) {
           setState(() => _pendingRingPreferences = null);
@@ -1173,13 +1364,19 @@ class _DashboardHostState extends State<DashboardHost>
         rethrow;
       }
       if (!mounted) return;
+      _noteSurfaceSettingsRevision(settled);
+      // A settled native revision retires the launcher's committed frame, one
+      // awaiting its first delivery included, so the widget publishes again.
+      final launcherRetired = settled != null;
       setState(() {
         _ringPreferences = value;
         _watchPublicationPending = true;
+        if (launcherRetired) _widgetPublicationPending = true;
         if (revision == _ringPreferenceRevision) _pendingRingPreferences = null;
       });
-      final acceptance = _acceptance;
-      if (acceptance != null) unawaited(_syncWatch(acceptance));
+      // The accepted load publishes both while its source is current; once
+      // work elsewhere retired it, the current retained input does.
+      unawaited(_resendWatchSummary(launcher: launcherRetired));
     });
     // A failed save is reported to its picker but cannot poison later work.
     _ringPreferenceWork = work.then<void>(
@@ -1208,8 +1405,11 @@ class _DashboardHostState extends State<DashboardHost>
     final work = _widgetPreferenceWork.then((_) async {
       final int? settled;
       try {
-        settled = await widget.phoneWidgetSyncService.saveSettings(
+        // Launcher choices leave the watch summary's content alone.
+        settled = await _saveSurfaceSettings(
           () => store.write(value),
+          watch: false,
+          retired: () => _publishLauncherSave(settled: true),
         );
       } catch (_) {
         if (mounted && revision == _widgetPreferenceRevision) {
@@ -1221,24 +1421,84 @@ class _DashboardHostState extends State<DashboardHost>
       _noteSurfaceSettingsRevision(settled);
       setState(() {
         _widgetPreferences = value;
-        _widgetPublicationPending = true;
         _widgetEditUnpublished = true;
         if (revision == _widgetPreferenceRevision)
           _pendingWidgetPreferences = null;
       });
-      final acceptance = _acceptance;
-      if (acceptance != null && _isAccepted(acceptance)) {
-        unawaited(_syncPhoneWidget(acceptance));
-      } else {
-        // A failed or replaced Dashboard load leaves no input to publish.
-        unawaited(_republishPhoneWidget());
-      }
+      _publishLauncherSave(settled: settled != null);
     });
     _widgetPreferenceWork = work.then<void>(
       (_) {},
       onError: (Object _, StackTrace __) {},
     );
     return work;
+  }
+
+  /// Saves through the shared settings transaction. A failed write that
+  /// native settled anyway is noted as a successful one would be and runs
+  /// [retired], that save's replacement, before its own error is rethrown.
+  /// One that overlaps a save still in flight, failed or not, leaves what it
+  /// retired owed, so the save that settles replaces it too.
+  Future<int?> _saveSurfaceSettings(
+    Future<void> Function() save, {
+    required void Function() retired,
+    bool watch = true,
+  }) async {
+    if (watch) _watchSettingsSaves++;
+    try {
+      final settled = await widget.phoneWidgetSyncService.saveSettings(
+        save,
+        watch: watch,
+      );
+      // A native authority settled a revision before, so no revision now
+      // means another save is still in flight.
+      if (settled == null && mounted && _surfaceSettingsRevision != null) {
+        if (watch) _watchPublicationPending = true;
+        _widgetPublicationPending = true;
+      }
+      return settled;
+    } on SettingsWriteFailure catch (failure) {
+      if (mounted) {
+        final settled = failure.settingsRevision;
+        if (settled != null) {
+          _noteSurfaceSettingsRevision(settled);
+          retired();
+        } else {
+          if (watch) _watchPublicationPending = true;
+          _widgetPublicationPending = true;
+        }
+      }
+      Error.throwWithStackTrace(failure.error, failure.stackTrace);
+    }
+  }
+
+  /// Replaces the watch item and, with [launcher], the launcher frame a
+  /// settled save retired natively: the accepted load publishes both while
+  /// its source is current, and otherwise one retained acceptance does.
+  void _replaceRetiredSurfaces({required bool launcher}) {
+    _watchPublicationPending = true;
+    if (launcher) _widgetPublicationPending = true;
+    unawaited(_resendWatchSummary(launcher: launcher));
+  }
+
+  /// Publishes the launcher frame a widget save owes. A launcher-only save
+  /// that [settled] a revision keeps the watch item's content and a current
+  /// send authority, so the watch is replaced too only when a publication is
+  /// still owed, as one an overlapping or abandoned save left, from the same
+  /// acceptance.
+  void _publishLauncherSave({required bool settled}) {
+    _widgetPublicationPending = true;
+    final acceptance = _acceptance;
+    if (settled && _watchPublicationPending) {
+      // Both surfaces publish from one acceptance, the Dashboard's or the
+      // current retained input's.
+      unawaited(_resendWatchSummary(launcher: true));
+    } else if (acceptance != null && _isAccepted(acceptance)) {
+      unawaited(_syncPhoneWidget(acceptance));
+    } else {
+      // A failed or replaced Dashboard load leaves no input to publish.
+      unawaited(_republishPhoneWidget());
+    }
   }
 
   // Snapshot acceptance and preference transactions share one order. Provider
@@ -1274,23 +1534,38 @@ class _DashboardHostState extends State<DashboardHost>
         previous == null
             ? null
             : widget.applyAlertSettings(previous.input, value);
-    final settled = await widget.phoneWidgetSyncService.saveSettings(
+    final settled = await _saveSurfaceSettings(
       () => widget.alertThresholdStore.write(value),
+      retired: () => _replaceRetiredSurfaces(launcher: true),
     );
     if (!mounted) return;
     _noteSurfaceSettingsRevision(settled);
     _confirmAlertThresholds(value);
-    if (previous == null || withAlerts == null) return;
+    // A settled revision retired both surfaces natively. Without an
+    // acceptance that can publish the saved rules, the current retained input
+    // replaces them once this transaction settles.
+    if (previous == null || withAlerts == null) {
+      if (settled != null) _replaceRetiredSurfaces(launcher: true);
+      return;
+    }
     try {
-      if (!await _isSourceCurrent(previous.operation, withAlerts)) return;
+      if (!await _isSourceCurrent(previous.operation, withAlerts)) {
+        // Work elsewhere retired the accepted load, which can no longer
+        // publish the saved rules.
+        if (mounted) _replaceRetiredSurfaces(launcher: true);
+        return;
+      }
     } catch (_) {
       // The write is saved even if ownership cannot be confirmed.
+      if (mounted && settled != null) _replaceRetiredSurfaces(launcher: true);
       return;
     }
     // A new load request may retain this accepted input as its owned fallback.
     if (!mounted ||
         surfaceRevision != _surfaceRevision ||
         !identical(previous, _acceptance)) {
+      // A failed load or credential change cleared the acceptance meanwhile.
+      if (mounted && settled != null) _replaceRetiredSurfaces(launcher: true);
       return;
     }
     final acceptance = _SnapshotAcceptance(
@@ -1305,10 +1580,24 @@ class _DashboardHostState extends State<DashboardHost>
       publication: previous.publication,
     );
     setState(() => _acceptance = acceptance);
-    unawaited(_syncWatch(acceptance));
-    unawaited(_syncPhoneWidget(acceptance));
+    unawaited(_syncSurfaces(acceptance));
     unawaited(_syncAlerts(acceptance));
   });
+
+  /// Publishes a save's [acceptance] to Wear, then to the launcher. Once
+  /// native refuses it, one retained acceptance replaces both, so neither
+  /// surface's fallback retires the other's ticket.
+  Future<void> _syncSurfaces(_SnapshotAcceptance acceptance) async {
+    if (!_isAccepted(acceptance)) return;
+    _watchPublicationPending = true;
+    if (await _queueWatchSummaryIfAvailable(acceptance) ==
+        _WatchReply.superseded) {
+      _widgetPublicationPending = true;
+      await _resendWatchSummary(launcher: true);
+    } else {
+      await _syncPhoneWidget(acceptance);
+    }
+  }
 
   Future<_SnapshotAcceptance> _acceptSnapshot(
     DashboardSnapshot repositorySnapshot,
@@ -1348,7 +1637,7 @@ class _DashboardHostState extends State<DashboardHost>
     if (!await operation.guard(() async {
       // A refused acceptance still shows; its launcher request republishes.
       // Ownership is checked after it: the host or load may have retired.
-      await publication.accept(snapshot);
+      final accepted = await publication.accept(snapshot);
       // Rechecked after acceptance, which retires the first delivery of rows
       // a widget is still owed.
       final established =
@@ -1357,7 +1646,9 @@ class _DashboardHostState extends State<DashboardHost>
         revision,
         () => _source(operation).isSnapshotCurrent(snapshot),
       )) {
-        throw const _RetiredDashboardLoad();
+        throw _RetiredDashboardLoad(
+          accepted: accepted && publication.load != null,
+        );
       }
       setState(() {
         _acceptance = acceptance;
@@ -1548,8 +1839,23 @@ class _DashboardHostState extends State<DashboardHost>
         unawaited(_publishWatchReply(acceptance));
       } else if (_watchPublicationPending) {
         unawaited(_syncWatch(acceptance));
+      } else if (context?.whollySkipped == true) {
+        unawaited(_seedWatchSummary(acceptance));
       }
-      if (_widgetPublicationPending && !(fromWatch && operation.cacheOnly)) {
+      if (fromWatch && operation.cacheOnly) {
+        // A watch-only resend replaces only a launcher frame it retired.
+        final snapshot = acceptance.snapshot;
+        unawaited(
+          _replaceRetiredLauncherFrame(
+            operation,
+            acceptance.publication,
+            acceptance.publication.settingsRevision,
+            acceptance.rules,
+            snapshot,
+            () => _isSourceCurrent(operation, snapshot),
+          ),
+        );
+      } else if (_widgetPublicationPending) {
         unawaited(_syncPhoneWidget(acceptance));
       }
       if (!operation.cacheOnly && context?.whollySkipped != true) {
@@ -1557,7 +1863,16 @@ class _DashboardHostState extends State<DashboardHost>
       }
       return acceptance.snapshot;
     } catch (error) {
-      if (mounted && watchOperation != null) {
+      // Work elsewhere, such as a headless poll, wrote the source after native
+      // accepted this load. Unless a newer load replaces it, the retained
+      // input that work left replaces both surfaces.
+      final replaced =
+          error is _RetiredDashboardLoad &&
+          error.accepted &&
+          mounted &&
+          revision == _loadRevision;
+      if (replaced) _replaceRetiredSurfaces(launcher: true);
+      if (mounted && watchOperation != null && !replaced) {
         try {
           // A newer load or mode answers the tap with current evidence. A
           // failed resend-only read leaves the watch-only reply to answer.
@@ -1917,14 +2232,20 @@ class _DashboardHostState extends State<DashboardHost>
       }
       if (_watchPublicationPending) {
         await _syncWatch(acceptance);
+      } else if (poll.whollySkipped) {
+        unawaited(_seedWatchSummary(acceptance));
       }
       if (_widgetPublicationPending) {
         await _syncPhoneWidget(acceptance);
       }
       await _syncRecoveries(acceptance);
       if (!poll.whollySkipped) await _syncAlerts(acceptance);
-    } on _RetiredDashboardLoad {
-      // A rejected selection cannot replace the last accepted Dashboard.
+    } on _RetiredDashboardLoad catch (retired) {
+      // A rejected selection cannot replace the last accepted Dashboard. One
+      // native accepted still replaces both surfaces from retained input.
+      if (retired.accepted && mounted && revision == _loadRevision) {
+        _replaceRetiredSurfaces(launcher: true);
+      }
     } on DashboardLoadException catch (failure) {
       // Keep successful data, but an error-only dashboard must follow the most
       // recent guarded result rather than the exception from its first load.
@@ -2033,8 +2354,32 @@ class _DashboardHostState extends State<DashboardHost>
     _watchPublicationPending = true;
     try {
       await _queueWatchSummary(acceptance);
+    } on WatchSummarySuperseded {
+      // Work in another engine accepted a newer load, or a save outran this
+      // read; the current retained input answers once an active load, which
+      // may be awaiting this sync, settles.
+      unawaited(_resendWatchSummary());
     } catch (_) {
       // Watch availability must not block the phone dashboard.
+    }
+  }
+
+  /// A cadence-skipped load still seeds Wear's first v10 summary, after an
+  /// upgrade, or the replacement for the empty one a mode transition left,
+  /// from its retained input. Asked after acceptance, since watch
+  /// availability must not hold the phone dashboard.
+  Future<void> _seedWatchSummary(_SnapshotAcceptance acceptance) async {
+    if (await widget.watchSyncService.isEstablished()) return;
+    await _syncWatch(acceptance);
+  }
+
+  /// A warm resume resumes native pending or owed work, and sends again a
+  /// publication the accepted load still owes after a failed attempt.
+  Future<void> _resumeWatchPublication() async {
+    await widget.watchSyncService.resume();
+    final acceptance = _acceptance;
+    if (mounted && _watchPublicationPending && acceptance != null) {
+      await _syncWatch(acceptance);
     }
   }
 
@@ -2044,6 +2389,8 @@ class _DashboardHostState extends State<DashboardHost>
       // one mode generation.
       if (!await _queueWatchSummary(acceptance)) await _resendWatchSummary();
     } on DataModeRetired {
+      await _resendWatchSummary();
+    } on WatchSummarySuperseded {
       await _resendWatchSummary();
     } catch (_) {
       // Unavailable publication cannot authorize provider work.
@@ -2141,10 +2488,11 @@ class _DashboardHostState extends State<DashboardHost>
   /// confirmed absence, without a provider poll: native refused it, its
   /// source retired or no Dashboard acceptance exists. Mock reads its captured
   /// sample source in the current generation; without one, as in Demo, the
-  /// choice and stored rows stay as they are. Only the widget is
-  /// published; Dashboard acceptance, notification work and Watch state stay
-  /// as they are. An active load publishes the request itself; the retry
-  /// resumes once it settles.
+  /// choice and stored rows stay as they are. Each accepted attempt also asks
+  /// Wear's state, which adopts a still-valid pending watch item, and
+  /// otherwise sends Wear that same acceptance; Dashboard acceptance and
+  /// notification work stay as they are. An active load publishes the
+  /// request itself; the retry resumes once it settles.
   Future<void> _republishPhoneWidget() async {
     if (_widgetRepublishing) return;
     _widgetRepublishing = true;
@@ -2193,18 +2541,30 @@ class _DashboardHostState extends State<DashboardHost>
         final (snapshot, proof) = retained;
         if (await proof() &&
             accepted() &&
-            await operation.run(() => publication.accept(snapshot)) &&
-            await _dispatchPhoneWidget(
-                  operation,
-                  snapshot,
-                  publication,
-                  preferences,
-                  settingsRevision,
-                  accepted: accepted,
-                  proof: proof,
-                ) ==
-                true) {
-          return;
+            await operation.run(() => publication.accept(snapshot))) {
+          // Accepting retires the send authority of a still-valid watch item
+          // waiting behind a put or in retry, and of a summary still in
+          // flight elsewhere, such as a headless poll's. Wear's answer and
+          // send stay off the launcher's path and do not depend on it.
+          unawaited(
+            _sendAcceptedWatchSummary(
+              operation,
+              publication,
+              settingsRevision,
+              snapshot,
+              proof,
+            ),
+          );
+          final published = await _dispatchPhoneWidget(
+            operation,
+            snapshot,
+            publication,
+            preferences,
+            settingsRevision,
+            accepted: accepted,
+            proof: proof,
+          );
+          if (published == true) return;
         }
         failures++;
       }
@@ -2214,6 +2574,68 @@ class _DashboardHostState extends State<DashboardHost>
       _widgetRepublishing = false;
     }
   }
+
+  /// Asks Wear's state after a launcher retry accepted [publication], which
+  /// adopts and resumes a still-valid watch item that acceptance retired.
+  /// Without an established item, sends Wear [snapshot] under the same
+  /// acceptance, tagged with [settingsRevision], so neither surface's send
+  /// retires the other's ticket. A refused or failed send leaves the
+  /// publication pending for the next load or resume.
+  Future<void> _sendAcceptedWatchSummary(
+    DataModeOperation operation,
+    PhoneWidgetPublicationInput publication,
+    int? settingsRevision,
+    DashboardSnapshot snapshot,
+    Future<bool> Function() proof,
+  ) async {
+    if (await widget.watchSyncService.isEstablished() || !mounted) return;
+    _watchPublicationPending = true;
+    final preferences = _ringPreferences;
+    final saves = _watchSettingsSaves;
+    if (preferences == null) return;
+    bool current() => mounted && identical(preferences, _ringPreferences);
+    bool? owned;
+    try {
+      await _requireWatchRingCapacity(snapshot, preferences);
+      await operation.run(
+        () => publication
+            .withSettingsRevision(settingsRevision)
+            .run(
+              () => widget.watchSyncService.sync(
+                snapshot,
+                preferences,
+                manualRefreshAnchorAt: _manualRefreshAnchorAt(snapshot),
+                mockDataMode: operation.mode == DataMode.mock,
+                isCurrent:
+                    () async => owned = current() && await proof() && current(),
+              ),
+            ),
+      );
+    } catch (_) {
+      return;
+    }
+    if (owned != false && current() && saves == _watchSettingsSaves) {
+      _watchPublicationPending = false;
+    }
+  }
+
+  /// Whether retained [snapshot], or confirmed absence when it is `null`,
+  /// read from [operation]'s source supplies launcher rows for [preferences].
+  /// The no-provider placeholder, a sample failure, which confirms no
+  /// absence, and a sample without accounts or without an eligible row for a
+  /// nonempty or default selection supply none.
+  bool _suppliesLauncherRows(
+    DataModeOperation operation,
+    DashboardSnapshot? snapshot,
+    PhoneWidgetPreferences preferences,
+  ) =>
+      !operation.mode.synthetic ||
+      (operation.mode == DataMode.mock &&
+          widget.mockRepository != null &&
+          snapshot != null &&
+          snapshot.accounts.isNotEmpty &&
+          (preferences.selectedIds?.isEmpty == true ||
+              buildPhoneWidgetPayload(snapshot, preferences).rows.isNotEmpty));
 
   /// The retained input a widget retry publishes, with its source proof, or
   /// `null` when no captured sample source has rows to read for [preferences].
@@ -2232,18 +2654,12 @@ class _DashboardHostState extends State<DashboardHost>
         await operation.run(_source(operation).load),
         rules,
       );
-      // A sample without accounts, or without an eligible row for a nonempty
-      // or default selection, supplies no sample rows either.
-      if (operation.mode.synthetic &&
-          (snapshot.accounts.isEmpty ||
-              (preferences.selectedIds?.isEmpty != true &&
-                  buildPhoneWidgetPayload(snapshot, preferences).isEmpty))) {
+      if (!_suppliesLauncherRows(operation, snapshot, preferences)) {
         return null;
       }
       return (snapshot, () => _isSourceCurrent(operation, snapshot));
     } on DashboardLoadException catch (failure) {
-      // A sample failure confirms no absence.
-      if (operation.mode.synthetic) return null;
+      if (!_suppliesLauncherRows(operation, null, preferences)) return null;
       // Confirmed absence replaces rows the cache no longer holds.
       return (
         failure.selection,
@@ -2263,8 +2679,12 @@ class _DashboardHostState extends State<DashboardHost>
     }
   }
 
+  /// Throws [WatchSummarySuperseded] when native refuses the accepted load or
+  /// the settings revision [preferences] were confirmed at.
   Future<bool> _queueWatchSummary(_SnapshotAcceptance acceptance) async {
     final preferences = _ringPreferences;
+    final settingsRevision = _surfaceSettingsRevision;
+    final saves = _watchSettingsSaves;
     if (preferences == null) return false;
     final snapshot = acceptance.snapshot;
     bool accepted() =>
@@ -2276,33 +2696,70 @@ class _DashboardHostState extends State<DashboardHost>
     if (!await _source(operation).isSnapshotCurrent(snapshot) || !accepted()) {
       return false;
     }
+    await _requireWatchRingCapacity(snapshot, preferences);
     // The native sender holds the lease only once Google Play services is
     // ready, after this acceptance proves its ownership again.
     bool? owned;
-    await operation.run(
-      () => widget.watchSyncService.sync(
-        snapshot,
-        preferences,
-        manualRefreshAnchorAt: _manualRefreshAnchorAt(snapshot),
-        mockDataMode: operation.mode == DataMode.mock,
-        isCurrent:
-            () async =>
-                owned =
-                    accepted() &&
-                    await _isSourceCurrent(operation, snapshot) &&
-                    accepted(),
-      ),
-    );
+    try {
+      await operation.run(
+        () => acceptance.publication
+            .withSettingsRevision(settingsRevision)
+            .run(
+              () => widget.watchSyncService.sync(
+                snapshot,
+                preferences,
+                manualRefreshAnchorAt: _manualRefreshAnchorAt(snapshot),
+                mockDataMode: operation.mode == DataMode.mock,
+                isCurrent:
+                    () async =>
+                        owned =
+                            accepted() &&
+                            await _isSourceCurrent(operation, snapshot) &&
+                            accepted(),
+              ),
+            ),
+      );
+    } on WatchSummarySuperseded {
+      // This acceptance lost ownership at readiness; nothing was sent.
+      if (owned == false) return false;
+      rethrow;
+    }
     if (owned == false) return false;
-    if (accepted()) _watchPublicationPending = false;
+    if (accepted() && saves == _watchSettingsSaves) {
+      _watchPublicationPending = false;
+    }
     return true;
+  }
+
+  /// Ring choices beyond capacity build no replacement, so nothing is queued
+  /// and a pending publication stays pending; native pending or owed work
+  /// still resumes.
+  Future<void> _requireWatchRingCapacity(
+    DashboardSnapshot snapshot,
+    WatchRingPreferences preferences,
+  ) async {
+    final reason = watchRingCapacityReason(
+      watchRingSelectionIds(snapshot, preferences),
+    );
+    if (reason == null) return;
+    await widget.watchSyncService.resume();
+    throw StateError(reason);
   }
 
   Future<void> _onSettingsSyncWatch() async {
     final acceptance = _acceptance;
-    if (acceptance == null || !await _queueWatchSummary(acceptance)) {
-      throw StateError('Watch sync unavailable');
+    var queued = false;
+    try {
+      queued = acceptance != null && await _queueWatchSummary(acceptance);
+    } on WatchSummarySuperseded {
+      // Only a retry that actually handed a current summary over is queued.
+      queued = await _resendWatchSummary();
+    } finally {
+      // Without a replacement, explicit sync still resumes pending or owed
+      // native publication.
+      if (!queued) await widget.watchSyncService.resume();
     }
+    if (!queued) throw StateError('Watch sync unavailable');
   }
 
   /// Pull-to-refresh runs the same reload the app-bar action does; the gesture
@@ -2582,6 +3039,7 @@ class _DashboardHostState extends State<DashboardHost>
                 ringPreferences: rulesCurrent ? _ringPreferences : null,
                 widgetPreferences: rulesCurrent ? _widgetPreferences : null,
                 onSyncWatch: _onSettingsSyncWatch,
+                onResumeWatch: widget.watchSyncService.resume,
                 recoveryNotificationsEnabled: _recoveryNotificationsEnabled,
                 onRecoveryNotificationsChanged: _updateRecoveryNotifications,
                 alertNotificationsEnabled: _alertNotificationsEnabled,

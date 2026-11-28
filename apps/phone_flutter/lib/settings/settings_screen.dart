@@ -33,6 +33,7 @@ class SettingsScreen extends StatefulWidget {
     required this.ringPreferences,
     required this.widgetPreferences,
     required this.onSyncWatch,
+    required this.onResumeWatch,
     required this.recoveryNotificationsEnabled,
     required this.onRecoveryNotificationsChanged,
     required this.alertNotificationsEnabled,
@@ -66,6 +67,10 @@ class SettingsScreen extends StatefulWidget {
   final WatchRingPreferences? ringPreferences;
   final PhoneWidgetPreferences? widgetPreferences;
   final Future<void> Function() onSyncWatch;
+
+  /// Resumes pending or owed native watch publication without sending a
+  /// summary, for an explicit sync that saved ring choices block.
+  final Future<void> Function() onResumeWatch;
   final bool debugDataAvailable;
   final bool mockDataReady;
   final bool mockDataEnabled;
@@ -99,6 +104,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() {
         _syncResult = watchRingPayloadSubtitle(snapshot, preferences);
       });
+      // No replacement can be built, but an owed or pending one still resumes.
+      await widget.onResumeWatch();
       return;
     }
 

@@ -1741,6 +1741,445 @@ void main() {
         }
       });
     }
+    // A cadence-denied load still publishes the retained watch summary when
+    // the desired Data Item is not established for the current generation.
+    for (final watchEstablished in [false, true]) {
+      final effect =
+          watchEstablished
+              ? 'leaves an established watch summary'
+              : 'republishes a watch summary a transition left owed';
+      test('a cadence-denied load $effect', () async {
+        const id = ProviderConnections.cursorPlan;
+        final secure = FakeSecureStorage();
+        await SecureProviderCredentialStore(
+          storage: secure,
+          platform: bridge.platform('ui'),
+        ).writeSecret(id, 'synthetic-session');
+        final initial = DateTime.utc(2026, 1, 1);
+        Future<void> setClock(DateTime at) async {
+          await bridge.invoke('test', 'setClock', {
+            'value': at.millisecondsSinceEpoch,
+          });
+        }
+
+        final capture = _SurfaceCapture();
+        final replies = <String, Object?>{};
+        final calls = _bindSurfaces(capture: capture, replies: replies);
+        final failures = <(String, Object)>[];
+        var requests = 0;
+        final poll = AutomaticPollContext();
+        Future<void> run(String engine, {AutomaticPollContext? context}) {
+          Future<void> sync() => providerSyncOnce(
+            load:
+                (owner) => loadProviderSyncWork(
+                  owner,
+                  createLive:
+                      () => PhoneLiveBindings.create(
+                        secureStorage: secure,
+                        cachePlatform: bridge.platform(engine),
+                        cursorClient: CursorPlanClient(
+                          http: ProviderReportingHttp(
+                            transport: _CursorPlanTransport(
+                              40,
+                              onRequest: () => requests++,
+                            ),
+                          ),
+                        ),
+                      ),
+                  readWindows: (_) => const [],
+                ),
+            logFailure: (step, error, _) => failures.add((step, error)),
+          );
+          return context == null ? sync() : context.run(sync);
+        }
+
+        await setClock(initial);
+        await run('v9');
+        final provided = requests;
+        expect(provided, greaterThan(0));
+
+        await SecureWatchRingPreferenceStore().write(
+          const WatchRingPreferences(selectedIds: [cursorOwnPoolId]),
+        );
+        calls.clear();
+        capture.watchSummaries.clear();
+        capture.watchSelections.clear();
+        replies.addAll({
+          'beginLoad': {
+            'load': 1,
+            'settingsRevision': 0,
+            'observed': 0,
+            'established': true,
+          },
+          'accept': true,
+          'established': true,
+          'issue': 1,
+          'watchSummaryEstablished': watchEstablished,
+        });
+        await setClock(initial.add(const Duration(minutes: 1)));
+        await run('v10', context: poll);
+        expect(poll.whollySkipped, isTrue);
+        expect(requests, provided);
+        expect(failures, isEmpty);
+        expect(calls, contains('watchSummaryEstablished'));
+        if (watchEstablished) {
+          expect(calls, isNot(contains('syncWatchSummary')));
+          expect(capture.watchSummaries, isEmpty);
+        } else {
+          expect(
+            calls.where((call) => call == 'syncWatchSummary'),
+            hasLength(1),
+          );
+          expect(_watchUsage(capture.watchSummaries.single), {
+            cursorOwnPoolId: 40,
+          });
+          expect(capture.watchSelections.single, isNotNull);
+        }
+      });
+    }
+    test(
+      'a late headless result reaches native with its load and settings and loses to a newer slot publication',
+      () async {
+        const id = ProviderConnections.cursorPlan;
+        final secure = FakeSecureStorage();
+        await SecureProviderCredentialStore(
+          storage: secure,
+          platform: bridge.platform('ui'),
+        ).writeSecret(id, 'synthetic-session');
+        await bridge.invoke('test', 'setClock', {
+          'value': DateTime.utc(2026, 1, 1).millisecondsSinceEpoch,
+        });
+        await SecureWatchRingPreferenceStore().write(
+          const WatchRingPreferences(selectedIds: [cursorOwnPoolId]),
+        );
+        // The headless claim: launcher load 4, read at settled revision 2.
+        const load = 4;
+        final replies = <String, Object?>{
+          'beginLoad': {
+            'load': load,
+            'settingsRevision': 2,
+            'observed': 0,
+            'established': true,
+          },
+          'accept': true,
+          'established': true,
+          'issue': 1,
+        };
+        final calls = _bindSurfaces(replies: replies);
+        // Native admission as the shared engine applies it: only the accepted
+        // load under the settled settings revision is ordered.
+        var acceptedLoad = load;
+        var settingsRevision = 2;
+        final arrived = <Map<Object?, Object?>>[];
+        final admitted = <Map<Object?, Object?>>[];
+        final refused = <Map<Object?, Object?>>[];
+        final reached = Completer<void>();
+        final release = Completer<void>();
+        const watchChannel = MethodChannel('app.wardpulse/watch_sync');
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        messenger.setMockMethodCallHandler(watchChannel, (call) async {
+          if (call.method != 'syncWatchSummary') {
+            throw MissingPluginException();
+          }
+          final arguments = call.arguments as Map<Object?, Object?>;
+          arrived.add(arguments);
+          if (!reached.isCompleted) {
+            // The headless send is held before admission.
+            reached.complete();
+            await release.future;
+          }
+          if (arguments['load'] != acceptedLoad ||
+              arguments['settingsRevision'] != settingsRevision) {
+            refused.add(arguments);
+            throw PlatformException(code: 'watch_summary_superseded');
+          }
+          admitted.add(arguments);
+          return null;
+        });
+        // The surface binding above detaches this handler after the test.
+
+        final failures = <(String, Object)>[];
+        final headless = providerSyncOnce(
+          load:
+              (owner) => loadProviderSyncWork(
+                owner,
+                createLive:
+                    () => PhoneLiveBindings.create(
+                      secureStorage: secure,
+                      cachePlatform: bridge.platform('worker'),
+                      cursorClient: CursorPlanClient(
+                        http: ProviderReportingHttp(
+                          transport: const _CursorPlanTransport(40),
+                        ),
+                      ),
+                    ),
+                readWindows: (_) => const [],
+              ),
+          logFailure: (step, error, _) => failures.add((step, error)),
+        );
+        await reached.future;
+        final held = arrived.single;
+        expect(held['load'], load);
+        expect(held['settingsRevision'], 2);
+        expect(
+          _watchUsage(
+            jsonDecode(held['payload'] as String) as Map<String, dynamic>,
+          ),
+          {cursorOwnPoolId: 40},
+        );
+
+        // A foreground slot save settles revision 3 and publishes it from a
+        // newer accepted load while the headless result is held.
+        await SecureWatchRingPreferenceStore().write(
+          const WatchRingPreferences(selectedIds: []),
+        );
+        settingsRevision = 3;
+        acceptedLoad = load + 1;
+        replies['beginLoad'] = {
+          'load': load + 2,
+          'settingsRevision': 3,
+          'observed': 0,
+          'established': true,
+        };
+        const foreground = PhoneWidgetPublicationInput(
+          load: load + 1,
+          settingsRevision: 3,
+        );
+        await foreground.run(
+          () => const MethodChannelWatchSyncService().sync(
+            DashboardSnapshot.empty(),
+            const WatchRingPreferences(selectedIds: []),
+          ),
+        );
+        expect(admitted.single['settingsRevision'], 3);
+
+        // Released afterwards, the older headless result is refused. Rebuilt
+        // with the saved ring choice under the settled revision, it still
+        // loses to the newer accepted load, and a revision that settles no
+        // further ends the retries.
+        release.complete();
+        await headless;
+        expect(calls.where((call) => call == 'beginLoad'), hasLength(3));
+        expect(arrived, hasLength(3));
+        expect(refused, hasLength(2));
+        expect(refused.first, same(held));
+        expect(refused.last['load'], load);
+        expect(refused.last['settingsRevision'], 3);
+        final rebuilt = refused.last['payload'] as String;
+        expect(
+          _watchUsage(jsonDecode(rebuilt) as Map<String, dynamic>),
+          isEmpty,
+        );
+        expect(admitted.single['load'], load + 1);
+        expect(failures, isEmpty);
+      },
+    );
+    // A save during a headless fetch refuses only the surfaces whose content
+    // it may change; each is rebuilt from the report with the saved settings
+    // and sent under the revision the save settles, after waiting for one in
+    // flight. Native keeps the watch summary's authority across launcher-only
+    // saves; every save retires launcher frames read before it.
+    for (final (saved, inFlight) in [
+      ('launcher-only', false),
+      ('ring', false),
+      ('alert-rule', false),
+      ('alert-rule', true),
+    ]) {
+      test(
+        'a headless report reaches both surfaces under the settled revision after the $saved save ${inFlight ? 'it waits for' : 'that settles'} during its fetch',
+        () async {
+          const id = ProviderConnections.cursorPlan;
+          final secure = FakeSecureStorage();
+          await SecureProviderCredentialStore(
+            storage: secure,
+            platform: bridge.platform('ui'),
+          ).writeSecret(id, 'synthetic-session');
+          await bridge.invoke('test', 'setClock', {
+            'value': DateTime.utc(2026, 1, 1).millisecondsSinceEpoch,
+          });
+          await SecureWatchRingPreferenceStore().write(
+            const WatchRingPreferences(selectedIds: [cursorOwnPoolId]),
+          );
+          await SecurePhoneWidgetPreferenceStore().write(
+            const PhoneWidgetPreferences(selectedIds: [cursorOwnPoolId]),
+          );
+          final capture = _SurfaceCapture();
+          final calls = _bindSurfaces(capture: capture);
+          // Native order as the shared engine applies it: the claim is launcher
+          // load 4 at settled revision 2. Watch input holds from the revision
+          // the last save that may change it began; launcher input only at the
+          // settled revision.
+          const load = 4;
+          var settled = 2;
+          var watchFloor = 2;
+          var writing = false;
+          var probes = 0;
+          final arrived = <Map<Object?, Object?>>[];
+          final admitted = <Map<Object?, Object?>>[];
+          final issued = <Map<Object?, Object?>>[];
+          final refusedFrames = <Map<Object?, Object?>>[];
+          Future<void> write() async {
+            if (saved == 'launcher-only') {
+              await SecurePhoneWidgetPreferenceStore().write(
+                const PhoneWidgetPreferences(selectedIds: []),
+              );
+            } else if (saved == 'ring') {
+              await SecureWatchRingPreferenceStore().write(
+                const WatchRingPreferences(selectedIds: []),
+              );
+            } else {
+              // The report's 40% Cursor Models pool crosses the saved rule.
+              await SecureAlertThresholdPreferenceStore().write(
+                AlertThresholdPreferences(
+                  connections: {
+                    id.storageKey: const ConnectionAlertThresholds(
+                      plan: AlertPercentThreshold(at: 30),
+                    ),
+                  },
+                ),
+              );
+            }
+          }
+
+          final messenger =
+              TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+          messenger.setMockMethodCallHandler(
+            const MethodChannel('app.wardpulse/widget_publication'),
+            (call) async {
+              calls.add(call.method);
+              final arguments =
+                  call.arguments as Map<Object?, Object?>? ?? const {};
+              switch (call.method) {
+                case 'beginLoad':
+                  return {
+                    'load': load + probes++,
+                    'settingsRevision': writing ? null : settled,
+                    'observed': 0,
+                    'established': true,
+                  };
+                case 'accept':
+                  return true;
+                case 'issue':
+                  if (writing ||
+                      arguments['load'] != load ||
+                      arguments['settingsRevision'] != settled) {
+                    refusedFrames.add(arguments);
+                    return null;
+                  }
+                  issued.add(arguments);
+                  return issued.length;
+                case 'publish':
+                  capture.widgetData.addAll(
+                    Map<String, Object?>.from(arguments),
+                  );
+                  return true;
+              }
+              throw MissingPluginException();
+            },
+          );
+          messenger.setMockMethodCallHandler(
+            const MethodChannel('app.wardpulse/watch_sync'),
+            (call) async {
+              if (call.method != 'syncWatchSummary') {
+                throw MissingPluginException();
+              }
+              final arguments = call.arguments as Map<Object?, Object?>;
+              arrived.add(arguments);
+              if (arrived.length == 1) {
+                // The save begins after the report's settings were read and
+                // before native admits its summary.
+                if (saved != 'launcher-only') watchFloor = 3;
+                if (inFlight) {
+                  writing = true;
+                } else {
+                  await write();
+                  settled = 3;
+                }
+              }
+              final revision = arguments['settingsRevision'] as int;
+              if (arguments['load'] != load ||
+                  revision < watchFloor ||
+                  revision > settled) {
+                throw PlatformException(code: 'watch_summary_superseded');
+              }
+              admitted.add(arguments);
+              return null;
+            },
+          );
+          // The surface binding above detaches both handlers after the test.
+
+          var waits = 0;
+          final failures = <(String, Object)>[];
+          await providerSyncOnce(
+            load:
+                (owner) => loadProviderSyncWork(
+                  owner,
+                  createLive:
+                      () => PhoneLiveBindings.create(
+                        secureStorage: secure,
+                        cachePlatform: bridge.platform('worker'),
+                        cursorClient: CursorPlanClient(
+                          http: ProviderReportingHttp(
+                            transport: const _CursorPlanTransport(40),
+                          ),
+                        ),
+                      ),
+                  readWindows: (_) => const [],
+                  // The save in flight settles revision 4 during the wait.
+                  awaitSettingsSave: () async {
+                    waits++;
+                    await write();
+                    writing = false;
+                    settled = 4;
+                  },
+                ),
+            logFailure: (step, error, _) => failures.add((step, error)),
+          );
+
+          final revision = inFlight ? 4 : 3;
+          expect(failures, isEmpty);
+          expect(waits, inFlight ? 1 : 0);
+          // The claim, then one probe per refusal; a save in flight is read
+          // again once it settles.
+          final probed =
+              (saved == 'launcher-only' ? 2 : 3) + (inFlight ? 1 : 0);
+          expect(calls.where((call) => call == 'beginLoad'), hasLength(probed));
+          // A launcher-only save leaves the summary's authority alone; any
+          // other is rebuilt with the saved settings.
+          expect(arrived.first['settingsRevision'], 2);
+          expect(admitted.single['load'], load);
+          expect(
+            admitted.single['settingsRevision'],
+            saved == 'launcher-only' ? 2 : revision,
+          );
+          expect(arrived, hasLength(saved == 'launcher-only' ? 1 : 2));
+          final summary = admitted.single['payload'] as String;
+          expect(
+            _watchUsage(jsonDecode(summary) as Map<String, dynamic>),
+            saved == 'ring' ? isEmpty : {cursorOwnPoolId: 40},
+          );
+          // Only a summary rebuilt with the saved alert rules carries alerts.
+          final claimed = arrived.first['payload'] as String;
+          expect((jsonDecode(claimed) as Map)['alerts'], isEmpty);
+          expect(
+            (jsonDecode(summary) as Map)['alerts'],
+            saved == 'alert-rule'
+                ? [containsPair('severity', 'warning')]
+                : isEmpty,
+          );
+          // Every save retires the claim's frame; it is rebuilt once.
+          expect(refusedFrames.single['settingsRevision'], 2);
+          expect(issued.single['load'], load);
+          expect(issued.single['settingsRevision'], revision);
+          expect(
+            capture.widgetData['row_count'],
+            saved == 'launcher-only' ? 0 : 1,
+          );
+          expect(capture.redraws, hasLength(1));
+        },
+      );
+    }
     for (final change in ['kept', 'removed', 'replaced']) {
       final effect = change == 'kept' ? 'marks rows STALE' : 'skips STALE';
       test('late Live failure with $change credentials $effect', () async {
@@ -3535,6 +3974,7 @@ const _orderingMethods = {
   'issue',
   'beginSettingsWrite',
   'finishSettingsWrite',
+  'watchSummaryEstablished',
 };
 
 List<String> _bindSurfaces({

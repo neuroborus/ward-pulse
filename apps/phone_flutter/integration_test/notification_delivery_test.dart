@@ -1147,6 +1147,10 @@ final class _NoWatch implements WatchSyncService {
   @override
   void unbindWatchRefreshListener() {}
   @override
+  Future<bool> isEstablished() async => true;
+  @override
+  Future<void> resume() async {}
+  @override
   Future<void> sync(
     DashboardSnapshot snapshot,
     WatchRingPreferences ringPreferences, {

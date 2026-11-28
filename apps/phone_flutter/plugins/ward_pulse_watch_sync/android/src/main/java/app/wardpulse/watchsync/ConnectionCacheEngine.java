@@ -70,18 +70,30 @@ public final class ConnectionCacheEngine {
     // Watch summaries by arrival: the newest reserved and the newest sent.
     private long watchSummaryReserved;
     private long watchSummarySent;
+    // In memory only: a new process, or an item an orphaned put overwrote, reasserts its desired summary.
+    private long watchSummaryAcknowledged;
+    // Watch tickets issued for an accepted load, by order: the load and settings revision the
+    // summary was built from, kept until a newer desired item is durably confirmed. A ticket
+    // without one, such as a reconstruction or a desired item from before process death, orders
+    // by arrival alone; the desired item's durable settings retirement covers process death.
+    private final Map<Long, WatchAuthority> watchAuthorities = new HashMap<>();
     private long automaticSamples;
     // Surface publication order. Load ordinals order replacement of the shared
-    // accepted snapshot; each surface orders its own publications. Widget and
-    // alert-rule saves advance the settings revision, retiring every read
-    // tagged before them.
+    // accepted snapshot; each surface orders its own publications. Widget, ring
+    // and alert-rule saves advance the settings revision, retiring every launcher
+    // read tagged before them. Watch input holds unless a save that may change it began.
     private long snapshotLoads;
     private long acceptedSnapshotLoad;
     private long widgetIssued;
     private WidgetTicket widgetPending;
     private WidgetDelivery widgetDelivery;
-    private final Map<String, String> surfaceSettingsWrites = new HashMap<>();
+    private final Map<String, SettingsWrite> surfaceSettingsWrites = new HashMap<>();
     private long surfaceSettingsRevision;
+    // The newest settled revision, and the revision at which the last save that may change the
+    // watch summary's content began or, its outcome unknown, was detached. Watch input built
+    // under a settled revision at or after that floor still holds.
+    private long surfaceSettingsSettled;
+    private long watchSettingsFloor;
 
     public ConnectionCacheEngine(Backend backend) { this(backend, System::currentTimeMillis); }
     public ConnectionCacheEngine(Backend backend, LongSupplier clock) { this(backend, new MemoryBackend(), clock, true); }
@@ -223,6 +235,18 @@ public final class ConnectionCacheEngine {
         Long generation = modeGeneration();
         if (generation == null || generation != 0L) return null;
         return beginOperation();
+    }
+    /**
+     * A v10 tap names its summary's install and generation. Only the current owner may refresh;
+     * a tap from a retired generation, a Demo tap after the return to Live included, resends.
+     */
+    public synchronized Map<String, Object> captureWatchRefresh(String installId, long generation) {
+        Map<String, String> record = modeRecord();
+        if (record == null || !modeSwitches.isEmpty() || !record.get("installId").equals(installId)
+                || generation != Long.parseLong(record.get("generation"))) return null;
+        Map<String, Object> operation = beginOperation();
+        operation.put("ordered", true);
+        return operation;
     }
     public synchronized boolean operationCurrent(long generation) {
         return modeSwitches.isEmpty() && generationCurrent(generation);
@@ -595,10 +619,65 @@ public final class ConnectionCacheEngine {
     public synchronized long reserveWatchSummary() {
         return ++watchSummaryReserved;
     }
+    /** Allocates above [floor], the newest order this install published before process death. */
+    public synchronized long reserveWatchSummary(long floor) {
+        watchSummaryReserved = Math.max(watchSummaryReserved, floor);
+        return reserveWatchSummary();
+    }
+    /**
+     * A watch ticket above [floor] for a summary built from the accepted [load] under the settled
+     * [settingsRevision], or null when a newer load was accepted, a save that may change the
+     * summary's content began after the revision or the mode generation changed. Launcher-only
+     * saves, in flight or settled, keep the revision's authority. The accepted load takes fresh
+     * tickets for the same snapshot without loading again. A null [load] carries no surface
+     * authority.
+     */
+    public synchronized Long issueWatchSummary(long floor, Long load, Long generation, Long settingsRevision) {
+        if (load == null) return reserveWatchSummary(floor);
+        if (settingsRevision == null || load != acceptedSnapshotLoad
+                || !surfaceCurrent(generation, null, null) || !watchSettingsCurrent(settingsRevision)) {
+            return null;
+        }
+        long ticket = reserveWatchSummary(floor);
+        watchAuthorities.put(ticket, new WatchAuthority(load, settingsRevision));
+        return ticket;
+    }
+    /** Whether the accepted load and settings revision [sequence] was issued against still hold. */
+    public synchronized boolean watchSummaryCurrent(long sequence) {
+        WatchAuthority authority = watchAuthorities.get(sequence);
+        return authority == null || authority.load == acceptedSnapshotLoad
+            && watchSettingsCurrent(authority.settingsRevision);
+    }
     /** Whether [ticket] may still be sent; a later arrival that was already sent supersedes it. */
     public synchronized boolean claimWatchSummary(long ticket) {
         if (ticket <= watchSummarySent) return false;
         watchSummarySent = ticket;
+        return true;
+    }
+    /**
+     * Runs [commit], the durable write of desired publication [sequence], only while the load
+     * and settings it was issued against still hold, so a settings save orders before the write
+     * (which it then refuses) or after it (when its durable retirement marks the written item).
+     * Null when superseded. A confirmed write releases older authorities; a failed one keeps the
+     * still-desired item's.
+     */
+    public synchronized Boolean commitWatchSummary(long sequence, BooleanSupplier commit) {
+        if (!watchSummaryCurrent(sequence)) return null;
+        boolean committed = commit.getAsBoolean();
+        if (committed) watchAuthorities.keySet().removeIf(ticket -> ticket < sequence);
+        return committed;
+    }
+    /**
+     * Whether desired publication [sequence], already built, is still valid input for a newer
+     * accepted load that does not publish: its settings revision still holds. The accepted load
+     * then adopts it, so its outstanding or reasserted put is not retired as an older load's.
+     * Only the authority to start a put follows the load ({@link #watchSummaryCurrent}).
+     */
+    public synchronized boolean watchSummaryEstablished(long sequence) {
+        WatchAuthority authority = watchAuthorities.get(sequence);
+        if (authority == null) return true;
+        if (!watchSettingsCurrent(authority.settingsRevision)) return false;
+        authority.load = acceptedSnapshotLoad;
         return true;
     }
     public synchronized Boolean admitWatchSummary(long ticket, Map<String, Map<String, String>> versions) {
@@ -608,13 +687,59 @@ public final class ConnectionCacheEngine {
      * Admits the send of [ticket] in the same step that proves its report or failure selection,
      * as {@link #validAll} would, so a credential retirement or cache write in this mode
      * generation orders before or after the send. Null [versions] carry no selection proof,
-     * leaving arrival order alone; null means the proof is stale, and consumes no ticket.
+     * leaving arrival order alone; null means the proof, or the load and settings [ticket] was
+     * issued against ({@link #watchSummaryCurrent}), is stale, and consumes no ticket.
      */
     public synchronized Boolean admitWatchSummary(long ticket, Map<String, Map<String, String>> versions,
             Map<String, Long> attemptClockEras, Map<String, ? extends Map<String, ?>> payloadOrders,
             Map<String, String> emptyCacheOrders) {
+        if (!watchSummaryCurrent(ticket)) return null;
         if (versions != null && !validAll(versions, attemptClockEras, payloadOrders, emptyCacheOrders)) return null;
         return claimWatchSummary(ticket);
+    }
+    /**
+     * Whether the durable mode record owes Wear an empty current-generation summary in place of
+     * the desired publication [installId, generation]; null fields mean none or a v9-only one.
+     * Without a v10 publication, generation 0 is an initial Live upgrade, which Dart seeds from
+     * retained input; any later generation followed a committed transition.
+     */
+    public synchronized boolean watchPublicationOwed(String installId, Long generation) {
+        Map<String, String> record = modeRecord();
+        if (record == null || !modeSwitches.isEmpty()) return false;
+        long current = Long.parseLong(record.get("generation"));
+        if (installId == null) return current > 0L;
+        return !installId.equals(record.get("installId")) || generation == null || generation != current;
+    }
+    /**
+     * Leases the actual put of desired publication [sequence], ordered against mode commits as
+     * any send effect is, after proving its install, generation, selection, accepted load and
+     * settings revision again. Null while a switch drains, or when a commit, a newer accepted
+     * load or a settings save retired it or its selection proof expired. A v9-only publication
+     * predates the record and stays current until the first transition; with no record there is
+     * nothing to order against, so its lease is empty.
+     */
+    public synchronized String enterWatchSend(String owner, long sequence, String installId, Long generation,
+            Map<String, Map<String, String>> versions, Map<String, Long> attemptClockEras,
+            Map<String, ? extends Map<String, ?>> payloadOrders, Map<String, String> emptyCacheOrders) {
+        if (!watchSummaryCurrent(sequence)) return null;
+        if (versions != null && !validAll(versions, attemptClockEras, payloadOrders, emptyCacheOrders)) return null;
+        Map<String, String> record = modeRecord();
+        if (installId == null) {
+            if (record == null) return "";
+            return "0".equals(record.get("generation")) ? enterEffect(owner, 0L) : null;
+        }
+        if (record == null || generation == null || !installId.equals(record.get("installId"))) return null;
+        return enterEffect(owner, generation);
+    }
+    public synchronized boolean watchSummaryAcknowledged(long sequence) {
+        return sequence == watchSummaryAcknowledged;
+    }
+    public synchronized void acknowledgeWatchSummary(long sequence) {
+        watchSummaryAcknowledged = sequence;
+    }
+    /** Forgets the acknowledgement of [sequence] once its item was found overwritten. */
+    public synchronized void reassertWatchSummary(long sequence) {
+        if (watchSummaryAcknowledged == sequence) watchSummaryAcknowledged = 0L;
     }
     private void persistAutomaticAnchor(String connection, Map<String, String> state, long anchor) {
         Map<String, String> all = readAll();
@@ -947,18 +1072,34 @@ public final class ConnectionCacheEngine {
         return recoveryPreferenceWrites.isEmpty() && recoveryPreferenceRevision == revision && liveCurrent(generation);
     }
     public synchronized String beginSurfaceSettingsWrite(String owner) {
+        return beginSurfaceSettingsWrite(owner, true);
+    }
+    /**
+     * Begins a settings save, retiring every launcher read tagged before it. One that leaves the
+     * watch summary's content alone ([watch] false) keeps the authority of watch input built
+     * under any revision since the last save that may change it, in flight and once it settles.
+     */
+    public synchronized String beginSurfaceSettingsWrite(String owner, boolean watch) {
         String token = unique();
-        surfaceSettingsWrites.put(token, owner);
+        surfaceSettingsWrites.put(token, new SettingsWrite(owner, watch));
         surfaceSettingsRevision++;
+        if (watch) watchSettingsFloor = surfaceSettingsRevision;
         return token;
     }
     /** The settled revision after this save, or null while another save is in flight. */
     public synchronized Long finishSurfaceSettingsWrite(String owner, String token) {
-        if (owner.equals(surfaceSettingsWrites.get(token))) {
+        SettingsWrite write = surfaceSettingsWrites.get(token);
+        if (write != null && write.owner.equals(owner)) {
             surfaceSettingsWrites.remove(token);
             surfaceSettingsRevision++;
         }
-        return surfaceSettingsWrites.isEmpty() ? surfaceSettingsRevision : null;
+        if (!surfaceSettingsWrites.isEmpty()) return null;
+        surfaceSettingsSettled = surfaceSettingsRevision;
+        return surfaceSettingsRevision;
+    }
+    /** Whether watch input built under settled [settingsRevision] still holds; launcher-only saves keep it. */
+    private boolean watchSettingsCurrent(long settingsRevision) {
+        return settingsRevision >= watchSettingsFloor && settingsRevision <= surfaceSettingsSettled;
     }
     /**
      * Starts a load before it reads settings or provider data: its ordinal, the settled settings
@@ -1079,7 +1220,14 @@ public final class ConnectionCacheEngine {
     public synchronized void detach(String owner) {
         // A detached engine's save can no longer finish; its outcome is unknown.
         if (recoveryPreferenceWrites.values().removeIf(owner::equals)) recoveryPreferenceRevision++;
-        if (surfaceSettingsWrites.values().removeIf(owner::equals)) surfaceSettingsRevision++;
+        // Only one that may change the watch summary's content retires watch input.
+        boolean watch = surfaceSettingsWrites.values().stream()
+            .anyMatch(write -> write.owner.equals(owner) && write.watch);
+        if (surfaceSettingsWrites.values().removeIf(write -> write.owner.equals(owner))) {
+            surfaceSettingsRevision++;
+            if (watch) watchSettingsFloor = surfaceSettingsRevision;
+            if (surfaceSettingsWrites.isEmpty()) surfaceSettingsSettled = surfaceSettingsRevision;
+        }
         // A detached engine can no longer commit its pending ticket.
         if (widgetPending != null && widgetPending.owner.equals(owner)) widgetPending = null;
         modeAdmissions.removeIf(request -> request.owner.equals(owner));
@@ -1424,6 +1572,14 @@ public final class ConnectionCacheEngine {
         }
     }
 
+    /** A settings save in flight: its engine, and whether it may change watch content. */
+    private static final class SettingsWrite {
+        final String owner;
+        final boolean watch;
+        SettingsWrite(String owner, boolean watch) {
+            this.owner = owner; this.watch = watch;
+        }
+    }
     private static final class ModeLease {
         final String owner;
         final long generation;
@@ -1475,6 +1631,13 @@ public final class ConnectionCacheEngine {
             this.owner = owner; this.ticket = ticket; this.load = load; this.generation = generation;
             this.settingsRevision = settingsRevision; this.selection = selection;
         }
+    }
+    /** The accepted load and settings revision a watch ticket was issued against. */
+    private static final class WatchAuthority {
+        // A newer accepted load that finds the published summary still valid adopts it.
+        long load;
+        final long settingsRevision;
+        WatchAuthority(long load, long settingsRevision) { this.load = load; this.settingsRevision = settingsRevision; }
     }
     /** The authority committed launcher rows need for each widget's first delivery. */
     private static final class WidgetDelivery {

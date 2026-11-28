@@ -14,7 +14,8 @@ internal class ConnectionCacheChannel(context: Context, messenger: BinaryMesseng
     private val owner = UUID.randomUUID().toString()
     private val main = Handler(Looper.getMainLooper())
     private val channel = MethodChannel(messenger, "app.wardpulse/connection_cache")
-    private val engine = engine(context.applicationContext)
+    private val appContext = context.applicationContext
+    private val engine = engine(appContext)
     private var attached = true
     init { channel.setMethodCallHandler(this) }
 
@@ -114,7 +115,13 @@ internal class ConnectionCacheChannel(context: Context, messenger: BinaryMesseng
                 deliver(result, null)
             }
             "switchMode" -> engine.switchMode(owner, call.argument<String>("mode") ?: error("Mode required."),
-                { value -> deliver(result, value) }, { error ->
+                { value ->
+                    deliver(result, value)
+                    // The committed mode replaces the outgoing summary before any new publication.
+                    main.post { WatchPublisher.process.reconcile(appContext) }
+                }, { error ->
+                    // A put held while the switch drained resumes under the unchanged record.
+                    main.post { WatchPublisher.process.reconcile(appContext) }
                     if (error is ConnectionCacheEngine.ModeWriteFailure) {
                         main.post {
                             if (attached) result.error("data_mode_write_failed", "Could not save data mode.",
@@ -168,9 +175,19 @@ internal class ConnectionCacheChannel(context: Context, messenger: BinaryMesseng
             return ConnectionCacheEngine(backend(context, "wardpulse.connection-cache.v1"),
                 backend(context, "wardpulse.data-mode.v1"), { System.currentTimeMillis() }, mockAllowed).also { shared = it }
         }
-        fun captureLegacyWatchRefresh(context: Context, payload: ByteArray?, captured: (Map<String, Any>?) -> Unit) {
+        /** An empty tap follows the legacy rule; a v10 body must name the current owner. */
+        fun captureWatchRefresh(context: Context, payload: ByteArray?, captured: (Map<String, Any>?) -> Unit) {
             executor.execute {
-                val operation = runCatching { engine(context.applicationContext).captureLegacyWatchRefresh(payload) }.getOrNull()
+                val operation = runCatching {
+                    val engine = engine(context.applicationContext)
+                    if (payload == null || payload.isEmpty()) {
+                        engine.captureLegacyWatchRefresh(payload)
+                    } else {
+                        orderedRefresh(payload)?.let { (installId, generation) ->
+                            engine.captureWatchRefresh(installId, generation)
+                        }
+                    }
+                }.getOrNull()
                 Handler(Looper.getMainLooper()).post { captured(operation) }
             }
         }

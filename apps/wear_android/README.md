@@ -16,15 +16,37 @@ versioned `WatchDashboardSummary` payload and persists only the latest successfu
   prompt. It is a separate swipe-back route; the app still has two home pages.
 - Local storage of the latest watch summary.
 - Wear-specific navigation, rotary input, shape-aware layouts, and stale data states.
-- Wear Data Layer receiver for `/wardpulse/watch-summary`.
-- Wear → phone refresh request on `/wardpulse/refresh-request`.
+- Wear Data Layer receiver for `/wardpulse/watch-summary`. Data events and phone reconnects
+  (the `wardpulse_phone` capability) are only signals: each resolves a connected route afresh,
+  keeping a reachable bound phone, and rereads its item. A v10 `summary` must match the closed
+  contract exactly, as one complete strict JSON document, and is accepted only for a route
+  verified by a fresh nonce reply on `/wardpulse/summary-owner`. The request names only the
+  install, generation and sequence Wear already stores from that phone, or is the bare nonce
+  without one, and an accepted v10 commit names its new order in a further request, so the
+  phone records that Wear has left the previous mode, and stops owing the empty fallback, only
+  once Wear stores an item of that generation. Resolutions
+  are ordered by when they start: the newest one to need a proof, or to find its route
+  invalid, retires older proofs, an older read returning late retires nothing, and each
+  commit, v10 or v9, rereads the exact item and then refuses a route that no longer resolves to the proven phone, even while
+  its item stays cached, or whose unbound resolution already reads a replacement, which
+  answers in its own attempt. A present but malformed v10 value is refused, and the v9 `payload` is
+  read only where v10 is absent and the route never established it. A failed store commit is
+  rolled back, so the confirmed record stays rendered and the same item retries. A restart renders the stored summary; an unchanged
+  item causes no request or write, except that a reconnect revalidates it without writing.
+  Each accepted write, by the listener or the app's start-up check, logs the single
+  `WardPulseSync` receipt; an unchanged item logs nothing, and other outcomes log on
+  `WardPulseWatch`.
+- Wear → phone refresh request on `/wardpulse/refresh-request`: the accepted install and
+  generation for a v10 binding, the legacy empty message for a v9-only one. A Glance tap uses
+  the binding read together with the rendered summary.
 - Ring + strip `RANGED_VALUE` complication data sources for the WardPulse watch face
   (family ColorRamp accents; credits only on the matching provider strip).
 
 Provider credentials are never entered or stored on the watch.
 The app shows a neutral sync prompt until the first valid phone summary arrives; it never creates
-mock state on its own. Mock summaries are accepted only when explicitly marked by a debug phone
-build, and release Wear builds reject them.
+mock state on its own. Product Demo summaries show "Demo data". Mock summaries are accepted only
+when explicitly marked by a debug phone build, show "Mock data", and release Wear builds reject
+them.
 The app marks a summary stale when the phone reports stale data or its generation time is at
 least two hours old, twice the longest planned MVP polling interval.
 The phone's `isStale` describes the selected rings and their displayed credits, or standalone

@@ -2264,6 +2264,55 @@ void main() {
     expect(find.text('Watch summary queued'), findsOneWidget);
   });
 
+  testWidgets('Settings sync reports a superseded send whose retry fails', (
+    tester,
+  ) async {
+    final snapshot = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final watchSyncService = _FakeWatchSyncService();
+
+    await tester.pumpWidget(
+      WardPulseApp(
+        repository: ValueDashboardRepository(snapshot),
+        watchSyncService: watchSyncService,
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Send to watch'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -160));
+    await tester.pumpAndSettle();
+
+    // A save outruns the explicit send; its retry then finds the watch
+    // unavailable, which is not a queued summary.
+    var superseded = false;
+    watchSyncService.beforeSync = () async {
+      if (superseded) {
+        watchSyncService.fail = true;
+        return;
+      }
+      superseded = true;
+      throw const WatchSummarySuperseded();
+    };
+    final resumes = watchSyncService.resumes;
+    await tester.tap(find.widgetWithText(FilledButton, 'Sync'));
+    await tester.pumpAndSettle();
+
+    expect(superseded, isTrue);
+    expect(watchSyncService.syncedSnapshots, [snapshot, snapshot]);
+    expect(find.text('Watch summary queued'), findsNothing);
+    expect(find.text('Watch sync unavailable'), findsOneWidget);
+    // Explicit sync still resumes pending or owed native publication.
+    expect(watchSyncService.resumes, greaterThan(resumes));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Settings sync reports invalid saved capacity without queuing', (
     tester,
   ) async {
@@ -2279,10 +2328,15 @@ void main() {
         _MemoryWatchRingStore()
           ..value = const WatchRingPreferences(selectedIds: ids);
     final published = <String>[];
+    var resumes = 0;
     const channel = MethodChannel('app.wardpulse/watch_sync');
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'resumeWatchSummary') {
+        resumes++;
+        return null;
+      }
       expect(call.method, 'syncWatchSummary');
       published.add((call.arguments as Map)['payload'] as String);
       return null;
@@ -2299,6 +2353,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(published, isEmpty);
+    // Without a replacement, native pending or owed publication resumes.
+    expect(resumes, isPositive);
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
@@ -2308,6 +2364,7 @@ void main() {
     );
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -160));
     await tester.pumpAndSettle();
+    final resumesBeforeTap = resumes;
     await tester.tap(find.widgetWithText(FilledButton, 'Sync'));
     await tester.pumpAndSettle();
 
@@ -2322,9 +2379,93 @@ void main() {
     );
     expect(find.text('Watch summary queued'), findsNothing);
     expect(published, isEmpty);
+    // The tap itself resumes pending or owed native publication.
+    expect(resumes, greaterThan(resumesBeforeTap));
     expect(store.value.selectedIds, ids);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'a superseded Settings Sync whose retry finds invalid choices is not queued',
+    (tester) async {
+      final store =
+          _MemoryWatchRingStore()
+            ..value = const WatchRingPreferences(
+              selectedIds: [codexPlanRingId, cursorOwnPoolId],
+            );
+      final watch = _FakeWatchSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: ValueDashboardRepository(
+            _threePairDashboard(fableUsed: null),
+          ),
+          watchRingPreferenceStore: store,
+          watchSyncService: watch,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final synced = watch.syncedSnapshots.length;
+      expect(synced, isPositive);
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Send to watch'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -160));
+      await tester.pumpAndSettle();
+
+      final release = Completer<void>();
+      var held = false;
+      watch.beforeSync = () async {
+        watch.beforeSync = null;
+        held = true;
+        await release.future;
+        // A newer load was accepted meanwhile, so native refuses this one.
+        throw const WatchSummarySuperseded();
+      };
+      await tester.tap(find.widgetWithText(FilledButton, 'Sync'));
+      await tester.pump();
+      await tester.pump();
+      expect(held, isTrue);
+      // Choices saved outside this engine exceed capacity; the newer load
+      // reads them, and the retry answers from its acceptance.
+      store.value = const WatchRingPreferences(
+        selectedIds: [
+          codexPlanRingId,
+          codexSparkRingId,
+          cursorOwnPoolId,
+          cursorOtherPoolId,
+          claudePlanRingId,
+          claudeFableRingId,
+        ],
+      );
+      unawaited(
+        tester
+            .state<RefreshIndicatorState>(
+              find.descendant(
+                of: find.byType(SettingsScreen),
+                matching: find.byType(RefreshIndicator),
+              ),
+            )
+            .show(),
+      );
+      for (var frame = 0; frame < 20; frame++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      final resumes = watch.resumes;
+      release.complete();
+      await tester.pumpAndSettle();
+
+      // No summary was handed over, so none is reported as queued.
+      expect(watch.syncedSnapshots, hasLength(synced));
+      expect(find.text('Watch summary queued'), findsNothing);
+      // Pending or owed native publication still resumes.
+      expect(watch.resumes, greaterThan(resumes));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('Settings shows systemic sections without Watch display', (
     tester,
@@ -3196,7 +3337,13 @@ void main() {
         store.value.forConnection(ProviderConnections.codexPlan).plan.at,
         70,
       );
-      expect(repository.loads, 1);
+      // The retired acceptance hands both surfaces to retained input, whose
+      // bounded cache-only reads stay retired too; no provider poll follows.
+      expect(repository.loads, greaterThan(1));
+      expect(repository.loads, lessThanOrEqualTo(1 + 2 * 3));
+      expect(repository.cacheOnlyLoads.first, isFalse);
+      expect(repository.cacheOnlyLoads.skip(1), everyElement(isTrue));
+      expect(repository.livePolls, hasLength(1));
       expect(tester.takeException(), isNull);
     },
   );
@@ -3274,6 +3421,209 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  // Under a native authority the save itself retires both surfaces, so its
+  // early exits still owe a replacement from the current retained input.
+  for (final exit in ['no acceptance', 'unconfirmed ownership']) {
+    testWidgets(
+      'an alert-rule save under a native authority with $exit republishes both surfaces',
+      (tester) async {
+        final source = _alertTestSnapshot();
+        final repository = _PublicationRepository(source);
+        final watch = _FakeWatchSyncService();
+        final revisions = <int?>[];
+        watch.onSync = (_) {
+          revisions.add(PhoneWidgetPublicationInput.current?.settingsRevision);
+        };
+        final launcher = _FakePhoneWidgetSyncService()..settingsRevision = 0;
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            alertThresholdStore: _MemoryAlertThresholdStore(),
+            watchSyncService: watch,
+            phoneWidgetSyncService: launcher,
+            applyAlertSettings: (snapshot, _) => snapshot,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(watch.syncedSnapshots, [source]);
+        expect(launcher.syncedSnapshots, [source]);
+        await tester.tap(find.text('Providers'));
+        await tester.pumpAndSettle();
+        if (exit == 'no acceptance') {
+          // An offline refresh fails and leaves the Dashboard no acceptance;
+          // the cache still holds the report.
+          repository.failPolling = true;
+          await tester.tap(find.byTooltip('Refresh'));
+          await tester.pumpAndSettle();
+        } else {
+          // The save's own ownership check cannot complete.
+          repository.beforeValidation = () {
+            repository.beforeValidation = null;
+            throw StateError('Ownership unavailable');
+          };
+        }
+        final polls = repository.livePolls.length;
+        await tester
+            .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+            .onAlertThresholdsChanged(
+              (current) => current.withConnection(
+                ProviderConnections.codexPlan,
+                const ConnectionAlertThresholds(
+                  plan: AlertPercentThreshold(at: 70),
+                ),
+              ),
+            );
+        await tester.pumpAndSettle();
+
+        // One cache-only retained read replaces both under the settled
+        // revision, without a provider poll.
+        expect(launcher.settingsRevision, 1);
+        expect(watch.syncedSnapshots, [source, source]);
+        expect(revisions.last, 1);
+        expect(launcher.syncedSnapshots, [source, source]);
+        expect(launcher.syncedInputs.last?.settingsRevision, 1);
+        expect(repository.cacheOnlyLoads.last, isTrue);
+        expect(repository.livePolls, hasLength(polls));
+        expect(
+          tester
+              .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+              .alertThresholds!
+              .forConnection(ProviderConnections.codexPlan)
+              .plan
+              .at,
+          70,
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'an alert-rule save whose acceptance a failed refresh clears republishes both surfaces',
+    (tester) async {
+      final source = _alertTestSnapshot();
+      final repository = _PublicationRepository(source);
+      final store = _DelayedAlertThresholdStore();
+      final watch = _FakeWatchSyncService();
+      final revisions = <int?>[];
+      watch.onSync = (_) {
+        revisions.add(PhoneWidgetPublicationInput.current?.settingsRevision);
+      };
+      final launcher = _FakePhoneWidgetSyncService()..settingsRevision = 0;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          alertThresholdStore: store,
+          watchSyncService: watch,
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots, [source]);
+      expect(launcher.syncedSnapshots, [source]);
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      // An offline refresh is still fetching when the save starts.
+      final refresh = Completer<DashboardSnapshot>();
+      repository.response = refresh.future;
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pump();
+      final save = tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onAlertThresholdsChanged(
+            (current) => current.withConnection(
+              ProviderConnections.codexPlan,
+              const ConnectionAlertThresholds(
+                plan: AlertPercentThreshold(at: 70),
+              ),
+            ),
+          );
+      await tester.pump();
+      expect(store.started, isTrue);
+      // The fetch fails during the write and clears the acceptance, while
+      // the cache still holds the report.
+      refresh.completeError(const DashboardLoadException());
+      repository.response = null;
+      await tester.pumpAndSettle();
+      final loads = repository.loads;
+      final polls = repository.livePolls.length;
+      store.release.complete();
+      await save;
+      await tester.pumpAndSettle();
+
+      // One cache-only retained read replaces both under the settled
+      // revision, without a provider poll.
+      expect(launcher.settingsRevision, 1);
+      expect(watch.syncedSnapshots, [source, source]);
+      expect(revisions.last, 1);
+      expect(launcher.syncedSnapshots, [source, source]);
+      expect(launcher.syncedInputs.last?.settingsRevision, 1);
+      expect(repository.loads, loads + 1);
+      expect(repository.cacheOnlyLoads.last, isTrue);
+      expect(repository.livePolls, hasLength(polls));
+      expect(
+        store.value.forConnection(ProviderConnections.codexPlan).plan.at,
+        70,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'an alert-rule save over a retired source with unread ring choices republishes the launcher',
+    (tester) async {
+      final source = _alertTestSnapshot();
+      final retained = _alertTestSnapshot(windowLabel: 'Retained');
+      final repository = _PublicationRepository(source);
+      final watch = _FakeWatchSyncService();
+      // The saved ring choices cannot be read, so no watch summary builds.
+      final rings = _MemoryWatchRingStore();
+      rings.beforeRead = () async => throw StateError('Storage unavailable');
+      final launcher = _FakePhoneWidgetSyncService()..settingsRevision = 0;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          alertThresholdStore: _MemoryAlertThresholdStore(),
+          watchSyncService: watch,
+          watchRingPreferenceStore: rings,
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots, isEmpty);
+      expect(launcher.syncedSnapshots, [source]);
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      // Work elsewhere retired the accepted report; the cache holds another.
+      repository.retired = source;
+      repository.snapshot = retained;
+      final polls = repository.livePolls.length;
+      await tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onAlertThresholdsChanged(
+            (current) => current.withConnection(
+              ProviderConnections.codexPlan,
+              const ConnectionAlertThresholds(
+                plan: AlertPercentThreshold(at: 70),
+              ),
+            ),
+          );
+      await tester.pumpAndSettle();
+
+      // The acceptance can no longer publish, so the launcher frame the save
+      // retired is republished once from retained input under its revision.
+      expect(launcher.settingsRevision, 1);
+      expect(launcher.syncedSnapshots, [source, retained]);
+      expect(launcher.syncedInputs.last?.settingsRevision, 1);
+      expect(watch.syncedSnapshots, isEmpty);
+      expect(repository.cacheOnlyLoads.last, isTrue);
+      expect(repository.livePolls, hasLength(polls));
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'Watchface composes overlapping picker saves across tab replacement',
@@ -3901,7 +4251,12 @@ void main() {
       rejectEditedCap = true;
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
-      expect(rejectedValidations, 1);
+      // The save's own check rejects the cap; its retained replacement reads
+      // are rejected too, within both surfaces' three-attempt bounds, and
+      // start no provider poll.
+      expect(rejectedValidations, greaterThan(1));
+      expect(rejectedValidations, lessThanOrEqualTo(1 + 2 * 3));
+      expect(polls, hasLength(2));
       expect(rules.writes, 1);
       final saved = rules.value.forConnection(
         ProviderConnections.openAiPlatform,
@@ -4544,13 +4899,22 @@ void main() {
         await tester.ensureVisible(savedChoice);
         await tester.tap(savedChoice);
         await tester.pumpAndSettle();
-        expect(watch.syncedSnapshots, hasLength(1));
+        expect(polls, hasLength(4));
         if (watchFails) {
           expect(rings.writes.single.selectedIds, isEmpty);
+          // The ring save retires the watch item natively. Without a
+          // Dashboard acceptance, the retained reply reads the cache and
+          // publishes the empty choice from its confirmed absence, validated
+          // before its acceptance and again at dispatch.
+          expect(reads, ['manual', 'cache-only']);
+          expect(cacheMissValidations, [1, 1]);
+          expect(watch.syncedSnapshots, hasLength(2));
+          expect(watch.syncedSnapshots.last.accounts, isEmpty);
+          expect(watch.syncedPreferences.last.selectedIds, isEmpty);
+          expect(watch.payload['rings'], isEmpty);
           expect(launcher.syncedSnapshots, hasLength(1));
-          expect(reads, ['manual']);
-          expect(cacheMissValidations, isEmpty);
         } else {
+          expect(watch.syncedSnapshots, hasLength(1));
           expect(widgets.writes.single.selectedIds, isEmpty);
           // Without a Dashboard acceptance, the widget-only retry reads the
           // cache and publishes the empty choice from its confirmed absence,
@@ -4569,15 +4933,15 @@ void main() {
           expect(launcher.payload.rows, isEmpty);
         }
 
-        // The skipped poll publishes the deferred Watch removal; the widget
-        // already holds its empty frame and is not published again.
+        // Each surface already holds its empty choice, so the skipped poll
+        // publishes neither again.
         scheduler.tick();
         await tester.pumpAndSettle();
         expect(polls, hasLength(5));
         expect(polls.last.whollySkipped, isTrue);
         expect(watch.syncedSnapshots, hasLength(watchFails ? 2 : 1));
         expect(launcher.syncedSnapshots, hasLength(watchFails ? 1 : 2));
-        expect(reads, watchFails ? ['manual'] : ['manual', 'cache-only']);
+        expect(reads, ['manual', 'cache-only']);
         if (watchFails) {
           expect(watch.payload['rings'], isEmpty);
         } else {
@@ -5510,9 +5874,16 @@ void main() {
       );
       expect(newer.budget.today, 2500);
       expect(newer.budget.month, isNull);
-      expect(watch.syncedSnapshots, hasLength(2));
-      expect(phoneWidget.syncedSnapshots, hasLength(2));
-      expect(repository.loads, 1);
+      // The rejected acceptance cannot publish the saved rules, so one
+      // retained cache-only read, evaluated with them, replaces both surfaces
+      // without a provider poll.
+      expect(watch.syncedSnapshots, hasLength(3));
+      expect(phoneWidget.syncedSnapshots, hasLength(3));
+      final replacement = watch.syncedSnapshots.last;
+      expect(phoneWidget.syncedSnapshots.last, same(replacement));
+      expect(replacement.toJson(), snapshot.toJson());
+      expect(repository.cacheOnlyLoads, [false, true]);
+      expect(repository.livePolls, hasLength(1));
       await tester.tap(find.text('Dashboard'));
       await tester.pumpAndSettle();
       final block = find.byKey(const ValueKey('source-expenses.reporting-a'));
@@ -9056,6 +9427,1787 @@ void main() {
     );
   }
 
+  // A retired Demo tap reaches Dart as a native resend or as the ordered
+  // operation native captured before Live committed.
+  for (final captured in [false, true]) {
+    testWidgets(
+      'a cold ${captured ? 'captured Demo tap' : 'Demo resend'} after Live commits resends without provider work',
+      (tester) async {
+        final authority = MemoryDataModeAuthority();
+        await authority.switchTo(DataMode.demo);
+        final demo = authority.state;
+        await authority.switchTo(DataMode.live);
+        expect(authority.state.generation, greaterThan(demo.generation));
+        final intent =
+            captured
+                ? WatchRefreshIntent.fromMessage({
+                  'kind': 'refresh',
+                  'installId': demo.installId,
+                  'generation': demo.generation,
+                  'mode': 'demo',
+                  'requestId': 'demo-tap',
+                  'ordered': true,
+                })
+                : const WatchRefreshIntent.resend();
+        final watch =
+            _FakeWatchSyncService()..initialRequest = Future.value(intent);
+        final live = _PublicationRepository(_alertTestSnapshot());
+        final sample = _PublicationRepository(
+          _alertTestSnapshot(windowLabel: 'Sample'),
+        );
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: live,
+            mockRepository: sample,
+            modeAuthority: authority,
+            watchSyncService: watch,
+            applyAlertSettings: (snapshot, _) => snapshot,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(live.livePolls, isEmpty);
+        expect(live.cacheOnlyLoads, everyElement(isTrue));
+        expect(sample.loads, 0);
+        expect(watch.syncedSnapshots, isNotEmpty);
+        expect(watch.syncedSnapshots.last, live.snapshot);
+        expect(watch.mockModes, everyElement(isFalse));
+        expect(authority.state.mode, DataMode.live);
+      },
+    );
+  }
+
+  // Launcher state when the resend's load began: a frame awaiting its first
+  // delivery (observed ticket 3), one every widget holds, or none yet.
+  for (final (frame, observed, awaiting, established) in [
+    ('replaces the launcher frame it retired', 3, true, false),
+    ('leaves an established launcher alone', 3, false, true),
+    ('creates no launcher frame it did not retire', 0, false, false),
+  ]) {
+    testWidgets(
+      'a cold retired-Demo resend over observed launcher ticket $observed $frame',
+      (tester) async {
+        final authority = MemoryDataModeAuthority();
+        await authority.switchTo(DataMode.demo);
+        await authority.switchTo(DataMode.live);
+        final watch =
+            _FakeWatchSyncService()
+              ..initialRequest = Future.value(
+                const WatchRefreshIntent.resend(),
+              );
+        // A headless load may have committed a frame native has not
+        // delivered; accepting the resend's read retires that delivery.
+        final launcher =
+            _FakePhoneWidgetSyncService()
+              ..input = PhoneWidgetPublicationInput(
+                load: 7,
+                settingsRevision: 0,
+                observed: observed,
+                established: established,
+                awaitingDelivery: awaiting,
+              );
+        _answerLauncherAuthority(established: established);
+        final headlessRegistrations = <Duration>[];
+        final live = _PublicationRepository(_alertTestSnapshot());
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: live,
+            modeAuthority: authority,
+            watchSyncService: watch,
+            phoneWidgetPreferenceStore: _MemoryPhoneWidgetStore(),
+            phoneWidgetSyncService: launcher,
+            scheduleHeadlessSync:
+                (interval) async => headlessRegistrations.add(interval),
+            applyAlertSettings: (snapshot, _) => snapshot,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(live.livePolls, isEmpty);
+        expect(live.cacheOnlyLoads, everyElement(isTrue));
+        expect(watch.syncedSnapshots.last, live.snapshot);
+        expect(headlessRegistrations, isEmpty);
+        if (awaiting) {
+          // The same accepted input replaces it, not a newer load.
+          expect(launcher.syncedSnapshots, [live.snapshot]);
+          expect(launcher.syncedInputs.single?.load, 7);
+        } else {
+          expect(launcher.syncedSnapshots, isEmpty);
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'a cold retired-Demo resend with unread alert rules replaces no launcher frame',
+    (tester) async {
+      final authority = MemoryDataModeAuthority();
+      await authority.switchTo(DataMode.demo);
+      await authority.switchTo(DataMode.live);
+      final watch =
+          _FakeWatchSyncService()
+            ..initialRequest = Future.value(const WatchRefreshIntent.resend());
+      // The resend's acceptance retires a frame awaiting its first delivery,
+      // but rows without rules would drop local caps and alerts.
+      final launcher =
+          _FakePhoneWidgetSyncService()
+            ..input = const PhoneWidgetPublicationInput(
+              load: 7,
+              settingsRevision: 0,
+              observed: 3,
+              established: false,
+              awaitingDelivery: true,
+            );
+      _answerLauncherAuthority(established: false);
+      final live = _PublicationRepository(_alertTestSnapshot());
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: authority,
+          watchSyncService: watch,
+          alertThresholdStore: _MemoryAlertThresholdStore()..failRead = true,
+          phoneWidgetPreferenceStore: _MemoryPhoneWidgetStore(),
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(live.livePolls, isEmpty);
+      expect(live.cacheOnlyLoads, isNotEmpty);
+      expect(live.cacheOnlyLoads, everyElement(isTrue));
+      // Both exports wait for a load that reads the rules.
+      expect(launcher.syncedSnapshots, isEmpty);
+      expect(watch.syncedSnapshots, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a warm resume resumes native publication and resends an owed summary',
+    (tester) async {
+      final live = _PublicationRepository(_alertTestSnapshot());
+      final watch = _FakeWatchSyncService()..fail = true;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      // The startup publication failed and stays owed.
+      final attempts = watch.syncedSnapshots.length;
+      expect(attempts, isPositive);
+      final loads = live.loads;
+      watch.fail = false;
+
+      await _notificationLifecycle(tester, AppLifecycleState.paused);
+      await _notificationLifecycle(tester, AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(watch.resumes, 1);
+      expect(watch.syncedSnapshots, hasLength(attempts + 1));
+      expect(watch.syncedSnapshots.last, live.snapshot);
+      expect(live.loads, loads);
+
+      // Once published, a resume only resumes native work.
+      await _notificationLifecycle(tester, AppLifecycleState.paused);
+      await _notificationLifecycle(tester, AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(watch.resumes, 2);
+      expect(watch.syncedSnapshots, hasLength(attempts + 1));
+    },
+  );
+
+  testWidgets(
+    'Settings Sync, a cadence-denied Wear reply and a slot save each publish afresh',
+    (tester) async {
+      final fixture = _asConnection(
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ),
+      );
+      // Inside the manual refresh floor, so a Wear tap cannot poll.
+      final report = DashboardSnapshot.fromJson({
+        ...fixture.toJson(),
+        'generatedAt':
+            DateTime.now()
+                .toUtc()
+                .subtract(const Duration(minutes: 1))
+                .toIso8601String(),
+      });
+      final authority = MemoryDataModeAuthority();
+      final live = _PublicationRepository(report);
+      final watch = _FakeWatchSyncService();
+      final store = _MemoryWatchRingStore();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: authority,
+          watchSyncService: watch,
+          watchRingPreferenceStore: store,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      var sent = watch.syncedSnapshots.length;
+      expect(sent, isPositive);
+      final loads = live.loads;
+      final polls = live.livePolls.length;
+
+      // Each trigger is a separate native submission, so Android allocates a
+      // fresh order above any late headless publication.
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Send to watch'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -160));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Sync'));
+      await tester.pumpAndSettle();
+      expect(find.text('Watch summary queued'), findsOneWidget);
+      expect(watch.syncedSnapshots, hasLength(++sent));
+      expect(watch.syncedSnapshots.last, same(report));
+      expect(watch.resumes, 0);
+
+      watch.receive!(_legacyWatchIntent(authority.state));
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots, hasLength(++sent));
+      expect(watch.syncedSnapshots.last, same(report));
+      expect(live.loads, loads);
+      expect(live.livePolls, hasLength(polls));
+
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Anthropic'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(
+        find.widgetWithText(CheckboxListTile, 'Today').hitTestable().first,
+      );
+      await tester.pumpAndSettle();
+      expect(store.value.selectedIds, isNotNull);
+      expect(watch.syncedSnapshots.length, greaterThan(sent));
+      expect(watch.syncedPreferences.last.selectedIds, store.value.selectedIds);
+      expect(live.livePolls, hasLength(polls));
+    },
+  );
+
+  testWidgets(
+    'a ring save between a widget commit and its first delivery republishes the launcher',
+    (tester) async {
+      final report = _asConnection(
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ),
+      );
+      final live = _PublicationRepository(report);
+      final watch = _FakeWatchSyncService();
+      final store = _MemoryWatchRingStore();
+      // A native authority: each save settles a newer shared revision.
+      final launcher = _FakePhoneWidgetSyncService()..settingsRevision = 0;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          watchRingPreferenceStore: store,
+          phoneWidgetPreferenceStore: _MemoryPhoneWidgetStore(),
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      // The startup frame is committed; native has not delivered it yet.
+      final committed = launcher.syncedSnapshots.length;
+      expect(committed, isPositive);
+      final saves = launcher.settingsSaves;
+      final loads = live.loads;
+
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Anthropic'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(
+        find.widgetWithText(CheckboxListTile, 'Today').hitTestable().first,
+      );
+      await tester.pumpAndSettle();
+
+      // The ring-only save advanced the shared revision, which retires that
+      // frame; the launcher gets a replacement under it without a new load.
+      expect(launcher.settingsSaves, saves + 1);
+      expect(watch.syncedPreferences.last.selectedIds, store.value.selectedIds);
+      expect(launcher.syncedSnapshots, hasLength(committed + 1));
+      expect(launcher.syncedSnapshots.last, same(report));
+      expect(
+        launcher.syncedInputs.last?.settingsRevision,
+        launcher.settingsRevision,
+      );
+      expect(live.loads, loads);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a launcher-only edit under a native authority keeps the watch summary',
+    (tester) async {
+      final report = _asConnection(
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ),
+      );
+      final live = _PublicationRepository(report);
+      final watch = _FakeWatchSyncService();
+      final preferences = _MemoryPhoneWidgetStore();
+      // A native authority: each save settles a newer shared revision. A
+      // launcher-only one keeps the watch item and its send authority.
+      final launcher = _FakePhoneWidgetSyncService()..settingsRevision = 0;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          phoneWidgetPreferenceStore: preferences,
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final sent = watch.syncedSnapshots.length;
+      expect(sent, isPositive);
+      final committed = launcher.syncedSnapshots.length;
+      final saves = launcher.settingsSaves;
+      final loads = live.loads;
+
+      await tester.tap(find.text('Widget'));
+      await tester.pumpAndSettle();
+      final today = find.widgetWithText(CheckboxListTile, 'Today').first;
+      await tester.ensureVisible(today);
+      await tester.tap(today);
+      await tester.pumpAndSettle();
+
+      // Only the launcher publishes under the settled revision, without a
+      // new load; an identical watch summary would only churn its order.
+      expect(launcher.settingsSaves, saves + 1);
+      expect(launcher.watchSaves.last, isFalse);
+      expect(watch.syncedSnapshots, hasLength(sent));
+      expect(launcher.syncedSnapshots, hasLength(committed + 1));
+      expect(launcher.syncedSnapshots.last, same(report));
+      expect(
+        launcher.syncedInputs.last?.settingsRevision,
+        launcher.settingsRevision,
+      );
+      expect(live.loads, loads);
+
+      // A later owner request is answered from the same accepted load.
+      watch.receive!(const WatchRefreshIntent.resend());
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots, hasLength(sent + 1));
+      expect(watch.syncedSnapshots.last, same(report));
+      expect(live.loads, loads);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a launcher-only edit over invalid ring choices leaves the watch item answerable',
+    (tester) async {
+      final live = _PublicationRepository(_threePairDashboard(fableUsed: null));
+      final watch = _FakeWatchSyncService();
+      // Choices beyond capacity build no watch replacement.
+      final rings =
+          _MemoryWatchRingStore()
+            ..value = const WatchRingPreferences(
+              selectedIds: [
+                codexPlanRingId,
+                codexSparkRingId,
+                cursorOwnPoolId,
+                cursorOtherPoolId,
+                claudePlanRingId,
+                claudeFableRingId,
+              ],
+            );
+      final launcher = _FakePhoneWidgetSyncService()..settingsRevision = 0;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          watchRingPreferenceStore: rings,
+          phoneWidgetPreferenceStore: _MemoryPhoneWidgetStore(),
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots, isEmpty);
+      final loads = live.loads;
+      final resumes = watch.resumes;
+
+      await tester.tap(find.text('Widget'));
+      await tester.pumpAndSettle();
+      final today = find.widgetWithText(CheckboxListTile, 'Today').first;
+      await tester.ensureVisible(today);
+      await tester.tap(today);
+      await tester.pumpAndSettle();
+
+      // The save leaves the durable watch item alone, so native still answers
+      // Wear's owner proof for it; nothing replaces it, and pending native
+      // work resumes.
+      expect(launcher.watchSaves.last, isFalse);
+      expect(watch.syncedSnapshots, isEmpty);
+      expect(watch.resumes, greaterThan(resumes));
+      expect(live.loads, loads);
+
+      // A later owner request queues nothing either, without a new load.
+      watch.receive!(const WatchRefreshIntent.resend());
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots, isEmpty);
+      expect(live.loads, loads);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a launcher-only edit with unread ring choices publishes the Demo acceptance',
+    (tester) async {
+      final watch = _FakeWatchSyncService();
+      // The saved ring choices cannot be read, so no watch summary builds.
+      final rings = _MemoryWatchRingStore();
+      rings.beforeRead = () async => throw StateError('Storage unavailable');
+      final launcher = _FakePhoneWidgetSyncService()..settingsRevision = 0;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: _PublicationRepository(_alertTestSnapshot()),
+          modeAuthority: MemoryDataModeAuthority(mode: DataMode.demo),
+          watchSyncService: watch,
+          watchRingPreferenceStore: rings,
+          phoneWidgetPreferenceStore: _MemoryPhoneWidgetStore(),
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots, isEmpty);
+      final committed = launcher.syncedSnapshots.length;
+
+      await tester.tap(find.text('Widget'));
+      await tester.pumpAndSettle();
+      await tester
+          .widget<WidgetScreen>(find.byType(WidgetScreen))
+          .onPreferencesChanged(
+            (_) => const PhoneWidgetPreferences(selectedIds: []),
+          );
+      await tester.pumpAndSettle();
+
+      // The watch is unavailable rather than superseded, so the Demo
+      // acceptance publishes the edit; Demo has no retained rows to read.
+      expect(launcher.watchSaves.last, isFalse);
+      expect(launcher.syncedSnapshots, hasLength(committed + 1));
+      expect(launcher.syncedSnapshots.last.accounts, isEmpty);
+      expect(launcher.syncedPreferences.last.selectedIds, isEmpty);
+      expect(
+        launcher.syncedInputs.last?.settingsRevision,
+        launcher.settingsRevision,
+      );
+      expect(watch.syncedSnapshots, isEmpty);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a failed ring write that native settled replaces both surfaces under its revision',
+    (tester) async {
+      final report = _asConnection(
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ),
+      );
+      final live = _PublicationRepository(report);
+      final watch = _FakeWatchSyncService();
+      final revisions = <int?>[];
+      watch.onSync = (_) {
+        revisions.add(PhoneWidgetPublicationInput.current?.settingsRevision);
+      };
+      final store = _MemoryWatchRingStore();
+      final launcher = _FakePhoneWidgetSyncService()..settingsRevision = 0;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          watchRingPreferenceStore: store,
+          phoneWidgetPreferenceStore: _MemoryPhoneWidgetStore(),
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final sent = watch.syncedSnapshots.length;
+      final committed = launcher.syncedSnapshots.length;
+      final saved = store.value;
+      final loads = live.loads;
+      // Secure storage refuses the write once native retired both surfaces.
+      store.beforeWrite = (_) async => throw StateError('Storage unavailable');
+
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Anthropic'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(
+        find.widgetWithText(CheckboxListTile, 'Today').hitTestable().first,
+      );
+      await tester.pumpAndSettle();
+
+      // The choices in force replace both surfaces under the settled
+      // revision, without a new load.
+      expect(launcher.settingsRevision, 1);
+      expect(store.value, same(saved));
+      expect(watch.syncedSnapshots, hasLength(sent + 1));
+      expect(watch.syncedSnapshots.last, same(report));
+      expect(watch.syncedPreferences.last, same(saved));
+      expect(revisions.last, 1);
+      expect(launcher.syncedSnapshots, hasLength(committed + 1));
+      expect(launcher.syncedSnapshots.last, same(report));
+      expect(launcher.syncedInputs.last?.settingsRevision, 1);
+      expect(live.loads, loads);
+
+      // Later sends carry the settled revision too.
+      watch.receive!(const WatchRefreshIntent.resend());
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots, hasLength(sent + 2));
+      expect(revisions.last, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a failed ring write overlapping a launcher-only save is replaced once that save settles',
+    (tester) async {
+      final report = _asConnection(
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ),
+      );
+      final live = _PublicationRepository(report);
+      final watch = _FakeWatchSyncService();
+      final revisions = <int?>[];
+      watch.onSync = (_) {
+        revisions.add(PhoneWidgetPublicationInput.current?.settingsRevision);
+      };
+      final rings = _MemoryWatchRingStore();
+      final launcherChoices = _MemoryPhoneWidgetStore();
+      final launcher = _FakePhoneWidgetSyncService()..settingsRevision = 0;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          watchRingPreferenceStore: rings,
+          phoneWidgetPreferenceStore: launcherChoices,
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final sent = watch.syncedSnapshots.length;
+      final committed = launcher.syncedSnapshots.length;
+      final saved = rings.value;
+      final loads = live.loads;
+      final launcherWrite = Completer<void>();
+      final ringWrite = Completer<void>();
+      launcherChoices.beforeWrite = (_) => launcherWrite.future;
+      rings.beforeWrite = (_) => ringWrite.future;
+
+      // A launcher-only save is in flight when a ring save begins.
+      await tester.tap(find.text('Widget'));
+      await tester.pumpAndSettle();
+      final saves = launcher.watchSaves.length;
+      final screen = tester.widget<WidgetScreen>(find.byType(WidgetScreen));
+      final launcherSave = screen.onPreferencesChanged(
+        (_) => const PhoneWidgetPreferences(selectedIds: []),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Anthropic'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(
+        find.widgetWithText(CheckboxListTile, 'Today').hitTestable().first,
+      );
+      await tester.pumpAndSettle();
+      expect(launcher.watchSaves.sublist(saves), [false, true]);
+
+      // The ring write fails while the launcher save is still in flight, so
+      // no revision settles for it yet.
+      ringWrite.completeError(StateError('Storage unavailable'));
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots, hasLength(sent));
+
+      // The launcher save settles the revision and replaces the watch item
+      // the ring save retired too, from the same acceptance.
+      launcherWrite.complete();
+      await launcherSave;
+      await tester.pumpAndSettle();
+      expect(launcher.settingsRevision, 2);
+      expect(rings.value, same(saved));
+      expect(watch.syncedSnapshots, hasLength(sent + 1));
+      expect(watch.syncedSnapshots.last, same(report));
+      expect(watch.syncedPreferences.last, same(saved));
+      expect(revisions.last, 2);
+      expect(launcher.syncedSnapshots, hasLength(committed + 1));
+      expect(launcher.syncedSnapshots.last, same(report));
+      expect(launcher.syncedPreferences.last.selectedIds, isEmpty);
+      expect(launcher.syncedInputs.last?.settingsRevision, 2);
+      expect(live.loads, loads);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'an unchanged alert-rule save overlapping a launcher-only save is replaced once that save settles',
+    (tester) async {
+      final source = _alertTestSnapshot();
+      final repository = _PublicationRepository(source);
+      final watch = _FakeWatchSyncService();
+      final revisions = <int?>[];
+      watch.onSync = (_) {
+        revisions.add(PhoneWidgetPublicationInput.current?.settingsRevision);
+      };
+      final launcherChoices = _MemoryPhoneWidgetStore();
+      // The Dashboard's load read native's settled revision 0.
+      final launcher =
+          _FakePhoneWidgetSyncService()
+            ..settingsRevision = 0
+            ..input = const PhoneWidgetPublicationInput(settingsRevision: 0);
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          modeAuthority: MemoryDataModeAuthority(),
+          alertThresholdStore: _MemoryAlertThresholdStore(),
+          watchSyncService: watch,
+          phoneWidgetPreferenceStore: launcherChoices,
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots, [source]);
+      final committed = launcher.syncedSnapshots.length;
+      final loads = repository.loads;
+      final launcherWrite = Completer<void>();
+      launcherChoices.beforeWrite = (_) => launcherWrite.future;
+
+      // A launcher-only save is in flight when the alert-rule save runs.
+      await tester.tap(find.text('Widget'));
+      await tester.pumpAndSettle();
+      final launcherSave = tester
+          .widget<WidgetScreen>(find.byType(WidgetScreen))
+          .onPreferencesChanged(
+            (_) => const PhoneWidgetPreferences(selectedIds: []),
+          );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      // Native retires the watch item but settles no revision while the
+      // launcher save is in flight, and the save's ownership check cannot
+      // complete; the unchanged rules mark nothing owed.
+      repository.beforeValidation = () {
+        repository.beforeValidation = null;
+        throw StateError('Ownership unavailable');
+      };
+      await tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onAlertThresholdsChanged((current) => current);
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots, [source]);
+
+      // The launcher save settles the revision and replaces the watch item
+      // the alert-rule save retired too, from the same acceptance.
+      launcherWrite.complete();
+      await launcherSave;
+      await tester.pumpAndSettle();
+      expect(launcher.settingsRevision, 2);
+      expect(watch.syncedSnapshots, [source, source]);
+      expect(revisions.last, 2);
+      expect(launcher.syncedSnapshots, hasLength(committed + 1));
+      expect(launcher.syncedInputs.last?.settingsRevision, 2);
+      expect(repository.loads, loads);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a send finishing after an overlapping ring save failed leaves the watch owed to the save that settles',
+    (tester) async {
+      final report = _asConnection(
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ),
+      );
+      final live = _PublicationRepository(report);
+      final watch = _FakeWatchSyncService();
+      final revisions = <int?>[];
+      watch.onSync = (_) {
+        revisions.add(PhoneWidgetPublicationInput.current?.settingsRevision);
+      };
+      final rings = _MemoryWatchRingStore();
+      final launcherChoices = _MemoryPhoneWidgetStore();
+      final launcher = _FakePhoneWidgetSyncService()..settingsRevision = 0;
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          watchRingPreferenceStore: rings,
+          phoneWidgetPreferenceStore: launcherChoices,
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final sent = watch.syncedSnapshots.length;
+      final saved = rings.value;
+
+      // A resend's put was leased before the saves below begin; it finishes
+      // after them.
+      final leased = Completer<void>();
+      var held = false;
+      watch.beforeSync = () async {
+        if (held) return;
+        held = true;
+        await leased.future;
+      };
+      watch.receive!(const WatchRefreshIntent.resend());
+      await tester.pumpAndSettle();
+      expect(held, isTrue);
+
+      // A launcher-only save is in flight when a ring save begins and fails,
+      // so no revision settles for the ring save.
+      final launcherWrite = Completer<void>();
+      final ringWrite = Completer<void>();
+      launcherChoices.beforeWrite = (_) => launcherWrite.future;
+      rings.beforeWrite = (_) => ringWrite.future;
+      await tester.tap(find.text('Widget'));
+      await tester.pumpAndSettle();
+      final launcherSave = tester
+          .widget<WidgetScreen>(find.byType(WidgetScreen))
+          .onPreferencesChanged(
+            (_) => const PhoneWidgetPreferences(selectedIds: []),
+          );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Anthropic'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(
+        find.widgetWithText(CheckboxListTile, 'Today').hitTestable().first,
+      );
+      await tester.pumpAndSettle();
+      ringWrite.completeError(StateError('Storage unavailable'));
+      await tester.pumpAndSettle();
+
+      // The leased send completes, but its input predates the ring save, so
+      // it cannot cover the item that save retired.
+      leased.complete();
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots, hasLength(sent + 1));
+
+      // The launcher save settles the revision and replaces the watch item.
+      launcherWrite.complete();
+      await launcherSave;
+      await tester.pumpAndSettle();
+      expect(launcher.settingsRevision, 2);
+      expect(rings.value, same(saved));
+      expect(watch.syncedSnapshots, hasLength(sent + 2));
+      expect(watch.syncedSnapshots.last, same(report));
+      expect(revisions.last, 2);
+      expect(launcher.syncedInputs.last?.settingsRevision, 2);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final established in [true, false]) {
+    testWidgets(
+      established
+          ? 'a launcher retry from retained input asks Wear state, which adopts a waiting watch item'
+          : 'a launcher retry from retained input sends Wear its acceptance when no watch item is established',
+      (tester) async {
+        final source = _alertTestSnapshot();
+        final repository = _PublicationRepository(source);
+        final watch = _FakeWatchSyncService();
+        final launcher = _FakePhoneWidgetSyncService();
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: repository,
+            modeAuthority: MemoryDataModeAuthority(),
+            alertThresholdStore: _MemoryAlertThresholdStore(),
+            watchSyncService: watch,
+            phoneWidgetPreferenceStore: _MemoryPhoneWidgetStore(),
+            phoneWidgetSyncService: launcher,
+            applyAlertSettings: (snapshot, _) => snapshot,
+          ),
+        );
+        await tester.pumpAndSettle();
+        final sent = watch.syncedSnapshots.length;
+        final committed = launcher.syncedSnapshots.length;
+        final checks = watch.establishedChecks;
+        // Without an established item, such as when the acceptance below
+        // retires a headless summary still in flight, Wear is owed it too.
+        watch.established = established;
+
+        // Native refuses the launcher-only save's publication, so the
+        // launcher retries from retained input under its own accepted load.
+        launcher.refusals = 1;
+        await tester.tap(find.text('Widget'));
+        await tester.pumpAndSettle();
+        await tester
+            .widget<WidgetScreen>(find.byType(WidgetScreen))
+            .onPreferencesChanged(
+              (_) => const PhoneWidgetPreferences(selectedIds: []),
+            );
+        await tester.pumpAndSettle();
+        expect(launcher.syncedSnapshots, hasLength(committed + 2));
+        expect(launcher.syncedSnapshots.last, same(source));
+        expect(repository.cacheOnlyLoads.last, isTrue);
+
+        // That acceptance retired a pending watch item's send authority, so
+        // it asks Wear's state once, which adopts and resumes a still-valid
+        // item natively; otherwise the same acceptance publishes to Wear.
+        expect(watch.establishedChecks, checks + 1);
+        if (established) {
+          expect(watch.syncedSnapshots, hasLength(sent));
+        } else {
+          expect(watch.syncedSnapshots, hasLength(sent + 1));
+          expect(
+            watch.syncedSnapshots.last,
+            same(launcher.syncedSnapshots.last),
+          );
+        }
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'a launcher-only save settling during a retained Wear reply retags its next attempt',
+    (tester) async {
+      final accepted = _alertTestSnapshot();
+      final retained = _alertTestSnapshot(windowLabel: 'Retained');
+      final live = _PublicationRepository(accepted);
+      final watch = _FakeWatchSyncService();
+      // The Dashboard's load reads native's settled revision 0.
+      final launcher =
+          _FakePhoneWidgetSyncService()
+            ..settingsRevision = 0
+            ..input = const PhoneWidgetPublicationInput(settingsRevision: 0);
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          phoneWidgetPreferenceStore: _MemoryPhoneWidgetStore(),
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final sent = watch.syncedSnapshots.length;
+      final polls = live.livePolls.length;
+      // Native refuses a summary tagged with any but the settled revision.
+      final revisions = <int?>[];
+      watch.beforeSync = () async {
+        revisions.add(PhoneWidgetPublicationInput.current?.settingsRevision);
+        if (revisions.last != launcher.settingsRevision) {
+          throw const WatchSummarySuperseded();
+        }
+      };
+
+      // Work elsewhere retired the acceptance, so the reply reads retained
+      // input; its first cache read waits.
+      final read = Completer<DashboardSnapshot>();
+      live.retired = accepted;
+      live.snapshot = retained;
+      live.response = read.future;
+      final loads = live.loads;
+      watch.receive!(const WatchRefreshIntent.resend());
+      await tester.pump();
+      expect(live.loads, loads + 1);
+
+      // A launcher-only save settles a newer revision meanwhile.
+      await tester.tap(find.text('Widget'));
+      await tester.pumpAndSettle();
+      final screen = tester.widget<WidgetScreen>(find.byType(WidgetScreen));
+      await screen.onPreferencesChanged(
+        (_) => const PhoneWidgetPreferences(selectedIds: []),
+      );
+      await tester.pumpAndSettle();
+      expect(launcher.settingsRevision, 1);
+
+      // The attempt tagged before the save is refused; the next one carries
+      // the settled revision and is sent, without a provider poll.
+      read.complete(retained);
+      await tester.pumpAndSettle();
+      expect(revisions, [0, 1]);
+      expect(watch.syncedSnapshots, hasLength(sent + 1));
+      expect(watch.syncedSnapshots.last, same(retained));
+      expect(live.livePolls, hasLength(polls));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a retained Wear resend between a widget commit and its first delivery republishes the launcher',
+    (tester) async {
+      final accepted = _alertTestSnapshot();
+      final retained = _alertTestSnapshot(windowLabel: 'Retained');
+      final live = _PublicationRepository(accepted);
+      final watch = _FakeWatchSyncService();
+      final launcher = _FakePhoneWidgetSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          phoneWidgetPreferenceStore: _MemoryPhoneWidgetStore(),
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final committed = launcher.syncedSnapshots.length;
+      expect(committed, isPositive);
+
+      // Work elsewhere retired the acceptance, so the resend reads retained
+      // input. Its acceptance retires the first delivery of rows a widget has
+      // not received yet, which leaves the launcher unestablished.
+      live.retired = accepted;
+      live.snapshot = retained;
+      launcher.input = const PhoneWidgetPublicationInput(
+        load: 7,
+        settingsRevision: 0,
+        observed: 3,
+        established: false,
+        awaitingDelivery: true,
+      );
+      _answerLauncherAuthority(established: false);
+      watch.receive!(const WatchRefreshIntent.resend());
+      await tester.pumpAndSettle();
+      expect(live.cacheOnlyLoads.last, isTrue);
+      expect(watch.syncedSnapshots.last, same(retained));
+      // The launcher publishes the same accepted input, not a newer load.
+      expect(launcher.syncedSnapshots, hasLength(committed + 1));
+      expect(launcher.syncedSnapshots.last, same(retained));
+      expect(launcher.syncedInputs.last?.load, 7);
+
+      // A launcher that holds its frame needs no replacement.
+      final resent = watch.syncedSnapshots.length;
+      launcher.input = const PhoneWidgetPublicationInput(
+        load: 8,
+        settingsRevision: 0,
+        observed: 0,
+      );
+      watch.receive!(const WatchRefreshIntent.resend());
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots, hasLength(resent + 1));
+      expect(watch.syncedSnapshots.last, same(retained));
+      expect(launcher.syncedSnapshots, hasLength(committed + 1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a retained Wear resend over rows committed after its load began republishes the launcher',
+    (tester) async {
+      final accepted = _alertTestSnapshot();
+      final retained = _alertTestSnapshot(windowLabel: 'Retained');
+      final live = _PublicationRepository(accepted);
+      final watch = _FakeWatchSyncService();
+      final launcher = _FakePhoneWidgetSyncService();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          phoneWidgetPreferenceStore: _MemoryPhoneWidgetStore(),
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final committed = launcher.syncedSnapshots.length;
+      expect(committed, isPositive);
+
+      // The resend's load began with no rows awaiting delivery; another load
+      // committed some before the resend's acceptance retired their first
+      // delivery, which only native's answer after that acceptance shows.
+      live.retired = accepted;
+      live.snapshot = retained;
+      launcher.input = const PhoneWidgetPublicationInput(
+        load: 7,
+        settingsRevision: 0,
+        observed: 3,
+        established: false,
+      );
+      final trace = <String>[];
+      const channel = MethodChannel('app.wardpulse/widget_publication');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        trace.add(call.method);
+        switch (call.method) {
+          case 'accept':
+            return true;
+          case 'awaitingDelivery':
+            return true;
+          case 'established':
+            return false;
+        }
+        throw MissingPluginException();
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      watch.receive!(const WatchRefreshIntent.resend());
+      await tester.pumpAndSettle();
+      // Native is asked once the resend's acceptance retired the delivery.
+      expect(trace, ['accept', 'awaitingDelivery', 'established']);
+      expect(watch.syncedSnapshots.last, same(retained));
+      // The launcher publishes the same accepted input, not a newer load.
+      expect(launcher.syncedSnapshots, hasLength(committed + 1));
+      expect(launcher.syncedSnapshots.last, same(retained));
+      expect(launcher.syncedInputs.last?.load, 7);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a retained reply whose rules an alert-rule save replaced leaves the launcher frame to that save',
+    (tester) async {
+      final report = _asConnection(
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ),
+      );
+      // The report work elsewhere left, which the cache now holds, and the
+      // same report evaluated with the saved rules.
+      final later = report.generatedAt.add(const Duration(minutes: 5));
+      final retained = DashboardSnapshot.fromJson({
+        ...report.toJson(),
+        'generatedAt': later.toUtc().toIso8601String(),
+      });
+      final evaluated = DashboardSnapshot.fromJson(retained.toJson());
+      final saved = const AlertThresholdPreferences().withConnection(
+        ProviderConnections.codexPlan,
+        const ConnectionAlertThresholds(plan: AlertPercentThreshold(at: 85)),
+      );
+      DashboardSnapshot evaluate(
+        DashboardSnapshot snapshot,
+        AlertThresholdPreferences rules,
+      ) {
+        if (identical(snapshot, retained) && identical(rules, saved)) {
+          return evaluated;
+        }
+        return snapshot;
+      }
+
+      // Native accepts each load; once armed, each acceptance waits.
+      var holding = false;
+      final held = <Completer<bool>>[];
+      const channel = MethodChannel('app.wardpulse/widget_publication');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        switch (call.method) {
+          case 'accept':
+            if (!holding) return true;
+            final release = Completer<bool>();
+            held.add(release);
+            return release.future;
+          case 'established':
+            return true;
+        }
+        throw MissingPluginException();
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      final live = _PublicationRepository(report);
+      final watch = _FakeWatchSyncService();
+      final launcher =
+          _FakePhoneWidgetSyncService()
+            ..settingsRevision = 0
+            ..input = const PhoneWidgetPublicationInput(
+              load: 7,
+              settingsRevision: 0,
+              observed: 0,
+            );
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          watchRingPreferenceStore: _MemoryWatchRingStore(),
+          alertThresholdStore: _MemoryAlertThresholdStore(),
+          phoneWidgetPreferenceStore: _MemoryPhoneWidgetStore(),
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: evaluate,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final committed = launcher.syncedSnapshots.length;
+      expect(committed, isPositive);
+      final polls = live.livePolls.length;
+
+      // Work elsewhere retired the acceptance, so a ring save's reply reads
+      // retained input with the current rules; its acceptance waits.
+      live.retired = report;
+      live.snapshot = retained;
+      holding = true;
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Anthropic'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(
+        find.widgetWithText(CheckboxListTile, 'Today').hitTestable().first,
+      );
+      await tester.pumpAndSettle();
+      expect(launcher.settingsRevision, 1);
+      expect(held, hasLength(1));
+
+      // An alert-rule save settles a newer revision meanwhile; its own reply
+      // reads the same input with the saved rules.
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      await tester
+          .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+          .onAlertThresholdsChanged((_) => saved);
+      await tester.pumpAndSettle();
+      expect(launcher.settingsRevision, 2);
+      expect(held, hasLength(2));
+
+      // Rows built with the replaced rules are refused under any revision,
+      // and the launcher stays owed.
+      held[0].complete(true);
+      await tester.pumpAndSettle();
+      expect(launcher.syncedSnapshots, hasLength(committed));
+
+      // The replies made with the saved rules publish both surfaces under
+      // the revision that save settled, without a provider poll.
+      holding = false;
+      for (final release in held.skip(1)) {
+        release.complete(true);
+      }
+      await tester.pumpAndSettle();
+      expect(launcher.syncedSnapshots.length, greaterThan(committed));
+      expect(
+        launcher.syncedSnapshots.skip(committed),
+        everyElement(same(evaluated)),
+      );
+      expect(launcher.syncedInputs.last?.settingsRevision, 2);
+      expect(watch.syncedSnapshots.last, same(evaluated));
+      expect(live.cacheOnlyLoads.last, isTrue);
+      expect(live.livePolls, hasLength(polls));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a retained reply covers the pending publication, so a resume sends nothing more',
+    (tester) async {
+      final report = _asConnection(
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ),
+      );
+      final live = _PublicationRepository(report);
+      final watch = _FakeWatchSyncService();
+      final store = _MemoryWatchRingStore();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          watchRingPreferenceStore: store,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final sent = watch.syncedSnapshots.length;
+      expect(sent, isPositive);
+
+      // A newer load accepted in another engine refuses the slot save's send
+      // natively, so the retained input answers instead.
+      var refusals = 1;
+      watch.beforeSync = () async {
+        if (refusals == 0) return;
+        refusals--;
+        throw const WatchSummarySuperseded();
+      };
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Anthropic'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(
+        find.widgetWithText(CheckboxListTile, 'Today').hitTestable().first,
+      );
+      await tester.pumpAndSettle();
+      expect(refusals, 0);
+      expect(live.cacheOnlyLoads.last, isTrue);
+      expect(watch.syncedSnapshots, hasLength(sent + 1));
+      expect(watch.syncedPreferences.last.selectedIds, store.value.selectedIds);
+
+      // That reply published what the save left pending; a resume only
+      // resumes native work.
+      final resumes = watch.resumes;
+      await _notificationLifecycle(tester, AppLifecycleState.paused);
+      await _notificationLifecycle(tester, AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(watch.resumes, resumes + 1);
+      expect(watch.syncedSnapshots, hasLength(sent + 1));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  // Work in another engine, such as a headless poll, accepted a newer load
+  // after the Dashboard's, so its acceptance can no longer publish a save:
+  // its source retired, or, with the source still current, native refuses
+  // the older load.
+  for (final (save, sourceCurrent) in [
+    ('ring', false),
+    ('alert-rule', false),
+    ('ring', true),
+    ('alert-rule', true),
+  ]) {
+    testWidgets(
+      'a $save save over a retired acceptance${sourceCurrent ? ' with a current source' : ''} lands both surfaces under one retained acceptance',
+      (tester) async {
+        final report = _asConnection(
+          DashboardSnapshot.fromJsonString(
+            File(
+              '../../fixtures/snapshots/dashboard_today.json',
+            ).readAsStringSync(),
+          ),
+        );
+        // The report the newer load left, which the cache now holds.
+        final later = report.generatedAt.add(const Duration(minutes: 5));
+        final retained = DashboardSnapshot.fromJson({
+          ...report.toJson(),
+          'generatedAt': later.toUtc().toIso8601String(),
+        });
+        // Native admission as the shared engine applies it: a launcher ticket
+        // or watch summary is admitted only under the newest accepted load
+        // and the settled settings revision.
+        var loads = 0;
+        var acceptedLoad = 0;
+        var settingsRevision = 0;
+        final watchSends = <(int, int, Object?)>[];
+        final launcherTickets = <(int, int)>[];
+        final refused = <String>[];
+        const publicationChannel = MethodChannel(
+          'app.wardpulse/widget_publication',
+        );
+        const launcherChannel = MethodChannel('home_widget');
+        const watchChannel = MethodChannel('app.wardpulse/watch_sync');
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        Future<Object?> publication(MethodCall call) async {
+          switch (call.method) {
+            case 'beginLoad':
+              return {
+                'load': ++loads,
+                'settingsRevision': settingsRevision,
+                'observed': 0,
+                'established': true,
+              };
+            case 'accept':
+              final accepted = (call.arguments as Map)['load'] as int;
+              if (accepted < acceptedLoad) {
+                refused.add('accept');
+                return false;
+              }
+              acceptedLoad = accepted;
+              return true;
+            case 'established':
+              return true;
+            case 'beginSettingsWrite':
+              return settingsRevision;
+            case 'finishSettingsWrite':
+              return ++settingsRevision;
+            case 'issue':
+              final arguments = call.arguments as Map;
+              final load = arguments['load'];
+              final revision = arguments['settingsRevision'];
+              if (load != acceptedLoad || revision != settingsRevision) {
+                refused.add('issue');
+                return null;
+              }
+              launcherTickets.add((load as int, revision as int));
+              return launcherTickets.length;
+            case 'publish':
+            case 'updateWidget':
+              return true;
+          }
+          throw MissingPluginException();
+        }
+
+        Future<Object?> watchSync(MethodCall call) async {
+          switch (call.method) {
+            case 'resumeWatchSummary':
+              return null;
+            case 'watchSummaryEstablished':
+              return true;
+            case 'syncWatchSummary':
+              final arguments = call.arguments as Map;
+              final load = arguments['load'];
+              final revision = arguments['settingsRevision'];
+              if (load != acceptedLoad || revision != settingsRevision) {
+                refused.add('watch');
+                throw PlatformException(code: 'watch_summary_superseded');
+              }
+              final payload = arguments['payload'];
+              watchSends.add((load as int, revision as int, payload));
+              return null;
+          }
+          throw MissingPluginException();
+        }
+
+        messenger.setMockMethodCallHandler(publicationChannel, publication);
+        messenger.setMockMethodCallHandler(launcherChannel, publication);
+        messenger.setMockMethodCallHandler(watchChannel, watchSync);
+        addTearDown(() {
+          for (final channel in [
+            publicationChannel,
+            launcherChannel,
+            watchChannel,
+          ]) {
+            messenger.setMockMethodCallHandler(channel, null);
+          }
+        });
+        final live = _PublicationRepository(report);
+        await tester.pumpWidget(
+          WardPulseApp(
+            repository: live,
+            modeAuthority: MemoryDataModeAuthority(),
+            watchRingPreferenceStore: _MemoryWatchRingStore(),
+            alertThresholdStore: _MemoryAlertThresholdStore(),
+            phoneWidgetPreferenceStore: _MemoryPhoneWidgetStore(),
+            phoneWidgetSyncService: HomeWidgetPhoneWidgetSyncService(
+              coordinator: PhoneWidgetSyncCoordinator(
+                write: HomeWidgetPhoneWidgetSyncService.writeHomeWidgetPayload,
+              ),
+            ),
+            applyAlertSettings: (snapshot, _) => snapshot,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(watchSends, isNotEmpty);
+        expect(launcherTickets, isNotEmpty);
+        expect(refused, isEmpty);
+        if (sourceCurrent) {
+          // The newer load left the cache as it was.
+          acceptedLoad = ++loads;
+        } else {
+          live.retired = report;
+          live.snapshot = retained;
+        }
+        final began = loads;
+        final sent = watchSends.length;
+        final issued = launcherTickets.length;
+        final polls = live.livePolls.length;
+        if (save == 'ring') {
+          await tester.tap(find.text('Watchface'));
+          await tester.pumpAndSettle();
+          await tester.scrollUntilVisible(
+            find.text('Anthropic'),
+            200,
+            scrollable: find.byType(Scrollable).first,
+          );
+          await tester.tap(
+            find.widgetWithText(CheckboxListTile, 'Today').hitTestable().first,
+          );
+        } else {
+          await tester.tap(find.text('Providers'));
+          await tester.pumpAndSettle();
+          await tester
+              .widget<ProvidersScreen>(find.byType(ProvidersScreen))
+              .onAlertThresholdsChanged(
+                (current) => current.withConnection(
+                  ProviderConnections.codexPlan,
+                  const ConnectionAlertThresholds(
+                    plan: AlertPercentThreshold(at: 85),
+                  ),
+                ),
+              );
+        }
+        await tester.pumpAndSettle();
+
+        // The save retired both natively. One retained acceptance replaces
+        // them under the settled revision, so neither retires the other; only
+        // Wear's sends from the older load are refused.
+        expect(settingsRevision, 1);
+        expect(loads, began + 1);
+        if (sourceCurrent) {
+          expect(refused, isNotEmpty);
+          expect(refused, everyElement('watch'));
+        } else {
+          expect(refused, isEmpty);
+        }
+        expect(watchSends, hasLength(sent + 1));
+        final (load, revision, payload) = watchSends.last;
+        expect((load, revision), (loads, 1));
+        final cached = sourceCurrent ? report : retained;
+        expect(
+          jsonDecode(payload as String)['generatedAt'],
+          cached.generatedAt.toUtc().toIso8601String(),
+        );
+        expect(launcherTickets, hasLength(issued + 1));
+        expect(launcherTickets.last, (loads, 1));
+        expect(live.cacheOnlyLoads.last, isTrue);
+        expect(live.livePolls, hasLength(polls));
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets(
+    'a refresh whose source retires after its native acceptance republishes both surfaces',
+    (tester) async {
+      final source = _alertTestSnapshot();
+      final retained = _alertTestSnapshot(windowLabel: 'Retained');
+      final repository = _PublicationRepository(source);
+      final watch = _FakeWatchSyncService();
+      final launcher =
+          _FakePhoneWidgetSyncService()
+            ..input = const PhoneWidgetPublicationInput(
+              load: 7,
+              settingsRevision: 0,
+              observed: 0,
+            );
+      // Native accepts each load. Once armed, a headless poll writes the
+      // cache just after the refresh's acceptance wins, so native refuses
+      // that poll's own acceptance and publications.
+      var headlessWrite = false;
+      const channel = MethodChannel('app.wardpulse/widget_publication');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        switch (call.method) {
+          case 'accept':
+            if (headlessWrite) {
+              headlessWrite = false;
+              repository.retired = source;
+              repository.snapshot = retained;
+            }
+            return true;
+          case 'established':
+            return true;
+        }
+        throw MissingPluginException();
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: repository,
+          modeAuthority: MemoryDataModeAuthority(),
+          watchSyncService: watch,
+          phoneWidgetSyncService: launcher,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(watch.syncedSnapshots, [source]);
+      expect(launcher.syncedSnapshots, [source]);
+      final loads = repository.loads;
+      final polls = repository.livePolls.length;
+
+      headlessWrite = true;
+      await tester.tap(find.byTooltip('Refresh'));
+      await tester.pumpAndSettle();
+
+      // The refresh's ownership recheck fails after native accepted it. One
+      // cache-only retained read replaces both with the headless report,
+      // without another provider poll.
+      expect(headlessWrite, isFalse);
+      expect(repository.loads, loads + 2);
+      expect(repository.cacheOnlyLoads.last, isTrue);
+      expect(repository.livePolls, hasLength(polls + 1));
+      expect(watch.syncedSnapshots, [source, retained]);
+      expect(launcher.syncedSnapshots, [source, retained]);
+      expect(launcher.syncedInputs.last?.load, 7);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'the production sender hands each trigger its accepted load and settings to native admission',
+    (tester) async {
+      final fixture = _asConnection(
+        DashboardSnapshot.fromJsonString(
+          File(
+            '../../fixtures/snapshots/dashboard_today.json',
+          ).readAsStringSync(),
+        ),
+      );
+      // Inside the manual refresh floor, so a Wear tap cannot poll.
+      final report = DashboardSnapshot.fromJson({
+        ...fixture.toJson(),
+        'generatedAt':
+            DateTime.now()
+                .toUtc()
+                .subtract(const Duration(minutes: 1))
+                .toIso8601String(),
+      });
+      // Native admission as the shared engine applies it: a summary is
+      // ordered only under the newest accepted load and the settled settings
+      // revision it was built from; anything else is superseded.
+      var loads = 0;
+      var acceptedLoad = 0;
+      var settingsRevision = 0;
+      var sequence = 0;
+      final admitted = <({int sequence, int load, int settingsRevision})>[];
+      final refused = <Map<Object?, Object?>>[];
+      Completer<void>? holdAdmission;
+      final heldBeforeAdmission = <Map<Object?, Object?>>[];
+      const publicationChannel = MethodChannel(
+        'app.wardpulse/widget_publication',
+      );
+      const launcherChannel = MethodChannel('home_widget');
+      const watchChannel = MethodChannel('app.wardpulse/watch_sync');
+      const refreshChannel = MethodChannel('app.wardpulse/watch_refresh');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      Future<Object?> publication(MethodCall call) async {
+        switch (call.method) {
+          case 'beginLoad':
+            return {
+              'load': ++loads,
+              'settingsRevision': settingsRevision,
+              'observed': 0,
+              'established': true,
+            };
+          case 'accept':
+            final load = (call.arguments as Map)['load'] as int;
+            if (load < acceptedLoad) return false;
+            acceptedLoad = load;
+            return true;
+          case 'established':
+            return true;
+          case 'beginSettingsWrite':
+            return settingsRevision;
+          case 'finishSettingsWrite':
+            return ++settingsRevision;
+          case 'issue':
+            return ++sequence;
+          case 'publish':
+          case 'updateWidget':
+            return true;
+        }
+        throw MissingPluginException();
+      }
+
+      Future<Object?> watchSync(MethodCall call) async {
+        switch (call.method) {
+          case 'resumeWatchSummary':
+            return null;
+          case 'watchSummaryEstablished':
+            return true;
+          case 'syncWatchSummary':
+            final arguments = call.arguments as Map<Object?, Object?>;
+            final gate = holdAdmission;
+            if (gate != null) {
+              holdAdmission = null;
+              heldBeforeAdmission.add(arguments);
+              await gate.future;
+            }
+            final load = arguments['load'];
+            final revision = arguments['settingsRevision'];
+            if (load != acceptedLoad || revision != settingsRevision) {
+              refused.add(arguments);
+              throw PlatformException(code: 'watch_summary_superseded');
+            }
+            admitted.add((
+              sequence: ++sequence,
+              load: load as int,
+              settingsRevision: revision as int,
+            ));
+            return null;
+        }
+        throw MissingPluginException();
+      }
+
+      messenger.setMockMethodCallHandler(publicationChannel, publication);
+      messenger.setMockMethodCallHandler(launcherChannel, publication);
+      messenger.setMockMethodCallHandler(watchChannel, watchSync);
+      messenger.setMockMethodCallHandler(refreshChannel, (_) async => null);
+      addTearDown(() {
+        for (final channel in [
+          publicationChannel,
+          launcherChannel,
+          watchChannel,
+          refreshChannel,
+        ]) {
+          messenger.setMockMethodCallHandler(channel, null);
+        }
+      });
+      final authority = MemoryDataModeAuthority();
+      final live = _PublicationRepository(report);
+      final store = _MemoryWatchRingStore();
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: live,
+          modeAuthority: authority,
+          watchRingPreferenceStore: store,
+          applyAlertSettings: (snapshot, _) => snapshot,
+          phoneWidgetPreferenceStore: _MemoryPhoneWidgetStore(),
+          phoneWidgetSyncService: HomeWidgetPhoneWidgetSyncService(
+            coordinator: PhoneWidgetSyncCoordinator(
+              write: HomeWidgetPhoneWidgetSyncService.writeHomeWidgetPayload,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(admitted, isNotEmpty);
+      expect(refused, isEmpty);
+      final load = acceptedLoad;
+      expect(load, isPositive);
+      expect(admitted.last.load, load);
+      final loaded = live.loads;
+      final polls = live.livePolls.length;
+      var sent = admitted.length;
+
+      // Explicit Settings Sync: the same accepted load, a fresh order.
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Send to watch'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -160));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Sync'));
+      await tester.pumpAndSettle();
+      expect(find.text('Watch summary queued'), findsOneWidget);
+      expect(admitted, hasLength(++sent));
+      expect(admitted.last.load, load);
+      expect(admitted.last.settingsRevision, 0);
+
+      // A cadence-denied Wear reply, delivered as native delivers it.
+      final state = authority.state;
+      await messenger.handlePlatformMessage(
+        refreshChannel.name,
+        refreshChannel.codec.encodeMethodCall(
+          MethodCall('watchRefreshRequested', {
+            'kind': 'refresh',
+            'installId': state.installId,
+            'generation': state.generation,
+            'mode': state.mode.name,
+            'requestId': 'cadence-tap',
+          }),
+        ),
+        (_) {},
+      );
+      await tester.pumpAndSettle();
+      expect(admitted, hasLength(++sent));
+      expect(admitted.last.load, load);
+      expect(admitted.last.settingsRevision, 0);
+      expect(live.loads, loaded);
+      expect(live.livePolls, hasLength(polls));
+
+      // Headless work read the ring choice before the save and reaches the
+      // sender with its claim; native holds it before admission.
+      holdAdmission = Completer<void>();
+      final release = holdAdmission!;
+      Object? headless;
+      const sender = MethodChannelWatchSyncService();
+      final claim = PhoneWidgetPublicationInput(
+        load: load,
+        settingsRevision: 0,
+      );
+      final read = store.value;
+      unawaited(
+        claim
+            .run(() => sender.sync(report, read))
+            .then<void>(
+              (_) => headless = 'admitted',
+              onError: (Object error) {
+                headless = error;
+              },
+            ),
+      );
+      await tester.pump();
+      expect(heldBeforeAdmission.single['settingsRevision'], 0);
+
+      // A slot save settles a new revision and publishes the same snapshot
+      // under it, above the held one.
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Anthropic'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(
+        find.widgetWithText(CheckboxListTile, 'Today').hitTestable().first,
+      );
+      await tester.pumpAndSettle();
+      expect(settingsRevision, 1);
+      expect(admitted, hasLength(++sent));
+      expect(admitted.last.load, load);
+      expect(admitted.last.settingsRevision, 1);
+
+      // Released after the save, the older headless summary is refused.
+      release.complete();
+      await tester.pumpAndSettle();
+      expect(headless, isA<WatchSummarySuperseded>());
+      expect(refused.single['settingsRevision'], 0);
+      expect(admitted, hasLength(sent));
+
+      // Each trigger took a fresh, increasing order for the same snapshot.
+      final orders = [for (final entry in admitted) entry.sequence];
+      expect(orders, [...orders]..sort());
+      expect(orders.toSet(), hasLength(orders.length));
+      expect(live.livePolls, hasLength(polls));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets(
     'a Wear reply reads again when work outside the Dashboard retires its proof',
     (tester) async {
@@ -10073,6 +12225,25 @@ void main() {
   });
 }
 
+/// Native launcher authority for an ordered [_FakePhoneWidgetSyncService]
+/// input, whose acceptance and recheck reach the publication channel: each
+/// acceptance wins, and [established] answers the recheck.
+void _answerLauncherAuthority({required bool established}) {
+  const channel = MethodChannel('app.wardpulse/widget_publication');
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  messenger.setMockMethodCallHandler(channel, (call) async {
+    switch (call.method) {
+      case 'accept':
+        return true;
+      case 'established':
+        return established;
+    }
+    throw MissingPluginException();
+  });
+  addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+}
+
 Future<void> _notificationLifecycle(
   WidgetTester tester,
   AppLifecycleState state,
@@ -10569,6 +12740,9 @@ class _FakeWatchSyncService implements WatchSyncService {
   /// The refresh anchor each summary advertised.
   final anchors = <DateTime?>[];
   bool fail = false;
+
+  /// Whether Wear already holds a v10 summary of the current generation.
+  bool established = true;
   void Function(WatchRefreshIntent)? receive;
   Future<WatchRefreshIntent?>? initialRequest;
   void Function()? get refreshHandler =>
@@ -10583,6 +12757,12 @@ class _FakeWatchSyncService implements WatchSyncService {
   /// Summaries the native ownership check dropped after readiness.
   final dropped = <DashboardSnapshot>[];
 
+  /// Native resumes of pending or owed publication.
+  var resumes = 0;
+
+  @override
+  Future<void> resume() async => resumes++;
+
   @override
   Future<void> sync(
     DashboardSnapshot snapshot,
@@ -10594,8 +12774,9 @@ class _FakeWatchSyncService implements WatchSyncService {
     final before = beforeSync;
     if (before != null) await before();
     if (isCurrent != null && !await isCurrent()) {
+      // Native refuses it as superseded.
       dropped.add(snapshot);
-      return;
+      throw const WatchSummarySuperseded();
     }
     syncedSnapshots.add(snapshot);
     syncedPreferences.add(ringPreferences);
@@ -10616,6 +12797,16 @@ class _FakeWatchSyncService implements WatchSyncService {
   @override
   void unbindWatchRefreshListener() {
     receive = null;
+  }
+
+  /// Asks of Wear's state, which natively also adopts and resumes a still
+  /// valid pending item.
+  var establishedChecks = 0;
+
+  @override
+  Future<bool> isEstablished() async {
+    establishedChecks++;
+    return established;
   }
 }
 
@@ -10679,11 +12870,41 @@ class _FakePhoneWidgetSyncService implements PhoneWidgetSyncService {
   @override
   Future<PhoneWidgetPublicationInput> beginLoad() async => input;
 
+  /// The shared revision a native authority last settled; each save advances
+  /// it. Null without a native authority, whose saves settle no revision.
+  int? settingsRevision;
+
+  /// Whether each save changed settings the watch summary reads.
+  final watchSaves = <bool>[];
+
+  // Saves a native authority began and has not finished.
+  var _writes = 0;
+
   @override
-  Future<int?> saveSettings(Future<void> Function() save) async {
+  Future<int?> saveSettings(
+    Future<void> Function() save, {
+    bool watch = true,
+  }) async {
     settingsSaves++;
-    await save();
-    return null;
+    watchSaves.add(watch);
+    if (settingsRevision == null) {
+      await save();
+      return null;
+    }
+    _writes++;
+    try {
+      await save();
+    } catch (error, stackTrace) {
+      throw SettingsWriteFailure(error, stackTrace, _finish());
+    }
+    return _finish();
+  }
+
+  /// Native settles each save's revision whether or not its write lands, and
+  /// reports it only once no other save is in flight.
+  int? _finish() {
+    final revision = settingsRevision = settingsRevision! + 1;
+    return --_writes == 0 ? revision : null;
   }
 
   @override
@@ -10717,7 +12938,10 @@ final class _QueuedPhoneWidgetSyncService implements PhoneWidgetSyncService {
       PhoneWidgetPublicationInput.unordered;
 
   @override
-  Future<int?> saveSettings(Future<void> Function() save) async {
+  Future<int?> saveSettings(
+    Future<void> Function() save, {
+    bool watch = true,
+  }) async {
     await save();
     return null;
   }
@@ -10739,6 +12963,12 @@ class _FailingWatchSyncService implements WatchSyncService {
   }) {
     return Future.error(StateError('Watch unavailable'));
   }
+
+  @override
+  Future<bool> isEstablished() async => true;
+
+  @override
+  Future<void> resume() async {}
 
   @override
   Future<WatchRefreshIntent?> bindWatchRefreshListener(

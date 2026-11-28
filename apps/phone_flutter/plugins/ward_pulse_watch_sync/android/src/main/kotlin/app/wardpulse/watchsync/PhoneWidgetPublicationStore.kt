@@ -104,6 +104,18 @@ class PhoneWidgetPublicationStore(private val preferences: SharedPreferences) {
     }
 
     /**
+     * Whether [mode]'s full ticketed rows of the saved settings are committed and one of the
+     * installed [widgets] has not shown them yet: a newer accepted load retires that first
+     * delivery. False when no such rows were ever committed.
+     */
+    fun awaitingDelivery(mode: Mode, widgets: Collection<String>): Boolean {
+        val cache = preferences.all
+        val delivered = cache[DELIVERED] as? Set<*> ?: return false
+        return mode.installId != null && cache[INSTALL] == mode.installId &&
+            cache[GENERATION] == mode.generation && cache[COMPLETE] == true && !delivered.containsAll(widgets)
+    }
+
+    /**
      * Records that a settings save began, so the stored rows no longer represent the saved
      * settings until a full publication replaces them, even if the process dies first.
      */

@@ -743,12 +743,17 @@ void main() {
       expect(headless.load, 5);
       expect(headless.observed, 4);
       expect(headless.established, isFalse);
+      // No committed rows awaited a first delivery.
+      expect(headless.awaitingDelivery, isFalse);
       // A save in flight retires the read.
       expect(headless.settingsRevision, -1);
       reply['settingsRevision'] = 6;
+      reply['awaitingDelivery'] = true;
       final settled = await PhoneWidgetPublicationInput.begin();
       expect(settled.settingsRevision, 6);
+      expect(settled.awaitingDelivery, isTrue);
       expect(settled.withSettingsRevision(8).settingsRevision, 8);
+      expect(settled.withSettingsRevision(8).awaitingDelivery, isTrue);
       expect(settled.withSettingsRevision(null).settingsRevision, -1);
     });
 
@@ -774,24 +779,82 @@ void main() {
         'beginSettingsWrite': 'save',
         'finishSettingsWrite': 8,
       };
-      _bindWidgetStorage({}, calls: calls, replies: replies);
+      // Set while native cannot begin a save; it carries the settled revision.
+      PlatformException? beginFailure;
+      _bindWidgetStorage(
+        {},
+        calls: calls,
+        replies: replies,
+        onCall: (call) async {
+          final failure = beginFailure;
+          if (call.method == 'beginSettingsWrite' && failure != null) {
+            throw failure;
+          }
+        },
+      );
       expect(await PhoneWidgetPublicationInput.saveSettings(() async {}), 8);
       calls.clear();
       // Another save in flight leaves the revision unsettled.
       replies['finishSettingsWrite'] = null;
       expect(await PhoneWidgetPublicationInput.saveSettings(() async {}), null);
       calls.clear();
+      // A failed write still reports that native began it, so the save that
+      // settles replaces what it retired.
+      final unsettled = StateError('disk full');
       await expectLater(
-        PhoneWidgetPublicationInput.saveSettings(
-          () async => throw StateError('disk full'),
+        PhoneWidgetPublicationInput.saveSettings(() async => throw unsettled),
+        throwsA(
+          isA<SettingsWriteFailure>()
+              .having((failure) => failure.settingsRevision, 'revision', null)
+              .having((failure) => failure.error, 'error', same(unsettled)),
         ),
-        throwsStateError,
       );
       expect(calls.map((call) => call.method), [
         'beginSettingsWrite',
         'finishSettingsWrite',
       ]);
+      expect(calls.first.arguments, isNull);
       expect(calls.last.arguments, {'token': 'save'});
+
+      // A save native could not begin never writes; native finished it, and
+      // its error carries the revision it settled, if any.
+      for (final settled in [10, null]) {
+        calls.clear();
+        beginFailure = PlatformException(
+          code: 'widget_storage_unavailable',
+          details: settled,
+        );
+        var saved = false;
+        await expectLater(
+          PhoneWidgetPublicationInput.saveSettings(() async => saved = true),
+          throwsA(
+            isA<SettingsWriteFailure>()
+                .having((it) => it.settingsRevision, 'revision', settled)
+                .having((it) => it.error, 'error', isA<PlatformException>()),
+          ),
+        );
+        expect(saved, isFalse);
+        expect(calls.map((call) => call.method), ['beginSettingsWrite']);
+      }
+      beginFailure = null;
+
+      // A failed write native settled anyway surfaces that revision with the
+      // write's own error.
+      replies['finishSettingsWrite'] = 9;
+      final error = StateError('disk full');
+      await expectLater(
+        PhoneWidgetPublicationInput.saveSettings(() async => throw error),
+        throwsA(
+          isA<SettingsWriteFailure>()
+              .having((failure) => failure.settingsRevision, 'revision', 9)
+              .having((failure) => failure.error, 'error', same(error)),
+        ),
+      );
+
+      // A launcher-only save asks native to leave the watch item answerable.
+      calls.clear();
+      await PhoneWidgetPublicationInput.saveSettings(() async {}, watch: false);
+      expect(calls.first.arguments, {'watch': false});
     });
 
     test('the coordinator writes under the newest caller claim', () async {

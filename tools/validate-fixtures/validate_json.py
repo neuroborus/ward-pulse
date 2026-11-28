@@ -83,6 +83,7 @@ FIXTURE_SCHEMAS = {
     "snapshots/watch_dashboard_summary_n3_full_full.json": "watch_dashboard_summary.schema.json",
     "snapshots/watch_dashboard_summary_n3_reorder_before.json": "watch_dashboard_summary.schema.json",
     "snapshots/watch_dashboard_summary_n3_reorder_after.json": "watch_dashboard_summary.schema.json",
+    "snapshots/watch_dashboard_summary_v10_demo.json": "watch_dashboard_summary_v10.schema.json",
     "snapshots/plan_recovery.json": "plan_recovery.schema.json",
 }
 
@@ -139,6 +140,10 @@ def check(
     # Keywords are vetted by check_keywords before any fixture is read, so this
     # walk may assume it understands every node it lands on.
     if "$ref" in schema:
+        # A deleted sibling contract is a diagnostic, like a deleted mapped one.
+        missing = schema["$ref"].partition("#")[0] or current
+        if missing not in schemas:
+            return [f"{where}: $ref {schema['$ref']} names missing schema {missing}"]
         target, owner = resolve(schema["$ref"], schemas, current)
         return check(value, target, schemas, owner, where)
 
@@ -297,29 +302,47 @@ def check_keywords(name: str, node: Any, where: str = "") -> list[str]:
 
 # The shells cannot import the schema, so each repeats its version number. A
 # mismatch is silent at build time and total at run time: the Wear store drops
-# every payload whose version it does not recognise.
+# every payload whose version it does not recognise. One Data Item carries the
+# ordered v10 summary and the v9 projection for older watches, so each shell
+# declares both numbers and each answers to its own contract. The native phone
+# sender builds the empty replacement after a mode transition itself.
+WEAR_STORE = "apps/wear_android/app/src/main/java/app/wardpulse/wear/data/WatchSummaryStore.kt"
+PHONE_SENDER = "apps/phone_flutter/lib/sync/watch_sync_service.dart"
+NATIVE_SENDER = (
+    "apps/phone_flutter/plugins/ward_pulse_watch_sync/android/src/main/kotlin/"
+    "app/wardpulse/watchsync/WatchPublication.kt"
+)
 SCHEMA_VERSION_USES = {
-    "apps/wear_android/app/src/main/java/app/wardpulse/wear/data/WatchSummaryStore.kt":
-        r"SCHEMA_VERSION = (\d+)",
-    "apps/phone_flutter/lib/sync/watch_sync_service.dart":
-        r"'schemaVersion': (\d+)",
+    "watch_dashboard_summary.schema.json": {
+        WEAR_STORE: r"LEGACY_SCHEMA_VERSION = (\d+)",
+        PHONE_SENDER: r"legacyWatchSummarySchemaVersion = (\d+)",
+        NATIVE_SENDER: r"LEGACY_SCHEMA_VERSION = (\d+)",
+    },
+    "watch_dashboard_summary_v10.schema.json": {
+        WEAR_STORE: r"(?<![A-Z_])SCHEMA_VERSION = (\d+)",
+        PHONE_SENDER: r"(?<![A-Za-z])watchSummarySchemaVersion = (\d+)",
+        NATIVE_SENDER: r"(?<![A-Z_])SCHEMA_VERSION = (\d+)",
+    },
 }
 
 
 def check_schema_version(schemas: dict[str, Any]) -> list[str]:
-    """The one number the phone, the watch, and the contract must agree on."""
-    summary = schemas["watch_dashboard_summary.schema.json"]
-    expected = summary["properties"]["schemaVersion"]["const"]
+    """The numbers the phone, the watch, and each contract must agree on."""
     errors: list[str] = []
-    for relative, pattern in sorted(SCHEMA_VERSION_USES.items()):
-        source = (ROOT / relative).read_text(encoding="utf-8")
-        found = re.search(pattern, source)
-        if found is None:
-            errors.append(f"{relative}: no schema version found by /{pattern}/")
-        elif int(found.group(1)) != expected:
-            errors.append(
-                f"{relative}: schema version {found.group(1)}, contract says {expected}"
-            )
+    for name, uses in sorted(SCHEMA_VERSION_USES.items()):
+        if name not in schemas:
+            errors.append(f"schemas/{name}: missing, so its shell versions go unchecked")
+            continue
+        expected = schemas[name]["properties"]["schemaVersion"]["const"]
+        for relative, pattern in sorted(uses.items()):
+            source = (ROOT / relative).read_text(encoding="utf-8")
+            found = re.search(pattern, source)
+            if found is None:
+                errors.append(f"{relative}: no schema version found by /{pattern}/")
+            elif int(found.group(1)) != expected:
+                errors.append(
+                    f"{relative}: schema version {found.group(1)}, contract says {expected} ({name})"
+                )
     return errors
 
 
@@ -370,6 +393,9 @@ def main() -> int:
             instance = load_json(fixture)
         except ValueError as failure:
             errors.append(str(failure))
+            continue
+        if schema_name not in schemas:
+            errors.append(f"{relative}: schema {schema_name} is missing, so nothing checks it")
             continue
         errors += check(instance, schemas[schema_name], schemas, schema_name, relative)
 

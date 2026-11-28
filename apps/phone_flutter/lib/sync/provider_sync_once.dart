@@ -34,6 +34,24 @@ typedef ProviderSyncFailureLogger =
 typedef ProviderSyncStaleMarker =
     Future<void> Function({required PhoneWidgetSyncGuard isCurrent});
 
+/// Pauses before a headless publication reads the settled settings revision
+/// again while a save is in flight.
+typedef SettingsSaveWait = Future<void> Function();
+
+Future<void> _awaitSettingsSave() =>
+    Future<void>.delayed(const Duration(milliseconds: 250));
+
+/// How many pauses a headless publication waits through for a save in flight.
+const _settingsSaveWaits = 8;
+
+/// Publications under a newer settled revision after a surface's refusal.
+const _settingsRetries = 2;
+
+/// Publishes a surface's [DashboardSnapshot] under a claim; `false` when
+/// native refused it.
+typedef _SettledPublication =
+    Future<bool> Function(PhoneWidgetPublicationInput, DashboardSnapshot);
+
 /// One Live operation, with credential/snapshot provenance bound after loading.
 final class HeadlessLiveOwner {
   HeadlessLiveOwner(this.operation);
@@ -166,6 +184,7 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
   WatchRingPreferenceStore? watchRingStore,
   PhoneWidgetPreferenceStore? widgetStore,
   ReadExhaustedWindows readWindows = exhaustedWindows,
+  SettingsSaveWait awaitSettingsSave = _awaitSettingsSave,
 }) async {
   if (!await owner.isLive()) return null;
   final live = (createLive ?? PhoneLiveBindings.create)();
@@ -214,10 +233,41 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
   // Retained cadence-skipped input is accepted too; a newer acceptance in any
   // engine refuses this load's publications.
   final accepted = await publication.accept(snapshot);
+
+  // A refusal caused only by a settings save is never final: a surface is
+  // rebuilt from [loaded] with the settings read again and sent under the
+  // revision the saves settled, once those in flight settle. A refusal under
+  // an unchanged revision, such as a newer accepted load's, is final.
+  Future<void> retryUnderSettledSettings(_SettledPublication publish) async {
+    if ((publication.load ?? -1) < 0) return;
+    var revision = publication.settingsRevision;
+    for (var retry = 0; retry < _settingsRetries; retry++) {
+      if (!await isCurrent()) return;
+      final settled = await _settledRevision(awaitSettingsSave, isCurrent);
+      if (settled == null || settled == revision) return;
+      revision = settled;
+      final rules = await SecureAlertThresholdPreferenceStore().read();
+      if (!await isCurrent()) return;
+      if (await publish(
+        publication.withSettingsRevision(settled),
+        applyUserAlertSettings(loaded, rules),
+      )) {
+        return;
+      }
+    }
+  }
+
   return ProviderSyncWork(
     isCurrent: owner._isProvenanceCurrent,
     syncWatch: () async {
-      if (poll.whollySkipped) return;
+      final watchSync = MethodChannelWatchSyncService(
+        claudePlanPaused: live.claudePlanPaused,
+      );
+      // A newer acceptance in any engine owns Wear, as it owns the widget.
+      if (!accepted) return;
+      // A cadence-skipped poll still seeds Wear's first v10 summary, after an
+      // upgrade or a mode transition, from the retained input.
+      if (poll.whollySkipped && await watchSync.isEstablished()) return;
       final ringPreferences =
           await (watchRingStore ?? SecureWatchRingPreferenceStore()).read();
       // A claim whose credential retired during the poll no longer owns its
@@ -242,21 +292,42 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
         owned.add(at);
       }
       if (!await isCurrent()) return;
-      await MethodChannelWatchSyncService(
-        claudePlanPaused: live.claudePlanPaused,
-      ).sync(
-        snapshot,
-        ringPreferences,
-        // A publication that is not wholly skipped follows an admitted claim.
-        // Its confirmed anchor, which native corrects after a clock rollback,
-        // is the owned attempt; a retained report's time may predate the
-        // rollback.
-        manualRefreshAnchorAt: ManualRefreshWindow.anchorAt(
-          reportAt: owned.isEmpty ? snapshot.generatedAt : null,
-          attempts: owned,
-        ),
-        isCurrent: isCurrent,
+      // A publication that is not wholly skipped follows an admitted claim.
+      // Its confirmed anchor, which native corrects after a clock rollback,
+      // is the owned attempt; a retained report's time may predate the
+      // rollback.
+      final anchorAt = ManualRefreshWindow.anchorAt(
+        reportAt: owned.isEmpty ? snapshot.generatedAt : null,
+        attempts: owned,
       );
+      // The ring choice was read after this load began, so a later save that
+      // may change the summary, or a newer accepted load, refuses it natively.
+      Future<bool> send(
+        PhoneWidgetPublicationInput claim,
+        DashboardSnapshot input,
+        WatchRingPreferences rings,
+      ) async {
+        try {
+          await claim.run(
+            () => watchSync.sync(
+              input,
+              rings,
+              manualRefreshAnchorAt: anchorAt,
+              isCurrent: isCurrent,
+            ),
+          );
+        } on WatchSummarySuperseded {
+          return false;
+        }
+        return true;
+      }
+
+      if (await send(publication, snapshot, ringPreferences)) return;
+      await retryUnderSettledSettings((claim, rebuilt) async {
+        final rings =
+            await (watchRingStore ?? SecureWatchRingPreferenceStore()).read();
+        return !await isCurrent() || await send(claim, rebuilt, rings);
+      });
     },
     syncWidget: () async {
       // An upgrade, a mode return or a widget still owed a frame publishes
@@ -265,16 +336,28 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
           (poll.whollySkipped && await publication.isEstablished())) {
         return;
       }
-      final widgetPreferences =
-          await (widgetStore ?? SecurePhoneWidgetPreferenceStore()).read();
+      final preferenceStore = widgetStore ?? SecurePhoneWidgetPreferenceStore();
+      final widgetPreferences = await preferenceStore.read();
       if (!await isCurrent()) return;
-      await publication.run(
-        () => HomeWidgetPhoneWidgetSyncService().sync(
-          snapshot,
-          widgetPreferences,
-          isCurrent: isCurrent,
-        ),
-      );
+      Future<bool> publish(
+        PhoneWidgetPublicationInput claim,
+        DashboardSnapshot input,
+        PhoneWidgetPreferences preferences,
+      ) {
+        return claim.run(
+          () => HomeWidgetPhoneWidgetSyncService().sync(
+            input,
+            preferences,
+            isCurrent: isCurrent,
+          ),
+        );
+      }
+
+      if (await publish(publication, snapshot, widgetPreferences)) return;
+      await retryUnderSettledSettings((claim, rebuilt) async {
+        final preferences = await preferenceStore.read();
+        return !await isCurrent() || await publish(claim, rebuilt, preferences);
+      });
     },
     syncRecoveries: () async {
       final preferences = SecureRecoveryNotificationPreferenceStore();
@@ -331,6 +414,24 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
           },
         ),
   );
+}
+
+/// The settled settings revision, read again after each [wait] while a save is
+/// in flight; `null` without a native order, once [isCurrent] retires, or
+/// when a save outlasts the bound.
+Future<int?> _settledRevision(
+  SettingsSaveWait wait,
+  Future<bool> Function() isCurrent,
+) async {
+  var waits = 0;
+  while (true) {
+    final revision =
+        (await PhoneWidgetPublicationInput.begin()).settingsRevision;
+    if (revision == null) return null;
+    if (revision >= 0) return revision;
+    if (waits++ == _settingsSaveWaits || !await isCurrent()) return null;
+    await wait();
+  }
 }
 
 Future<void> _attemptProviderSyncStep(

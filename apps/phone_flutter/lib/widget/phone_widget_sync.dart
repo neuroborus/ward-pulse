@@ -33,6 +33,7 @@ final class PhoneWidgetPublicationInput {
     this.settingsRevision,
     this.observed,
     this.established = true,
+    this.awaitingDelivery = false,
     this.selection,
   });
 
@@ -61,6 +62,11 @@ final class PhoneWidgetPublicationInput {
   /// still publishes the retained input until it does ([isEstablished]).
   final bool established;
 
+  /// Whether this load began while committed rows of the saved settings
+  /// still awaited an installed widget's first delivery, which accepting a
+  /// newer load retires.
+  final bool awaitingDelivery;
+
   /// [snapshotSelectionProof] arguments for a Live ticket.
   final Map<String, Object>? selection;
 
@@ -78,6 +84,7 @@ final class PhoneWidgetPublicationInput {
         settingsRevision: settingsRevision,
         observed: observed,
         established: established,
+        awaitingDelivery: awaitingDelivery,
         selection: selection,
       );
 
@@ -89,6 +96,7 @@ final class PhoneWidgetPublicationInput {
         settingsRevision: revision ?? -1,
         observed: observed,
         established: established,
+        awaitingDelivery: awaitingDelivery,
         selection: selection,
       );
 
@@ -133,6 +141,24 @@ final class PhoneWidgetPublicationInput {
     }
   }
 
+  /// [awaitingDelivery], read again on an ordered load once it was
+  /// [accept]ed: rows committed since the claim may await a first delivery
+  /// that acceptance retired, while rows delivered since then await none.
+  Future<bool> isAwaitingDelivery() async {
+    final load = this.load;
+    if (load == null || load < 0) return awaitingDelivery;
+    try {
+      final awaiting = await _publicationChannel.invokeMethod<bool>(
+        'awaitingDelivery',
+      );
+      return awaiting == true;
+    } on MissingPluginException {
+      return awaitingDelivery;
+    } on PlatformException {
+      return awaitingDelivery;
+    }
+  }
+
   /// Takes the next load ordinal before the load reads settings or providers.
   static Future<PhoneWidgetPublicationInput> begin() async {
     final Object? reply;
@@ -155,6 +181,7 @@ final class PhoneWidgetPublicationInput {
         settingsRevision: revision is int ? revision : -1,
         observed: observed,
         established: established,
+        awaitingDelivery: reply['awaitingDelivery'] == true,
       );
     }
     return unavailable;
@@ -163,28 +190,70 @@ final class PhoneWidgetPublicationInput {
   /// Orders [save] against revision-tagged reads in every engine.
   ///
   /// Returns the settled revision after it, or `null` while another save is
-  /// in flight or without a native authority.
-  static Future<int?> saveSettings(Future<void> Function() save) async {
+  /// in flight or without a native authority. Unless [watch] is `false`, for
+  /// a save that leaves the watch summary's content alone, the desired watch
+  /// item is retired durably too. A failed [save], or one native could not
+  /// begin, throws [SettingsWriteFailure].
+  static Future<int?> saveSettings(
+    Future<void> Function() save, {
+    bool watch = true,
+  }) async {
     final Object? token;
     try {
       token = await _publicationChannel.invokeMethod<Object?>(
         'beginSettingsWrite',
+        watch ? null : const {'watch': false},
       );
     } on MissingPluginException {
       await save();
       return null;
+    } on PlatformException catch (error, stackTrace) {
+      // Native finished the save it could not begin; [save] never runs.
+      final revision = error.details;
+      throw SettingsWriteFailure(
+        error,
+        stackTrace,
+        revision is int ? revision : null,
+      );
     }
-    Object? revision;
-    try {
-      await save();
-    } finally {
-      revision = await _publicationChannel.invokeMethod<Object?>(
+    Future<int?> finish() async {
+      final revision = await _publicationChannel.invokeMethod<Object?>(
         'finishSettingsWrite',
         {'token': token},
       );
+      return revision is int ? revision : null;
     }
-    return revision is int ? revision : null;
+
+    try {
+      await save();
+    } catch (error, stackTrace) {
+      throw SettingsWriteFailure(error, stackTrace, await finish());
+    }
+    return finish();
   }
+}
+
+/// A settings write that failed after a native authority began it, or that
+/// the authority could not begin.
+///
+/// Native may have retired what the settings feed, and it advanced the shared
+/// revision. With a settled [settingsRevision], a caller notes it and
+/// schedules the replacement a successful save would before reporting
+/// [error]; without one, the save still in flight settles the revision and
+/// replaces what both retired.
+final class SettingsWriteFailure implements Exception {
+  const SettingsWriteFailure(
+    this.error,
+    this.stackTrace,
+    this.settingsRevision,
+  );
+
+  final Object error;
+  final StackTrace stackTrace;
+  final int? settingsRevision;
+
+  @override
+  String toString() => 'SettingsWriteFailure: $error';
 }
 
 /// Pushes [snapshot] metrics onto the Android home-screen widget.
@@ -207,10 +276,13 @@ abstract interface class PhoneWidgetSyncService {
 
   Future<PhoneWidgetPublicationInput> beginLoad();
 
-  /// Orders a widget or alert-rule save before later publication tickets.
+  /// Orders a widget, ring or alert-rule save before later publication
+  /// tickets. A save with [watch] `false` leaves the watch summary's content
+  /// alone, so its desired item stays answerable to Wear.
   ///
-  /// Returns the settled settings revision after it, when known.
-  Future<int?> saveSettings(Future<void> Function() save);
+  /// Returns the settled settings revision after it, when known. A failed
+  /// write that a native authority began throws [SettingsWriteFailure].
+  Future<int?> saveSettings(Future<void> Function() save, {bool watch = true});
 
   /// Redraws installed widgets from current-generation rows, or empty.
   Future<void> redraw();
@@ -232,7 +304,10 @@ final class DisabledPhoneWidgetSyncService implements PhoneWidgetSyncService {
       PhoneWidgetPublicationInput.unordered;
 
   @override
-  Future<int?> saveSettings(Future<void> Function() save) async {
+  Future<int?> saveSettings(
+    Future<void> Function() save, {
+    bool watch = true,
+  }) async {
     await save();
     return null;
   }
@@ -385,8 +460,10 @@ final class HomeWidgetPhoneWidgetSyncService implements PhoneWidgetSyncService {
       PhoneWidgetPublicationInput.begin();
 
   @override
-  Future<int?> saveSettings(Future<void> Function() save) =>
-      PhoneWidgetPublicationInput.saveSettings(save);
+  Future<int?> saveSettings(
+    Future<void> Function() save, {
+    bool watch = true,
+  }) => PhoneWidgetPublicationInput.saveSettings(save, watch: watch);
 
   @override
   Future<void> redraw() => _redraw();

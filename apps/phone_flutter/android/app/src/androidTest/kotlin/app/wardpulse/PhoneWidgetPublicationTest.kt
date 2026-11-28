@@ -324,6 +324,7 @@ class PhoneWidgetPublicationTest : InstrumentationTestCase() {
         // Cutover-era rows carry the mode tags but no full ticketed publication.
         assertTrue(store.publish(WidgetPublicationFixture.payload("A", 2, 10), mode))
         assertFalse("cutover rows", store.established(mode))
+        assertFalse("cutover rows await no proven delivery", store.awaitingDelivery(mode, listOf("7")))
         assertEquals(true, store.markStale(mode, begin()["observed"] as Long, engine))
         assertFalse("STALE-only write", store.established(mode))
 
@@ -341,11 +342,15 @@ class PhoneWidgetPublicationTest : InstrumentationTestCase() {
         assertFalse("undelivered widget", store.established(mode, listOf("7")))
         assertFalse("undelivered widget after restart",
             PhoneWidgetPublicationStore(preferences).established(mode, listOf("7")))
+        // Its first delivery is what a newer accepted load would retire.
+        assertTrue("awaiting delivery", store.awaitingDelivery(mode, listOf("7")))
+        assertFalse("no widget awaits it", store.awaitingDelivery(mode, emptyList()))
 
         // A slot save began; the process may die before its publication.
         val save = engine.beginSurfaceSettingsWrite("test")
         assertTrue(store.retireSettings())
         assertFalse("unpublished save after restart", PhoneWidgetPublicationStore(preferences).established(mode))
+        assertFalse("retired settings await no delivery", store.awaitingDelivery(mode, listOf("7")))
         assertEquals(true, store.markStale(mode, begin()["observed"] as Long, engine))
         assertFalse("STALE keeps the save unpublished", store.established(mode))
 

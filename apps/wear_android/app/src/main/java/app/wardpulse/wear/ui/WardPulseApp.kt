@@ -71,6 +71,7 @@ import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
 import androidx.wear.compose.ui.tooling.preview.WearPreviewSquare
+import app.wardpulse.wear.data.SummaryBinding
 import app.wardpulse.wear.model.PreviewWatchDashboardSummary
 import app.wardpulse.wear.model.PulseStatus
 import app.wardpulse.wear.model.WatchDashboardSummary
@@ -143,6 +144,8 @@ internal data class SummaryRow(
 @Composable
 fun WardPulseApp(
     summary: WatchDashboardSummary?,
+    // The binding [summary] was read with; a Glance refresh names its owner.
+    refreshBinding: SummaryBinding?,
     watchFaceState: WatchFaceState,
     onCheckWatchFace: () -> Unit,
     onInstallWatchFace: () -> Unit,
@@ -156,6 +159,7 @@ fun WardPulseApp(
     val pagerState = rememberPagerState(pageCount = { HomePage.entries.size })
     // Navigation retains destination content, so read current inputs inside each composition.
     val currentSummary by rememberUpdatedState(summary)
+    val currentRefreshBinding by rememberUpdatedState(refreshBinding)
     val currentWatchFaceState by rememberUpdatedState(watchFaceState)
     val currentOnCheck by rememberUpdatedState(onCheckWatchFace)
     val currentOnInstall by rememberUpdatedState(onInstallWatchFace)
@@ -190,6 +194,7 @@ fun WardPulseApp(
                     } else {
                         HomeScreen(
                             summary = latestSummary,
+                            refreshBinding = currentRefreshBinding,
                             pagerState = pagerState,
                             onOpenAlerts = { navController.navigate(ALERTS_ROUTE) },
                             onOpenWatchFace = { navController.navigate(WATCH_FACE_ROUTE) },
@@ -275,6 +280,7 @@ internal fun WatchDashboardSummary.alertRows(): List<SummaryRow> =
 @Composable
 private fun HomeScreen(
     summary: WatchDashboardSummary,
+    refreshBinding: SummaryBinding?,
     pagerState: PagerState,
     onOpenAlerts: () -> Unit,
     onOpenWatchFace: () -> Unit,
@@ -305,6 +311,7 @@ private fun HomeScreen(
         when (pages[page]) {
             HomePage.Glance -> GlanceLegendPage(
                 summary = summary,
+                refreshBinding = refreshBinding,
                 onOpenAlerts = onOpenAlerts,
                 modifier = pageModifier,
             )
@@ -551,6 +558,7 @@ private fun WardPulsePreview() {
     WardPulseTheme {
         WardPulseApp(
             summary = PreviewWatchDashboardSummary.glanceLegend,
+            refreshBinding = null,
             watchFaceState = WatchFaceState(),
             onCheckWatchFace = {},
             onInstallWatchFace = {},

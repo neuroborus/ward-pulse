@@ -2329,6 +2329,7 @@ class WardPulseNavigationStateTest {
                             } else {
                                 WardPulseApp(
                                     summary = summary,
+                                    refreshBinding = null,
                                     watchFaceState = watchFaceState,
                                     onCheckWatchFace = callbacks.onCheck,
                                     onInstallWatchFace = callbacks.onInstall,

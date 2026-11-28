@@ -100,6 +100,9 @@ internal class IsolatedWearApplication : Application(), MainActivityDependencies
     override fun summaryStore(context: Context) = WatchSummaryStore(scope.summaryPreferences)
     override fun consentStore(context: Context) = WatchFaceConsentStore(scope.consentPreferences)
     override fun requestComplicationRefresh(context: Context) = scope.recordRefresh(context as MainActivity)
+
+    // Isolated launches never read or prove a Data Layer route.
+    override fun reconcileSummary(context: Context, store: WatchSummaryStore) = Unit
 }
 
 /** Wraps @After too, so failure cleanup cannot withdraw isolation from a surviving owner. */

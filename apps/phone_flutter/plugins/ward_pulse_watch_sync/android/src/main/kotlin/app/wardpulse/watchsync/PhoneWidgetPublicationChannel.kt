@@ -35,20 +35,39 @@ internal class PhoneWidgetPublicationChannel(context: Context, messenger: Binary
                     "beginLoad" -> {
                         val mode = PhoneWidgetPublicationStore.modeFrom(engine.readMode())
                         val load = engine.beginWidgetLoad { store.sequence() ?: 0L }
-                        load["established"] = store.established(mode, installedWidgets())
+                        val widgets = installedWidgets()
+                        load["established"] = store.established(mode, widgets)
+                        load["awaitingDelivery"] = store.awaitingDelivery(mode, widgets)
                         reply(result, load)
                     }
                     // Rechecked after acceptance, which retires the first delivery of undelivered rows.
                     "established" -> reply(result,
                         store.established(PhoneWidgetPublicationStore.modeFrom(engine.readMode()), installedWidgets()))
+                    // Also rechecked after acceptance: rows committed since the load began may await it.
+                    "awaitingDelivery" -> reply(result,
+                        store.awaitingDelivery(PhoneWidgetPublicationStore.modeFrom(engine.readMode()), installedWidgets()))
                     "beginSettingsWrite" -> {
                         // Begun first: a publication of the old settings cannot commit after this.
-                        val token = engine.beginSurfaceSettingsWrite(owner)
-                        if (!store.retireSettings()) {
-                            engine.finishSurfaceSettingsWrite(owner, token)
-                            throw IllegalStateException("Widget storage unavailable.")
+                        // A watch item built from changed watch settings is retired durably too,
+                        // for a new process; a launcher-only save leaves it answerable, and its
+                        // in-process send authority standing.
+                        val watchSettings = arguments?.get("watch") != false
+                        val token = engine.beginSurfaceSettingsWrite(owner, watchSettings)
+                        val retired = try {
+                            retireSurfaceSettings(store::retireSettings, WatchPublicationStore(context), watchSettings)
+                        } catch (_: RuntimeException) {
+                            false
                         }
-                        reply(result, token)
+                        if (retired) {
+                            reply(result, token)
+                        } else {
+                            // The save never starts, but it advanced the revision: the error
+                            // carries the one it settles, or null while another save is in flight.
+                            val settled = engine.finishSurfaceSettingsWrite(owner, token)
+                            main.post {
+                                if (attached) result.error("widget_storage_unavailable", "Widget storage unavailable.", settled)
+                            }
+                        }
                     }
                     "finishSettingsWrite" -> reply(result, engine.finishSurfaceSettingsWrite(owner,
                         arguments?.get("token") as? String ?: throw IllegalArgumentException()))
@@ -132,7 +151,7 @@ internal class PhoneWidgetPublicationChannel(context: Context, messenger: Binary
 
     private companion object {
         val executor = Executors.newSingleThreadExecutor()
-        val METHODS = setOf("beginLoad", "established", "beginSettingsWrite", "finishSettingsWrite", "accept", "issue", "publish",
-            "markStale")
+        val METHODS = setOf("beginLoad", "established", "awaitingDelivery", "beginSettingsWrite", "finishSettingsWrite",
+            "accept", "issue", "publish", "markStale")
     }
 }
