@@ -10,6 +10,7 @@ home-widget metrics are on **Widget**.
 | --- | --- |
 | Refresh | Refresh interval while open and approximate background cadence. |
 | Notifications | Independent Alert notifications and Plan recovery switches, plus an Android settings action when notifications are blocked. |
+| Demo | **Demo mode**, off by default, shows sample readings without a provider account; see [Explore with Demo mode](/guide/getting-started#explore-with-demo-mode). |
 | Diagnostics | Sync timestamp/status and the next Watch and Widget summaries, when phone data is available. |
 | Help | User guide in your external browser. |
 | Privacy Policy | WardPulse's privacy policy in your external browser. |

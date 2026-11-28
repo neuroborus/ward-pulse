@@ -371,6 +371,71 @@ void main() {
     expect(seeds, [107, 114]);
   });
 
+  test('a product draw anchors at the whole-second UTC clock time', () async {
+    final fixture =
+        File(
+          '../../fixtures/snapshots/dashboard_today.json',
+        ).readAsStringSync();
+    final requests = <(int, String)>[];
+    var seed = 279;
+    var now = DateTime.utc(2026, 11, 28, 12, 30, 45, 987, 654);
+    var failures = 1;
+    final repository = DemoDashboardRepository.product(
+      seedForLoad: () => ++seed,
+      clock: () => now,
+      loadDashboardJson: (drawn, anchor) {
+        requests.add((drawn, anchor));
+        if (failures > 0) {
+          failures--;
+          throw StateError('native details');
+        }
+        return fixture;
+      },
+    );
+
+    // A failed draw is not cached; the next load draws again.
+    await expectLater(
+      repository.load(),
+      throwsA(isA<DashboardLoadException>()),
+    );
+    final first = await repository.load();
+    now = DateTime.utc(2026, 11, 28, 13);
+    expect(await repository.load(), same(first));
+    repository.invalidate();
+    expect(await repository.load(), isNot(same(first)));
+    expect(requests, [
+      (280, '2026-11-28T12:30:45Z'),
+      (281, '2026-11-28T12:30:45Z'),
+      (282, '2026-11-28T13:00:00Z'),
+    ]);
+    expect(
+      demoCaptureAnchor(DateTime.utc(2028, 2, 29, 23, 59, 59, 999).toLocal()),
+      '2028-02-29T23:59:59Z',
+    );
+  });
+
+  test('the product sample omits the paused Claude plan', () async {
+    final repository = DemoDashboardRepository.product(
+      seedForLoad: () => 280,
+      clock: () => DateTime.utc(2026, 11, 2, 12, 0, 0, 500),
+    );
+    final snapshot = await repository.load();
+    expect(snapshot.generatedAt, DateTime.utc(2026, 11, 2, 12));
+    expect(snapshot.accounts.map((account) => account.connection), [
+      ProviderConnections.openAiPlatform.storageKey,
+      ProviderConnections.codexPlan.storageKey,
+      ProviderConnections.anthropicPlatform.storageKey,
+      ProviderConnections.cursorPlan.storageKey,
+      ProviderConnections.cursorPlatform.storageKey,
+    ]);
+    final meters = [
+      for (final account in snapshot.accounts)
+        for (final meter in account.allowances) meter.id,
+    ];
+    expect(meters, isNotEmpty);
+    expect(meters.where((id) => id.startsWith('claude-')), isEmpty);
+  });
+
   test('does not double-count cached input tokens', () {
     final bucket = UsageBucket(
       startAt: DateTime.utc(2026, 7, 19),

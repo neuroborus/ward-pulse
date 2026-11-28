@@ -136,6 +136,7 @@ class MethodChannelWatchSyncService implements WatchSyncService {
     this.claudePlanPaused = claudePlanPausedInBuild,
   });
 
+  /// The build's Claude plan policy; Demo publications pause it regardless.
   final bool claudePlanPaused;
 
   static const _watchRefreshChannel = MethodChannel(
@@ -152,29 +153,32 @@ class MethodChannelWatchSyncService implements WatchSyncService {
     bool mockDataMode = false,
     Future<bool> Function()? isCurrent,
   }) async {
+    final operation = DataModeOperation.current;
+    final demo = operation?.mode == DataMode.demo;
+    // Demo publishes the Play build's capabilities in every build.
+    final paused = claudePlanPaused || demo;
     // Keep the last valid publication while the owner corrects saved choices.
     if (watchRingCapacityReason(
           watchRingSelectionIds(
             snapshot,
             ringPreferences,
-            claudePlanPaused: claudePlanPaused,
+            claudePlanPaused: paused,
           ),
-          claudePlanPaused: claudePlanPaused,
+          claudePlanPaused: paused,
         ) !=
         null) {
       // Pending native work still resumes, though this sync replaces nothing.
       await resume();
       return;
     }
-    final operation = DataModeOperation.current;
     final input = PhoneWidgetPublicationInput.current;
     final payload = WatchDashboardSummaryPayload.fromSnapshot(
       snapshot,
       ringPreferences,
       manualRefreshAnchorAt: manualRefreshAnchorAt,
       mockDataMode: mockDataMode,
-      demoDataMode: operation?.mode == DataMode.demo,
-      claudePlanPaused: claudePlanPaused,
+      demoDataMode: demo,
+      claudePlanPaused: paused,
     );
     try {
       await WardPulseWatchSync.syncSummary(

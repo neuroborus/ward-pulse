@@ -374,6 +374,42 @@ void main() {
     },
   );
 
+  test('Debug builds publish Demo under the Play capability policy', () async {
+    final published = _captureWatchPublications();
+    final sample = freshnessSnapshot([
+      freshnessAccount('claude', 'anthropic.platform'),
+    ]);
+    const budgets = [
+      'budget.anthropic.platform.today',
+      'budget.anthropic.platform.week',
+      'budget.anthropic.platform.month',
+    ];
+    // A Debug selection that kept its Claude plan ring from Live.
+    const saved = WatchRingPreferences(
+      selectedIds: [claudePlanRingId, ...budgets],
+    );
+    const debug = MethodChannelWatchSyncService(claudePlanPaused: false);
+    final authority = MemoryDataModeAuthority();
+    final live = await authority.begin();
+    await live.run(() => debug.sync(sample, saved));
+    // Live counts the Claude ring, so the choice exceeds the slots.
+    expect([for (final call in published) call.method], ['resumeWatchSummary']);
+    published.clear();
+
+    await authority.switchTo(DataMode.demo);
+    final demo = await authority.begin();
+    await demo.run(() => debug.sync(sample, saved));
+    final call = published.single;
+    expect(call.method, 'syncWatchSummary');
+    final summary = jsonDecode((call.arguments as Map)['summary'] as String);
+    expect(summary['dataMode'], 'demo');
+    expect(
+      (summary['rings'] as List).map((ring) => (ring as Map)['id']),
+      unorderedEquals(budgets),
+    );
+    expect(saved.selectedIds, [claudePlanRingId, ...budgets]);
+  });
+
   for (final (label, settings) in [
     (
       'Plan threshold',

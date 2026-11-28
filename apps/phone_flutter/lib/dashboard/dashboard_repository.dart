@@ -108,12 +108,17 @@ typedef DatedDebugDashboardJsonLoader =
 String _loadDatedDebugDashboardJson(int seed, String anchor) =>
     loadDebugDashboardSnapshotJson(seed, captureAnchor: anchor);
 
-/// Debug Mock data: full multi-provider fixture dashboard.
+/// The whole-second UTC anchor the Rust generator rebases samples to.
+String demoCaptureAnchor(DateTime time) =>
+    '${time.toUtc().toIso8601String().substring(0, 19)}Z';
+
+/// Seeded synthetic dashboards: Debug Mock data or the public Demo sample.
 ///
 /// Cached until [invalidate] so automatic sync ticks stay stable; phone refresh
-/// and the Mock data toggle clear the cache and draw a new seed.
+/// and the mode switch clear the cache and draw a new seed.
 /// A valid debug seed starts a reproducible sequence instead of time-based seeds.
 final class DemoDashboardRepository extends DashboardRepository {
+  /// Debug Mock data: the full multi-provider fixture dashboard.
   DemoDashboardRepository({
     this.loadDebugDashboardJson = loadDebugDashboardSnapshotJson,
     this.loadDatedDebugDashboardJson = _loadDatedDebugDashboardJson,
@@ -121,7 +126,8 @@ final class DemoDashboardRepository extends DashboardRepository {
     String? debugSeed,
     String? debugAnchor,
     bool debugMode = kDebugMode,
-  }) : _captureAnchor = debugMode ? debugAnchor : null {
+  }) : _captureAnchor = debugMode ? debugAnchor : null,
+       _clock = null {
     if (debugMode &&
         debugSeed != null &&
         !debugSeed.contains(RegExp(r'[^0-9]'))) {
@@ -129,12 +135,31 @@ final class DemoDashboardRepository extends DashboardRepository {
     }
   }
 
+  /// The public Demo sample, available in every build. Each draw is rebased
+  /// to the device's current time, so its dates stay current; it omits the
+  /// Claude plan the Play build pauses.
+  DemoDashboardRepository.product({
+    DatedDebugDashboardJsonLoader loadDashboardJson =
+        loadDemoDashboardSnapshotJson,
+    this.seedForLoad,
+    DateTime Function()? clock,
+  }) : loadDebugDashboardJson = _unavailableSeedOnlySample,
+       loadDatedDebugDashboardJson = loadDashboardJson,
+       _captureAnchor = null,
+       _clock = clock ?? DateTime.now;
+
   final DebugDashboardJsonLoader loadDebugDashboardJson;
   final DatedDebugDashboardJsonLoader loadDatedDebugDashboardJson;
   final int Function()? seedForLoad;
   final String? _captureAnchor;
+
+  /// The product sample's anchor source; `null` for Debug Mock data.
+  final DateTime Function()? _clock;
   int? _nextSeed;
   DashboardSnapshot? _cached;
+
+  static String _unavailableSeedOnlySample(int seed) =>
+      throw StateError('The Demo sample requires a capture anchor.');
 
   @override
   Future<DashboardSnapshot> load() async {
@@ -147,7 +172,9 @@ final class DemoDashboardRepository extends DashboardRepository {
           _nextSeed ??
           seedForLoad?.call() ??
           DateTime.now().microsecondsSinceEpoch;
-      final anchor = _captureAnchor;
+      final clock = _clock;
+      final anchor =
+          clock == null ? _captureAnchor : demoCaptureAnchor(clock());
       final snapshot = DashboardSnapshot.fromJsonString(
         anchor == null
             ? loadDebugDashboardJson(seed)

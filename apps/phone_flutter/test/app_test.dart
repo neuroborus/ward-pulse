@@ -2538,14 +2538,18 @@ void main() {
     final privacyTop = tester.getTopLeft(find.text('Privacy Policy')).dy;
     expect(privacyTop, greaterThan(helpTop));
     expect(tester.getTopLeft(find.text('Legal')).dy, greaterThan(privacyTop));
-    expect(
-      find.text(
-        'WardPulse is an independent usage monitor. It is not affiliated with, '
-        'endorsed by, or sponsored by OpenAI, Anthropic, Cursor, Google, or any '
-        'other provider. Product names are trademarks of their respective owners.',
-      ),
-      findsOneWidget,
+    final disclaimer = find.text(
+      'WardPulse is an independent usage monitor. It is not affiliated with, '
+      'endorsed by, or sponsored by OpenAI, Anthropic, Cursor, Google, or any '
+      'other provider. Product names are trademarks of their respective owners.',
     );
+    // The header can come into view a step before the card under it.
+    await tester.scrollUntilVisible(
+      disclaimer,
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(disclaimer, findsOneWidget);
   });
 
   testWidgets('Settings Widget summary follows current widget preferences', (
@@ -12223,6 +12227,295 @@ void main() {
 
     expect(find.text('Mock data'), findsNothing);
   });
+
+  testWidgets(
+    'production Demo runs without credentials and returns to intact Live data',
+    (tester) async {
+      final authority = MemoryDataModeAuthority(
+        policy: const DataModePolicy(debugBuild: false),
+      );
+      // Mock data stays Debug-only.
+      expect(() => authority.switchTo(DataMode.mock), throwsArgumentError);
+      final live = _PublicationRepository(_alertTestSnapshot());
+      const sampleAlert = AlertSummary(
+        severity: 'warning',
+        message: 'Sample alert',
+      );
+      final demo = _PublicationRepository(
+        DashboardSnapshot.fromJson({
+          ..._surfaceSelectionSnapshot(spent: 900).toJson(),
+          'alerts': [sampleAlert.toJson()],
+          'alertConditions': [
+            const AlertCondition.crossed(
+              key: _expenseAlertKey,
+              alert: sampleAlert,
+            ).toJson(),
+          ],
+        }),
+      );
+      // Custom live caps and rules, which never shape the sample.
+      final rules = _MemoryAlertThresholdStore()..value = _savedExpenseRules;
+      final evaluated = <DashboardSnapshot>[];
+      final evaluatedRules = <AlertThresholdPreferences>[];
+      final watch = _FakeWatchSyncService();
+      final launcher = _FakePhoneWidgetSyncService();
+      final keptHistory = <WindowKey>[
+        (
+          accountId: 'cached-account',
+          allowanceId: 'weekly',
+          historyOwner: null,
+        ),
+      ];
+      final watchlist = _MemoryRecoveryWatchlistStore()..keys = keptHistory;
+      final notifications = _FakeAlertNotifier();
+      final markers = _MemoryAlertConditions();
+      final scheduler = _ManualProviderSyncScheduler();
+      addTearDown(scheduler.dispose);
+      final notices = _RejectionNotices(
+        const ConnectionRejectionNotice(
+          connection: ProviderConnections.cursorPlatform,
+          eventId: 'synthetic-event',
+          dismissed: false,
+        ),
+      );
+      Widget app() => WardPulseApp(
+        repository: live,
+        demoRepository: demo,
+        modeAuthority: authority,
+        claudePlanPaused: true,
+        alertThresholdStore: rules,
+        applyAlertSettings: (snapshot, settings) {
+          evaluated.add(snapshot);
+          evaluatedRules.add(settings);
+          return snapshot;
+        },
+        watchSyncService: watch,
+        phoneWidgetSyncService: launcher,
+        syncScheduler: scheduler,
+        recoveryWatchlistStore: watchlist,
+        // Live still sees the window spent, so Live keeps its saved history.
+        readExhaustedWindows: (_) => keptHistory,
+        readPlanRecoveries: (_, _) => const [],
+        alertNotifier: notifications,
+        alertConditionStore: markers,
+        rejectionNotices: notices,
+      );
+      final notice = find.byTooltip(
+        'Review Cursor · Team Admin API connection',
+      );
+      void expectSample(DashboardSnapshot snapshot) {
+        expect(snapshot.accounts, same(demo.snapshot.accounts));
+        expect(snapshot.alerts, isEmpty);
+        expect(snapshot.alertConditions, isEmpty);
+        expect(snapshot.reportingOutcomes, isEmpty);
+      }
+
+      await tester.pumpWidget(app());
+      await tester.pumpAndSettle();
+      expect(notice, findsWidgets);
+      expect(find.text('Demo data'), findsNothing);
+      expect(watchlist.keys, keptHistory);
+      final liveLoads = live.loads;
+      final livePolls = live.livePolls.length;
+      final historyReads = watchlist.reads;
+      final historyWrites = watchlist.writes.length;
+      final markerReads = markers.reads.length;
+
+      final toggle = await _openDemoToggle(tester);
+      expect(find.widgetWithText(SwitchListTile, 'Mock data'), findsNothing);
+      expect(tester.widget<SwitchListTile>(toggle).value, isFalse);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(authority.writes, [DataMode.demo]);
+      expect(tester.widget<SwitchListTile>(toggle).value, isTrue);
+      expectSample(watch.syncedSnapshots.last);
+      expectSample(launcher.syncedSnapshots.last);
+      expect(watch.mockModes.last, isFalse);
+      expect(evaluated, isNot(contains(same(demo.snapshot))));
+
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      expect(find.text('Demo data'), findsOneWidget);
+      expect(notice, findsNothing);
+      final dashboard = tester.widget<DashboardScreen>(
+        find.byType(DashboardScreen),
+      );
+      expectSample(dashboard.snapshot);
+      // The sample's own limits set its budget periods.
+      expect(dashboard.configuredBudgetPeriods, {
+        'openai.platform': {'today', 'week', 'month'},
+      });
+      await tester.tap(find.text('Watchface'));
+      await tester.pumpAndSettle();
+      final picker = tester.widget<WatchfaceScreen>(
+        find.byType(WatchfaceScreen),
+      );
+      expect(picker.reportingOutcomes, isEmpty);
+      expect(picker.claudePlanPaused, isTrue);
+
+      // Live rules stay editable for the return to Live.
+      await tester.tap(find.text('Providers'));
+      await tester.pumpAndSettle();
+      final providers = tester.widget<ProvidersScreen>(
+        find.byType(ProvidersScreen),
+      );
+      expect(providers.snapshot, isNull);
+      expect(providers.statuses, isEmpty);
+      expect(providers.demoDataEnabled, isTrue);
+      expect(providers.alertThresholds, same(_savedExpenseRules));
+      const platform = ProviderConnections.openAiPlatform;
+      const edited = ConnectionBudget(today: 1000, week: 3000, month: 4000);
+      await providers.onAlertThresholdsChanged((current) {
+        final saved = current.forConnection(platform);
+        return current.withConnection(platform, saved.copyWith(budget: edited));
+      });
+      await tester.pumpAndSettle();
+      expect(rules.writes, 1);
+      expect(evaluated, isNot(contains(same(demo.snapshot))));
+      expectSample(watch.syncedSnapshots.last);
+
+      // Neither foreground ticks nor a restart reach a provider.
+      scheduler.tick();
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(app());
+      await tester.pumpAndSettle();
+      expect(find.text('Demo data'), findsOneWidget);
+      expect(notice, findsNothing);
+      expectSample(watch.syncedSnapshots.last);
+      expect(live.loads, liveLoads);
+      expect(live.livePolls, hasLength(livePolls));
+      expect(watchlist.reads, historyReads);
+      expect(watchlist.writes, hasLength(historyWrites));
+      expect(markers.reads, hasLength(markerReads));
+      expect(notifications.posts, isEmpty);
+
+      await tester.tap(await _openDemoToggle(tester));
+      await tester.pumpAndSettle();
+      expect(authority.writes, [DataMode.demo, DataMode.live]);
+      expect(live.loads, greaterThan(liveLoads));
+      expect(watch.syncedSnapshots.last, same(live.snapshot));
+      expect(launcher.syncedSnapshots.last, same(live.snapshot));
+      // Live evaluates the rules edited during Demo.
+      final returned = evaluatedRules.last.forConnection(platform);
+      expect(returned.budget.week, 3000);
+      expect(watchlist.keys, keptHistory);
+      // No transition ever wrote the saved history away.
+      expect(watchlist.writes, everyElement(keptHistory));
+      expect(notifications.posts, isEmpty);
+      await tester.tap(find.text('Dashboard'));
+      await tester.pumpAndSettle();
+      expect(find.text('Demo data'), findsNothing);
+      expect(notice, findsWidgets);
+    },
+  );
+
+  testWidgets('Demo without connected providers returns to the empty state', (
+    tester,
+  ) async {
+    final authority = MemoryDataModeAuthority(
+      policy: const DataModePolicy(debugBuild: false),
+    );
+    final demo = _PublicationRepository(_surfaceSelectionSnapshot());
+    final watch = _FakeWatchSyncService();
+    final launcher = _FakePhoneWidgetSyncService();
+    Widget app() => WardPulseApp(
+      repository: const NoProvidersDashboardRepository(),
+      demoRepository: demo,
+      modeAuthority: authority,
+      claudePlanPaused: true,
+      applyAlertSettings: (snapshot, _) => snapshot,
+      watchSyncService: watch,
+      phoneWidgetSyncService: launcher,
+    );
+
+    await tester.pumpWidget(app());
+    await tester.pumpAndSettle();
+    expect(watch.syncedSnapshots.last.accounts, isEmpty);
+    await tester.tap(await _openDemoToggle(tester));
+    await tester.pumpAndSettle();
+    expect(watch.syncedSnapshots.last.accounts, same(demo.snapshot.accounts));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(app());
+    await tester.pumpAndSettle();
+    expect(find.text('Demo data'), findsOneWidget);
+    expect(watch.syncedSnapshots.last.accounts, same(demo.snapshot.accounts));
+
+    await tester.tap(await _openDemoToggle(tester));
+    await tester.pumpAndSettle();
+    expect(authority.writes, [DataMode.demo, DataMode.live]);
+    // The existing publication flow replaces the sample on both surfaces.
+    expect(watch.syncedSnapshots.last.accounts, isEmpty);
+    expect(launcher.syncedSnapshots.last.accounts, isEmpty);
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+    expect(find.text('Demo data'), findsNothing);
+  });
+
+  testWidgets(
+    'Debug Demo replaces Mock and keeps preselected Claude slots off the count',
+    (tester) async {
+      const todayId = 'budget.openai.platform.today';
+      const weekId = 'budget.openai.platform.week';
+      const monthId = 'budget.openai.platform.month';
+      const saved = [claudePlanRingId, claudeFableRingId, todayId, weekId];
+      final rings =
+          _MemoryWatchRingStore()
+            ..value = const WatchRingPreferences(selectedIds: saved);
+      final authority = MemoryDataModeAuthority();
+      final watch = _FakeWatchSyncService();
+      final sample = _surfaceSelectionSnapshot();
+      final demo = _PublicationRepository(sample);
+      await tester.pumpWidget(
+        WardPulseApp(
+          repository: ValueDashboardRepository(sample),
+          demoRepository: demo,
+          mockRepository: _PublicationRepository(sample),
+          debugDataAvailable: true,
+          modeAuthority: authority,
+          watchRingPreferenceStore: rings,
+          watchSyncService: watch,
+          applyAlertSettings: (snapshot, _) => snapshot,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final month = find.widgetWithText(CheckboxListTile, 'Month');
+      Future<void> openWatchface() async {
+        await tester.tap(find.text('Watchface'));
+        await tester.pumpAndSettle();
+        await tester.ensureVisible(month);
+        await tester.pumpAndSettle();
+      }
+
+      // A Debug Live build counts the saved Claude pair as a band.
+      await openWatchface();
+      expect(tester.widget<CheckboxListTile>(month).onChanged, isNull);
+
+      await tester.tap(await _openMockToggle(tester));
+      await tester.pumpAndSettle();
+      final demoToggle = await _openDemoToggle(tester);
+      await tester.tap(demoToggle);
+      await tester.pumpAndSettle();
+      // One switch replaces Mock with Demo.
+      expect(authority.writes, [DataMode.mock, DataMode.demo]);
+      expect(tester.widget<SwitchListTile>(demoToggle).value, isTrue);
+      final mockToggle = await _openMockToggle(tester);
+      expect(tester.widget<SwitchListTile>(mockToggle).value, isFalse);
+
+      // Demo follows the Play build: saved Claude choices use no slots.
+      await openWatchface();
+      final picker = tester.widget<WatchfaceScreen>(
+        find.byType(WatchfaceScreen),
+      );
+      expect(picker.claudePlanPaused, isTrue);
+      await tester.tap(month);
+      await tester.pumpAndSettle();
+      expect(rings.value.selectedIds, [...saved, monthId]);
+      expect(watch.syncedPreferences.last.selectedIds, [...saved, monthId]);
+      expect(watch.syncedSnapshots.last.accounts, same(sample.accounts));
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 /// Native launcher authority for an ordered [_FakePhoneWidgetSyncService]
@@ -12557,6 +12850,7 @@ class _BlockedRecoveryNotifier implements RecoveryNotifier {
 class _MemoryRecoveryWatchlistStore implements RecoveryWatchlistStore {
   List<WindowKey> keys = const [];
   int reads = 0;
+  final writes = <List<WindowKey>>[];
   Future<void> Function()? beforeRead;
 
   @override
@@ -12567,7 +12861,10 @@ class _MemoryRecoveryWatchlistStore implements RecoveryWatchlistStore {
   }
 
   @override
-  Future<void> write(List<WindowKey> value) async => keys = value;
+  Future<void> write(List<WindowKey> value) async {
+    writes.add(value);
+    keys = value;
+  }
 }
 
 class _RecordingRecoveryWake implements RecoveryWakeScheduler {
@@ -12647,6 +12944,22 @@ class _FakeAlertNotifier implements AlertNotifier {
     posts.add(key);
     bodies.add(body);
   }
+}
+
+/// Opens Settings from Dashboard, so its list starts at the top.
+Future<Finder> _openDemoToggle(WidgetTester tester) async {
+  await tester.tap(find.text('Dashboard'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Settings'));
+  await tester.pumpAndSettle();
+  final toggle = find.widgetWithText(SwitchListTile, 'Demo mode');
+  await tester.scrollUntilVisible(
+    toggle,
+    300,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+  return toggle;
 }
 
 Future<Finder> _openMockToggle(WidgetTester tester) async {

@@ -229,6 +229,9 @@ transaction over network waits.
 - Mock payloads are produced only by debug builds after the user explicitly enables mock data.
   Debug Mock data is a seeded multi-provider demo (OpenAI, Codex, Claude, Cursor), not the
   legacy single `provider: mock` golden fixture. Release Wear builds reject mock payloads.
+- Product Demo payloads are produced in any build only after the user turns on
+  **Settings → Demo mode**. The phone generates them from the same sanitized fixtures, without
+  provider requests, credentials or real account data, and omits the paused Claude plan source.
 - Account identifiers, credentials, authorization headers, prompts, and raw provider
   payloads are excluded from the watch contract.
 - Google Play services restricts Data Layer data to paired apps with matching application
@@ -325,7 +328,7 @@ read/write suppresses that condition's post and can be retried on a later accept
 after a successful claim, plugin failure or a crash can lose delivery until clear. One isolate
 serializes its work, but secure storage supplies no cross-isolate atomic claim: overlapping
 workers can duplicate attempts or race bookkeeping. This is best effort, not exactly-once
-delivery. Mock data neither posts synthetic alerts nor changes production consumed markers.
+delivery. Mock and Demo data neither post synthetic alerts nor change production consumed markers.
 
 Both switches affect delivery only. Dashboard/Wear alerts, status, watch/widget publication,
 recovery tracking and reset-wake scheduling remain independent. Recovery preference failures

@@ -66,6 +66,7 @@ Future<void> main() async {
                         : null,
               )
               : null,
+      demoRepository: DemoDashboardRepository.product(),
     ),
   );
 }

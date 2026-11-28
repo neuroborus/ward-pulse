@@ -231,14 +231,14 @@ that flag (upgrade, cutover-era or untagged rows, a save the process died before
 publishes retained input even when cadence skips every poll, as does a mode whose installed
 widgets are not all framed, which the headless and foreground paths both query natively after
 every ordered skipped load's acceptance, whatever its claim saw; otherwise skipped polls stay
-quiet. Mock has no headless publication; its
+quiet. Mock and Demo have no headless publication; their
 foreground loads always publish, and a launcher-only redraw after a restart renews as above. Selection reads never write back their migration. A refused foreground request, a widget
 edit whose source retired or one saved without a Dashboard acceptance stays pending and
 republishes only the widget from retained input or confirmed absence, after any active load or
-draining switch settles; Dashboard, alert and Watch state are untouched. Mock retries read the
-captured sample source in the current generation; without usable sample data (a failed or
-account-free read, one with no eligible row for a nonempty or default selection, or no source, as
-in Demo), the stored rows and the pending change stay as they are.
+draining switch settles; Dashboard, alert and Watch state are untouched. Mock and Demo retries
+read their captured sample source in the current generation; without usable sample data (a failed
+or account-free read, one with no eligible row for a nonempty or default selection, or no sample
+source), the stored rows and the pending change stay as they are.
 Unticketed fixture writes still supersede every older ticket.
 
 ## Own-font rendering, states and accessibility

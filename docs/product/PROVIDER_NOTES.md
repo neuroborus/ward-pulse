@@ -191,6 +191,11 @@ per-provider capability tables below are the source of truth for what each conne
   Platform accounts come from the real adapters, which report spend without limits. The demo
   derives a stand-in ceiling from the fixture's own spend and keeps it short of exhaustion.
   An invented limit must never stage an `Error`.
+- Product **Settings → Demo mode**, in every build and off by default, loads the public sample
+  from the same generator: rebased to the phone's current whole-second UTC time, with Cursor
+  Team and without the paused canonical Claude plan source. Refresh draws a new sample and
+  automatic sync keeps it. Live rules never shape it, so it shows its own limits and no alerts.
+  Demo and Debug Mock data replace each other.
 
 ## Polling cadence
 

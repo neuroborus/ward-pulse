@@ -68,6 +68,7 @@ class WardPulseApp extends StatelessWidget {
     this.debugDataAvailable = false,
     this.modeAuthority,
     this.mockRepository,
+    this.demoRepository,
     this.prepareLive,
     this.clock,
     this.recoveryWatchlistStore = const DisabledRecoveryWatchlistStore(),
@@ -103,6 +104,9 @@ class WardPulseApp extends StatelessWidget {
   final bool debugDataAvailable;
   final DataModeAuthority? modeAuthority;
   final DashboardRepository? mockRepository;
+
+  /// The public Demo sample; without one, Demo shows the empty state.
+  final DashboardRepository? demoRepository;
   final Future<void> Function()? prepareLive;
 
   /// The clock Wear refresh cooldown reads; the device clock by default.
@@ -145,6 +149,7 @@ class WardPulseApp extends StatelessWidget {
         debugDataAvailable: debugDataAvailable,
         modeAuthority: modeAuthority,
         mockRepository: mockRepository,
+        demoRepository: demoRepository,
         prepareLive: prepareLive,
         clock: clock,
         recoveryWatchlistStore: recoveryWatchlistStore,
@@ -184,6 +189,7 @@ class DashboardHost extends StatefulWidget {
     required this.debugDataAvailable,
     this.modeAuthority,
     this.mockRepository,
+    this.demoRepository,
     this.prepareLive,
     this.clock,
     required this.recoveryWatchlistStore,
@@ -217,6 +223,9 @@ class DashboardHost extends StatefulWidget {
   final bool debugDataAvailable;
   final DataModeAuthority? modeAuthority;
   final DashboardRepository? mockRepository;
+
+  /// The public Demo sample; without one, Demo shows the empty state.
+  final DashboardRepository? demoRepository;
   final Future<void> Function()? prepareLive;
 
   /// The clock Wear refresh cooldown reads; the device clock by default.
@@ -403,13 +412,43 @@ class _DashboardHostState extends State<DashboardHost>
   bool _modeChangeInFlight = false;
   bool _accountStorageUnresolved = false;
 
-  DashboardRepository _source(DataModeOperation operation) => switch (operation
-      .mode) {
-    DataMode.live => widget.repository,
-    DataMode.mock =>
-      widget.mockRepository ?? const NoProvidersDashboardRepository(),
-    DataMode.demo => const NoProvidersDashboardRepository(),
+  DashboardRepository _source(DataModeOperation operation) =>
+      operation.mode == DataMode.live
+          ? widget.repository
+          : _sampleSource(operation.mode) ??
+              const NoProvidersDashboardRepository();
+
+  /// The sample source a synthetic [mode] reads, if this host has one.
+  DashboardRepository? _sampleSource(DataMode mode) => switch (mode) {
+    DataMode.live => null,
+    DataMode.demo => widget.demoRepository,
+    DataMode.mock => widget.mockRepository,
   };
+
+  /// Demo shows its sample as generated: live rules, which stay editable for
+  /// the return to Live, neither shape nor gate it.
+  static const _sampleRules = AlertThresholdPreferences();
+
+  /// The rules [mode]'s acceptances are evaluated with; `null` while the
+  /// live rules are unread.
+  AlertThresholdPreferences? _rulesFor(DataMode mode) =>
+      mode == DataMode.demo ? _sampleRules : _alertThresholds;
+
+  /// Applies [rules] to [input]; Demo only clears alerts and conditions.
+  DashboardSnapshot _evaluate(
+    DataMode mode,
+    DashboardSnapshot input,
+    AlertThresholdPreferences rules,
+  ) =>
+      mode == DataMode.demo
+          ? applyUserAlertSettings(input, _sampleRules)
+          : widget.applyAlertSettings(input, rules);
+
+  /// Demo follows the Play build's capabilities in every build, so its
+  /// pickers, previews and publications match the reviewed release.
+  bool _claudePlanPausedIn(DataMode mode) =>
+      widget.claudePlanPaused || mode == DataMode.demo;
+
   bool _recoveryNotificationsEnabled = true;
   bool _alertNotificationsEnabled = true;
   var _alertNotificationRevision = 0;
@@ -871,9 +910,8 @@ class _DashboardHostState extends State<DashboardHost>
     bool launcher = false,
   }) async {
     final preferences = _ringPreferences;
-    final rules = _alertThresholds;
     final launcherPreferences = _widgetPreferences;
-    if (preferences == null || rules == null) return _WatchReply.unavailable;
+    if (preferences == null) return _WatchReply.unavailable;
     final DataModeOperation operation;
     try {
       operation = await _modeAuthority.begin(
@@ -884,12 +922,14 @@ class _DashboardHostState extends State<DashboardHost>
       // Unavailable mode storage cannot authorize a publication.
       return _WatchReply.unavailable;
     }
+    final rules = _rulesFor(operation.mode);
+    if (rules == null) return _WatchReply.unavailable;
     bool superseded() =>
         !mounted ||
         _activeLoad != null ||
         !identical(acceptance, _acceptance) ||
         !identical(preferences, _ringPreferences) ||
-        !identical(rules, _alertThresholds);
+        !identical(rules, _rulesFor(operation.mode));
     // [proof] runs again at the native send boundary, once Google Play
     // services is ready; a retired proof reads again, as does a summary whose
     // accepted [publication] or settings revision native already replaced.
@@ -911,7 +951,9 @@ class _DashboardHostState extends State<DashboardHost>
           );
       // Choices beyond capacity send Wear nothing; unless a launcher frame is
       // owed, accepting this read would only retire one.
-      if (!owed) await _requireWatchRingCapacity(snapshot, preferences);
+      if (!owed) {
+        await _requireWatchRingCapacity(snapshot, preferences, operation.mode);
+      }
       if (!await operation.run(() => publication.accept(snapshot))) {
         return false;
       }
@@ -926,7 +968,9 @@ class _DashboardHostState extends State<DashboardHost>
           owed: owed,
         ),
       );
-      if (owed) await _requireWatchRingCapacity(snapshot, preferences);
+      if (owed) {
+        await _requireWatchRingCapacity(snapshot, preferences, operation.mode);
+      }
       bool? owned;
       try {
         await operation.run(
@@ -996,7 +1040,7 @@ class _DashboardHostState extends State<DashboardHost>
           if (superseded()) return _WatchReply.superseded;
           continue;
         }
-        final snapshot = widget.applyAlertSettings(loaded, rules);
+        final snapshot = _evaluate(operation.mode, loaded, rules);
         if (superseded()) return _WatchReply.superseded;
         if (!await _isSourceCurrent(operation, snapshot)) continue;
         if (superseded()) return _WatchReply.superseded;
@@ -1048,7 +1092,7 @@ class _DashboardHostState extends State<DashboardHost>
       if (!mounted ||
           !identical(preferences, _widgetPreferences) ||
           rules == null ||
-          !identical(rules, _alertThresholds)) {
+          !identical(rules, _rulesFor(operation.mode))) {
         return;
       }
       _widgetPublicationPending = true;
@@ -1064,7 +1108,7 @@ class _DashboardHostState extends State<DashboardHost>
                 mounted &&
                 publicationRevision == _widgetPublicationRevision &&
                 identical(preferences, _widgetPreferences) &&
-                identical(rules, _alertThresholds),
+                identical(rules, _rulesFor(operation.mode)),
         proof: proof,
       );
     } catch (_) {
@@ -1529,9 +1573,10 @@ class _DashboardHostState extends State<DashboardHost>
     final previous = _acceptance;
     final surfaceRevision = _surfaceRevision;
     // Evaluate before persisting so a core/FFI failure does not leave the
-    // store ahead of in-memory prefs / dashboard alerts.
+    // store ahead of in-memory prefs / dashboard alerts. Live rules never
+    // shape a Demo sample, whose acceptance publishes as it is.
     final withAlerts =
-        previous == null
+        previous == null || previous.operation.mode == DataMode.demo
             ? null
             : widget.applyAlertSettings(previous.input, value);
     final settled = await _saveSurfaceSettings(
@@ -1542,8 +1587,8 @@ class _DashboardHostState extends State<DashboardHost>
     _noteSurfaceSettingsRevision(settled);
     _confirmAlertThresholds(value);
     // A settled revision retired both surfaces natively. Without an
-    // acceptance that can publish the saved rules, the current retained input
-    // replaces them once this transaction settles.
+    // acceptance that can publish the saved rules, the current acceptance or
+    // retained input replaces them once this transaction settles.
     if (previous == null || withAlerts == null) {
       if (settled != null) _replaceRetiredSurfaces(launcher: true);
       return;
@@ -1610,11 +1655,11 @@ class _DashboardHostState extends State<DashboardHost>
     if (!mounted || revision != _loadRevision) {
       throw const _RetiredDashboardLoad();
     }
-    final rules = _alertThresholds;
+    final rules = _rulesFor(operation.mode);
     final snapshot =
         rules == null
             ? repositorySnapshot
-            : widget.applyAlertSettings(repositorySnapshot, rules);
+            : _evaluate(operation.mode, repositorySnapshot, rules);
     final current = await _ownsLoad(
       revision,
       () => _isSourceCurrent(operation, snapshot),
@@ -2085,7 +2130,8 @@ class _DashboardHostState extends State<DashboardHost>
   bool _hasCurrentRules(_SnapshotAcceptance? acceptance) =>
       acceptance != null &&
       acceptance.rules != null &&
-      acceptance.ruleGeneration == _ruleGeneration &&
+      (acceptance.operation.mode == DataMode.demo ||
+          acceptance.ruleGeneration == _ruleGeneration) &&
       _isAccepted(acceptance);
 
   Future<void> _syncRecoveries(_SnapshotAcceptance acceptance) async {
@@ -2280,12 +2326,20 @@ class _DashboardHostState extends State<DashboardHost>
     }
   }
 
-  Future<void> _updateMockDataEnabled(bool value) async {
+  Future<void> _updateMockDataEnabled(bool value) =>
+      _updateSampleMode(DataMode.mock, value);
+
+  Future<void> _updateDemoDataEnabled(bool value) =>
+      _updateSampleMode(DataMode.demo, value);
+
+  /// Turns synthetic [mode] on, replacing the other one in the same switch,
+  /// or off, back to Live. Turning off a mode that is not active does nothing.
+  Future<void> _updateSampleMode(DataMode mode, bool enabled) async {
     if (_modeChangeInFlight) return;
     _modeChangeInFlight = true;
     try {
       await _serializeSnapshotSettings(() async {
-        if (!mounted || !_modeReady || value == _mockDataEnabled) return;
+        if (!mounted || !_modeReady || enabled == (_mode == mode)) return;
         ++_loadRevision;
         ++_noticeRevision;
         setState(
@@ -2295,7 +2349,7 @@ class _DashboardHostState extends State<DashboardHost>
         final DataModeSwitch result;
         try {
           result = await _modeAuthority.switchTo(
-            value ? DataMode.mock : DataMode.live,
+            enabled ? mode : DataMode.live,
           );
         } catch (error) {
           // A load denied during the drain may have advanced the load revision
@@ -2330,8 +2384,7 @@ class _DashboardHostState extends State<DashboardHost>
         if (!mounted) return;
         _surfaceRevision++;
         _wearRefreshAnchorAt = null;
-        final mock = widget.mockRepository;
-        if (result.state.mode == DataMode.mock) mock?.invalidate();
+        _sampleSource(result.state.mode)?.invalidate();
         setState(() {
           _mode = result.state.mode;
           _accountStorageUnresolved =
@@ -2486,8 +2539,8 @@ class _DashboardHostState extends State<DashboardHost>
 
   /// Publishes the pending launcher request from retained input, or from
   /// confirmed absence, without a provider poll: native refused it, its
-  /// source retired or no Dashboard acceptance exists. Mock reads its captured
-  /// sample source in the current generation; without one, as in Demo, the
+  /// source retired or no Dashboard acceptance exists. A synthetic mode reads
+  /// its captured sample source in the current generation; without one, the
   /// choice and stored rows stay as they are. Each accepted attempt also asks
   /// Wear's state, which adopts a still-valid pending watch item, and
   /// otherwise sends Wear that same acceptance; Dashboard acceptance and
@@ -2504,16 +2557,22 @@ class _DashboardHostState extends State<DashboardHost>
           await _activeLoad;
         }
         final preferences = _widgetPreferences;
-        final rules = _alertThresholds;
         if (!mounted ||
             !_widgetPublicationPending ||
             !_modeReady ||
             preferences == null ||
-            rules == null) {
+            _rulesFor(_mode) == null) {
           return;
         }
         final settingsRevision = _surfaceSettingsRevision;
         final publicationRevision = _widgetPublicationRevision;
+        // A switch that refused the publication may fail and keep this mode.
+        final operation = await _modeAuthority.begin(
+          cacheOnly: true,
+          waitForSwitch: true,
+        );
+        final rules = _rulesFor(operation.mode);
+        if (rules == null) return;
         // A cache read through the shared repository would retire a newer
         // load, and a newer request or edit publishes itself.
         bool accepted() =>
@@ -2521,12 +2580,7 @@ class _DashboardHostState extends State<DashboardHost>
             _activeLoad == null &&
             publicationRevision == _widgetPublicationRevision &&
             identical(preferences, _widgetPreferences) &&
-            identical(rules, _alertThresholds);
-        // A switch that refused the publication may fail and keep this mode.
-        final operation = await _modeAuthority.begin(
-          cacheOnly: true,
-          waitForSwitch: true,
-        );
+            identical(rules, _rulesFor(operation.mode));
         // Ordered before the cache read; a newer load's acceptance wins.
         final publication = await widget.phoneWidgetSyncService.beginLoad();
         if (!accepted()) continue;
@@ -2596,7 +2650,7 @@ class _DashboardHostState extends State<DashboardHost>
     bool current() => mounted && identical(preferences, _ringPreferences);
     bool? owned;
     try {
-      await _requireWatchRingCapacity(snapshot, preferences);
+      await _requireWatchRingCapacity(snapshot, preferences, operation.mode);
       await operation.run(
         () => publication
             .withSettingsRevision(settingsRevision)
@@ -2630,8 +2684,7 @@ class _DashboardHostState extends State<DashboardHost>
     PhoneWidgetPreferences preferences,
   ) =>
       !operation.mode.synthetic ||
-      (operation.mode == DataMode.mock &&
-          widget.mockRepository != null &&
+      (_sampleSource(operation.mode) != null &&
           snapshot != null &&
           snapshot.accounts.isNotEmpty &&
           (preferences.selectedIds?.isEmpty == true ||
@@ -2645,12 +2698,12 @@ class _DashboardHostState extends State<DashboardHost>
     PhoneWidgetPreferences preferences,
   ) async {
     // The no-provider placeholder supplies no sample rows.
-    if (operation.mode.synthetic &&
-        (operation.mode != DataMode.mock || widget.mockRepository == null)) {
+    if (operation.mode.synthetic && _sampleSource(operation.mode) == null) {
       return null;
     }
     try {
-      final snapshot = widget.applyAlertSettings(
+      final snapshot = _evaluate(
+        operation.mode,
         await operation.run(_source(operation).load),
         rules,
       );
@@ -2696,7 +2749,7 @@ class _DashboardHostState extends State<DashboardHost>
     if (!await _source(operation).isSnapshotCurrent(snapshot) || !accepted()) {
       return false;
     }
-    await _requireWatchRingCapacity(snapshot, preferences);
+    await _requireWatchRingCapacity(snapshot, preferences, operation.mode);
     // The native sender holds the lease only once Google Play services is
     // ready, after this acceptance proves its ownership again.
     bool? owned;
@@ -2731,15 +2784,18 @@ class _DashboardHostState extends State<DashboardHost>
     return true;
   }
 
-  /// Ring choices beyond capacity build no replacement, so nothing is queued
-  /// and a pending publication stays pending; native pending or owed work
-  /// still resumes.
+  /// Ring choices beyond capacity under [mode]'s capabilities build no
+  /// replacement, so nothing is queued and a pending publication stays
+  /// pending; native pending or owed work still resumes.
   Future<void> _requireWatchRingCapacity(
     DashboardSnapshot snapshot,
     WatchRingPreferences preferences,
+    DataMode mode,
   ) async {
+    final paused = _claudePlanPausedIn(mode);
     final reason = watchRingCapacityReason(
-      watchRingSelectionIds(snapshot, preferences),
+      watchRingSelectionIds(snapshot, preferences, claudePlanPaused: paused),
+      claudePlanPaused: paused,
     );
     if (reason == null) return;
     await widget.watchSyncService.resume();
@@ -2778,9 +2834,9 @@ class _DashboardHostState extends State<DashboardHost>
     DataModeOperation? operation,
   }) {
     if (!forCredentialChange && _reportingCheckActive) return;
-    // Mock demo is cached across auto-sync; refresh should draw a new seed.
+    // Samples are cached across auto-sync; refresh should draw a new seed.
     // Live repos must not clear connection recovery caches on every refresh.
-    if (_mockDataEnabled) widget.mockRepository?.invalidate();
+    if (_mode.synthetic) _sampleSource(_mode)?.invalidate();
     setState(() {
       _snapshot = _loadSnapshot(operation: operation);
     });
@@ -2929,8 +2985,9 @@ class _DashboardHostState extends State<DashboardHost>
         final data = acceptance?.snapshot;
         final acceptedRules = acceptance?.rules;
         final rulesCurrent = _hasCurrentRules(acceptance);
+        // Samples carry no live reporting outcomes, even while loading.
         final snapshot =
-            data == null || _mockDataEnabled
+            data == null || _mode.synthetic
                 ? data
                 : data.withReportingOutcomes(
                   {
@@ -2943,10 +3000,18 @@ class _DashboardHostState extends State<DashboardHost>
                 );
 
         final reportingOutcomes = <ConnectionReportingOutcome>[
-          if (!_mockDataEnabled)
+          if (!_mode.synthetic)
             for (final update in _reportingUpdates.values)
               if (update.outcome != null) update.outcome!,
         ];
+        final modeLabel = switch (_mode) {
+          DataMode.live => null,
+          DataMode.demo => 'Demo data',
+          DataMode.mock => 'Mock data',
+        };
+        final claudePlanPaused = _claudePlanPausedIn(_mode);
+        // Providers manage live connections, so Demo readings stay off it.
+        final liveSnapshot = _mode == DataMode.demo ? null : snapshot;
 
         return Scaffold(
           appBar: AppBar(
@@ -2960,8 +3025,8 @@ class _DashboardHostState extends State<DashboardHost>
             ),
             title: const Text('WardPulse'),
             actions: [
-              if (_mockDataEnabled && _selectedIndex == _dashboardIndex)
-                const Center(child: Text('Mock data')),
+              if (modeLabel != null && _selectedIndex == _dashboardIndex)
+                Center(child: Text(modeLabel)),
               if (snapshot != null)
                 _AppBarProblems(
                   problems: dashboardProblems(snapshot, _dashboardOrder),
@@ -2984,6 +3049,7 @@ class _DashboardHostState extends State<DashboardHost>
                 ringPreferences: _pendingRingPreferences ?? _ringPreferences,
                 saving: _pendingRingPreferences != null,
                 localCapsAvailable: rulesCurrent,
+                claudePlanPaused: claudePlanPaused,
                 onRingPreferencesChanged:
                     (update, {required ringId, required selected}) =>
                         _updateRingPreferences(
@@ -3017,6 +3083,7 @@ class _DashboardHostState extends State<DashboardHost>
                 isSnapshotCurrent: widget.repository.isSnapshotCurrent,
                 savingConnections: Set.unmodifiable(_reportingSaves),
                 mockDataEnabled: _mockDataEnabled,
+                demoDataEnabled: _mode == DataMode.demo,
                 editConnection: _editReportingConnection,
                 revealConnection: _connectionReveal,
                 onConnectionRevealed: (token) {
@@ -3026,9 +3093,9 @@ class _DashboardHostState extends State<DashboardHost>
                 onEditConnectionOpened: () => _editReportingConnection = null,
                 alertThresholds: _alertThresholds,
                 onAlertThresholdsChanged: _updateAlertThresholds,
-                snapshot: snapshot,
+                snapshot: liveSnapshot,
                 alertContextRevision: _surfaceRevision,
-                statuses: _providerStatuses(snapshot),
+                statuses: _providerStatuses(liveSnapshot),
               ),
               _ when _selectedIndex == _settingsIndex => SettingsScreen(
                 key: const ValueKey('settings'),
@@ -3038,6 +3105,7 @@ class _DashboardHostState extends State<DashboardHost>
                 onRefreshIntervalChanged: _updateRefreshInterval,
                 ringPreferences: rulesCurrent ? _ringPreferences : null,
                 widgetPreferences: rulesCurrent ? _widgetPreferences : null,
+                claudePlanPaused: claudePlanPaused,
                 onSyncWatch: _onSettingsSyncWatch,
                 onResumeWatch: widget.watchSyncService.resume,
                 recoveryNotificationsEnabled: _recoveryNotificationsEnabled,
@@ -3050,7 +3118,9 @@ class _DashboardHostState extends State<DashboardHost>
                         await widget.notificationCoordinator
                             ?.openAndroidNotificationSettings(),
                 debugDataAvailable: widget.debugDataAvailable,
-                mockDataReady: _modeReady,
+                dataModeReady: _modeReady,
+                demoDataEnabled: _mode == DataMode.demo,
+                onDemoDataEnabledChanged: _updateDemoDataEnabled,
                 mockDataEnabled: _mockDataEnabled,
                 onMockDataEnabledChanged: _updateMockDataEnabled,
                 accountStorageUnresolved: _accountStorageUnresolved,
@@ -3087,7 +3157,9 @@ class _DashboardHostState extends State<DashboardHost>
                 onRefresh: _pullToRefresh,
                 snapshot: snapshot,
                 configuredBudgetPeriods:
-                    acceptedRules == null
+                    acceptance?.operation.mode == DataMode.demo
+                        ? _sampleBudgetPeriods(snapshot)
+                        : acceptedRules == null
                         ? null
                         : {
                           for (final entry in acceptedRules.connections.entries)
@@ -3331,6 +3403,16 @@ class _ErrorView extends StatelessWidget {
     );
   }
 }
+
+/// Demo has no live rules, so the sample's own limits set its budget periods.
+Map<String, Set<String>> _sampleBudgetPeriods(DashboardSnapshot snapshot) => {
+  for (final account in snapshot.accounts)
+    if (account.connection case final connection?)
+      connection: {
+        for (final budget in [account.today, account.week, account.month])
+          if (budget.limit != null) budget.period,
+      },
+};
 
 DashboardLoadException _dashboardFailure(Object? error) {
   return error is DashboardLoadException
