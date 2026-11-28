@@ -4,7 +4,7 @@ This directory owns the public UI PNGs used by the site, root README and task-gu
 Apply [user-docs](../../.agents/skills/user-docs/SKILL.md) when capturing or reviewing them.
 Store assets have their own upload order and format. See the [phone gallery](store-phone/README.md),
 [foldable gallery](store-foldable/README.md), and [Wear OS and watch face gallery](store-wear/README.md).
-The [advertising assets](advertising/README.md) cover the Google Play Feature Graphic and Reddit ads.
+The [advertising assets](advertising/README.md) cover the Play Feature Graphic, icon and Reddit ads.
 The store PNGs are covered by the [WardPulse brand usage rules](../../brand/README.md#usage-rules).
 
 Select up to three showcase subjects per platform for the landing/README gallery. Android
@@ -29,8 +29,8 @@ credit values agree with Glance. The phone captures were resized from 1080×2400
 
 **Glance refresh, 2026-11-22 (Europe/Paris).** The general Glance image was recaptured on the
 round Wear emulator with the same sample credits, percentages and ring selection as the
-showcase. The fixture was refreshed for a healthy `OK` state. Its native 384×384 frame also
-supplies the [Wear store gallery](store-wear/README.md). The documentation export keeps the
+showcase. The fixture was refreshed for a healthy `OK` state. Its 384×384 frame supplied the
+[Wear store gallery](store-wear/README.md) until 2026-11-28. The documentation export keeps the
 existing 500×500 round presentation. Prior capture records below describe their dated exports.
 
 **Capture refresh, 2026-11-06 (Europe/Paris).** The library remains 37 screenshots.

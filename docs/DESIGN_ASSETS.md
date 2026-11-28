@@ -299,6 +299,7 @@ writes. So a change to the **mark** runs `just export-icons` first and then
 | Color logo (canonical SVG) | `brand/icons/wardpulse.svg` |
 | Mono watermark (canonical SVG) | `brand/icons/wardpulse-mono.svg` |
 | PNG previews (incl. faded mono) | `brand/icons/previews/` |
+| Google Play store icon, 512 × 512, owner-supplied 2026-11-25 (not written by `just export-icons`) | `brand/icons/wardpulse-play-icon-512-transparent.png` |
 | Flutter app-bar mark (1× / 2× / 3× PNG) | `apps/phone_flutter/assets/brand/` |
 | Phone / Wear launcher mipmaps | `mipmap-*/ic_launcher.png` |
 | Phone adaptive foreground | `drawable-*/ic_launcher_foreground.png` |
