@@ -6,7 +6,7 @@ use std::fmt;
 pub use demo::{
     debug_multi_provider_dashboard, debug_multi_provider_dashboard_at,
     debug_multi_provider_dashboard_json, debug_multi_provider_dashboard_json_at,
-    DebugDemoDashboardError,
+    product_demo_dashboard_at, product_demo_dashboard_json_at, DebugDemoDashboardError,
 };
 
 use crate::{BucketCapabilities, ProviderCapabilities};

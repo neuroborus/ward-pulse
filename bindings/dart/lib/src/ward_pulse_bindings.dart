@@ -41,6 +41,10 @@ final class _WardPulseBindings {
           .lookupFunction<_NativeDatedResultJson, _DartDatedResultJson>(
             'ward_pulse_debug_dashboard_snapshot_at_result_json',
           ),
+      _demoDashboardSnapshotResultJson = library
+          .lookupFunction<_NativeDatedResultJson, _DartDatedResultJson>(
+            'ward_pulse_demo_dashboard_snapshot_at_result_json',
+          ),
       _openAiDashboardSnapshotResultJson = library
           .lookupFunction<_NativeJsonTransform, _DartJsonTransform>(
             'ward_pulse_openai_dashboard_snapshot_result_json',
@@ -96,6 +100,7 @@ final class _WardPulseBindings {
   final _DartSnapshotResultJson _dashboardSnapshotResultJson;
   final _DartSeededResultJson _debugDashboardSnapshotResultJson;
   final _DartDatedResultJson _datedDebugDashboardSnapshotResultJson;
+  final _DartDatedResultJson _demoDashboardSnapshotResultJson;
   final _DartJsonTransform _openAiDashboardSnapshotResultJson;
   final _DartJsonTransform _codexDashboardSnapshotResultJson;
   final _DartJsonTransform _anthropicDashboardSnapshotResultJson;
@@ -117,6 +122,26 @@ final class _WardPulseBindings {
     if (captureAnchor == null) {
       return _decodeResultJson(_debugDashboardSnapshotResultJson(seed));
     }
+    return _loadDatedSnapshotJson(
+      seed,
+      captureAnchor,
+      _datedDebugDashboardSnapshotResultJson,
+    );
+  }
+
+  String loadDemoDashboardSnapshotJson(int seed, String captureAnchor) {
+    return _loadDatedSnapshotJson(
+      seed,
+      captureAnchor,
+      _demoDashboardSnapshotResultJson,
+    );
+  }
+
+  String _loadDatedSnapshotJson(
+    int seed,
+    String captureAnchor,
+    _DartDatedResultJson load,
+  ) {
     if (captureAnchor.contains('\u0000')) {
       throw const WardPulseBindingsException(
         'Capture anchor contains a null character.',
@@ -124,9 +149,7 @@ final class _WardPulseBindings {
     }
     final request = captureAnchor.toNativeUtf8();
     try {
-      return _decodeResultJson(
-        _datedDebugDashboardSnapshotResultJson(seed, request),
-      );
+      return _decodeResultJson(load(seed, request));
     } finally {
       malloc.free(request);
     }
@@ -270,6 +293,11 @@ String loadDebugDashboardSnapshotJson(int seed, {String? captureAnchor}) {
     seed,
     captureAnchor: captureAnchor,
   );
+}
+
+/// Seeded public Demo sample at a required whole-second UTC anchor.
+String loadDemoDashboardSnapshotJson(int seed, String captureAnchor) {
+  return _bindings.loadDemoDashboardSnapshotJson(seed, captureAnchor);
 }
 
 String normalizeOpenAiReportJson(String reportJson) {

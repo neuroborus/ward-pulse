@@ -18,6 +18,14 @@ NUL input is rejected before the C-string boundary. Phone startup exposes this o
 Rebuild both Android ABIs and qualify the actual APK/FFI symbols on HOST before acceptance;
 Flutter tests alone do not establish native symbol availability.
 
+`loadDemoDashboardSnapshotJson(seed, captureAnchor)` loads the public Demo sample through
+`ward_pulse_demo_dashboard_snapshot_at_result_json`. The anchor is required and follows the
+same rules and ownership as the dated debug call. The sample rebases every source to the
+anchor, includes Cursor Team, and drops the canonical `anthropic.plan` source before
+aggregation because the Play build pauses it; the Anthropic Organization source stays. The
+debug outputs are unchanged. Every lookup is eager, so a library without this export fails
+every binding call: rebuild the Rust libraries before loading the package.
+
 ## Plan recovery reconciliation
 
 `reconcilePlanRecoveriesJson(snapshotJson, pendingJson)` calls the additive
