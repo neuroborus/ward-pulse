@@ -19,7 +19,8 @@ use ward_pulse_providers::cursor::{
 };
 use ward_pulse_providers::mock::{
     debug_multi_provider_dashboard_json, debug_multi_provider_dashboard_json_at,
-    mock_provider_snapshot_from_usage_fixture, DebugDemoDashboardError, MockUsageFixtureError,
+    mock_provider_snapshot_from_usage_fixture, product_demo_dashboard_json_at,
+    DebugDemoDashboardError, MockUsageFixtureError,
 };
 use ward_pulse_providers::openai::plan::{
     codex_provider_snapshot_from_report_json, CodexReportError,
@@ -324,6 +325,28 @@ pub unsafe extern "C" fn ward_pulse_debug_dashboard_snapshot_at_result_json(
     transform_report_json(capture_anchor, |anchor| {
         snapshot_result_json(
             debug_multi_provider_dashboard_json_at(seed, Some(anchor))
+                .map_err(DashboardSnapshotJsonError::DebugDemo),
+        )
+    })
+}
+
+/// Builds the seeded public Demo sample at a required `YYYY-MM-DDTHH:MM:SSZ` UTC
+/// anchor. It includes Cursor Team and never the paused Claude plan source.
+/// Invalid dates return an error envelope. Free every non-null result with
+/// [`ward_pulse_string_free`]; the caller retains the input.
+///
+/// # Safety
+///
+/// Non-null `capture_anchor` must point to a valid null-terminated byte string.
+/// Null and non-UTF-8 inputs return null.
+#[no_mangle]
+pub unsafe extern "C" fn ward_pulse_demo_dashboard_snapshot_at_result_json(
+    seed: u64,
+    capture_anchor: *const c_char,
+) -> *mut c_char {
+    transform_report_json(capture_anchor, |anchor| {
+        snapshot_result_json(
+            product_demo_dashboard_json_at(seed, anchor)
                 .map_err(DashboardSnapshotJsonError::DebugDemo),
         )
     })
@@ -986,6 +1009,65 @@ mod tests {
         for input in [ptr::null(), invalid_utf8.as_ptr()] {
             assert!(
                 unsafe { ward_pulse_debug_dashboard_snapshot_at_result_json(7, input) }.is_null()
+            );
+        }
+    }
+
+    #[test]
+    fn product_demo_api_matches_the_sample_and_borrows_its_anchor() {
+        for (anchor, status) in [
+            ("2026-11-02T12:00:00Z", "success"),
+            ("2027-01-01T00:00:00Z", "success"),
+            ("2026-02-30T12:00:00Z", "error"),
+            ("", "error"),
+        ] {
+            let request = CString::new(anchor).unwrap();
+            let result =
+                unsafe { ward_pulse_demo_dashboard_snapshot_at_result_json(7, request.as_ptr()) };
+            assert!(!result.is_null());
+            let envelope: serde_json::Value =
+                serde_json::from_str(unsafe { CStr::from_ptr(result) }.to_str().unwrap()).unwrap();
+            unsafe { ward_pulse_string_free(result) };
+            assert_eq!(envelope["status"], status);
+            assert_eq!(request.to_str().unwrap(), anchor);
+            if status == "success" {
+                let json = envelope["dashboardJson"].as_str().unwrap();
+                assert_eq!(json, product_demo_dashboard_json_at(7, anchor).unwrap());
+                let snapshot: DashboardSnapshot = serde_json::from_str(json).unwrap();
+                assert_eq!(snapshot.generated_at.as_str(), anchor);
+                assert_eq!(
+                    snapshot
+                        .accounts
+                        .iter()
+                        .map(|account| account.source.explicit_connection().unwrap())
+                        .collect::<Vec<_>>(),
+                    [
+                        "openai.platform",
+                        "openai.plan",
+                        "anthropic.platform",
+                        "cursor.plan",
+                        "cursor.platform",
+                    ]
+                );
+                assert_eq!(
+                    snapshot,
+                    build_dashboard_snapshot(
+                        snapshot.generated_at.clone(),
+                        snapshot.accounts.clone()
+                    )
+                );
+            } else {
+                assert!(envelope["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains("capture anchor"));
+                assert!(envelope.get("dashboardJson").is_none());
+            }
+        }
+        let invalid_utf8 = CString::new(vec![0xff]).unwrap();
+        for input in [ptr::null(), invalid_utf8.as_ptr()] {
+            assert!(
+                unsafe { ward_pulse_demo_dashboard_snapshot_at_result_json(7, input) }.is_null()
             );
         }
     }

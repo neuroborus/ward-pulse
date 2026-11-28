@@ -63,7 +63,9 @@ void main() {
         final screen = tester.widget<DashboardScreen>(
           find.byType(DashboardScreen),
         );
-        final emitted = jsonDecode(call.arguments as String);
+        final emitted = jsonDecode(
+          (call.arguments as Map)['payload'] as String,
+        );
         binding.reportData = {
           'scope':
               'configured-empty integration target / real Rust and watch serializer',
@@ -146,9 +148,16 @@ final class _Rules implements AlertThresholdPreferenceStore {
 final class _IsolatedWatch extends MethodChannelWatchSyncService {
   const _IsolatedWatch();
   @override
-  void bindWatchRefreshListener(void Function() onRefresh) {}
+  Future<WatchRefreshIntent?> bindWatchRefreshListener(
+    void Function(WatchRefreshIntent) onRefresh,
+  ) async => null;
   @override
   void unbindWatchRefreshListener() {}
+  // Never resumes the ordinary app's pending native publication.
+  @override
+  Future<bool> isEstablished() async => true;
+  @override
+  Future<void> resume() async {}
 }
 
 final class _NoNavigation implements PhoneWidgetNavigationService {

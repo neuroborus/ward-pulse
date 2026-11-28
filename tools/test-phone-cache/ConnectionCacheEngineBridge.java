@@ -18,8 +18,16 @@ public final class ConnectionCacheEngineBridge {
         public boolean commit(Map<String, String> values) { if (fail) return false; data = new HashMap<>(values); return true; }
     }
     static final Disk disk = new Disk();
+    static final Disk modes = new Disk();
+    static boolean mockAllowed = true;
     static long now;
-    static ConnectionCacheEngine engine = new ConnectionCacheEngine(disk, () -> now);
+    static ConnectionCacheEngine engine = create();
+    static ConnectionCacheEngine create() { return new ConnectionCacheEngine(disk, modes, () -> now, mockAllowed); }
+    static Long optionalLong(String value) { return value == null ? null : Long.valueOf(value); }
+    static List<String> occurrences(Map<String, String> args) {
+        String joined = args.getOrDefault("occurrences", "");
+        return joined.isEmpty() ? List.of() : List.of(joined.split("\n"));
+    }
     public static void main(String[] unused) throws Exception {
         BufferedReader input = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
         String line;
@@ -40,14 +48,16 @@ public final class ConnectionCacheEngineBridge {
         Map<String, String> expected = collected.isEmpty() ? null : collected;
         switch (method) {
             case "acquire": engine.acquire(owner, connection, args.get("action"), expected, args.get("fetchTicket"),
+                optionalLong(args.get("generation")), args.get("settlementLease"),
                 value -> response(id, value, false), error -> response(id, null, true)); return;
-            case "acquireFetch": engine.acquireFetch(owner, connection, value -> response(id, value, false)); return;
-            case "releaseFetch":
-                String reportAt = args.get("reportAtMillis");
-                engine.releaseFetch(owner, connection, args.get("fetchTicket"), reportAt == null ? null : Long.valueOf(reportAt));
-                response(id, null, false); return;
-            case "validFetch": response(id, engine.validFetch(owner, connection, args.get("fetchTicket")), false); return;
-            case "claimAutomatic": response(id, engine.claimAutomatic(owner, connection, args.get("fetchTicket"), expected, Long.parseLong(args.get("intervalMillis"))), false); return;
+            case "acquireFetch": engine.acquireFetch(owner, connection, optionalLong(args.get("generation")),
+                value -> response(id, value, false), error -> response(id, null, true)); return;
+            case "releaseFetch": response(id, engine.releaseFetch(owner, connection, args.get("fetchTicket"),
+                optionalLong(args.get("reportAtMillis"))), false); return;
+            case "validFetch": response(id, engine.validFetch(owner, connection, args.get("fetchTicket"),
+                Boolean.parseBoolean(args.get("forAdmission"))), false); return;
+            case "claimAutomatic": response(id, engine.claimAutomatic(owner, connection, args.get("fetchTicket"), expected, Long.parseLong(args.get("intervalMillis")),
+                Boolean.parseBoolean(args.get("cacheOnly"))), false); return;
             case "stampFetch": response(id, engine.stampFetch(owner, connection, args.get("fetchTicket"), expected), false); return;
             case "finish": response(id, engine.finish(owner, connection, args.get("lease"), args.get("operation"), args.get("identity")), false); return;
             case "prepareMigration": response(id, engine.prepareMigration(owner, connection, args.get("lease")), false); return;
@@ -57,6 +67,7 @@ public final class ConnectionCacheEngineBridge {
             case "readNotice": response(id, engine.readNotice(connection), false); return;
             case "dismissNotice": response(id, engine.dismissNotice(connection, args.get("eventId")), false); return;
             case "valid": response(id, engine.valid(connection, expected), false); return;
+            case "ownsAutomatic": response(id, engine.ownsAutomatic(connection, expected), false); return;
             case "validAll":
                 Map<String, Map<String, String>> versions = new HashMap<>();
                 Map<String, Long> attemptClockEras = new HashMap<>();
@@ -86,21 +97,69 @@ public final class ConnectionCacheEngineBridge {
                     String suffix = key.substring(9); int dot = suffix.lastIndexOf('.');
                     versions.computeIfAbsent(suffix.substring(0, dot), ignored -> new HashMap<>()).put(suffix.substring(dot + 1), value);
                 });
-                boolean current = engine.validAll(versions, attemptClockEras, payloadOrders, emptyCacheOrders);
+                boolean current = engine.validAll(versions, attemptClockEras, payloadOrders, emptyCacheOrders,
+                    optionalLong(args.get("recoveryPreferenceRevision")), optionalLong(args.get("recoveryModeGeneration")));
                 response(id, current && !Boolean.parseBoolean(args.get("rejectValidation")), false);
                 return;
-            case "readSnapshot":
-                response(id, Boolean.parseBoolean(args.get("ordered")) ? engine.readSnapshotPair(connection, expected, Boolean.parseBoolean(args.get("forSelection")))
-                    : engine.readSnapshot(connection, expected), false); return;
-            case "writeSnapshot":
+            case "readSnapshot": {
+                boolean ordered = Boolean.parseBoolean(args.get("ordered"));
+                Map<String, Object> row = engine.readSnapshotPair(connection, expected,
+                    ordered && Boolean.parseBoolean(args.get("forSelection")), optionalLong(args.get("generation")));
+                response(id, ordered ? row : row.get("snapshot"), false); return;
+            }
+            case "writeSnapshot": {
                 String snapshot = args.get("snapshot");
                 long generatedAt = Long.parseLong(args.get("generatedAt"));
-                response(id, Boolean.parseBoolean(args.get("ordered")) ? engine.writeSnapshotOrdered(owner, connection, expected, snapshot, generatedAt, args.get("stamp"))
-                    : engine.writeSnapshot(connection, expected, snapshot, generatedAt), false); return;
-            case "upgradeSnapshotTimestamp": response(id, engine.upgradeSnapshotTimestamp(connection, expected, args.get("snapshot"), Long.parseLong(args.get("generatedAt"))), false); return;
-            case "clearSnapshot": engine.clearSnapshot(connection, expected); response(id, null, false); return;
-            case "restart": engine = new ConnectionCacheEngine(disk, () -> now); response(id, null, false); return;
-            case "reset": disk.data.clear(); disk.fail = false; now = 0; engine = new ConnectionCacheEngine(disk, () -> now); response(id, null, false); return;
+                boolean ordered = Boolean.parseBoolean(args.get("ordered"));
+                Map<String, Object> write = engine.writeSnapshotOrdered(owner, connection, expected, snapshot, generatedAt,
+                    ordered ? args.get("stamp") : null, optionalLong(args.get("generation")));
+                response(id, ordered ? write : "stored".equals(write.get("status")), false); return;
+            }
+            case "upgradeSnapshotTimestamp": response(id, engine.upgradeSnapshotTimestamp(connection, expected, args.get("snapshot"),
+                Long.parseLong(args.get("generatedAt")), optionalLong(args.get("generation"))), false); return;
+            case "clearSnapshot": engine.clearSnapshot(connection, expected, optionalLong(args.get("generation")));
+                response(id, null, false); return;
+            case "beginRecoveryPreferenceWrite": response(id, engine.beginRecoveryPreferenceWrite(owner), false); return;
+            case "finishRecoveryPreferenceWrite": engine.finishRecoveryPreferenceWrite(owner, args.get("token"));
+                response(id, null, false); return;
+            case "readRecoveryPreferenceRevision": response(id, engine.readRecoveryPreferenceRevision(), false); return;
+            case "recoveryDeliveryCurrent": response(id, engine.recoveryDeliveryCurrent(Long.parseLong(args.get("revision")),
+                optionalLong(args.get("generation"))), false); return;
+            case "readUnrecordedRecoveries": response(id, engine.readUnrecordedRecoveries(), false); return;
+            case "recordUnrecordedRecoveries": engine.recordUnrecordedRecoveries(occurrences(args)); response(id, null, false); return;
+            case "forgetUnrecordedRecoveries": engine.forgetUnrecordedRecoveries(occurrences(args)); response(id, null, false); return;
+            case "readMode": response(id, engine.readMode(), false); return;
+            case "initializeMode": response(id, engine.initializeMode(Boolean.parseBoolean(args.get("legacyMock"))), false); return;
+            case "beginModeImport": engine.beginModeImport(owner, token -> response(id, token, false), error -> response(id, null, true)); return;
+            case "finishModeImport":
+                engine.finishModeImport(owner, args.get("token"), args.containsKey("legacyMock") ? Boolean.valueOf(args.get("legacyMock")) : null);
+                response(id, null, false); return;
+            case "beginOperation":
+                if (Boolean.parseBoolean(args.get("waitForSwitch"))) {
+                    engine.beginAfterSwitch(owner, value -> response(id, value, false), error -> response(id, null, true));
+                } else response(id, engine.beginOperation(), false);
+                return;
+            case "operationCurrent": response(id, engine.operationCurrent(Long.parseLong(args.get("generation"))), false); return;
+            case "enterEffect": response(id, engine.enterEffect(owner, Long.parseLong(args.get("generation")),
+                Boolean.parseBoolean(args.get("settlement"))), false); return;
+            case "exitEffect": engine.exitEffect(owner, args.get("lease"), Boolean.parseBoolean(args.get("unresolved"))); response(id, null, false); return;
+            case "switchMode":
+                engine.switchMode(owner, args.get("mode"), value -> response(id, value, false), error -> {
+                    if (error instanceof ConnectionCacheEngine.ModeWriteFailure) {
+                        ConnectionCacheEngine.ModeWriteFailure failure = (ConnectionCacheEngine.ModeWriteFailure) error;
+                        Map<String, Object> details = new HashMap<>();
+                        details.put("code", "data_mode_write_failed");
+                        details.put("details", failure.unresolvedStorageFailure);
+                        response(id, details, true);
+                    } else response(id, null, true);
+                });
+                return;
+            case "failModeCommit": modes.fail = Boolean.parseBoolean(args.get("value")); response(id, null, false); return;
+            // A Profile or Release process: the same records under the production policy.
+            case "setMockAllowed": mockAllowed = Boolean.parseBoolean(args.get("value")); engine = create(); response(id, null, false); return;
+            case "restart": engine = create(); response(id, null, false); return;
+            case "reset": disk.data.clear(); disk.fail = false; modes.data.clear(); modes.fail = false; mockAllowed = true; now = 0;
+                engine = create(); response(id, null, false); return;
             case "setClock": now = Long.parseLong(args.get("value")); response(id, null, false); return;
             case "setDisk": disk.data.put(args.get("key"), args.get("value")); response(id, null, false); return;
             case "failCommit": disk.fail = Boolean.parseBoolean(args.get("value")); response(id, null, false); return;

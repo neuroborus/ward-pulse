@@ -172,7 +172,10 @@ internal class N1PairDiagnostics(
     }
 
     private fun caseLabel(summary: WatchDashboardSummary?, ordinal: Int): String? {
-        if (ordinal != 0 || summary == null || summary.schemaVersion != 9 || summary.dataMode != WatchDataMode.MOCK) {
+        // Debug Mock only, from either the v9 projection or the ordered v10 summary; never Demo.
+        if (ordinal != 0 || summary == null || summary.schemaVersion !in DIAGNOSED_SCHEMA_VERSIONS ||
+            summary.dataMode != WatchDataMode.MOCK
+        ) {
             return null
         }
         val codex = summary.rings.firstOrNull() ?: return null
@@ -208,6 +211,7 @@ internal class N1PairDiagnostics(
 
     companion object {
         const val MAX_RECORDS = 4
+        private val DIAGNOSED_SCHEMA_VERSIONS = setOf(9, 10)
     }
 }
 

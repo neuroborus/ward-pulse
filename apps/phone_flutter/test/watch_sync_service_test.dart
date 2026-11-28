@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -12,13 +13,253 @@ import 'package:ward_pulse_phone/sync/watch_sync_service.dart';
 import 'package:ward_pulse_phone/settings/watch_ring_preferences.dart';
 import 'package:ward_pulse_phone/sync/manual_refresh_window.dart';
 import 'package:ward_pulse_phone/sync/provider_sync_once.dart';
+import 'package:ward_pulse_phone/sync/data_mode.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_payload.dart';
 import 'package:ward_pulse_phone/widget/phone_widget_preferences.dart';
+import 'package:ward_pulse_phone/widget/phone_widget_sync.dart';
 
 import 'selected_data_freshness_test_support.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('only a current initial-generation Wear intent can poll', () async {
+    final authority = MemoryDataModeAuthority();
+    final arguments = {
+      'kind': 'refresh',
+      'mode': 'live',
+      'installId': authority.installId,
+      'generation': 0,
+      'requestId': 'tap',
+    };
+    final owned = WatchRefreshIntent.fromMessage(arguments);
+    expect((await owned.operation(authority)).requestId, 'tap');
+    expect((await owned.operation(authority)).cacheOnly, isFalse);
+    for (final unowned in [
+      null,
+      const {'kind': 'resend'},
+      {...arguments, 'kind': 'unknown'},
+      {...arguments, 'requestId': ''},
+      {...arguments, 'mode': 'unknown'},
+      {...arguments, 'mode': 'mock'},
+      {...arguments, 'generation': '0'},
+      {...arguments, 'generation': 1},
+      {...arguments, 'installId': 'earlier-install'},
+    ]) {
+      final intent = WatchRefreshIntent.fromMessage(unowned);
+      expect((await intent.operation(authority)).cacheOnly, isTrue);
+    }
+    await authority.switchTo(DataMode.mock);
+    await authority.switchTo(DataMode.live);
+    final retired = await owned.operation(authority);
+    expect(retired.cacheOnly, isTrue);
+    expect(retired.generation, authority.generation);
+    expect(retired.requestId, isNot('tap'));
+  });
+
+  test('an ordered Wear intent refreshes only its current owner', () async {
+    final authority = MemoryDataModeAuthority();
+    await authority.switchTo(DataMode.demo);
+    final arguments = {
+      'kind': 'refresh',
+      'mode': 'demo',
+      'installId': authority.installId,
+      'generation': authority.generation,
+      'requestId': 'demo-tap',
+      'ordered': true,
+    };
+    final owned = WatchRefreshIntent.fromMessage(arguments);
+    expect((await owned.operation(authority)).requestId, 'demo-tap');
+    for (final unowned in [
+      {...arguments, 'ordered': 'true'},
+      {...arguments, 'generation': -1},
+      {...arguments, 'generation': 1.0},
+      {...arguments, 'installId': 'earlier-install'},
+      {...arguments, 'mode': 'live'},
+    ]) {
+      final intent = WatchRefreshIntent.fromMessage(unowned);
+      expect((await intent.operation(authority)).cacheOnly, isTrue);
+    }
+    // A Demo tap that arrives after the return to Live resends the current
+    // summary without provider work.
+    await authority.switchTo(DataMode.live);
+    final retired = await owned.operation(authority);
+    expect(retired.cacheOnly, isTrue);
+    expect(retired.mode, DataMode.live);
+    expect(retired.requestId, isNot('demo-tap'));
+  });
+
+  test('Demo carries provenance in v10 and projects neutral Live in v9', () {
+    final dashboard = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    const preferences = WatchRingPreferences();
+    final normal = WatchDashboardSummaryPayload.fromSnapshot(
+      dashboard,
+      preferences,
+    );
+    final legacy = jsonDecode(normal.encode()) as Map<String, dynamic>;
+    final ordered = jsonDecode(normal.encodeSummary()) as Map<String, dynamic>;
+    expect(legacy['schemaVersion'], legacyWatchSummarySchemaVersion);
+    // The v10 body is the v9 body; Android adds owner and order fields.
+    expect(ordered, {...legacy, 'schemaVersion': watchSummarySchemaVersion});
+
+    final demo = WatchDashboardSummaryPayload.fromSnapshot(
+      dashboard,
+      preferences,
+      demoDataMode: true,
+    );
+    expect(jsonDecode(demo.encodeSummary()), {...ordered, 'dataMode': 'demo'});
+    expect(jsonDecode(demo.encode()), {
+      'schemaVersion': legacyWatchSummarySchemaVersion,
+      'dataMode': 'live',
+      'generatedAt': legacy['generatedAt'],
+      'overallStatus': 'unknown',
+      'manualRefreshAllowed': false,
+      'manualRefreshAvailableAt': null,
+      'rings': [],
+      'creditsGlance': null,
+      'today': const BudgetState.unknownPeriod('today').toJson(),
+      'week': const BudgetState.unknownPeriod('week').toJson(),
+      'allowances': [],
+      'providers': [],
+      'alerts': [],
+      'isStale': false,
+    });
+  });
+
+  test('every scoped sync sends both versions for Android to order', () async {
+    final published = _captureWatchPublications();
+    final authority = MemoryDataModeAuthority();
+    await authority.switchTo(DataMode.demo);
+    final operation = await authority.begin();
+    final dashboard = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    const service = MethodChannelWatchSyncService();
+    // A slot change, cadence and an explicit sync each republish the same
+    // snapshot; each arrival takes its own native order.
+    for (var sent = 0; sent < 3; sent++) {
+      await operation.run(
+        () => service.sync(dashboard, const WatchRingPreferences()),
+      );
+    }
+    expect(published, hasLength(3));
+    for (final call in published) {
+      final arguments = call.arguments as Map;
+      expect(arguments['generation'], authority.generation);
+      expect(arguments['selection'], isNull);
+      expect(jsonDecode(arguments['payload'] as String)['dataMode'], 'live');
+      final summary = jsonDecode(arguments['summary'] as String) as Map;
+      expect(summary['schemaVersion'], watchSummarySchemaVersion);
+      expect(summary['dataMode'], 'demo');
+      for (final owner in ['installId', 'generation', 'sequence']) {
+        expect(summary.containsKey(owner), isFalse, reason: owner);
+      }
+    }
+    // An unscoped publication keeps the v9 call form; Android derives v10.
+    await service.sync(dashboard, const WatchRingPreferences());
+    expect(published.last.arguments, isA<String>());
+  });
+
+  test('a claimed sync carries its load and settings revision', () async {
+    final authority = MemoryDataModeAuthority();
+    await authority.switchTo(DataMode.demo);
+    final operation = await authority.begin();
+    final dashboard = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    final published = <MethodCall>[];
+    var refuse = false;
+    const channel = MethodChannel('app.wardpulse/watch_sync');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      published.add(call);
+      if (refuse) {
+        throw PlatformException(code: 'watch_summary_superseded');
+      }
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    const service = MethodChannelWatchSyncService();
+    Future<void> sync(PhoneWidgetPublicationInput input) => operation.run(
+      () => input.run(
+        () => service.sync(dashboard, const WatchRingPreferences()),
+      ),
+    );
+
+    const accepted = PhoneWidgetPublicationInput(load: 4, observed: 0);
+    await sync(accepted.withSettingsRevision(6));
+    // A save in flight when the foreground's choices were read matches no
+    // settled revision.
+    await sync(accepted.withSettingsRevision(null));
+    expect(
+      [
+        for (final call in published)
+          (
+            (call.arguments as Map)['load'],
+            (call.arguments as Map)['settingsRevision'],
+          ),
+      ],
+      [(4, 6), (4, -1)],
+    );
+
+    // A newer accepted load or a later save retired the read natively.
+    refuse = true;
+    await expectLater(
+      sync(accepted.withSettingsRevision(6)),
+      throwsA(isA<WatchSummarySuperseded>()),
+    );
+    refuse = false;
+    // Without a native authority nothing is claimed.
+    await sync(PhoneWidgetPublicationInput.unordered);
+    expect((published.last.arguments as Map).containsKey('load'), isFalse);
+  });
+
+  test('a send whose owner is refused at readiness is superseded', () async {
+    final dashboard = DashboardSnapshot.fromJsonString(
+      File('../../fixtures/snapshots/dashboard_today.json').readAsStringSync(),
+    );
+    const channel = MethodChannel('app.wardpulse/watch_sync');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final answers = <Object?>[];
+    // Android asks once readiness settles, and answers a refused owner as
+    // superseded without submitting.
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      final reply = Completer<Object?>();
+      await messenger.handlePlatformMessage(
+        channel.name,
+        channel.codec.encodeMethodCall(
+          MethodCall(
+            'confirmWatchSummary',
+            (call.arguments as Map)['confirmation'],
+          ),
+        ),
+        (data) => reply.complete(channel.codec.decodeEnvelope(data!)),
+      );
+      final owned = await reply.future;
+      answers.add(owned);
+      if (owned != true) {
+        throw PlatformException(code: 'watch_summary_superseded');
+      }
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    const service = MethodChannelWatchSyncService();
+    var current = false;
+    Future<void> sync() => service.sync(
+      dashboard,
+      const WatchRingPreferences(),
+      isCurrent: () async => current,
+    );
+
+    await expectLater(sync(), throwsA(isA<WatchSummarySuperseded>()));
+    current = true;
+    await sync();
+    expect(answers, [false, true]);
+  });
 
   test(
     'paused rings keep their saved IDs and free publication capacity',
@@ -90,7 +331,12 @@ void main() {
         'Selected ring data unavailable',
       );
       await debug.sync(snapshot, mixed);
-      expect(published, isEmpty);
+      // Beyond capacity nothing is published, but pending native work resumes.
+      expect(
+        [for (final call in published) call.method],
+        ['resumeWatchSummary'],
+      );
+      published.clear();
       await production.sync(snapshot, mixed);
       await production.sync(snapshot, planOnly);
 
@@ -127,6 +373,42 @@ void main() {
       expect(planOnly.selectedIds, [claudePlanRingId]);
     },
   );
+
+  test('Debug builds publish Demo under the Play capability policy', () async {
+    final published = _captureWatchPublications();
+    final sample = freshnessSnapshot([
+      freshnessAccount('claude', 'anthropic.platform'),
+    ]);
+    const budgets = [
+      'budget.anthropic.platform.today',
+      'budget.anthropic.platform.week',
+      'budget.anthropic.platform.month',
+    ];
+    // A Debug selection that kept its Claude plan ring from Live.
+    const saved = WatchRingPreferences(
+      selectedIds: [claudePlanRingId, ...budgets],
+    );
+    const debug = MethodChannelWatchSyncService(claudePlanPaused: false);
+    final authority = MemoryDataModeAuthority();
+    final live = await authority.begin();
+    await live.run(() => debug.sync(sample, saved));
+    // Live counts the Claude ring, so the choice exceeds the slots.
+    expect([for (final call in published) call.method], ['resumeWatchSummary']);
+    published.clear();
+
+    await authority.switchTo(DataMode.demo);
+    final demo = await authority.begin();
+    await demo.run(() => debug.sync(sample, saved));
+    final call = published.single;
+    expect(call.method, 'syncWatchSummary');
+    final summary = jsonDecode((call.arguments as Map)['summary'] as String);
+    expect(summary['dataMode'], 'demo');
+    expect(
+      (summary['rings'] as List).map((ring) => (ring as Map)['id']),
+      unorderedEquals(budgets),
+    );
+    expect(saved.selectedIds, [claudePlanRingId, ...budgets]);
+  });
 
   for (final (label, settings) in [
     (
@@ -515,10 +797,15 @@ void main() {
     'invalid publication retains the last summary while local sync continues',
     () async {
       final published = <String>[];
+      var resumes = 0;
       const channel = MethodChannel('app.wardpulse/watch_sync');
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
       messenger.setMockMethodCallHandler(channel, (call) async {
+        if (call.method == 'resumeWatchSummary') {
+          resumes++;
+          return null;
+        }
         expect(call.method, 'syncWatchSummary');
         published.add(call.arguments as String);
         return null;
@@ -557,6 +844,7 @@ void main() {
       );
       final localUpdates = <String>[];
       await providerSyncOnce(
+        modeAuthority: MemoryDataModeAuthority(),
         load:
             (_) async => ProviderSyncWork(
               syncWatch: () => service.sync(dashboard, invalid),
@@ -571,6 +859,9 @@ void main() {
             (step, error, stack) => fail('Unexpected $step failure: $error'),
       );
       expect(published, [lastSummary]);
+      // The capacity-invalid sync builds no replacement but resumes pending
+      // native publication.
+      expect(resumes, 1);
       expect(localUpdates, ['widget', 'recovery']);
       await service.sync(dashboard, valid);
       expect(published, hasLength(2));

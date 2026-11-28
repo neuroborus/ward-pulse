@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wardpulse.app/schemas/watch_dashboard_summary_v10.schema.json",
+  "title": "WatchDashboardSummaryV10",
+  "description": "The ordered summary in the `summary` key of the `/wardpulse/watch-summary` Data Item. The same item keeps the v9 `payload` projection for older Wear apps. The body matches v9; provenance adds product Demo, and the owner fields let Wear accept only the phone install, data-mode generation and publication order it verified.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "dataMode",
+    "installId",
+    "generation",
+    "sequence",
+    "generatedAt",
+    "overallStatus",
+    "rings",
+    "creditsGlance",
+    "today",
+    "week",
+    "allowances",
+    "providers",
+    "alerts",
+    "isStale",
+    "manualRefreshAllowed",
+    "manualRefreshAvailableAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 10 },
+    "dataMode": {
+      "description": "Provenance: live provider readings, product Demo samples, or Debug-only Mock samples.",
+      "enum": ["live", "demo", "mock"]
+    },
+    "installId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "Random identifier of the phone's data-mode record. Never an account id or credential."
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "The phone data-mode generation that published this summary."
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Publication order within one install, allocated before the asynchronous send."
+    },
+    "generatedAt": { "$ref": "watch_dashboard_summary.schema.json#/properties/generatedAt" },
+    "overallStatus": { "$ref": "watch_dashboard_summary.schema.json#/properties/overallStatus" },
+    "manualRefreshAllowed": { "$ref": "watch_dashboard_summary.schema.json#/properties/manualRefreshAllowed" },
+    "manualRefreshAvailableAt": { "$ref": "watch_dashboard_summary.schema.json#/properties/manualRefreshAvailableAt" },
+    "rings": { "$ref": "watch_dashboard_summary.schema.json#/properties/rings" },
+    "selectedRingDataUnavailable": { "$ref": "watch_dashboard_summary.schema.json#/properties/selectedRingDataUnavailable" },
+    "creditsGlance": { "$ref": "watch_dashboard_summary.schema.json#/properties/creditsGlance" },
+    "today": { "$ref": "watch_dashboard_summary.schema.json#/properties/today" },
+    "week": { "$ref": "watch_dashboard_summary.schema.json#/properties/week" },
+    "allowances": { "$ref": "watch_dashboard_summary.schema.json#/properties/allowances" },
+    "providers": { "$ref": "watch_dashboard_summary.schema.json#/properties/providers" },
+    "alerts": { "$ref": "watch_dashboard_summary.schema.json#/properties/alerts" },
+    "isStale": { "$ref": "watch_dashboard_summary.schema.json#/properties/isStale" }
+  }
+}

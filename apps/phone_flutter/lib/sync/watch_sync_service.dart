@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -6,26 +5,130 @@ import 'package:ward_pulse_bindings/ward_pulse_bindings.dart'
     show mergeDashboardSnapshotsJson;
 import 'package:ward_pulse_watch_sync/ward_pulse_watch_sync.dart';
 
+import '../dashboard/connection_snapshot_cache.dart';
 import '../dashboard/dashboard_models.dart';
 import '../providers/claude_plan_pause.dart';
 import '../providers/provider_connection.dart';
 import '../settings/watch_ring_preferences.dart';
+import '../widget/phone_widget_sync.dart';
+import 'data_mode.dart';
 import 'manual_refresh_window.dart';
 import 'selected_data_freshness.dart';
 import 'watch_credits_glance.dart';
 
+/// The ordered summary in the `summary` key of the watch Data Item.
+const watchSummarySchemaVersion = 10;
+
+/// The `payload` projection that Wear apps without v10 read.
+const legacyWatchSummarySchemaVersion = 9;
+
+/// A newer accepted load, or a settings save after the revision the summary
+/// was built from, retired a [WatchSyncService.sync]; a fresh read answers.
+final class WatchSummarySuperseded implements Exception {
+  const WatchSummarySuperseded();
+}
+
 abstract interface class WatchSyncService {
+  /// Queues [snapshot] for Wear. [isCurrent] proves its load and credential
+  /// ownership again at the native send boundary, after Google Play services
+  /// is ready; a `false` answer drops the summary for its newer owner and
+  /// throws [WatchSummarySuperseded]. In
+  /// Live, Android then admits the send with [snapshot]'s native selection
+  /// proof, its credential versions and cache ordering, in one step. A
+  /// credential retirement or cache write after that answer throws
+  /// [DataModeRetired] instead of publishing.
+  ///
+  /// Under a [PhoneWidgetPublicationInput.current] claim, the summary is
+  /// ordered by the shared accepted load and settings revision too: once
+  /// either is replaced, it throws [WatchSummarySuperseded] instead of
+  /// publishing, and none of its later puts is sent.
   Future<void> sync(
     DashboardSnapshot snapshot,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,
+    Future<bool> Function()? isCurrent,
   });
 
-  /// Native → Dart: Wear Glance asked the phone to sync providers.
-  void bindWatchRefreshListener(void Function() onRefresh);
+  /// Whether Wear's desired summary is a published v10 summary of the current
+  /// data-mode generation. A cadence-skipped load republishes retained input
+  /// until it is: an upgrade from v9, or the empty summary a mode transition
+  /// left. Unknown state reads as established. Asking also resumes pending
+  /// native publication.
+  Future<bool> isEstablished();
+
+  /// Replaces a summary the data-mode record owes Wear, or resumes a pending
+  /// or retrying native publication: warm resume and explicit sync, also when
+  /// the current load cannot build a replacement. Never throws.
+  Future<void> resume();
+
+  /// Binds warm requests and claims the pending launch request before loading.
+  Future<WatchRefreshIntent?> bindWatchRefreshListener(
+    void Function(WatchRefreshIntent) onRefresh,
+  );
 
   void unbindWatchRefreshListener();
+}
+
+/// A tap can refresh only the operation captured at native ingress: a v10 tap
+/// naming the current install and generation, or a v9 tap in generation 0.
+final class WatchRefreshIntent {
+  const WatchRefreshIntent.resend() : _state = null, _requestId = null;
+
+  const WatchRefreshIntent._(this._state, this._requestId);
+
+  factory WatchRefreshIntent.fromMessage(Object? message) {
+    final ordered = message is Map && message['ordered'] == true;
+    if (message
+        case {
+          'kind': 'refresh',
+          'generation': final int generation,
+          'installId': final String installId,
+          'requestId': final String requestId,
+          'mode': final String mode,
+        }
+        when (generation == 0 || ordered) &&
+            generation >= 0 &&
+            installId.isNotEmpty &&
+            requestId.isNotEmpty) {
+      try {
+        return WatchRefreshIntent._(
+          DataModeState(
+            installId: installId,
+            generation: generation,
+            mode: DataMode.parse(mode),
+          ),
+          requestId,
+        );
+      } on StateError {
+        // Unknown ownership can only request a resend.
+      }
+    }
+    return const WatchRefreshIntent.resend();
+  }
+
+  /// The owner and request captured at native ingress; `null` for a resend.
+  final DataModeState? _state;
+  final String? _requestId;
+
+  /// Starts a cache-only resend if the captured owner is no longer current.
+  Future<DataModeOperation> operation(DataModeAuthority authority) async {
+    final state = _state;
+    if (state != null) {
+      final current = await authority.read();
+      if (current.installId == state.installId &&
+          current.generation == state.generation &&
+          current.mode == state.mode &&
+          await authority.isCurrent(state.generation)) {
+        return DataModeOperation(
+          authority: authority,
+          state: state,
+          requestId: _requestId!,
+        );
+      }
+    }
+    return authority.begin(cacheOnly: true, waitForSwitch: true);
+  }
 }
 
 class MethodChannelWatchSyncService implements WatchSyncService {
@@ -33,6 +136,7 @@ class MethodChannelWatchSyncService implements WatchSyncService {
     this.claudePlanPaused = claudePlanPausedInBuild,
   });
 
+  /// The build's Claude plan policy; Demo publications pause it regardless.
   final bool claudePlanPaused;
 
   static const _watchRefreshChannel = MethodChannel(
@@ -47,43 +151,96 @@ class MethodChannelWatchSyncService implements WatchSyncService {
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,
+    Future<bool> Function()? isCurrent,
   }) async {
+    final operation = DataModeOperation.current;
+    final demo = operation?.mode == DataMode.demo;
+    // Demo publishes the Play build's capabilities in every build.
+    final paused = claudePlanPaused || demo;
     // Keep the last valid publication while the owner corrects saved choices.
     if (watchRingCapacityReason(
           watchRingSelectionIds(
             snapshot,
             ringPreferences,
-            claudePlanPaused: claudePlanPaused,
+            claudePlanPaused: paused,
           ),
-          claudePlanPaused: claudePlanPaused,
+          claudePlanPaused: paused,
         ) !=
         null) {
+      // Pending native work still resumes, though this sync replaces nothing.
+      await resume();
       return;
     }
-    await WardPulseWatchSync.syncSummary(
-      WatchDashboardSummaryPayload.fromSnapshot(
-        snapshot,
-        ringPreferences,
-        manualRefreshAnchorAt: manualRefreshAnchorAt,
-        mockDataMode: mockDataMode,
-        claudePlanPaused: claudePlanPaused,
-      ).encode(),
+    final input = PhoneWidgetPublicationInput.current;
+    final payload = WatchDashboardSummaryPayload.fromSnapshot(
+      snapshot,
+      ringPreferences,
+      manualRefreshAnchorAt: manualRefreshAnchorAt,
+      mockDataMode: mockDataMode,
+      demoDataMode: demo,
+      claudePlanPaused: paused,
     );
+    try {
+      await WardPulseWatchSync.syncSummary(
+        payload.encode(),
+        // Android adds the owner and order fields at the send boundary.
+        summary: operation == null ? null : payload.encodeSummary(),
+        generation: operation?.generation,
+        isCurrent: isCurrent,
+        selection:
+            operation?.mode == DataMode.live
+                ? snapshotSelectionProof(snapshot)
+                : null,
+        load: input?.load,
+        settingsRevision: input?.settingsRevision,
+      );
+    } on PlatformException catch (error) {
+      if (error.code == 'watch_summary_retired') throw DataModeRetired();
+      if (error.code == 'watch_summary_superseded') {
+        throw const WatchSummarySuperseded();
+      }
+      rethrow;
+    }
   }
 
   @override
-  void bindWatchRefreshListener(void Function() onRefresh) {
+  Future<bool> isEstablished() async {
+    try {
+      return await WardPulseWatchSync.isSummaryEstablished();
+    } catch (_) {
+      // Unknown state cannot hold a cadence-skipped load's publication.
+      return true;
+    }
+  }
+
+  @override
+  Future<void> resume() async {
+    try {
+      await WardPulseWatchSync.resumeSummary();
+    } catch (_) {
+      // Startup, a Wear route proof or a later sync resumes it instead.
+    }
+  }
+
+  @override
+  Future<WatchRefreshIntent?> bindWatchRefreshListener(
+    void Function(WatchRefreshIntent) onRefresh,
+  ) async {
     _watchRefreshChannel.setMethodCallHandler((call) async {
       if (call.method == _watchRefreshMethod) {
-        onRefresh();
+        onRefresh(WatchRefreshIntent.fromMessage(call.arguments));
       }
     });
-    // Flush a refresh tap that arrived before the Dart handler was bound.
-    unawaited(
-      _watchRefreshChannel
-          .invokeMethod<void>(_watchRefreshReadyMethod)
-          .catchError((_) {}),
-    );
+    try {
+      final pending = await _watchRefreshChannel.invokeMethod<Object?>(
+        _watchRefreshReadyMethod,
+      );
+      return pending == null ? null : WatchRefreshIntent.fromMessage(pending);
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return const WatchRefreshIntent.resend();
+    }
   }
 
   @override
@@ -103,6 +260,7 @@ class WatchDashboardSummaryPayload {
     DateTime? manualRefreshAnchorAt,
     DateTime? clock,
     bool mockDataMode = false,
+    bool demoDataMode = false,
     bool claudePlanPaused = claudePlanPausedInBuild,
   }) {
     final planConnection = ProviderConnections.claudePlan.storageKey;
@@ -176,8 +334,12 @@ class WatchDashboardSummaryPayload {
         snapshot.accounts.isNotEmpty &&
         snapshot.accounts.every((account) => account.provider == 'mock');
     return WatchDashboardSummaryPayload._({
-      'schemaVersion': 9,
-      'dataMode': mockDataMode || isLegacyMockProvider ? 'mock' : 'live',
+      'dataMode':
+          demoDataMode
+              ? 'demo'
+              : mockDataMode || isLegacyMockProvider
+              ? 'mock'
+              : 'live',
       'generatedAt': snapshot.generatedAt.toUtc().toIso8601String(),
       'overallStatus': snapshot.overallStatus.wireName,
       'manualRefreshAllowed': window.allowed,
@@ -242,7 +404,33 @@ class WatchDashboardSummaryPayload {
     });
   }
 
-  String encode() => jsonEncode(_value);
+  /// The v9 `payload` projection. v9 has no product Demo, so Demo projects
+  /// as a neutral empty Live summary with refresh disabled.
+  String encode() => jsonEncode(
+    _value['dataMode'] == 'demo'
+        ? {
+          'schemaVersion': legacyWatchSummarySchemaVersion,
+          'dataMode': 'live',
+          'generatedAt': _value['generatedAt'],
+          'overallStatus': ProviderStatus.unknown.wireName,
+          'manualRefreshAllowed': false,
+          'manualRefreshAvailableAt': null,
+          'rings': const <Object?>[],
+          'creditsGlance': null,
+          'today': _budgetToJson(const BudgetState.unknownPeriod('today')),
+          'week': _budgetToJson(const BudgetState.unknownPeriod('week')),
+          'allowances': const <Object?>[],
+          'providers': const <Object?>[],
+          'alerts': const <Object?>[],
+          'isStale': false,
+        }
+        : {'schemaVersion': legacyWatchSummarySchemaVersion, ..._value},
+  );
+
+  /// The v10 body with its provenance, before Android adds `installId`,
+  /// `generation` and `sequence`.
+  String encodeSummary() =>
+      jsonEncode({'schemaVersion': watchSummarySchemaVersion, ..._value});
 }
 
 extension _ProviderStatusWireName on ProviderStatus {

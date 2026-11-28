@@ -1141,15 +1141,22 @@ final class _Recoveries implements RecoveryNotifier {
 
 final class _NoWatch implements WatchSyncService {
   @override
-  void bindWatchRefreshListener(void Function() onRefresh) {}
+  Future<WatchRefreshIntent?> bindWatchRefreshListener(
+    void Function(WatchRefreshIntent) onRefresh,
+  ) async => null;
   @override
   void unbindWatchRefreshListener() {}
+  @override
+  Future<bool> isEstablished() async => true;
+  @override
+  Future<void> resume() async {}
   @override
   Future<void> sync(
     DashboardSnapshot snapshot,
     WatchRingPreferences ringPreferences, {
     DateTime? manualRefreshAnchorAt,
     bool mockDataMode = false,
+    Future<bool> Function()? isCurrent,
   }) async {}
 }
 

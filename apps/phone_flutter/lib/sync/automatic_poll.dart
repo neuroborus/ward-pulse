@@ -28,6 +28,10 @@ final class AutomaticPollContext {
 
   /// Confirmed native cadence anchors by connection, including corrections.
   final automaticAt = <String, DateTime>{};
+
+  /// Native observation order of each [automaticAt] sample, so competing
+  /// loads resolve by when Android claimed cadence, not when Dart started.
+  final samples = <String, int>{};
   bool get whollySkipped => skipped.isNotEmpty && attempted.isEmpty;
 
   static Future<Duration> _savedInterval() async =>

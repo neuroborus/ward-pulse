@@ -46,6 +46,13 @@
                     android:path="/wardpulse/refresh-request"
                     android:scheme="wear" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.REQUEST_RECEIVED" />
+                <data
+                    android:host="*"
+                    android:path="/wardpulse/summary-owner"
+                    android:scheme="wear" />
+            </intent-filter>
         </service>
 
         <receiver

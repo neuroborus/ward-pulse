@@ -5,6 +5,15 @@
 watch-face baseline in [`WATCH_RING_DESIGN.md`](WATCH_RING_DESIGN.md): this screen is a
 **text legend** for face ring colors, not a face clone.
 
+## Revision 2026-11-27 — Demo data detail
+
+A summary with product Demo provenance shows **Demo data** in the existing detail line,
+ahead of **Mock data**, which stays reserved for Debug Mock; both outrank `Stale`, and either
+keeps the pulse at `!OK`. The refresh control still follows the phone's refresh flags and the
+rate limit. Layout, colors, rings, complications and review art remain unchanged. Updated-app
+Demo and Mock detail rendering remains **Pending** for post-execution HOST verification.
+Earlier records retain their dated scope.
+
 ## Revision 2026-11-04 — exact Cursor pair title
 
 The selected pair title is **Cursor / Others** only for renderable inner
@@ -763,10 +772,10 @@ Pulse (`OK` / `!OK`) and interactivity are **independent**:
 | Provider rate-limited | `!OK` (gray) | **Disabled** | `Rate limited` |
 
 - When a **specific problem** is known, show it under the control (`Stale`, `Auth required`,
-  `Rate limited`, `Mock data`, …). Keep the primary glyph as `OK` / `!OK` only.
+  `Rate limited`, `Demo data`, `Mock data`, …). Keep the primary glyph as `OK` / `!OK` only.
 - Cadence cooldown is **not** a problem — do not show `Rate limited` or flip to `!OK` for it.
-- Only **one** detail fits, so problems have a precedence: `Mock data`, then `Stale`, then
-  `Rate limited`, then the remaining statuses. Trustworthiness of the numbers outranks the
+- Only **one** detail fits, so problems have a precedence: `Demo data`, then `Mock data`, then
+  `Stale`, then `Rate limited`, then the remaining statuses. Trustworthiness of the numbers outranks the
   reason a refresh failed, because a rate limit already shows as a gray disabled control while
   age has no other channel. Precedence changes the detail line only — the control still follows
   the rate limit.

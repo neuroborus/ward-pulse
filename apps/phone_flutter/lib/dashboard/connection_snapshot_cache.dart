@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import '../providers/connection_lifecycle.dart';
 import '../providers/provider_connection.dart';
+import '../settings/recovery_notification_preferences.dart';
+import '../sync/data_mode.dart';
 import 'dashboard_models.dart';
 
 final class CapturedConnectionCache {
@@ -74,6 +76,43 @@ enum SnapshotWriteStatus { stored, older, storageFailure, superseded }
 
 typedef SnapshotWriteResult = ({SnapshotWriteStatus status, int? minimumEra});
 
+/// The native state [snapshot]'s selection depends on, as `validAll`
+/// arguments: each connection's credential version and cache ordering. A
+/// native effect proves it in the same step it starts, after
+/// [validateSnapshotSelection] has checked the selection's own shape.
+Map<String, Object> snapshotSelectionProof(DashboardSnapshot snapshot) {
+  final versions = {
+    ...snapshot.connectionVersions,
+    // A matching outcome stamp replaces the carried version.
+    for (final outcome in snapshot.reportingOutcomes)
+      if (outcome.credentialVersion case final version?)
+        outcome.connection.storageKey: version.values,
+  };
+  final attemptEras = <String, int>{};
+  final payloadOrders = <String, Map<String, Object>>{};
+  final cacheOrders = <String, String>{};
+  for (final MapEntry(:key, :value) in snapshot.snapshotOrdering.entries) {
+    if (value.attemptEra case final era?) attemptEras[key] = era;
+    if (value.payload case final payload?) {
+      payloadOrders[key] = {
+        'era': payload.era,
+        'generatedAt': payload.generatedAtMicros,
+        if (value.confirmedRowId case final id?) 'rowId': id,
+      };
+    }
+    if ((value.emptyCacheOrder ?? value.cacheObservation?.order)
+        case final order?) {
+      cacheOrders[key] = order;
+    }
+  }
+  return {
+    'versions': versions,
+    if (attemptEras.isNotEmpty) 'attemptClockEras': attemptEras,
+    if (payloadOrders.isNotEmpty) 'payloadOrders': payloadOrders,
+    if (cacheOrders.isNotEmpty) 'emptyCacheOrders': cacheOrders,
+  };
+}
+
 /// Validates the complete selection through the shared native lifecycle gate.
 Future<bool> validateSnapshotSelection(
   DashboardSnapshot snapshot,
@@ -107,31 +146,25 @@ Future<bool> validateSnapshotSelection(
             );
     if (account.historyOwner != owner) return false;
   }
-  final attemptEras = <String, int>{};
-  final payloadOrders = <String, Map<String, Object>>{};
-  final cacheOrders = <String, String>{};
-  for (final MapEntry(:key, :value) in snapshot.snapshotOrdering.entries) {
-    if (value.selectionUnverified) return false;
-    if (value.attemptEra case final era?) attemptEras[key] = era;
-    if (value.payload case final payload?) {
-      payloadOrders[key] = {
-        'era': payload.era,
-        'generatedAt': payload.generatedAtMicros,
-        if (value.confirmedRowId case final id?) 'rowId': id,
-      };
-    }
-    if ((value.emptyCacheOrder ?? value.cacheObservation?.order)
-        case final order?) {
-      cacheOrders[key] = order;
-    }
+  if (snapshot.snapshotOrdering.values.any(
+    (value) => value.selectionUnverified,
+  )) {
+    return false;
   }
-  return await platform.invoke('validAll', {
-        'versions': versions,
-        if (attemptEras.isNotEmpty) 'attemptClockEras': attemptEras,
-        if (payloadOrders.isNotEmpty) 'payloadOrders': payloadOrders,
-        if (cacheOrders.isNotEmpty) 'emptyCacheOrders': cacheOrders,
+  final recoveryRevision = RecoveryPreferenceRevision.current;
+  final current =
+      await platform.invoke('validAll', {
+        ...snapshotSelectionProof(snapshot),
+        // A recovery post also proves its switch choice and Live mode
+        // admission in this step.
+        if (recoveryRevision != null)
+          'recoveryPreferenceRevision': recoveryRevision.value,
+        if (recoveryRevision?.generation case final generation?)
+          'recoveryModeGeneration': generation,
       }) ==
       true;
+  if (current) recoveryRevision?.markProven();
+  return current;
 }
 
 /// Only canonical normalized data for the owning connection is persisted.
@@ -154,10 +187,17 @@ final class ConnectionSnapshotCache {
   ]) => _platform.invoke(method, {
     'connection': connection,
     if (expected != null) 'expected': expected.values,
+    if (DataModeOperation.current case final operation?)
+      'generation': operation.generation,
     ...values,
   });
   Future<bool> valid(CredentialVersion version) async =>
       await _invoke('valid', version) == true;
+
+  /// Whether automatic cadence claimed under [version] still belongs to the
+  /// confirmed credential; a snapshot epoch change keeps it.
+  Future<bool> ownsAutomatic(CredentialVersion version) async =>
+      await _invoke('ownsAutomatic', version) == true;
   Future<bool> validSnapshot(DashboardSnapshot snapshot) =>
       validateSnapshotSelection(snapshot, _platform);
 

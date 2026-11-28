@@ -13,6 +13,7 @@ import android.os.Bundle
 import android.util.SizeF
 import android.view.View
 import android.widget.RemoteViews
+import app.wardpulse.watchsync.PhoneWidgetPublicationStore
 import es.antonborri.home_widget.HomeWidgetPlugin
 import java.time.ZoneId
 import kotlin.math.ceil
@@ -41,17 +42,38 @@ class WardPulseAppWidget : AppWidgetProvider() {
     private fun refresh(
         context: Context, manager: AppWidgetManager, id: Int, data: SharedPreferences,
     ) {
+        val mode = try {
+            PhoneWidgetPublicationStore.currentMode(context)
+        } catch (_: IllegalStateException) {
+            return
+        }
         val display = context.resources.displayMetrics
         // The platform's bitmap allowance is 1.5 screen-sized ARGB images. Keep a lower hard cap.
         val bytes = minOf(
             PhoneWidgetLayout.MAX_BITMAP_BYTES,
             display.widthPixels.toLong() * display.heightPixels * 6L,
         ).coerceAtLeast(0)
+        val cache = data.all
+        val eligible = mode.eligibleRows(cache)
         // Fresh full updates replace the previous bitmap set; no accumulated partial updates/cache.
-        manager.updateAppWidget(id, publication(
-            context, id, data.all, manager.getAppWidgetOptions(id), bytes,
-        ).views)
+        val publication = publication(
+            context, id, eligible, manager.getAppWidgetOptions(id), bytes,
+        )
+        mode.deliverIfCurrent(
+            context, data, id, PhoneWidgetPublicationStore.sequenceOf(cache),
+            ownContent(eligible, publication),
+        ) { manager.updateAppWidget(id, publication.views) }
     }
+
+    /**
+     * Whether [publication] shows the stored publication's own content: its metric rows, or the
+     * explicit empty result marked in the [eligible] rows. That content reaches a widget first only
+     * under the publication's authority. No-fit frames, a frame the Claude Plan pause emptied and
+     * the neutral empty frame that clears another generation's rows need only the stored-sequence
+     * fence and grant no retained redraw.
+     */
+    internal fun ownContent(eligible: Map<String, *>, publication: Publication) =
+        publication.rows || eligible["empty"] == "1"
 
     internal data class Sizes(val values: List<SizeF>, val responsive: Boolean)
 
@@ -60,6 +82,8 @@ class WardPulseAppWidget : AppWidgetProvider() {
         val plans: List<PhoneWidgetLayout.Plan>,
         val bitmapBytes: Long,
         val views: RemoteViews,
+        /** Whether any submitted size variant shows metric rows. */
+        val rows: Boolean,
     )
 
     @Suppress("DEPRECATION")
@@ -143,20 +167,22 @@ class WardPulseAppWidget : AppWidgetProvider() {
                 remaining -= cost(plans[index])
             }
         }
-        val variants = plans.map { buildViews(context, id, it, renderer, mark, stale, empty) }
+        val built = plans.map { buildViews(context, id, it, renderer, mark, stale, empty) }
+        val variants = built.map { it.first }
         val views = when {
             sizes.responsive && variants.size > 1 && Build.VERSION.SDK_INT >= 31 ->
                 RemoteViews(sizes.values.zip(variants).toMap())
             !sizes.responsive && variants.size > 1 -> RemoteViews(variants[1], variants[0])
             else -> variants.first()
         }
-        return Publication(sizes, plans, plans.sumOf(::cost), views)
+        return Publication(sizes, plans, plans.sumOf(::cost), views, built.any { it.second })
     }
 
+    /** The views for [plan], and whether they show metric rows. */
     private fun buildViews(
         context: Context, id: Int, plan: PhoneWidgetLayout.Plan, renderer: PhoneWidgetRenderer,
         mark: Bitmap, stale: Boolean, empty: Boolean,
-    ): RemoteViews {
+    ): Pair<RemoteViews, Boolean> {
         val views = RemoteViews(context.packageName, R.layout.ward_pulse_app_widget)
         val images = renderer.render(plan)
         val card = if (images == null) null else plan.card
@@ -186,6 +212,7 @@ class WardPulseAppWidget : AppWidgetProvider() {
         views.setViewVisibility(R.id.widget_watermark, if (showMark) View.VISIBLE else View.GONE)
         val description = mutableListOf(context.getString(R.string.ward_pulse_widget_title))
         if (stale) description.add(context.getString(R.string.ward_pulse_widget_stale))
+        val rows = images != null && plan.state == PhoneWidgetLayout.EmptyState.NONE && plan.rows.isNotEmpty()
         if (images != null && plan.state == PhoneWidgetLayout.EmptyState.NONE) {
             for (row in plan.rows) description.add(PhoneWidgetLayout.rowDescription(row))
         } else {
@@ -200,6 +227,6 @@ class WardPulseAppWidget : AppWidgetProvider() {
         views.setOnClickPendingIntent(R.id.widget_root, PendingIntent.getActivity(
             context, id, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         ))
-        return views
+        return views to rows
     }
 }

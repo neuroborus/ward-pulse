@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../app/pull_to_refresh_list.dart';
 import '../dashboard/dashboard_models.dart';
 import '../dashboard/status_pill.dart';
+import '../providers/claude_plan_pause.dart';
 import '../sync/poll_cadence.dart';
 import '../widget/phone_widget_preferences.dart';
 import 'refresh_interval_preferences.dart';
@@ -20,8 +21,8 @@ const _helpUrl = 'https://neuroborus.github.io/ward-pulse/';
 const _privacyPolicyUrl =
     'https://neuroborus.github.io/ward-pulse/product/privacy-policy/';
 
-/// Systemic phone settings: poll cadence, notifications, diagnostics, help,
-/// privacy policy, legal, and debug toggles.
+/// Systemic phone settings: poll cadence, notifications, Demo mode,
+/// diagnostics, help, privacy policy, legal, and debug toggles.
 /// Not connections, credentials, Watchface/Widget layout, or alert thresholds
 /// (those live on Providers).
 class SettingsScreen extends StatefulWidget {
@@ -32,7 +33,9 @@ class SettingsScreen extends StatefulWidget {
     required this.onRefreshIntervalChanged,
     required this.ringPreferences,
     required this.widgetPreferences,
+    this.claudePlanPaused = claudePlanPausedInBuild,
     required this.onSyncWatch,
+    required this.onResumeWatch,
     required this.recoveryNotificationsEnabled,
     required this.onRecoveryNotificationsChanged,
     required this.alertNotificationsEnabled,
@@ -40,8 +43,12 @@ class SettingsScreen extends StatefulWidget {
     required this.androidNotificationsEnabled,
     required this.onOpenNotificationSettings,
     required this.debugDataAvailable,
+    this.dataModeReady = true,
+    this.demoDataEnabled = false,
+    this.onDemoDataEnabledChanged,
     required this.mockDataEnabled,
     required this.onMockDataEnabledChanged,
+    this.accountStorageUnresolved = false,
     required this.onRefresh,
   });
 
@@ -63,9 +70,25 @@ class SettingsScreen extends StatefulWidget {
   onRefreshIntervalChanged;
   final WatchRingPreferences? ringPreferences;
   final PhoneWidgetPreferences? widgetPreferences;
+
+  /// The capability policy of the shown data, for the watch preview and sync.
+  final bool claudePlanPaused;
   final Future<void> Function() onSyncWatch;
+
+  /// Resumes pending or owed native watch publication without sending a
+  /// summary, for an explicit sync that saved ring choices block.
+  final Future<void> Function() onResumeWatch;
   final bool debugDataAvailable;
+
+  /// Whether the saved data mode is known, so either switch may change it.
+  final bool dataModeReady;
+
+  /// Product Demo mode, offered in every build; Mock data is Debug-only.
+  /// Turning either on replaces the other.
+  final bool demoDataEnabled;
+  final Future<void> Function(bool value)? onDemoDataEnabledChanged;
   final bool mockDataEnabled;
+  final bool accountStorageUnresolved;
   final Future<void> Function(bool value) onMockDataEnabledChanged;
 
   /// Pull-to-refresh reload, shared with the app-bar action.
@@ -77,10 +100,22 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _settingNotification = false;
+  bool _settingDataMode = false;
   bool _openingNotificationSettings = false;
   bool _isSyncing = false;
   String? _syncResult;
   int? _dragRefreshMinutes;
+
+  String? _capacityReason(
+    DashboardSnapshot snapshot,
+    WatchRingPreferences preferences,
+  ) {
+    final paused = widget.claudePlanPaused;
+    return watchRingCapacityReason(
+      watchRingSelectionIds(snapshot, preferences, claudePlanPaused: paused),
+      claudePlanPaused: paused,
+    );
+  }
 
   Future<void> _syncWatch() async {
     final snapshot = widget.snapshot;
@@ -88,12 +123,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (snapshot == null) {
       return;
     }
-    if (preferences != null &&
-        watchRingCapacityReason(watchRingSelectionIds(snapshot, preferences)) !=
-            null) {
+    if (preferences != null && _capacityReason(snapshot, preferences) != null) {
       setState(() {
-        _syncResult = watchRingPayloadSubtitle(snapshot, preferences);
+        _syncResult = watchRingPayloadSubtitle(
+          snapshot,
+          preferences,
+          claudePlanPaused: widget.claudePlanPaused,
+        );
       });
+      // No replacement can be built, but an owed or pending one still resumes.
+      await widget.onResumeWatch();
       return;
     }
 
@@ -182,16 +221,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _setMockDataEnabled(bool value) async {
+  Future<void> _setDataMode(
+    Future<void> Function(bool value) change,
+    bool value,
+    String failure,
+  ) async {
+    if (_settingDataMode) return;
+    setState(() => _settingDataMode = true);
     try {
-      await widget.onMockDataEnabledChanged(value);
+      await change(value);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not update mock data setting')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(failure)));
       }
+    } finally {
+      if (mounted) setState(() => _settingDataMode = false);
     }
+  }
+
+  Future<void> _setDemoDataEnabled(bool value) async {
+    await _setDataMode(
+      widget.onDemoDataEnabledChanged!,
+      value,
+      'Could not update Demo mode',
+    );
+  }
+
+  Future<void> _setMockDataEnabled(bool value) async {
+    await _setDataMode(
+      widget.onMockDataEnabledChanged,
+      value,
+      'Could not update mock data setting',
+    );
   }
 
   Future<void> _setRefreshInterval(int minutes) async {
@@ -383,6 +446,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ),
         const SizedBox(height: 16),
+        if (widget.accountStorageUnresolved) ...[
+          const ListTile(
+            leading: Icon(Icons.warning_amber_outlined),
+            title: Text('Could not save an updated account session'),
+            subtitle: Text(
+              'Check the connection under Providers before using live data.',
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (widget.onDemoDataEnabledChanged != null) ...[
+          const _SettingsSectionHeader(title: 'Demo'),
+          Card(
+            child: SwitchListTile(
+              secondary: const Icon(Icons.preview_outlined),
+              title: const Text('Demo mode'),
+              subtitle: const Text(
+                'Sample readings on Dashboard, widget and watch · no provider '
+                'refresh or notifications; your connections stay saved',
+              ),
+              value: widget.demoDataEnabled,
+              onChanged:
+                  widget.dataModeReady && !_settingDataMode
+                      ? _setDemoDataEnabled
+                      : null,
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
         if (widget.debugDataAvailable) ...[
           const _SettingsSectionHeader(title: 'Debug'),
           Card(
@@ -393,7 +485,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Debug only · full multi-provider demo; refresh draws a new scenario',
               ),
               value: widget.mockDataEnabled,
-              onChanged: _setMockDataEnabled,
+              onChanged:
+                  widget.dataModeReady && !_settingDataMode
+                      ? _setMockDataEnabled
+                      : null,
             ),
           ),
           const SizedBox(height: 16),
@@ -422,7 +517,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: Text(
                     ringPreferences == null
                         ? 'Unavailable'
-                        : watchRingPayloadSubtitle(snapshot, ringPreferences),
+                        : watchRingPayloadSubtitle(
+                          snapshot,
+                          ringPreferences,
+                          claudePlanPaused: widget.claudePlanPaused,
+                        ),
                   ),
                   trailing:
                       ringPreferences == null

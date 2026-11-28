@@ -4,6 +4,7 @@ import 'dart:io';
 
 import '../providers/codex_account_store.dart';
 import '../providers/connection_lifecycle.dart';
+import 'data_mode.dart';
 
 enum CodexAccountFailure {
   authentication,
@@ -86,12 +87,17 @@ final class IoCodexHttpTransport implements CodexHttpTransport {
     String? body,
   }) async {
     try {
+      DataModeOperation.admitTransport();
       final request = await _client.openUrl(method, uri).timeout(_timeout);
       headers.forEach(request.headers.set);
-      if (body != null) {
-        request.write(body);
-      }
-      final response = await request.close().timeout(_timeout);
+      // Ownership is rechecked after setup; a retired operation never sends.
+      final response = await DataModeOperation.sendRequest(
+        request,
+        write: () {
+          if (body != null) request.write(body);
+        },
+        timeout: _timeout,
+      );
       final bytes = <int>[];
       await for (final chunk in response.timeout(_timeout)) {
         if (bytes.length + chunk.length > _maximumResponseBytes) {
@@ -241,9 +247,29 @@ final class CodexAccountClient {
     CodexSessionChanged? onSessionChanged,
   }) async {
     var current = session;
+    // A sent refresh settles and persists its rotation before a mode switch.
+    Future<CodexAccountSession> rotate(CodexAccountSession prior) async {
+      if (DataModeOperation.current != null && onSessionChanged == null) {
+        throw const CodexAccountException(
+          CodexAccountFailure.unavailable,
+          'Codex token refresh · Account storage unavailable',
+        );
+      }
+      return DataModeOperation.settle(
+        () => _refresh(prior),
+        (rotated) async {
+          await onSessionChanged?.call(rotated);
+        },
+        // An explicit account action replaced the session; nothing is lost.
+        superseded:
+            (error) =>
+                error is CodexAccountException &&
+                error.failure == CodexAccountFailure.cancelled,
+      );
+    }
+
     if (_needsRefresh(current)) {
-      current = await _refresh(current);
-      await onSessionChanged?.call(current);
+      current = await rotate(current);
     }
 
     try {
@@ -252,8 +278,7 @@ final class CodexAccountClient {
       if (error.failure != CodexAccountFailure.authentication) {
         rethrow;
       }
-      current = await _refresh(current);
-      await onSessionChanged?.call(current);
+      current = await rotate(current);
       try {
         return await _fetchReport(current);
       } on CodexAccountException catch (retry) {
@@ -604,6 +629,8 @@ final class CodexAccountClient {
     try {
       return await _transport.send(method, uri, headers: headers, body: body);
     } on CodexAccountException {
+      rethrow;
+    } on DataModeRetired {
       rethrow;
     } on IOException {
       throw CodexAccountException(

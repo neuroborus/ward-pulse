@@ -34,6 +34,7 @@ class ProvidersScreen extends StatefulWidget {
     this.isSnapshotCurrent,
     this.savingConnections = const {},
     this.mockDataEnabled = false,
+    this.demoDataEnabled = false,
     this.editConnection,
     this.revealConnection,
     this.onConnectionRevealed,
@@ -52,6 +53,9 @@ class ProvidersScreen extends StatefulWidget {
   /// The repository's complete publication gate, including native atomic proof.
   final Future<bool> Function(DashboardSnapshot)? isSnapshotCurrent;
   final bool mockDataEnabled;
+
+  /// Demo, like Mock data, checks no saved key.
+  final bool demoDataEnabled;
   final Set<ProviderConnectionId> savingConnections;
   final ProviderConnectionId? editConnection;
   final ({ProviderConnectionId connection, int token})? revealConnection;
@@ -704,10 +708,12 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     final outcome = update?.outcome;
     final readFailed = _readFailures.contains(connection.id.storageKey);
     final checking = update?.checking == true;
+    final synthetic = widget.mockDataEnabled || widget.demoDataEnabled;
+    final syntheticMode = widget.demoDataEnabled ? 'Demo mode' : 'Mock data';
     final status =
         readFailed
             ? 'Could not read saved key'
-            : hasSecret == true && widget.mockDataEnabled
+            : hasSecret == true && synthetic
             ? 'Not verified'
             : checking
             ? 'Checking…'
@@ -726,8 +732,8 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
     final supporting =
         readFailed
             ? 'Edit or remove the saved key to try again.'
-            : hasSecret == true && widget.mockDataEnabled
-            ? 'Key not checked while Mock data is on.'
+            : hasSecret == true && synthetic
+            ? 'Key not checked while $syntheticMode is on.'
             : outcome?.failed == true
             ? '${outcome!.connectionLabel}\n${outcome.supportingCopy}'
             : null;
@@ -736,7 +742,7 @@ class _ProvidersScreenState extends State<ProvidersScreen> {
       status:
           hasSecret == null
               ? const RowProgress()
-              : checking && !widget.mockDataEnabled
+              : checking && !synthetic
               ? const Wrap(
                 spacing: 8,
                 crossAxisAlignment: WrapCrossAlignment.center,

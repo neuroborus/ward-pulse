@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 
-import '../settings/debug_data_preferences.dart';
 import '../providers/connection_lifecycle.dart';
 import 'dashboard_models.dart';
 
@@ -16,21 +15,18 @@ abstract class DashboardRepository {
   Future<DashboardSnapshot> loadObserved(ReportingObserver observer) => load();
 
   Future<bool> isFailureCurrent(DashboardLoadException failure) =>
-      isSnapshotCurrent(
-        DashboardSnapshot.empty()
-            .withConnectionVersions(
-              failure.connectionVersions,
-              snapshotOrdering: failure.snapshotOrdering,
-            )
-            .withReportingOutcomes(failure.reportingOutcomes),
-      );
+      isSnapshotCurrent(failure.selection);
 
   void invalidate() {}
-  Future<void> clearPersistentSnapshots() async {
-    invalidate();
-  }
 
   Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) async => true;
+
+  /// Whether automatic cadence claimed under [version] still belongs to
+  /// [connection]'s confirmed credential. Sources without that proof keep it.
+  Future<bool> ownsAutomaticCadence(
+    String connection,
+    CredentialVersion version,
+  ) async => true;
 }
 
 final class DashboardLoadException implements Exception {
@@ -62,6 +58,15 @@ final class DashboardLoadException implements Exception {
   final List<ConnectionReportingOutcome> reportingOutcomes;
   final Map<String, Map<String, String>> connectionVersions;
   final Map<String, SnapshotOrdering> snapshotOrdering;
+
+  /// The empty selection this failure proves: its credential versions, cache
+  /// ordering and outcomes, without accounts.
+  DashboardSnapshot get selection => DashboardSnapshot.empty()
+      .withConnectionVersions(
+        connectionVersions,
+        snapshotOrdering: snapshotOrdering,
+      )
+      .withReportingOutcomes(reportingOutcomes);
 
   DashboardLoadException withConnectionVersions(
     Map<String, Map<String, String>> versions, {
@@ -103,12 +108,17 @@ typedef DatedDebugDashboardJsonLoader =
 String _loadDatedDebugDashboardJson(int seed, String anchor) =>
     loadDebugDashboardSnapshotJson(seed, captureAnchor: anchor);
 
-/// Debug Mock data: full multi-provider fixture dashboard.
+/// The whole-second UTC anchor the Rust generator rebases samples to.
+String demoCaptureAnchor(DateTime time) =>
+    '${time.toUtc().toIso8601String().substring(0, 19)}Z';
+
+/// Seeded synthetic dashboards: Debug Mock data or the public Demo sample.
 ///
 /// Cached until [invalidate] so automatic sync ticks stay stable; phone refresh
-/// and the Mock data toggle clear the cache and draw a new seed.
+/// and the mode switch clear the cache and draw a new seed.
 /// A valid debug seed starts a reproducible sequence instead of time-based seeds.
 final class DemoDashboardRepository extends DashboardRepository {
+  /// Debug Mock data: the full multi-provider fixture dashboard.
   DemoDashboardRepository({
     this.loadDebugDashboardJson = loadDebugDashboardSnapshotJson,
     this.loadDatedDebugDashboardJson = _loadDatedDebugDashboardJson,
@@ -116,7 +126,8 @@ final class DemoDashboardRepository extends DashboardRepository {
     String? debugSeed,
     String? debugAnchor,
     bool debugMode = kDebugMode,
-  }) : _captureAnchor = debugMode ? debugAnchor : null {
+  }) : _captureAnchor = debugMode ? debugAnchor : null,
+       _clock = null {
     if (debugMode &&
         debugSeed != null &&
         !debugSeed.contains(RegExp(r'[^0-9]'))) {
@@ -124,12 +135,31 @@ final class DemoDashboardRepository extends DashboardRepository {
     }
   }
 
+  /// The public Demo sample, available in every build. Each draw is rebased
+  /// to the device's current time, so its dates stay current; it omits the
+  /// Claude plan the Play build pauses.
+  DemoDashboardRepository.product({
+    DatedDebugDashboardJsonLoader loadDashboardJson =
+        loadDemoDashboardSnapshotJson,
+    this.seedForLoad,
+    DateTime Function()? clock,
+  }) : loadDebugDashboardJson = _unavailableSeedOnlySample,
+       loadDatedDebugDashboardJson = loadDashboardJson,
+       _captureAnchor = null,
+       _clock = clock ?? DateTime.now;
+
   final DebugDashboardJsonLoader loadDebugDashboardJson;
   final DatedDebugDashboardJsonLoader loadDatedDebugDashboardJson;
   final int Function()? seedForLoad;
   final String? _captureAnchor;
+
+  /// The product sample's anchor source; `null` for Debug Mock data.
+  final DateTime Function()? _clock;
   int? _nextSeed;
   DashboardSnapshot? _cached;
+
+  static String _unavailableSeedOnlySample(int seed) =>
+      throw StateError('The Demo sample requires a capture anchor.');
 
   @override
   Future<DashboardSnapshot> load() async {
@@ -142,7 +172,9 @@ final class DemoDashboardRepository extends DashboardRepository {
           _nextSeed ??
           seedForLoad?.call() ??
           DateTime.now().microsecondsSinceEpoch;
-      final anchor = _captureAnchor;
+      final clock = _clock;
+      final anchor =
+          clock == null ? _captureAnchor : demoCaptureAnchor(clock());
       final snapshot = DashboardSnapshot.fromJsonString(
         anchor == null
             ? loadDebugDashboardJson(seed)
@@ -162,47 +194,6 @@ final class DemoDashboardRepository extends DashboardRepository {
       _nextSeed = seed == 9223372036854775807 ? 0 : seed + 1;
     }
     _cached = null;
-  }
-}
-
-final class DebugDashboardRepository extends DashboardRepository {
-  DebugDashboardRepository({
-    required DashboardRepository live,
-    required DebugDataPreferenceStore preferences,
-    DashboardRepository? mock,
-  }) : _live = live,
-       _mock = mock ?? DemoDashboardRepository(),
-       _preferences = preferences;
-
-  final DashboardRepository _live;
-  final DashboardRepository _mock;
-  final DebugDataPreferenceStore _preferences;
-
-  @override
-  Future<DashboardSnapshot> load() async {
-    final useMock = await _preferences.readMockDataEnabled();
-    return useMock ? _mock.load() : _live.load();
-  }
-
-  @override
-  Future<DashboardSnapshot> loadObserved(ReportingObserver observer) async {
-    final useMock = await _preferences.readMockDataEnabled();
-    return useMock ? _mock.load() : _live.loadObserved(observer);
-  }
-
-  @override
-  Future<void> clearPersistentSnapshots() async {
-    await _live.clearPersistentSnapshots();
-    _mock.invalidate();
-  }
-
-  @override
-  Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) =>
-      _live.isSnapshotCurrent(snapshot);
-  @override
-  void invalidate() {
-    _live.invalidate();
-    _mock.invalidate();
   }
 }
 

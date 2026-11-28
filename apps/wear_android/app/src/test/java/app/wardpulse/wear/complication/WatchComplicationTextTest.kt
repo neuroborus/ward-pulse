@@ -201,6 +201,9 @@ class WatchComplicationTextTest {
         for (rejected in listOf(
             null,
             summary.copy(schemaVersion = 8), summary.copy(dataMode = WatchDataMode.LIVE),
+            // An ordered v10 summary is diagnosed only for Debug Mock, never for product Demo.
+            summary.copy(schemaVersion = 10, dataMode = WatchDataMode.DEMO),
+            summary.copy(schemaVersion = 11),
             summary.copy(rings = emptyList()), summary.copy(rings = listOf(pair, pair)),
             summary.copy(rings = listOf(pair.copy(id = "allowance.claude.plan"))),
             summary.copy(rings = listOf(pair.copy(usedPercent = 62.0))),
@@ -225,6 +228,10 @@ class WatchComplicationTextTest {
                 "type=ranged_value value=74.0 min=0.0 max=200.0 valueType=undefined title=index0 ramp=spark",
             records.first(),
         )
+        // The ordered v10 Debug Mock summary records the same case.
+        val ordered = mutableListOf<String>()
+        N1PairDiagnostics(true, ordered::add).observe(summary.copy(schemaVersion = 10), 0, data, route) { "0" }
+        assertEquals(listOf(records.first()), ordered)
     }
 
     @Test

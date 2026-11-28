@@ -1,8 +1,10 @@
-//! Debug multi-provider dashboard built from sanitized provider fixtures.
+//! Multi-provider dashboards built from sanitized provider fixtures.
 //!
-//! Used by the phone Settings "Mock data" toggle so debug builds can exercise
-//! Codex / Claude / Cursor / OpenAI UI without live credentials. A seed reshuffles
-//! utilization so refresh cycles cover healthy, warning, and rate-limited cases.
+//! The Debug variant backs the phone Settings "Mock data" toggle so debug builds can
+//! exercise Codex / Claude / Cursor / OpenAI UI without live credentials. The product
+//! variant backs the public Demo mode with the sources available in the Play build.
+//! A seed reshuffles utilization so refresh cycles cover healthy, warning, and
+//! rate-limited cases.
 
 use std::error::Error as StdError;
 use std::fmt;
@@ -109,6 +111,45 @@ pub fn debug_multi_provider_dashboard_at(
     capture_anchor: Option<&str>,
 ) -> Result<DashboardSnapshot, DebugDemoDashboardError> {
     let anchor = capture_anchor.map(DemoTime::parse).transpose()?;
+    multi_provider_dashboard(seed, anchor, DemoVariant::Debug)
+}
+
+/// Builds the public Demo sample JSON at a required whole-second UTC anchor.
+pub fn product_demo_dashboard_json_at(
+    seed: u64,
+    capture_anchor: &str,
+) -> Result<String, DebugDemoDashboardError> {
+    let snapshot = product_demo_dashboard_at(seed, capture_anchor)?;
+    serde_json::to_string(&snapshot).map_err(DebugDemoDashboardError::Serialize)
+}
+
+/// Builds the public Demo sample through the normal adapters, without consulting a clock.
+///
+/// Dates are rebased to the caller's `YYYY-MM-DDTHH:MM:SSZ` anchor, and Cursor Team is
+/// included. The Claude plan connection is paused in the Play build, so the canonical
+/// `anthropic.plan` source is removed by connection identity before aggregation; totals,
+/// status and the watch summary never contain it. The Anthropic Organization source and
+/// the other public sources stay. The sample is never [`ProviderStatus::Stale`]: each
+/// account keeps the status computed from its readings.
+pub fn product_demo_dashboard_at(
+    seed: u64,
+    capture_anchor: &str,
+) -> Result<DashboardSnapshot, DebugDemoDashboardError> {
+    let anchor = DemoTime::parse(capture_anchor)?;
+    multi_provider_dashboard(seed, Some(anchor), DemoVariant::Product)
+}
+
+#[derive(Clone, Copy)]
+enum DemoVariant {
+    Debug,
+    Product,
+}
+
+fn multi_provider_dashboard(
+    seed: u64,
+    anchor: Option<DemoTime>,
+    variant: DemoVariant,
+) -> Result<DashboardSnapshot, DebugDemoDashboardError> {
     let mut rng = SeedRng(seed);
     let cursor_plan = cursor_plan_account(&mut rng, anchor)?;
     let mut accounts = vec![
@@ -118,16 +159,23 @@ pub fn debug_multi_provider_dashboard_at(
         (anthropic_platform_account(anchor)?, ScrambleMode::Budgets),
         (cursor_plan, ScrambleMode::Allowances),
     ];
-    if anchor.is_none() {
+    // The dated Debug preset omits Cursor Team; the product sample keeps it.
+    if anchor.is_none() || matches!(variant, DemoVariant::Product) {
         accounts.push((cursor_platform_account(anchor)?, ScrambleMode::Budgets));
     }
     let mut accounts: Vec<_> = accounts
         .into_iter()
-        .map(|(account, mode)| scramble_account(&mut rng, account, mode, anchor.is_some()))
+        .map(|(account, mode)| scramble_account(&mut rng, account, mode, anchor.is_some(), variant))
         .collect();
+    if matches!(variant, DemoVariant::Product) {
+        accounts.retain(|account| {
+            account.source.origin()
+                != SourceOrigin::Connection(ProviderConnectionId::ANTHROPIC_PLAN)
+        });
+    }
 
     // Docs preset revision 2 keeps all random draws and unrelated data intact.
-    if let (280, Some(anchor)) = (seed, anchor) {
+    if let (280, Some(anchor), DemoVariant::Debug) = (seed, anchor, variant) {
         for account in &mut accounts {
             match account.source.origin() {
                 SourceOrigin::Connection(ProviderConnectionId::OPENAI_PLAN) => {
@@ -193,6 +241,7 @@ fn scramble_account(
     mut account: ProviderSnapshot,
     mode: ScrambleMode,
     preserve_unknowns: bool,
+    variant: DemoVariant,
 ) -> ProviderSnapshot {
     match mode {
         ScrambleMode::Allowances => {
@@ -216,8 +265,11 @@ fn scramble_account(
         }
     }
 
-    // Occasional stale chrome so Wear / phone refresh UI can be exercised.
-    if rng.next_u32() % 11 == 0 {
+    // Occasional stale chrome lets Debug Mock data exercise the Wear / phone refresh UI.
+    // Both variants consume the draw so each seed keeps its values; the product sample is
+    // never stale.
+    let stale = rng.next_u32() % 11 == 0;
+    if stale && matches!(variant, DemoVariant::Debug) {
         account.status = ProviderStatus::Stale;
     }
 
@@ -1252,6 +1304,180 @@ mod tests {
         }
     }
 
+    const PRODUCT_CONNECTIONS: [&str; 5] = [
+        "openai.platform",
+        "openai.plan",
+        "anthropic.platform",
+        "cursor.plan",
+        "cursor.platform",
+    ];
+
+    fn connections(snapshot: &DashboardSnapshot) -> Vec<&str> {
+        snapshot
+            .accounts
+            .iter()
+            .map(|account| account.source.explicit_connection().unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn product_sample_excludes_the_claude_plan_before_aggregation() {
+        let anchor = "2026-11-02T12:00:00Z";
+        let mut claude_would_change_status = false;
+        for seed in (0..48).chain([280]) {
+            let snapshot = product_demo_dashboard_at(seed, anchor).unwrap();
+            assert_eq!(snapshot, product_demo_dashboard_at(seed, anchor).unwrap());
+            assert_eq!(
+                serde_json::to_string(&snapshot).unwrap(),
+                product_demo_dashboard_json_at(seed, anchor).unwrap()
+            );
+            assert_eq!(connections(&snapshot), PRODUCT_CONNECTIONS, "seed {seed}");
+            assert!(snapshot
+                .accounts
+                .iter()
+                .flat_map(|account| &account.allowances)
+                .all(|meter| !meter.id.starts_with("claude-")));
+            // Totals, status and the watch summary come only from the listed sources.
+            assert_eq!(
+                snapshot,
+                build_dashboard_snapshot(snapshot.generated_at.clone(), snapshot.accounts.clone()),
+                "seed {seed}"
+            );
+
+            let debug = debug_multi_provider_dashboard_at(seed, Some(anchor)).unwrap();
+            let claude = debug
+                .accounts
+                .iter()
+                .find(|account| account.source.explicit_connection() == Some("anthropic.plan"))
+                .unwrap();
+            claude_would_change_status |=
+                ProviderStatus::worst([snapshot.overall_status, claude.status])
+                    != snapshot.overall_status;
+            let cursor_on_demand = snapshot.accounts[3]
+                .allowances
+                .iter()
+                .any(|meter| meter.id == "cursor-on-demand");
+            if seed == 280 {
+                // The Debug docs preset never reaches the product sample.
+                assert!(cursor_on_demand);
+                continue;
+            }
+            // Shared sources keep the dated Debug draws; Cursor Team draws last.
+            let shared: Vec<_> = debug
+                .accounts
+                .iter()
+                .filter(|account| account.source.explicit_connection() != Some("anthropic.plan"))
+                .collect();
+            assert_eq!(shared.len(), 4, "seed {seed}");
+            for (product, debug) in snapshot.accounts[..4].iter().zip(shared) {
+                let mut product = product.clone();
+                // Only Debug applies its stale draw; every other field still matches.
+                if debug.status == ProviderStatus::Stale {
+                    product.status = ProviderStatus::Stale;
+                }
+                assert_eq!(&product, debug, "seed {seed}");
+            }
+        }
+        assert!(
+            claude_would_change_status,
+            "no seed proves the Claude plan stays out of the status"
+        );
+        assert_ne!(
+            product_demo_dashboard_at(1, anchor).unwrap(),
+            product_demo_dashboard_at(2, anchor).unwrap()
+        );
+    }
+
+    #[test]
+    fn product_sample_is_never_stale() {
+        for anchor in [
+            "2026-11-02T12:00:00Z",
+            "2028-02-29T23:59:59Z",
+            "2027-01-01T00:00:00Z",
+            "2026-06-01T00:00:00Z",
+        ] {
+            let mut debug_draws_stale = false;
+            for seed in (0..48).chain([280]) {
+                let snapshot = product_demo_dashboard_at(seed, anchor).unwrap();
+                assert_ne!(
+                    snapshot.overall_status,
+                    ProviderStatus::Stale,
+                    "seed {seed} at {anchor}"
+                );
+                assert!(
+                    snapshot
+                        .accounts
+                        .iter()
+                        .all(|account| account.status != ProviderStatus::Stale),
+                    "seed {seed} at {anchor}"
+                );
+                // A shared source drawn stale in Debug would be stale here without the gate.
+                debug_draws_stale |= debug_multi_provider_dashboard_at(seed, Some(anchor))
+                    .unwrap()
+                    .accounts
+                    .iter()
+                    .any(|account| {
+                        account.status == ProviderStatus::Stale
+                            && account.source.explicit_connection() != Some("anthropic.plan")
+                    });
+            }
+            assert!(debug_draws_stale, "no Debug seed draws stale at {anchor}");
+        }
+    }
+
+    #[test]
+    fn product_sample_rebases_every_source_to_its_anchor() {
+        for anchor in [
+            "2028-02-29T23:59:59Z",
+            "2027-01-01T00:00:00Z",
+            "2026-06-01T00:00:00Z",
+            "2026-11-02T12:00:00Z",
+        ] {
+            let time = DemoTime::parse(anchor).unwrap();
+            let next_month = time.month_start(true).unwrap().stamp();
+            let snapshot = product_demo_dashboard_at(7, anchor).unwrap();
+            assert_eq!(snapshot.generated_at.as_str(), anchor);
+            assert_eq!(connections(&snapshot), PRODUCT_CONNECTIONS);
+            for account in &snapshot.accounts {
+                assert_eq!(
+                    account.last_successful_sync_at.as_ref().unwrap().as_str(),
+                    anchor
+                );
+                for bucket in &account.buckets {
+                    let start = DemoTime::parse(bucket.start_at.as_str()).unwrap();
+                    let end = DemoTime::parse(bucket.end_at.as_str()).unwrap();
+                    assert_eq!(start.0.rem_euclid(DAY_SECONDS), 0);
+                    assert_eq!(end.0 - start.0, DAY_SECONDS);
+                    assert!(start.0 <= time.day_start().0);
+                }
+                for meter in &account.allowances {
+                    if meter.id.starts_with("cursor-") {
+                        assert_eq!(meter.resets_at.as_ref().unwrap().as_str(), next_month);
+                    }
+                }
+            }
+            let cursor = &snapshot.accounts[4];
+            assert_eq!(cursor.today.spent.is_some(), time.0 > time.day_start().0);
+            assert_eq!(
+                cursor.week.spent.is_some(),
+                time.0 > time.week_start().unwrap().0
+            );
+            assert_eq!(
+                cursor.month.spent.is_some(),
+                time.0 > time.month_start(false).unwrap().0
+            );
+        }
+        for anchor in ["", "2026-02-29T12:00:00Z", "2026-11-02T12:00:00+00:00"] {
+            assert!(
+                matches!(
+                    product_demo_dashboard_at(7, anchor),
+                    Err(DebugDemoDashboardError::InvalidAnchor)
+                ),
+                "{anchor:?}"
+            );
+        }
+    }
+
     #[test]
     fn dated_input_refuses_invalid_anchors_and_retains_unknowns() {
         for anchor in [
@@ -1288,8 +1514,13 @@ mod tests {
         purchased.remaining = Some(credits(400));
         account.allowances.push(purchased);
         let unknowns = account.allowances.clone();
-        let scrambled =
-            scramble_account(&mut SeedRng(280), account, ScrambleMode::Allowances, true);
+        let scrambled = scramble_account(
+            &mut SeedRng(280),
+            account,
+            ScrambleMode::Allowances,
+            true,
+            DemoVariant::Debug,
+        );
         assert_eq!(scrambled.allowances[0], unknowns[0]);
         assert_eq!(scrambled.allowances.last(), unknowns.last());
     }

@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.foundation.requestFocusOnHierarchyActive
 import androidx.wear.compose.material3.Text
+import app.wardpulse.wear.data.SummaryBinding
 import app.wardpulse.wear.model.WatchDashboardSummary
 import app.wardpulse.wear.sync.PhoneRefreshRequester
 import java.time.Duration
@@ -192,6 +193,7 @@ private fun glanceMetricsFor(diameter: Dp): GlanceMetrics {
 @Composable
 internal fun GlanceLegendPage(
     summary: WatchDashboardSummary,
+    refreshBinding: SummaryBinding?,
     onOpenAlerts: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -257,7 +259,7 @@ internal fun GlanceLegendPage(
                 chrome = chrome,
                 controlSize = metrics.refreshSize,
                 labelStyle = metrics.refreshLabel,
-                onRefresh = { requester.requestRefresh() },
+                onRefresh = { requester.requestRefresh(refreshBinding) },
             )
             if (chrome.detail != null) {
                 Text(

@@ -1,6 +1,5 @@
 import 'dart:developer' as developer;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../dashboard/apply_alert_settings.dart';
@@ -11,11 +10,12 @@ import '../dashboard/plan_recoveries.dart';
 import '../providers/connection_lifecycle.dart';
 import '../settings/alert_notification_preferences.dart';
 import '../settings/alert_threshold_preferences.dart';
-import '../settings/debug_data_preferences.dart';
 import '../settings/recovery_notification_preferences.dart';
 import '../settings/watch_ring_preferences.dart';
 import '../widget/phone_widget_preferences.dart';
 import '../widget/phone_widget_sync.dart';
+import 'data_mode.dart';
+import 'manual_refresh_window.dart';
 import 'alert_notifications.dart';
 import 'recovery_notifications.dart';
 import 'recovery_wake.dart';
@@ -34,56 +34,61 @@ typedef ProviderSyncFailureLogger =
 typedef ProviderSyncStaleMarker =
     Future<void> Function({required PhoneWidgetSyncGuard isCurrent});
 
-/// Whether one headless invocation still owns Live publications.
-///
-/// Debug Mock data belongs to the foreground app. A saved Mock choice, or one
-/// that cannot be read, retires the invocation for good. Release builds never
-/// read the debug preference. Failed validation of bound credential/snapshot
-/// provenance also retires the invocation. The next invocation checks again.
-final class HeadlessLiveOwner {
-  HeadlessLiveOwner({
-    bool debugBuild = kDebugMode,
-    DebugDataPreferenceStore? debugData,
-  }) : _debugData =
-           debugBuild ? debugData ?? SecureDebugDataPreferenceStore() : null;
+/// Pauses before a headless publication reads the settled settings revision
+/// again while a save is in flight.
+typedef SettingsSaveWait = Future<void> Function();
 
-  final DebugDataPreferenceStore? _debugData;
-  var _retired = false;
+Future<void> _awaitSettingsSave() =>
+    Future<void>.delayed(const Duration(milliseconds: 250));
+
+/// How many pauses a headless publication waits through for a save in flight.
+const _settingsSaveWaits = 8;
+
+/// Publications under a newer settled revision after a surface's refusal.
+const _settingsRetries = 2;
+
+/// Publishes a surface's [DashboardSnapshot] under a claim; `false` when
+/// native refused it.
+typedef _SettledPublication =
+    Future<bool> Function(PhoneWidgetPublicationInput, DashboardSnapshot);
+
+/// One Live operation, with credential/snapshot provenance bound after loading.
+final class HeadlessLiveOwner {
+  HeadlessLiveOwner(this.operation);
+
+  final DataModeOperation operation;
+
+  /// The launcher claim taken before setup read settings or providers.
+  PhoneWidgetPublicationInput? publication;
+  var _modeRetired = false;
+  var _provenanceRetired = false;
   Future<bool> Function()? _provenance;
 
-  /// Binds later currentness to the repository result now being handled.
   void bindProvenance(Future<bool> Function() provenance) {
     _provenance = provenance;
   }
 
-  /// Mode first: the bound provenance stays the final validation.
   Future<bool> isCurrent() async =>
       await isLive() && await _isProvenanceCurrent();
 
   Future<bool> _isProvenanceCurrent() async {
-    if (_retired) return false;
+    if (_provenanceRetired) return false;
     final provenance = _provenance;
     if (provenance == null) return true;
     try {
-      if (await provenance()) return !_retired;
+      if (await provenance()) return !_provenanceRetired;
     } catch (_) {
-      _retired = true;
+      _provenanceRetired = true;
       rethrow;
     }
-    _retired = true;
+    _provenanceRetired = true;
     return false;
   }
 
   Future<bool> isLive() async {
-    final debugData = _debugData;
-    if (_retired) return false;
-    if (debugData == null) return true;
-    try {
-      if (!await debugData.readMockDataEnabled()) return !_retired;
-    } catch (_) {
-      // An unreadable choice may be Mock: never publish Live data over it.
-    }
-    _retired = true;
+    if (_modeRetired || operation.mode.synthetic) return false;
+    if (await operation.isCurrent()) return !_modeRetired;
+    _modeRetired = true;
     return false;
   }
 }
@@ -115,44 +120,61 @@ Future<void> providerSyncOnce({
   ProviderSyncFailureLogger logFailure = _logProviderSyncFailure,
   ProviderSyncStaleMarker markWidgetStale =
       HomeWidgetPhoneWidgetSyncService.markExistingRowsStale,
-  bool debugBuild = kDebugMode,
-  DebugDataPreferenceStore? debugData,
+  DataModeAuthority? modeAuthority,
 }) async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final owner = HeadlessLiveOwner(debugBuild: debugBuild, debugData: debugData);
-  final poll = AutomaticPollContext.current ?? AutomaticPollContext();
-  final ProviderSyncWork? loaded;
+  final DataModeOperation operation;
   try {
-    loaded = await poll.run(() => load(owner));
+    operation =
+        await (modeAuthority ?? MethodChannelDataModeAuthority()).begin();
+  } on DataModeRetired {
+    return;
   } catch (error, stackTrace) {
     logFailure('setup', error, stackTrace);
-    // Obsolete failures and rejected snapshots cannot mark newer rows STALE.
-    if (!poll.whollySkipped)
-      await _attemptProviderSyncStep('widget', () async {
-        if (await owner.isCurrent())
-          await markWidgetStale(isCurrent: owner.isCurrent);
-      }, logFailure);
     return;
   }
-  if (loaded == null) return;
-  // Effect closures lose the deferred local's promotion: capture non-null work.
-  final work = loaded;
+  if (operation.mode.synthetic) return;
 
-  await _attemptProviderSyncStep('watch', () async {
-    if (await work.isCurrent()) await work.syncWatch();
-  }, logFailure);
-  await _attemptProviderSyncStep('widget', () async {
-    if (await work.isCurrent()) await work.syncWidget();
-  }, logFailure);
-  // Bookkeeping last: reader-visible surfaces are pushed first, but neither
-  // surface can prevent the recovery state from advancing.
-  await _attemptProviderSyncStep('recovery', () async {
-    if (await work.isCurrent()) await work.syncRecoveries();
-  }, logFailure);
-  await _attemptProviderSyncStep('alerts', () async {
-    if (await work.isCurrent()) await work.syncAlerts();
-  }, logFailure);
+  final owner = HeadlessLiveOwner(operation);
+  final poll = AutomaticPollContext.current ?? AutomaticPollContext();
+  await operation.run(() async {
+    final ProviderSyncWork? loaded;
+    try {
+      // Claimed before any fallible setup, so a failure marks only the
+      // committed rows it observed.
+      owner.publication = await PhoneWidgetPublicationInput.begin();
+      loaded = await poll.run(() => load(owner));
+    } catch (error, stackTrace) {
+      await _attemptProviderSyncStep('setup', () async {
+        if (!await owner.isLive()) return;
+        logFailure('setup', error, stackTrace);
+        final publication = owner.publication;
+        if (!poll.whollySkipped && publication != null) {
+          await _attemptProviderSyncStep('widget', () async {
+            if (!await owner.isCurrent()) return;
+            await publication.run(
+              () => markWidgetStale(isCurrent: owner.isCurrent),
+            );
+          }, logFailure);
+        }
+      }, logFailure);
+      return;
+    }
+    if (loaded == null) return;
+    final work = loaded;
+
+    Future<void> step(String name, Future<void> Function() effect) =>
+        _attemptProviderSyncStep(name, () async {
+          if (await owner.isLive() && await work.isCurrent()) await effect();
+        }, logFailure);
+
+    // Surfaces first, then bookkeeping. A failed surface never blocks its sibling.
+    await step('watch', work.syncWatch);
+    await step('widget', work.syncWidget);
+    await step('recovery', work.syncRecoveries);
+    await step('alerts', work.syncAlerts);
+  });
 }
 
 /// Asks [owner] before Live bindings exist and again after each awaited stage.
@@ -162,12 +184,16 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
   WatchRingPreferenceStore? watchRingStore,
   PhoneWidgetPreferenceStore? widgetStore,
   ReadExhaustedWindows readWindows = exhaustedWindows,
+  SettingsSaveWait awaitSettingsSave = _awaitSettingsSave,
 }) async {
   if (!await owner.isLive()) return null;
   final live = (createLive ?? PhoneLiveBindings.create)();
   // Paused builds retire saved Claude plan credentials before provider work.
-  await live.retirePausedClaudePlan();
+  if (!await owner.operation.guard(live.retirePausedClaudePlan)) return null;
   final poll = AutomaticPollContext.current ?? AutomaticPollContext();
+  // Ordered before the settings and provider reads it publishes.
+  final publication =
+      owner.publication ??= await PhoneWidgetPublicationInput.begin();
   final alertThresholds = await SecureAlertThresholdPreferenceStore().read();
   if (!await owner.isLive()) return null;
   final DashboardSnapshot loaded;
@@ -192,7 +218,7 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
               error is DashboardLoadException ? error.snapshotOrdering : null,
         );
     owner.bindProvenance(() => live.repository.isSnapshotCurrent(failure));
-    // A load that ends after Mock took over is retired, not a Live failure.
+    // A load that ends after its generation retires cannot mark STALE.
     if (!await owner.isLive()) return null;
     rethrow;
   }
@@ -204,43 +230,165 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
   if (!await owner._isProvenanceCurrent()) {
     throw StateError('Connection changed during refresh.');
   }
+  // Retained cadence-skipped input is accepted too; a newer acceptance in any
+  // engine refuses this load's publications.
+  final accepted = await publication.accept(snapshot);
+
+  // A refusal caused only by a settings save is never final: a surface is
+  // rebuilt from [loaded] with the settings read again and sent under the
+  // revision the saves settled, once those in flight settle. A refusal under
+  // an unchanged revision, such as a newer accepted load's, is final.
+  Future<void> retryUnderSettledSettings(_SettledPublication publish) async {
+    if ((publication.load ?? -1) < 0) return;
+    var revision = publication.settingsRevision;
+    for (var retry = 0; retry < _settingsRetries; retry++) {
+      if (!await isCurrent()) return;
+      final settled = await _settledRevision(awaitSettingsSave, isCurrent);
+      if (settled == null || settled == revision) return;
+      revision = settled;
+      final rules = await SecureAlertThresholdPreferenceStore().read();
+      if (!await isCurrent()) return;
+      if (await publish(
+        publication.withSettingsRevision(settled),
+        applyUserAlertSettings(loaded, rules),
+      )) {
+        return;
+      }
+    }
+  }
+
   return ProviderSyncWork(
-    isCurrent: isCurrent,
+    isCurrent: owner._isProvenanceCurrent,
     syncWatch: () async {
-      if (poll.whollySkipped) return;
+      final watchSync = MethodChannelWatchSyncService(
+        claudePlanPaused: live.claudePlanPaused,
+      );
+      // A newer acceptance in any engine owns Wear, as it owns the widget.
+      if (!accepted) return;
+      // A cadence-skipped poll still seeds Wear's first v10 summary, after an
+      // upgrade or a mode transition, from the retained input.
+      if (poll.whollySkipped && await watchSync.isEstablished()) return;
       final ringPreferences =
           await (watchRingStore ?? SecureWatchRingPreferenceStore()).read();
+      // A claim whose credential retired during the poll no longer owns its
+      // cadence and cannot hold the healthy siblings in cooldown.
+      final owned = <DateTime>[];
+      for (final MapEntry(key: connection, value: at)
+          in poll.automaticAt.entries.toList()) {
+        final version =
+            poll.admittedVersions[connection] ??
+            poll.skipped[connection]?.version;
+        if (version == null) continue;
+        try {
+          if (!await live.repository.ownsAutomaticCadence(
+            connection,
+            version,
+          )) {
+            continue;
+          }
+        } catch (_) {
+          // Unavailable proof keeps the floor.
+        }
+        owned.add(at);
+      }
       if (!await isCurrent()) return;
-      await MethodChannelWatchSyncService(
-        claudePlanPaused: live.claudePlanPaused,
-      ).sync(snapshot, ringPreferences);
+      // A publication that is not wholly skipped follows an admitted claim.
+      // Its confirmed anchor, which native corrects after a clock rollback,
+      // is the owned attempt; a retained report's time may predate the
+      // rollback.
+      final anchorAt = ManualRefreshWindow.anchorAt(
+        reportAt: owned.isEmpty ? snapshot.generatedAt : null,
+        attempts: owned,
+      );
+      // The ring choice was read after this load began, so a later save that
+      // may change the summary, or a newer accepted load, refuses it natively.
+      Future<bool> send(
+        PhoneWidgetPublicationInput claim,
+        DashboardSnapshot input,
+        WatchRingPreferences rings,
+      ) async {
+        try {
+          await claim.run(
+            () => watchSync.sync(
+              input,
+              rings,
+              manualRefreshAnchorAt: anchorAt,
+              isCurrent: isCurrent,
+            ),
+          );
+        } on WatchSummarySuperseded {
+          return false;
+        }
+        return true;
+      }
+
+      if (await send(publication, snapshot, ringPreferences)) return;
+      await retryUnderSettledSettings((claim, rebuilt) async {
+        final rings =
+            await (watchRingStore ?? SecureWatchRingPreferenceStore()).read();
+        return !await isCurrent() || await send(claim, rebuilt, rings);
+      });
     },
     syncWidget: () async {
-      if (poll.whollySkipped) return;
-      final widgetPreferences =
-          await (widgetStore ?? SecurePhoneWidgetPreferenceStore()).read();
+      // An upgrade, a mode return or a widget still owed a frame publishes
+      // the retained input once, even when cadence skipped every provider.
+      if (!accepted ||
+          (poll.whollySkipped && await publication.isEstablished())) {
+        return;
+      }
+      final preferenceStore = widgetStore ?? SecurePhoneWidgetPreferenceStore();
+      final widgetPreferences = await preferenceStore.read();
       if (!await isCurrent()) return;
-      await HomeWidgetPhoneWidgetSyncService().sync(
-        snapshot,
-        widgetPreferences,
-        isCurrent: isCurrent,
-      );
+      Future<bool> publish(
+        PhoneWidgetPublicationInput claim,
+        DashboardSnapshot input,
+        PhoneWidgetPreferences preferences,
+      ) {
+        return claim.run(
+          () => HomeWidgetPhoneWidgetSyncService().sync(
+            input,
+            preferences,
+            isCurrent: isCurrent,
+          ),
+        );
+      }
+
+      if (await publish(publication, snapshot, widgetPreferences)) return;
+      await retryUnderSettledSettings((claim, rebuilt) async {
+        final preferences = await preferenceStore.read();
+        return !await isCurrent() || await publish(claim, rebuilt, preferences);
+      });
     },
     syncRecoveries: () async {
+      final preferences = SecureRecoveryNotificationPreferenceStore();
       var notifications = false;
       try {
-        notifications =
-            await SecureRecoveryNotificationPreferenceStore().read();
+        notifications = await preferences.read();
       } catch (_) {
         // Delivery preferences cannot block publication or recovery tracking.
       }
       if (!await isCurrent()) return;
+      final delivery = RecoveryDeliveryAdmission(
+        preferences: preferences,
+        platform: live.cachePlatform,
+      );
       await syncPlanRecoveries(
         snapshot,
-        SecureRecoveryWatchlistStore(),
+        SecureRecoveryWatchlistStore(
+          postLedger: NativeRecoveryPostLedger(platform: live.cachePlatform),
+        ),
         LocalRecoveryNotifier(),
         const WorkmanagerRecoveryWakeScheduler(),
         notifications: notifications,
+        // The foreground saves the switch. Its revision and this report's
+        // provenance are proven in one native step; the owner's sticky proof
+        // is not retired by a save.
+        admitDelivery:
+            () => delivery.admit(
+              () async =>
+                  await owner.isLive() &&
+                  await live.repository.isSnapshotCurrent(snapshot),
+            ),
         readWindows: readWindows,
         rethrowFailures: true,
         poll: poll,
@@ -266,6 +414,24 @@ Future<ProviderSyncWork?> loadProviderSyncWork(
           },
         ),
   );
+}
+
+/// The settled settings revision, read again after each [wait] while a save is
+/// in flight; `null` without a native order, once [isCurrent] retires, or
+/// when a save outlasts the bound.
+Future<int?> _settledRevision(
+  SettingsSaveWait wait,
+  Future<bool> Function() isCurrent,
+) async {
+  var waits = 0;
+  while (true) {
+    final revision =
+        (await PhoneWidgetPublicationInput.begin()).settingsRevision;
+    if (revision == null) return null;
+    if (revision >= 0) return revision;
+    if (waits++ == _settingsSaveWaits || !await isCurrent()) return null;
+    await wait();
+  }
 }
 
 Future<void> _attemptProviderSyncStep(

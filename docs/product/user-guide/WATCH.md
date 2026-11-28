@@ -19,6 +19,28 @@ Until its first valid phone summary, Wear shows a setup prompt. You do not enter
 sign in to providers on the watch. If the phone has data but the watch does not, follow
 [Troubleshooting](/guide/troubleshooting#watch-summary-is-missing-or-old).
 
+## Demo mode on the watch
+
+[Demo mode](/guide/getting-started#explore-with-demo-mode) sends the phone's sample readings
+to the watch without a provider account.
+
+1. Pair the watch with your phone using its manufacturer's normal setup. Check that its
+   companion app reports it connected.
+2. Install or update the WardPulse watch app, then open it from the watch's app launcher.
+3. On the phone, turn on **Settings → Demo mode**, then refresh **Dashboard**. Glance shows
+   **Demo data** in its detail line.
+4. For the face, install WardPulse Watch Face if needed. Touch and hold your current face,
+   then choose WardPulse in the watch-face list, or use your watch's companion selector. See
+   [Select and customize the face](#select-and-customize-the-face).
+
+Rings on Glance and the face follow your **Watchface** choices. A saved Claude plan choice
+stays saved but uses no ring slot.
+
+An older WardPulse watch app shows an empty summary with refresh disabled while Demo mode is
+on. Refresh from the phone, and update the watch app to see the sample readings. After you
+turn Demo mode off, an older watch app can request a resend only while its refresh control
+is enabled.
+
 ## Read the Wear app
 
 **Glance** shows remaining capacity with provider labels, compact tracks, optional purchased

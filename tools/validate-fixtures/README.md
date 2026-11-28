@@ -12,11 +12,20 @@ for a checked one.
 A schema must be named `*.schema.json` for the same reason: that is the glob the checker reads,
 and one named otherwise would sit unswept.
 
-The watch payload version is checked across the three places that must agree: the `const` in
-`watch_dashboard_summary.schema.json`, `SCHEMA_VERSION` in the Wear store, and `schemaVersion`
-in the phone's sync service. A mismatch builds fine and fails at run time — the watch drops
-every payload whose version it does not recognise — so the shells run this gate too
-(`phone-android.yml`, `wear-android.yml`), not only the core workflow.
+The watch Data Item carries two versions, and each is checked across the four places that
+must agree. The v9 `payload` projection that older watches read: the `const` in
+`watch_dashboard_summary.schema.json`, `LEGACY_SCHEMA_VERSION` in the Wear store and in the
+phone's native sender (`WatchPublication.kt`, which builds the empty replacement after a mode
+transition), and `legacyWatchSummarySchemaVersion` in the phone's sync service. The ordered
+v10 `summary`: the `const` in `watch_dashboard_summary_v10.schema.json`, `SCHEMA_VERSION` in
+the Wear store and the native sender, and `watchSummarySchemaVersion` in the phone's sync
+service. The v10 schema reuses every v9 body
+property by `$ref` and adds Demo provenance and the `installId`, `generation` and `sequence`
+owner fields; `watch_dashboard_summary_v10_demo.json` is its sanitized example. A mismatch
+builds fine and fails at run time — the watch drops every payload whose version it does not
+recognise — so the shells run this gate too (`phone-android.yml`, `wear-android.yml`), not only
+the core workflow. A missing schema, whether mapped or reached by another schema's `$ref`, is
+reported rather than leaving its shell versions or fixtures unchecked.
 
 Provider fixtures (`fixtures/providers/`) are sanitized payloads from other people's APIs and
 have no schema of ours to match; they are checked for syntax only.
@@ -58,8 +67,13 @@ The standard-library suite in [`test_validate_json.py`](test_validate_json.py),
 and `load_schemas` entry points. It temporarily binds `ROOT` to an external
 `TemporaryDirectory` and restricts `FIXTURE_SCHEMAS` to the existing watch-summary entry.
 Every case uses regular input files: an independent watch-summary sample, byte-for-byte
-copies of its three schema dependencies, and minimal synthetic phone/Wear version
-declarations. Defects are confined to these copies. Cleanup restores both bindings and
+copies of its three schema dependencies and the v10 schema, and minimal synthetic phone, native
+sender and Wear declarations of both versions, the v9 projection's first so the earlier single-version guard
+still reads it. `OrderedSummaryContractTests` also maps the v10 example and checks its strict
+owner fields, the shared v9 body, the Live/Mock-only v9 projection, its mapping guard and
+both per-schema version guards, including drift in either native sender constant alone. The OLD validator predates those guards, so these cases
+belong to the ordinary `just test-fixture-validator` gate, not the HOST comparison below.
+Defects are confined to these copies. Cleanup restores both bindings and
 removes owned inputs even after a failed assertion. Canonical inputs are never displaced,
 repointed, overlaid or written.
 
@@ -102,7 +116,10 @@ Git blob `d367427df19be2c9c3cdd5be134d440c474ee7f6`, Git mode `100644`. Its prod
 is that single file and the same Python standard library. Retain the regular file's
 filesystem permissions `0664` (full mode `0100664`). The only substituted Source bytes are
 that production file; final tests, support inputs and interpreter stay identical in both
-legs. Protected Source here means every tracked and nonignored untracked path; Root must
+legs. Both legs select only the original causal regressions, `ArrayConstraintTests` and
+`FixtureValidatorTests`, so their generated input manifests stay comparable; the v10
+`OrderedSummaryContractTests` remain covered by the ordinary gate at its own checkpoint.
+Protected Source here means every tracked and nonignored untracked path; Root must
 also qualify that no relevant input or reader is hidden outside this inventory.
 
 After qualifying custody, run the following Runner-authored parent once from the repository
@@ -139,7 +156,8 @@ target = root / relative
 revision = "1ff850eaa618786d0d693450b747a7c7fa570fb2"
 blob = "d367427df19be2c9c3cdd5be134d440c474ee7f6"
 command = ["python3", "-B", "-m", "unittest", "discover",
-           "-s", "tools/validate-fixtures", "-p", "test_*.py"]
+           "-s", "tools/validate-fixtures", "-p", "test_*.py",
+           "-k", "ArrayConstraintTests", "-k", "FixtureValidatorTests"]
 journal = Path(tempfile.mkdtemp(prefix="wardpulse-fixture-proof-"))
 print(f"HOST journal retained: {journal}", flush=True)
 active = None

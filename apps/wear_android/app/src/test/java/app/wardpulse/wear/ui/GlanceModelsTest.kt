@@ -105,6 +105,24 @@ class GlanceModelsTest {
     }
 
     @Test
+    fun refreshChrome_labelsProductDemoAndDebugMockApart() {
+        val demo = glanceRefreshChrome(
+            baseSummary(dataMode = WatchDataMode.DEMO, isStale = true),
+            refreshAllowed = true,
+        )
+        val mock = glanceRefreshChrome(baseSummary(dataMode = WatchDataMode.MOCK), refreshAllowed = true)
+        val live = glanceRefreshChrome(baseSummary(dataMode = WatchDataMode.LIVE), refreshAllowed = true)
+
+        // Demo uses the existing indicator: its line outranks Stale, and the tap stays live.
+        assertEquals("Demo data", demo.detail)
+        assertFalse(demo.ok)
+        assertTrue(demo.enabled)
+        assertEquals("Mock data", mock.detail)
+        assertNull(live.detail)
+        assertTrue(live.ok)
+    }
+
+    @Test
     fun refreshChrome_unknownShowsDetail() {
         val chrome =
             glanceRefreshChrome(

@@ -1,41 +1,33 @@
 package app.wardpulse.wear.sync
 
-import android.util.Log
-import app.wardpulse.wear.complication.WatchComplicationUpdater
 import app.wardpulse.wear.data.WatchSummaryStore
+import com.google.android.gms.wearable.CapabilityInfo
 import com.google.android.gms.wearable.DataEvent
 import com.google.android.gms.wearable.DataEventBuffer
-import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.WearableListenerService
 
 class WatchSummaryListenerService : WearableListenerService() {
     override fun onDataChanged(dataEvents: DataEventBuffer) {
-        val store = WatchSummaryStore(this)
-
-        dataEvents
-            .asSequence()
-            .filter { it.type == DataEvent.TYPE_CHANGED }
-            .filter { it.dataItem.uri.path == WatchDataContract.PATH }
-            .forEach { event ->
-                if (storeSummary(event, store)) {
-                    WatchComplicationUpdater.requestUpdate(this)
-                    Log.i(TAG, "Watch summary received.")
-                } else {
-                    Log.w(TAG, "Ignored invalid watch summary.")
-                }
-            }
+        // An event only signals that the route may have changed; reconciliation rereads it.
+        val signalled = dataEvents.any {
+            it.type == DataEvent.TYPE_CHANGED && it.dataItem.uri.path == WatchDataContract.PATH
+        }
+        if (signalled) reconcile(revalidate = false)
     }
 
-    private fun storeSummary(event: DataEvent, store: WatchSummaryStore): Boolean = try {
-        val payload = DataMapItem.fromDataItem(event.dataItem)
-            .dataMap
-            .getString(WatchDataContract.PAYLOAD_KEY)
-        payload != null && store.saveEncoded(payload)
-    } catch (_: RuntimeException) {
-        false
+    /**
+     * An observed phone reconnect asks the bound owner again, even for an unchanged item; a
+     * disconnect resolves the route afresh, which retires a proof still pending for it.
+     */
+    override fun onCapabilityChanged(capabilityInfo: CapabilityInfo) {
+        if (capabilityInfo.name == WatchDataContract.PHONE_CAPABILITY) {
+            reconcile(revalidate = capabilityInfo.nodes.isNotEmpty())
+        }
     }
 
-    private companion object {
-        const val TAG = "WardPulseSync"
+    // Listener callbacks run off the main thread, so the route proof may block here.
+    private fun reconcile(revalidate: Boolean) {
+        val reconciler = WatchSummaryReconciler(WatchSummaryStore(this), WearableSummaryRoute(this))
+        WatchSummaryReconciler.report(this, reconciler.reconcile(revalidate))
     }
 }

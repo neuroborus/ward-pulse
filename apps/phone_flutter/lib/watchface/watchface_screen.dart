@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app/catalog_outline.dart';
 import '../app/pull_to_refresh_list.dart';
 import '../dashboard/dashboard_models.dart';
+import '../providers/claude_plan_pause.dart';
 import '../settings/watch_ring_preferences.dart';
 
 /// Wear / WFF ring slots and a compact preview of the next watch payload.
@@ -16,6 +17,7 @@ class WatchfaceScreen extends StatefulWidget {
     this.reportingOutcomes = const [],
     this.saving = false,
     this.localCapsAvailable = true,
+    this.claudePlanPaused = claudePlanPausedInBuild,
   });
 
   final DashboardSnapshot? snapshot;
@@ -23,6 +25,10 @@ class WatchfaceScreen extends StatefulWidget {
   final WatchRingPreferences? ringPreferences;
   final bool saving;
   final bool localCapsAvailable;
+
+  /// The capability policy of the shown data; paused Claude plan choices stay
+  /// saved but use no slots.
+  final bool claudePlanPaused;
   final Future<void> Function(
     WatchRingPreferences Function(WatchRingPreferences current) update, {
     required String ringId,
@@ -47,11 +53,19 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
     try {
       await picker.onRingPreferencesChanged(
         (current) {
-          final ids = [...watchRingSelectionIds(picker.snapshot, current)];
+          final paused = picker.claudePlanPaused;
+          final saved = watchRingSelectionIds(
+            picker.snapshot,
+            current,
+            claudePlanPaused: paused,
+          );
+          final ids = [...saved];
           if (selected) {
+            final added = [...ids, metric.id];
             if (!metric.isAvailable ||
                 ids.contains(metric.id) ||
-                watchRingCapacityReason([...ids, metric.id]) != null) {
+                watchRingCapacityReason(added, claudePlanPaused: paused) !=
+                    null) {
               return current;
             }
             ids.add(metric.id);
@@ -84,11 +98,16 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
     final selectedIds =
         preferences == null || defaultsUnavailable
             ? const <String>[]
-            : watchRingSelectionIds(snapshot, preferences);
+            : watchRingSelectionIds(
+              snapshot,
+              preferences,
+              claudePlanPaused: picker.claudePlanPaused,
+            );
     final reported = watchRingCatalog(
       snapshot,
       reportingOutcomes: picker.reportingOutcomes,
       localCapsAvailable: picker.localCapsAvailable,
+      claudePlanPaused: picker.claudePlanPaused,
     );
     final reportedIds = reported.map((metric) => metric.id).toSet();
     final catalog = [
@@ -104,8 +123,14 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
                 'This saved metric is not currently reported. Deselect it to remove the choice.',
           ),
     ];
-    final capacityReason = watchRingCapacityReason(selectedIds);
-    final usedSlots = watchRingSlotCost(selectedIds);
+    final capacityReason = watchRingCapacityReason(
+      selectedIds,
+      claudePlanPaused: picker.claudePlanPaused,
+    );
+    final usedSlots = watchRingSlotCost(
+      selectedIds,
+      claudePlanPaused: picker.claudePlanPaused,
+    );
 
     return PullToRefreshList(
       onRefresh: widget.onRefresh,
@@ -163,7 +188,7 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
                         capacityReason: watchRingCapacityReason([
                           ...selectedIds,
                           metric.id,
-                        ]),
+                        ], claudePlanPaused: picker.claudePlanPaused),
                         onChanged:
                             (value) => _toggleRing(picker, metric, value),
                       ),
@@ -181,7 +206,11 @@ class _WatchfaceScreenState extends State<WatchfaceScreen> {
               subtitle: Text(
                 preferences == null || !picker.localCapsAvailable
                     ? 'Unavailable'
-                    : watchRingPayloadSubtitle(snapshot, preferences),
+                    : watchRingPayloadSubtitle(
+                      snapshot,
+                      preferences,
+                      claudePlanPaused: picker.claudePlanPaused,
+                    ),
               ),
             ),
           ),

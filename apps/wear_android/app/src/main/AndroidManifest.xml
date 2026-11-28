@@ -45,6 +45,13 @@
                     android:path="/wardpulse/watch-summary"
                     android:scheme="wear" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.CAPABILITY_CHANGED" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/wardpulse_phone"
+                    android:scheme="wear" />
+            </intent-filter>
         </service>
 
         <service

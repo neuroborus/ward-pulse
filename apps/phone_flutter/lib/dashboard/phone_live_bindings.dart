@@ -28,6 +28,7 @@ final class PhoneLiveBindings {
     required this.repository,
     this.rejectionNotices = const NativeConnectionRejectionNoticeStore(),
     this.claudePlanPaused = claudePlanPausedInBuild,
+    this.cachePlatform = const MethodChannelConnectionCachePlatform(),
     Future<void> Function()? retireClaudePlan,
   }) : _retireClaudePlan = retireClaudePlan;
 
@@ -36,6 +37,9 @@ final class PhoneLiveBindings {
   final ClaudeAccountService claudeAccountService;
   final DashboardRepository repository;
   final ConnectionRejectionNoticeStore rejectionNotices;
+
+  /// The native engine these bindings prove provenance against.
+  final ConnectionCachePlatform cachePlatform;
 
   /// Whether this build pauses Claude plan; see [claudePlanPausedInBuild].
   final bool claudePlanPaused;
@@ -131,6 +135,7 @@ final class PhoneLiveBindings {
       codexAccountService: codexAccountService,
       claudeAccountService: claudeAccountService,
       claudePlanPaused: claudePlanPaused,
+      cachePlatform: platform,
       retireClaudePlan: claudePlanPaused ? claudeStore.retire : null,
       repository: buildLiveProviderStack(
         clock: clock,

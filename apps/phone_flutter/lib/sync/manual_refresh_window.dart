@@ -12,6 +12,30 @@ final class ManualRefreshWindow {
 
   static const floor = Duration(minutes: PollCadence.minRefreshMinutes);
 
+  /// Advertised when no report or attempt anchors the window: refresh is open.
+  static final open = DateTime.utc(1970);
+
+  /// The anchor Wear advertises: the latest of [reportAt] and the cadence
+  /// [attempts] the publisher owns, or [open] without one. A report dated
+  /// after [now] predates a clock rollback, so its time proves no attempt;
+  /// a publisher that sees the clock cross it later passes `null` instead.
+  /// Display keeps the report's own time.
+  static DateTime anchorAt({
+    DateTime? reportAt,
+    Iterable<DateTime?> attempts = const [],
+    DateTime? now,
+  }) {
+    final clock = (now ?? DateTime.now()).toUtc();
+    DateTime? anchor;
+    for (final at in [
+      if (reportAt != null && !reportAt.isAfter(clock)) reportAt,
+      ...attempts,
+    ]) {
+      if (at != null && (anchor == null || at.isAfter(anchor))) anchor = at;
+    }
+    return anchor ?? open;
+  }
+
   factory ManualRefreshWindow.fromLastSync({
     required DateTime lastSyncAt,
     DateTime? now,

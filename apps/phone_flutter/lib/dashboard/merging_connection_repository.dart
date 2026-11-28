@@ -4,6 +4,7 @@ import 'package:ward_pulse_bindings/ward_pulse_bindings.dart';
 import '../sync/provider_sync_logger.dart';
 import '../sync/provider_reporting.dart';
 import '../sync/automatic_poll.dart';
+import '../sync/data_mode.dart';
 import '../sync/claude_account_client.dart' show ClaudeAccountException;
 import '../sync/codex_account_client.dart' show CodexAccountException;
 import '../providers/connection_lifecycle.dart';
@@ -97,6 +98,7 @@ final class MergingConnectionRepository extends DashboardRepository {
 
   Future<DashboardSnapshot> _load(ReportingObserver? observer) async {
     final revision = ++_cacheRevision;
+    final operation = DataModeOperation.current;
     var observing = true;
     void forward(ConnectionReportingUpdate update) {
       if (observing && revision == _cacheRevision) {
@@ -195,11 +197,11 @@ final class MergingConnectionRepository extends DashboardRepository {
       if (secret == null) {
         if (readObservation.unprovenAbsence)
           throw ConnectionFetchRetired(id.storageKey);
-        if (revision == _cacheRevision) {
+        await _updateRetained(revision, () {
           _lastSuccessfulConnectionSnapshot = null;
           _lastFailure = null;
           _lastFailureVersion = null;
-        }
+        });
         _logger.record(ProviderSyncEvent.skippedNoCredential);
         return _noConnectionResult;
       }
@@ -467,35 +469,43 @@ final class MergingConnectionRepository extends DashboardRepository {
           // Retire the proof before any reader can retry this validation.
           throw rejectSelection();
         }
+        if (operation != null && !await operation.isCurrent()) {
+          throw DataModeRetired();
+        }
         if (selectionCurrent && revision == _cacheRevision) {
-          // A live payload whose write failed can only seed recovery once
-          // the ordered selection has been validated.
-          if (remembered != null) {
-            _lastSuccessfulConnectionSnapshot = remembered.withCacheObservation(
-              order?.cacheObservation,
-            );
-          }
-          // Only a qualified attempt can supply feedback to a later skip.
-          if (!fixedFailureSelection && attemptCurrent) {
-            if (currentFailure != null) {
-              _lastFailure = currentFailure;
-              final owner = cache?.connection ?? id?.storageKey;
-              _lastFailureVersion =
-                  AutomaticPollContext.current?.admittedVersions[owner] ??
-                  stamp?.version ??
-                  (cachedVersion == null
-                      ? null
-                      : CredentialVersion(cachedVersion));
-              for (final outcome in facts) {
-                if (outcome.connection.storageKey == owner &&
-                    outcome.credentialVersion != null)
-                  _lastFailureVersion = outcome.credentialVersion;
+          final retained = remembered;
+          if (retained != null || (!fixedFailureSelection && attemptCurrent)) {
+            await _updateRetained(revision, () {
+              // A failed durable write can still leave an eligible RAM row.
+              if (retained != null) {
+                _lastSuccessfulConnectionSnapshot = retained
+                    .withCacheObservation(order?.cacheObservation);
               }
-            }
-            if (own.snapshot != null && skipped == null) {
-              _lastFailure = null;
-              _lastFailureVersion = null;
-            }
+              // Only a qualified attempt supplies feedback for a later skip.
+              if (!fixedFailureSelection && attemptCurrent) {
+                if (currentFailure != null) {
+                  _lastFailure = currentFailure;
+                  final owner = cache?.connection ?? id?.storageKey;
+                  _lastFailureVersion =
+                      AutomaticPollContext.current?.admittedVersions[owner] ??
+                      stamp?.version ??
+                      (cachedVersion == null
+                          ? null
+                          : CredentialVersion(cachedVersion));
+                  for (final outcome in facts) {
+                    if (outcome.connection.storageKey == owner &&
+                        outcome.credentialVersion != null) {
+                      _lastFailureVersion = outcome.credentialVersion;
+                    }
+                  }
+                }
+                if (own.snapshot != null && skipped == null) {
+                  _lastFailure = null;
+                  _lastFailureVersion = null;
+                }
+              }
+            });
+            if (revision != _cacheRevision) throw rejectSelection();
           }
           if (result == null) {
             var resultFailure = currentFailure!;
@@ -637,6 +647,17 @@ final class MergingConnectionRepository extends DashboardRepository {
     throw confirmedFailure;
   }
 
+  // A positive mode reply can outlive its generation. Keep RAM mutations
+  // inside an effect lease, just as durable writes are ordered against it.
+  Future<void> _updateRetained(int revision, void Function() update) async {
+    if (revision != _cacheRevision) return;
+    if (!await DataModeOperation.guardCurrent(() async {
+      if (revision == _cacheRevision) update();
+    })) {
+      throw DataModeRetired();
+    }
+  }
+
   Future<bool> _current(
     ProviderConnectionId id,
     int revision,
@@ -733,6 +754,7 @@ final class MergingConnectionRepository extends DashboardRepository {
     ConnectionReadObservation? readObservation,
   }) async {
     final cache = _cache;
+    final operation = DataModeOperation.current;
     final CapturedConnectionCache? captured;
     try {
       captured = cache == null ? null : await cache.capture(expected: version);
@@ -760,6 +782,9 @@ final class MergingConnectionRepository extends DashboardRepository {
               );
       Error.throwWithStackTrace(_unverifiedFailure(failure, key), stackTrace);
     }
+    if (operation != null && !await operation.isCurrent()) {
+      throw DataModeRetired();
+    }
     var cached = _lastSuccessfulConnectionSnapshot;
     if (_cache != null) {
       final stamp = cached?.snapshot.connectionVersions[_cache.connection];
@@ -768,16 +793,16 @@ final class MergingConnectionRepository extends DashboardRepository {
           !captured!.version!.sameCache(CredentialVersion(stamp))) {
         cached = null;
       }
-      if ((_lastFailureVersion == null ||
-              captured?.version?.sameCache(_lastFailureVersion!) != true) &&
-          revision == _cacheRevision) {
-        _lastFailure = null;
-        _lastFailureVersion = null;
-      }
       final disk = captured?.record;
       if (disk != null && _preferPairedRecord(disk, cached)) cached = disk;
-      if (revision == _cacheRevision)
+      await _updateRetained(revision, () {
+        if (_lastFailureVersion == null ||
+            captured?.version?.sameCache(_lastFailureVersion!) != true) {
+          _lastFailure = null;
+          _lastFailureVersion = null;
+        }
         _lastSuccessfulConnectionSnapshot = cached;
+      });
     }
     // Only a capture of the failed attempt's cache epoch can qualify an
     // accountless result if the paired selection read fails.
@@ -899,9 +924,11 @@ final class MergingConnectionRepository extends DashboardRepository {
       } catch (_) {
         // Omit unverified feedback and let the aggregate validate the skip.
       }
-      if (failureCurrent == false && revision == _cacheRevision) {
-        _lastFailure = null;
-        _lastFailureVersion = null;
+      if (failureCurrent == false) {
+        await _updateRetained(revision, () {
+          _lastFailure = null;
+          _lastFailureVersion = null;
+        });
       }
       final retainFailure = failureCurrent == true;
       final attemptEra = retainFailure ? failureEra : null;
@@ -956,6 +983,9 @@ final class MergingConnectionRepository extends DashboardRepository {
     } on ConnectionFetchRetired {
       rethrow;
     } catch (error, stackTrace) {
+      if (operation != null && !await operation.isCurrent()) {
+        throw DataModeRetired();
+      }
       final failure = _attribute(_mapError(error), version);
       // Cacheless loaders with a credential store can recheck a failed read
       // before publishing fallback data, provided they still own the fetch.
@@ -976,6 +1006,9 @@ final class MergingConnectionRepository extends DashboardRepository {
           ? failedBeforeStamp(failure, key, CredentialVersion(attempted))
           : failed(failure, cause: error);
     }
+    if (operation != null && !await operation.isCurrent()) {
+      throw DataModeRetired();
+    }
     if (report == null) {
       // The cache probe cannot qualify the actual credential read.
       if (readObservation case ConnectionReadObservation(
@@ -986,7 +1019,10 @@ final class MergingConnectionRepository extends DashboardRepository {
       }
       if (revision == _cacheRevision && captured?.version != null)
         await _cache!.clear(captured!.version);
-      if (revision == _cacheRevision) _lastSuccessfulConnectionSnapshot = null;
+      await _updateRetained(
+        revision,
+        () => _lastSuccessfulConnectionSnapshot = null,
+      );
       return _noConnectionResult;
     }
 
@@ -1044,8 +1080,10 @@ final class MergingConnectionRepository extends DashboardRepository {
       }
 
       if (cacheVersion == null || !await isCacheCurrent(cacheVersion)) {
-        if (revision == _cacheRevision)
-          _lastSuccessfulConnectionSnapshot = null;
+        await _updateRetained(
+          revision,
+          () => _lastSuccessfulConnectionSnapshot = null,
+        );
         return discardSelection();
       }
       if (!_cache.owns(connectionSnapshot))
@@ -1657,6 +1695,17 @@ final class MergingConnectionRepository extends DashboardRepository {
       outcome.credentialVersion == null;
 
   @override
+  Future<bool> ownsAutomaticCadence(
+    String connection,
+    CredentialVersion version,
+  ) {
+    final cache = _cache;
+    return cache != null && cache.connection == connection
+        ? cache.ownsAutomatic(version)
+        : _fallback.ownsAutomaticCadence(connection, version);
+  }
+
+  @override
   Future<bool> isSnapshotCurrent(DashboardSnapshot snapshot) async {
     final cache = _cache;
     if (snapshot.snapshotOrdering.values.any(
@@ -1729,14 +1778,6 @@ final class MergingConnectionRepository extends DashboardRepository {
       platform,
       allowUnstampedAccounts: true,
     );
-  }
-
-  @override
-  Future<void> clearPersistentSnapshots() async {
-    final revision = ++_cacheRevision;
-    await _cache?.clear();
-    if (revision == _cacheRevision) _lastSuccessfulConnectionSnapshot = null;
-    await _fallback.clearPersistentSnapshots();
   }
 
   @override

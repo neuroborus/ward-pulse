@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
@@ -9,12 +7,12 @@ import 'dashboard/phone_live_bindings.dart';
 import 'settings/alert_notification_preferences.dart';
 import 'settings/alert_threshold_preferences.dart';
 import 'settings/recovery_notification_preferences.dart';
-import 'settings/debug_data_preferences.dart';
 import 'settings/refresh_interval_preferences.dart';
 import 'settings/watch_ring_preferences.dart';
 import 'widget/phone_widget_preferences.dart';
 import 'widget/phone_widget_sync.dart';
 import 'sync/alert_notifications.dart';
+import 'sync/data_mode.dart';
 import 'sync/headless_provider_sync.dart';
 import 'sync/notification_coordinator.dart';
 import 'sync/provider_sync_scheduler.dart';
@@ -26,8 +24,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await HeadlessProviderSync.ensureInitialized();
   final live = PhoneLiveBindings.create();
-  unawaited(live.retirePausedClaudePlan());
-  final debugDataPreferenceStore = SecureDebugDataPreferenceStore();
+
   final notifications = PhoneNotificationCoordinator();
 
   runApp(
@@ -48,29 +45,28 @@ Future<void> main() async {
       alertNotifier: LocalAlertNotifier(coordinator: notifications),
       syncScheduler: TimerProviderSyncScheduler(),
       debugDataAvailable: kDebugMode,
-      debugDataPreferenceStore: debugDataPreferenceStore,
-      recoveryWatchlistStore: SecureRecoveryWatchlistStore(),
-      recoveryNotificationStore: SecureRecoveryNotificationPreferenceStore(),
+      modeAuthority: MethodChannelDataModeAuthority(),
+      prepareLive: live.retirePausedClaudePlan,
+      recoveryWatchlistStore: SecureRecoveryWatchlistStore(
+        postLedger: NativeRecoveryPostLedger(platform: live.cachePlatform),
+      ),
+      recoveryNotificationStore: SecureRecoveryNotificationPreferenceStore(
+        platform: live.cachePlatform,
+      ),
       recoveryNotifier: LocalRecoveryNotifier(coordinator: notifications),
       recoveryWake: const WorkmanagerRecoveryWakeScheduler(),
-      repository:
+      repository: live.repository,
+      mockRepository:
           kDebugMode
-              ? DebugDashboardRepository(
-                live: live.repository,
-                preferences: debugDataPreferenceStore,
-                mock: DemoDashboardRepository(
-                  debugSeed: const String.fromEnvironment(
-                    'WARD_PULSE_MOCK_SEED',
-                  ),
-                  debugAnchor:
-                      const bool.hasEnvironment('WARD_PULSE_MOCK_ANCHOR')
-                          ? const String.fromEnvironment(
-                            'WARD_PULSE_MOCK_ANCHOR',
-                          )
-                          : null,
-                ),
+              ? DemoDashboardRepository(
+                debugSeed: const String.fromEnvironment('WARD_PULSE_MOCK_SEED'),
+                debugAnchor:
+                    const bool.hasEnvironment('WARD_PULSE_MOCK_ANCHOR')
+                        ? const String.fromEnvironment('WARD_PULSE_MOCK_ANCHOR')
+                        : null,
               )
-              : live.repository,
+              : null,
+      demoRepository: DemoDashboardRepository.product(),
     ),
   );
 }

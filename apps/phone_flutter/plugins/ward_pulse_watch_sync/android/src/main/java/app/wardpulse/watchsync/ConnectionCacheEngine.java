@@ -12,10 +12,14 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.LongFunction;
 import java.util.function.LongSupplier;
+import java.util.function.Supplier;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -42,12 +46,317 @@ public final class ConnectionCacheEngine {
     private final Map<String, ArrayDeque<FetchPending>> fetchQueues = new HashMap<>();
     private final Map<String, ClockOrder> clockOrders = new HashMap<>();
     private final Mac stampMac = newStampMac();
+    private static final List<String> MODES = Arrays.asList("live", "demo", "mock");
+    private final Backend modeBackend;
+    private final boolean mockAllowed;
+    private Map<String, String> confirmedModeRecord;
+    private final ArrayDeque<ModeImport> modeImports = new ArrayDeque<>();
+    private ModeImport activeModeImport;
+    private final Map<String, ModeLease> modeLeases = new HashMap<>();
+    private final ArrayDeque<ModeSwitch> modeSwitches = new ArrayDeque<>();
+    private final ArrayDeque<ModeAdmission> modeAdmissions = new ArrayDeque<>();
+    private boolean unresolvedModeEffect;
+    // A failed first mode write can stay visible in SharedPreferences memory; never adopt it.
+    private boolean modeUnconfirmed;
     // SharedPreferences can expose failed commits in memory. Keep the whole
     // confirmed map so a sibling commit cannot persist any part of a failed write.
     private Map<String, String> confirmedAfterFailure;
+    // Plan recovery switch saves, by token and owner. Each start and finish
+    // advances the revision, so a reader in any engine can prove its choice.
+    private final Map<String, String> recoveryPreferenceWrites = new HashMap<>();
+    private long recoveryPreferenceRevision;
+    // Recovery occurrences Android accepted before their history write failed.
+    private final Set<String> unrecordedRecoveries = new HashSet<>();
+    // Watch summaries by arrival: the newest reserved and the newest sent.
+    private long watchSummaryReserved;
+    private long watchSummarySent;
+    // In memory only: a new process, or an item an orphaned put overwrote, reasserts its desired summary.
+    private long watchSummaryAcknowledged;
+    // Watch tickets issued for an accepted load, by order: the load and settings revision the
+    // summary was built from, kept until a newer desired item is durably confirmed. A ticket
+    // without one, such as a reconstruction or a desired item from before process death, orders
+    // by arrival alone; the desired item's durable settings retirement covers process death.
+    private final Map<Long, WatchAuthority> watchAuthorities = new HashMap<>();
+    private long automaticSamples;
+    // Surface publication order. Load ordinals order replacement of the shared
+    // accepted snapshot; each surface orders its own publications. Widget, ring
+    // and alert-rule saves advance the settings revision, retiring every launcher
+    // read tagged before them. Watch input holds unless a save that may change it began.
+    private long snapshotLoads;
+    private long acceptedSnapshotLoad;
+    private long widgetIssued;
+    private WidgetTicket widgetPending;
+    private WidgetDelivery widgetDelivery;
+    private final Map<String, SettingsWrite> surfaceSettingsWrites = new HashMap<>();
+    private long surfaceSettingsRevision;
+    // The newest settled revision, and the revision at which the last save that may change the
+    // watch summary's content began or, its outcome unknown, was detached. Watch input built
+    // under a settled revision at or after that floor still holds.
+    private long surfaceSettingsSettled;
+    private long watchSettingsFloor;
 
     public ConnectionCacheEngine(Backend backend) { this(backend, System::currentTimeMillis); }
-    public ConnectionCacheEngine(Backend backend, LongSupplier clock) { this.backend = backend; this.clock = clock; }
+    public ConnectionCacheEngine(Backend backend, LongSupplier clock) { this(backend, new MemoryBackend(), clock, true); }
+    public ConnectionCacheEngine(Backend backend, Backend modeBackend, LongSupplier clock, boolean mockAllowed) {
+        this.backend = backend; this.modeBackend = modeBackend; this.clock = clock; this.mockAllowed = mockAllowed;
+    }
+
+    /** One data-mode authority shared by every engine in this process. */
+    private Map<String, String> modeRecord() {
+        if (confirmedModeRecord == null) {
+            if (modeUnconfirmed) return null;
+            Map<String, String> stored = modeBackend.read();
+            try {
+                UUID.fromString(stored.get("installId"));
+                if (!MODES.contains(stored.get("mode")) || Long.parseLong(stored.get("generation")) < 0L) return null;
+            } catch (RuntimeException invalid) { return null; }
+            confirmedModeRecord = new LinkedHashMap<>(stored);
+        }
+        // Retire Debug Mock durably before exposing Live. Retain the confirmed
+        // source record so a failed commit cannot admit its in-memory candidate.
+        if (!mockAllowed && "mock".equals(confirmedModeRecord.get("mode"))
+                && !commitModeChange(confirmedModeRecord, "live")) {
+            throw new IllegalStateException("Data mode storage failed.");
+        }
+        return confirmedModeRecord;
+    }
+    private Long modeGeneration() {
+        Map<String, String> record = modeRecord();
+        return record == null ? null : Long.parseLong(record.get("generation"));
+    }
+    private boolean generationCurrent(Long generation) {
+        return generation == null || generation.equals(modeGeneration());
+    }
+    public synchronized Map<String, Object> readMode() {
+        Map<String, String> record = modeRecord();
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("initialized", record != null);
+        view.put("mockAllowed", mockAllowed);
+        view.put("switching", !modeSwitches.isEmpty());
+        if (record != null) {
+            view.put("installId", record.get("installId"));
+            view.put("mode", record.get("mode"));
+            view.put("generation", Long.parseLong(record.get("generation")));
+        }
+        return view;
+    }
+    /** Writes the first record once; [legacyMock] is honored only where Mock is allowed. */
+    public synchronized Map<String, Object> initializeMode(boolean legacyMock) {
+        if (modeRecord() == null) {
+            Map<String, String> record = new LinkedHashMap<>();
+            record.put("installId", unique());
+            record.put("mode", legacyMock && mockAllowed ? "mock" : "live");
+            record.put("generation", "0");
+            if (!commitMode(record)) throw new IllegalStateException("Data mode storage failed.");
+        }
+        return readMode();
+    }
+    /** Serializes the secure-storage read as well as the first mode write. */
+    public synchronized void beginModeImport(String owner, Consumer<String> ready, Consumer<Exception> failure) {
+        modeImports.addLast(new ModeImport(owner, ready, failure));
+        advanceModeImport();
+    }
+
+    public synchronized void finishModeImport(String owner, String token, Boolean legacyMock) {
+        if (activeModeImport == null || !activeModeImport.owner.equals(owner)
+                || !activeModeImport.token.equals(token)) {
+            throw new IllegalStateException("Data mode import unavailable.");
+        }
+        try {
+            if (legacyMock != null) initializeMode(legacyMock);
+        } finally {
+            activeModeImport = null;
+            advanceModeImport();
+        }
+    }
+
+    private void advanceModeImport() {
+        while (activeModeImport == null && !modeImports.isEmpty()) {
+            ModeImport request = modeImports.removeFirst();
+            try {
+                if (modeRecord() != null) {
+                    request.ready.accept(null);
+                } else if (!mockAllowed) {
+                    initializeMode(false);
+                    request.ready.accept(null);
+                } else {
+                    activeModeImport = request;
+                    request.ready.accept(request.token);
+                }
+            } catch (RuntimeException error) {
+                activeModeImport = null;
+                request.failure.accept(error);
+            }
+        }
+    }
+    private boolean commitMode(Map<String, String> record) {
+        boolean committed;
+        try { committed = modeBackend.commit(record); } catch (RuntimeException error) { committed = false; }
+        if (committed) { confirmedModeRecord = new LinkedHashMap<>(record); modeUnconfirmed = false; }
+        else if (confirmedModeRecord == null) modeUnconfirmed = true;
+        return committed;
+    }
+    private boolean commitModeChange(Map<String, String> record, String mode) {
+        long generation = Long.parseLong(record.get("generation"));
+        if (generation == Long.MAX_VALUE) return false;
+        Map<String, String> next = new LinkedHashMap<>(record);
+        next.put("mode", mode);
+        next.put("generation", Long.toString(generation + 1));
+        return commitMode(next);
+    }
+    /** Captures one operation's mode; admission is closed while a switch drains. */
+    public synchronized Map<String, Object> beginOperation() {
+        if (modeRecord() == null || !modeSwitches.isEmpty()) throw new IllegalStateException("Data mode unavailable.");
+        Map<String, Object> view = readMode();
+        view.put("requestId", unique());
+        return view;
+    }
+
+    public synchronized void beginAfterSwitch(String owner, Consumer<Map<String, Object>> success,
+            Consumer<Exception> failure) {
+        modeAdmissions.addLast(new ModeAdmission(owner, success, failure));
+        admitWaitingOperations();
+    }
+
+    private void admitWaitingOperations() {
+        while (modeSwitches.isEmpty() && !modeAdmissions.isEmpty()) {
+            ModeAdmission request = modeAdmissions.removeFirst();
+            try {
+                request.success.accept(beginOperation());
+            } catch (RuntimeException error) {
+                request.failure.accept(error);
+            }
+        }
+    }
+
+    /** v9 has no ownership fields. Only its empty tap in the initial mode may refresh. */
+    public synchronized Map<String, Object> captureLegacyWatchRefresh(byte[] payload) {
+        if (payload == null || payload.length != 0 || !modeSwitches.isEmpty()) return null;
+        Long generation = modeGeneration();
+        if (generation == null || generation != 0L) return null;
+        return beginOperation();
+    }
+    /**
+     * A v10 tap names its summary's install and generation. Only the current owner may refresh;
+     * a tap from a retired generation, a Demo tap after the return to Live included, resends.
+     */
+    public synchronized Map<String, Object> captureWatchRefresh(String installId, long generation) {
+        Map<String, String> record = modeRecord();
+        if (record == null || !modeSwitches.isEmpty() || !record.get("installId").equals(installId)
+                || generation != Long.parseLong(record.get("generation"))) return null;
+        Map<String, Object> operation = beginOperation();
+        operation.put("ordered", true);
+        return operation;
+    }
+    public synchronized boolean operationCurrent(long generation) {
+        return modeSwitches.isEmpty() && generationCurrent(generation);
+    }
+
+    /** Orders a launcher delivery against the durable mode write; a draining switch closes it. */
+    public synchronized void deliverWidgetIfModeCurrent(String installId, Long generation, Runnable deliver) {
+        Map<String, String> record = modeRecord();
+        if (!modeSwitches.isEmpty()) return;
+        if (record == null ? installId == null && generation == null
+                : record.get("installId").equals(installId) && Long.valueOf(record.get("generation")).equals(generation)) {
+            deliver.run();
+        }
+    }
+    /**
+     * Delivers views rendered from the publication stored under [sequence] while the mode write is
+     * current and [stored] still reads that sequence. A widget's first frame of ticketed rows
+     * ([rows] shown in the views and not yet [shown] there) also requires everything they committed
+     * under: accepted load, settings revision and selection; otherwise [refused] runs instead. A
+     * widget that already shows them keeps redrawing them, as on resize, until replacement rows
+     * commit; a frame showing none needs no proof. [renewable] reads the durable flags that the
+     * stored rows are a confirmed full publication of the saved settings, which a save clears before
+     * writing, and that no newer load was accepted since they committed.
+     */
+    public synchronized void deliverWidgetIfCurrent(String installId, Long generation, Long sequence, boolean rows,
+            Supplier<Long> stored, BooleanSupplier shown, BooleanSupplier renewable, Runnable deliver,
+            Runnable refused) {
+        deliverWidgetIfModeCurrent(installId, generation, () -> {
+            if (!Objects.equals(stored.get(), sequence)) return;
+            if (rows && !shown.getAsBoolean() && !widgetDeliveryCurrent(sequence, renewable)) refused.run();
+            else deliver.run();
+        });
+    }
+    private boolean widgetDeliveryCurrent(Long sequence, BooleanSupplier renewable) {
+        WidgetDelivery delivery = widgetDelivery;
+        if (sequence == null) return false;
+        if (delivery == null) {
+            // A restart lost the authority. Synthetic rows carry no source proof, so their
+            // confirmed full publication in this generation, unsuperseded before the restart,
+            // renews it until this process accepts a load or begins a save. Live rows wait for
+            // the next publication.
+            Map<String, String> record = modeRecord();
+            return record != null && !"live".equals(record.get("mode")) && acceptedSnapshotLoad == 0
+                && surfaceSettingsWrites.isEmpty() && renewable.getAsBoolean();
+        }
+        if (delivery.sequence != sequence) return false;
+        WidgetTicket authority = delivery.authority;
+        return authority.load == acceptedSnapshotLoad
+            && surfaceCurrent(authority.generation, authority.settingsRevision, authority.selection);
+    }
+    /** Scoped provider work runs only in the current Live generation. */
+    private boolean liveCurrent(Long generation) {
+        return generation == null || operationCurrent(generation) && "live".equals(confirmedModeRecord.get("mode"));
+    }
+    /** A short effect (send initiation, OAuth settlement) that a switch waits for. */
+    public synchronized String enterEffect(String owner, long generation) {
+        return enterEffect(owner, generation, false);
+    }
+    /** A [settlement] lease covers a sent OAuth refresh until its rotation is stored. */
+    public synchronized String enterEffect(String owner, long generation, boolean settlement) {
+        if (!operationCurrent(generation) || modeRecord() == null) return null;
+        String lease = unique();
+        modeLeases.put(lease, new ModeLease(owner, generation, settlement));
+        return lease;
+    }
+    public synchronized void exitEffect(String owner, String lease, boolean unresolved) {
+        ModeLease held = modeLeases.get(lease);
+        if (held == null || !held.owner.equals(owner)) return;
+        modeLeases.remove(lease);
+        if (unresolved) unresolvedModeEffect = true;
+        advanceModeSwitch();
+    }
+    public synchronized void switchMode(String owner, String mode, Consumer<Map<String, Object>> success,
+            Consumer<Exception> failure) {
+        if (!MODES.contains(mode) || ("mock".equals(mode) && !mockAllowed))
+            throw new IllegalArgumentException("Invalid data mode.");
+        if (modeRecord() == null) throw new IllegalStateException("Data mode unavailable.");
+        modeSwitches.add(new ModeSwitch(owner, mode, success, failure));
+        advanceModeSwitch();
+    }
+    private void advanceModeSwitch() {
+        while (!modeSwitches.isEmpty() && modeLeases.isEmpty()
+                && leases.values().stream().noneMatch(lease -> lease.scoped)) {
+            ModeSwitch request = modeSwitches.removeFirst();
+            boolean unresolved = unresolvedModeEffect;
+            unresolvedModeEffect = false;
+            Map<String, String> record = modeRecord();
+            if (!request.mode.equals(record.get("mode")) && !commitModeChange(record, request.mode)) {
+                // The old record and generation stay authoritative, and a
+                // drained storage failure stays pending for the next switch.
+                unresolvedModeEffect |= unresolved;
+                request.failure.accept(new ModeWriteFailure(unresolved));
+                continue;
+            }
+            Map<String, Object> view = readMode();
+            view.put("unresolved", unresolved);
+            request.success.accept(view);
+        }
+        admitWaitingOperations();
+    }
+
+    public static final class ModeWriteFailure extends IllegalStateException {
+        public final boolean unresolvedStorageFailure;
+
+        ModeWriteFailure(boolean unresolvedStorageFailure) {
+            super("Data mode storage failed.");
+            this.unresolvedStorageFailure = unresolvedStorageFailure;
+        }
+    }
+
     private Map<String, String> readAll() {
         Map<String, String> all = new LinkedHashMap<>(
             confirmedAfterFailure == null ? backend.read() : confirmedAfterFailure);
@@ -218,34 +527,68 @@ public final class ConnectionCacheEngine {
 
     /** Network exclusion is separate: user credential barriers never wait for it. */
     public synchronized void acquireFetch(String owner, String connection, Consumer<Map<String, Object>> success) {
+        // Unscoped requests never retire, so they never fail when granted.
+        acquireFetch(owner, connection, null, success, ignored -> {});
+    }
+    /**
+     * A non-null [generation] binds the fetch to one Live data-mode operation.
+     * A queued request whose generation retires is failed instead of granted.
+     */
+    public synchronized void acquireFetch(String owner, String connection, Long generation,
+            Consumer<Map<String, Object>> success, Consumer<Exception> failure) {
         requireConnection(connection);
-        FetchPending pending = new FetchPending(owner, connection, success);
+        if (!liveCurrent(generation)) throw new IllegalStateException("Data mode retired.");
+        FetchPending pending = new FetchPending(owner, connection, generation, success, failure);
         if (fetches.containsKey(connection)) fetchQueues.computeIfAbsent(connection, ignored -> new ArrayDeque<>()).add(pending);
         else startFetch(pending);
     }
     private void startFetch(FetchPending pending) {
-        FetchLease lease = new FetchLease(pending.owner, unique()); fetches.put(pending.connection, lease);
+        FetchLease lease = new FetchLease(pending.owner, unique(), pending.generation); fetches.put(pending.connection, lease);
         pending.success.accept(Collections.singletonMap("fetchTicket", lease.ticket));
     }
     public synchronized boolean validFetch(String owner, String connection, String ticket) {
+        return validFetch(owner, connection, ticket, false);
+    }
+    public synchronized boolean validFetch(String owner, String connection, String ticket, boolean forAdmission) {
+        if (!ownsFetch(owner, connection, ticket)) return false;
+        Long generation = fetches.get(connection).generation;
+        return forAdmission ? liveCurrent(generation) : generationCurrent(generation);
+    }
+    private boolean ownsFetch(String owner, String connection, String ticket) {
         FetchLease lease = fetches.get(connection);
         return lease != null && lease.owner.equals(owner) && lease.ticket.equals(ticket);
     }
     /** Persist automatic polling cadence independently of credential/cache transactions. */
     public synchronized Map<String, Object> claimAutomatic(String owner, String connection, String ticket,
             Map<String, String> expected, long intervalMillis) {
+        return claimAutomatic(owner, connection, ticket, expected, intervalMillis, false);
+    }
+    /** [cacheOnly] reports cadence without admitting, so the caller never opens a transport. */
+    public synchronized Map<String, Object> claimAutomatic(String owner, String connection, String ticket,
+            Map<String, String> expected, long intervalMillis, boolean cacheOnly) {
         requireConnection(connection);
         Map<String, String> state = state(connection);
-        if (!validFetch(owner, connection, ticket) || fenced.contains(connection)
+        if (!ownsFetch(owner, connection, ticket) || !liveCurrent(fetches.get(connection).generation) || fenced.contains(connection)
                 || !same(state, expected, true) || !same(state, expected, false))
             throw new IllegalStateException("Automatic fetch superseded.");
         if (intervalMillis < 300000L || intervalMillis > 3600000L)
             throw new IllegalArgumentException("Invalid automatic interval.");
         long now = clock.getAsLong();
         Map<String, Object> result = new LinkedHashMap<>();
+        // Orders competing loads' cadence observations by when this engine made them.
+        result.put("sample", ++automaticSamples);
         // Both decisions report the confirmed anchor that reset wakes count from.
-        if (state.get("generation").equals(state.get("automaticGeneration"))
-                && state.get("identity").equals(state.get("automaticIdentity"))) {
+        boolean anchored = state.get("generation").equals(state.get("automaticGeneration"))
+                && state.get("identity").equals(state.get("automaticIdentity"));
+        if (cacheOnly) {
+            long anchor = anchored ? Long.parseLong(state.get("automaticAt")) : now;
+            result.put("admitted", false);
+            result.put("nextEligible", Math.max(now, Math.addExact(Math.min(anchor, now), intervalMillis)));
+            if (anchored) result.put("automaticAt", Math.min(anchor, now));
+            result.put("order", cacheOrder(state, minimumEra(connection, state, confirmedEra(state))));
+            return result;
+        }
+        if (anchored) {
             long previousAnchor = Long.parseLong(state.get("automaticAt"));
             long anchor = Math.min(previousAnchor, now);
             long due = Math.addExact(anchor, intervalMillis);
@@ -261,6 +604,143 @@ public final class ConnectionCacheEngine {
         persistAutomaticAnchor(connection, state, now);
         result.put("admitted", true); result.put("automaticAt", now); return result;
     }
+    /**
+     * Whether cadence claimed under [expected] still belongs to the confirmed credential.
+     * Like the claim's own anchor, it follows generation and identity, so a snapshot epoch
+     * change keeps it. Unreadable or fenced state throws instead of proving retirement.
+     */
+    public synchronized boolean ownsAutomatic(String connection, Map<String, String> expected) {
+        if (fenced.contains(connection)) throw new IllegalStateException("Credential lifecycle unavailable.");
+        Map<String, String> state = state(connection);
+        return state.get("identity") != null && state.get("generation").equals(expected.get("generation"))
+            && state.get("identity").equals(expected.get("identity"));
+    }
+    /** Orders watch summaries by arrival across engines in this process. */
+    public synchronized long reserveWatchSummary() {
+        return ++watchSummaryReserved;
+    }
+    /** Allocates above [floor], the newest order this install published before process death. */
+    public synchronized long reserveWatchSummary(long floor) {
+        watchSummaryReserved = Math.max(watchSummaryReserved, floor);
+        return reserveWatchSummary();
+    }
+    /**
+     * A watch ticket above [floor] for a summary built from the accepted [load] under the settled
+     * [settingsRevision], or null when a newer load was accepted, a save that may change the
+     * summary's content began after the revision or the mode generation changed. Launcher-only
+     * saves, in flight or settled, keep the revision's authority. The accepted load takes fresh
+     * tickets for the same snapshot without loading again. A null [load] carries no surface
+     * authority.
+     */
+    public synchronized Long issueWatchSummary(long floor, Long load, Long generation, Long settingsRevision) {
+        if (load == null) return reserveWatchSummary(floor);
+        if (settingsRevision == null || load != acceptedSnapshotLoad
+                || !surfaceCurrent(generation, null, null) || !watchSettingsCurrent(settingsRevision)) {
+            return null;
+        }
+        long ticket = reserveWatchSummary(floor);
+        watchAuthorities.put(ticket, new WatchAuthority(load, settingsRevision));
+        return ticket;
+    }
+    /** Whether the accepted load and settings revision [sequence] was issued against still hold. */
+    public synchronized boolean watchSummaryCurrent(long sequence) {
+        WatchAuthority authority = watchAuthorities.get(sequence);
+        return authority == null || authority.load == acceptedSnapshotLoad
+            && watchSettingsCurrent(authority.settingsRevision);
+    }
+    /** Whether [ticket] may still be sent; a later arrival that was already sent supersedes it. */
+    public synchronized boolean claimWatchSummary(long ticket) {
+        if (ticket <= watchSummarySent) return false;
+        watchSummarySent = ticket;
+        return true;
+    }
+    /**
+     * Runs [commit], the durable write of desired publication [sequence], only while the load
+     * and settings it was issued against still hold, so a settings save orders before the write
+     * (which it then refuses) or after it (when its durable retirement marks the written item).
+     * Null when superseded. A confirmed write releases older authorities; a failed one keeps the
+     * still-desired item's.
+     */
+    public synchronized Boolean commitWatchSummary(long sequence, BooleanSupplier commit) {
+        if (!watchSummaryCurrent(sequence)) return null;
+        boolean committed = commit.getAsBoolean();
+        if (committed) watchAuthorities.keySet().removeIf(ticket -> ticket < sequence);
+        return committed;
+    }
+    /**
+     * Whether desired publication [sequence], already built, is still valid input for a newer
+     * accepted load that does not publish: its settings revision still holds. The accepted load
+     * then adopts it, so its outstanding or reasserted put is not retired as an older load's.
+     * Only the authority to start a put follows the load ({@link #watchSummaryCurrent}).
+     */
+    public synchronized boolean watchSummaryEstablished(long sequence) {
+        WatchAuthority authority = watchAuthorities.get(sequence);
+        if (authority == null) return true;
+        if (!watchSettingsCurrent(authority.settingsRevision)) return false;
+        authority.load = acceptedSnapshotLoad;
+        return true;
+    }
+    public synchronized Boolean admitWatchSummary(long ticket, Map<String, Map<String, String>> versions) {
+        return admitWatchSummary(ticket, versions, Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+    }
+    /**
+     * Admits the send of [ticket] in the same step that proves its report or failure selection,
+     * as {@link #validAll} would, so a credential retirement or cache write in this mode
+     * generation orders before or after the send. Null [versions] carry no selection proof,
+     * leaving arrival order alone; null means the proof, or the load and settings [ticket] was
+     * issued against ({@link #watchSummaryCurrent}), is stale, and consumes no ticket.
+     */
+    public synchronized Boolean admitWatchSummary(long ticket, Map<String, Map<String, String>> versions,
+            Map<String, Long> attemptClockEras, Map<String, ? extends Map<String, ?>> payloadOrders,
+            Map<String, String> emptyCacheOrders) {
+        if (!watchSummaryCurrent(ticket)) return null;
+        if (versions != null && !validAll(versions, attemptClockEras, payloadOrders, emptyCacheOrders)) return null;
+        return claimWatchSummary(ticket);
+    }
+    /**
+     * Whether the durable mode record owes Wear an empty current-generation summary in place of
+     * the desired publication [installId, generation]; null fields mean none or a v9-only one.
+     * Without a v10 publication, generation 0 is an initial Live upgrade, which Dart seeds from
+     * retained input; any later generation followed a committed transition.
+     */
+    public synchronized boolean watchPublicationOwed(String installId, Long generation) {
+        Map<String, String> record = modeRecord();
+        if (record == null || !modeSwitches.isEmpty()) return false;
+        long current = Long.parseLong(record.get("generation"));
+        if (installId == null) return current > 0L;
+        return !installId.equals(record.get("installId")) || generation == null || generation != current;
+    }
+    /**
+     * Leases the actual put of desired publication [sequence], ordered against mode commits as
+     * any send effect is, after proving its install, generation, selection, accepted load and
+     * settings revision again. Null while a switch drains, or when a commit, a newer accepted
+     * load or a settings save retired it or its selection proof expired. A v9-only publication
+     * predates the record and stays current until the first transition; with no record there is
+     * nothing to order against, so its lease is empty.
+     */
+    public synchronized String enterWatchSend(String owner, long sequence, String installId, Long generation,
+            Map<String, Map<String, String>> versions, Map<String, Long> attemptClockEras,
+            Map<String, ? extends Map<String, ?>> payloadOrders, Map<String, String> emptyCacheOrders) {
+        if (!watchSummaryCurrent(sequence)) return null;
+        if (versions != null && !validAll(versions, attemptClockEras, payloadOrders, emptyCacheOrders)) return null;
+        Map<String, String> record = modeRecord();
+        if (installId == null) {
+            if (record == null) return "";
+            return "0".equals(record.get("generation")) ? enterEffect(owner, 0L) : null;
+        }
+        if (record == null || generation == null || !installId.equals(record.get("installId"))) return null;
+        return enterEffect(owner, generation);
+    }
+    public synchronized boolean watchSummaryAcknowledged(long sequence) {
+        return sequence == watchSummaryAcknowledged;
+    }
+    public synchronized void acknowledgeWatchSummary(long sequence) {
+        watchSummaryAcknowledged = sequence;
+    }
+    /** Forgets the acknowledgement of [sequence] once its item was found overwritten. */
+    public synchronized void reassertWatchSummary(long sequence) {
+        if (watchSummaryAcknowledged == sequence) watchSummaryAcknowledged = 0L;
+    }
     private void persistAutomaticAnchor(String connection, Map<String, String> state, long anchor) {
         Map<String, String> all = readAll();
         all.put(connection + ".automaticGeneration", state.get("generation"));
@@ -272,16 +752,29 @@ public final class ConnectionCacheEngine {
     public synchronized void releaseFetch(String owner, String connection, String ticket) {
         releaseFetch(owner, connection, ticket, null);
     }
-    public synchronized void releaseFetch(String owner, String connection, String ticket, Long generatedAtMillis) {
-        if (!validFetch(owner, connection, ticket)) return;
+    /** Returns whether the reservation was still current when released. */
+    public synchronized boolean releaseFetch(String owner, String connection, String ticket, Long generatedAtMillis) {
+        if (!ownsFetch(owner, connection, ticket)) return false;
         FetchLease lease = fetches.remove(connection);
         try {
-            if (generatedAtMillis != null && lease.order != null && valid(connection, lease.order.version))
+            boolean current = generationCurrent(lease.generation);
+            // A retired operation releases its reservation without observing its report.
+            if (current && generatedAtMillis != null && lease.order != null && valid(connection, lease.order.version))
                 lease.order.observe(lease.era, generatedAtMillis);
+            return current;
         } finally {
-            ArrayDeque<FetchPending> queue = fetchQueues.get(connection);
-            if (queue != null && !queue.isEmpty()) startFetch(queue.removeFirst()); else fetchQueues.remove(connection);
+            grantNextFetch(connection);
         }
+    }
+    private void grantNextFetch(String connection) {
+        ArrayDeque<FetchPending> queue = fetchQueues.get(connection);
+        while (queue != null && !queue.isEmpty()) {
+            FetchPending next = queue.removeFirst();
+            if (liveCurrent(next.generation)) { startFetch(next); return; }
+            // Requested before a mode switch: retire it so current work goes first.
+            next.failure.accept(new IllegalStateException("Data mode retired."));
+        }
+        fetchQueues.remove(connection);
     }
 
     /** Capture the wall clock while this credential still owns the fetch. */
@@ -299,7 +792,7 @@ public final class ConnectionCacheEngine {
         }
         Map<String, Object> stamp = new LinkedHashMap<>();
         stamp.put("era", lease.era);
-        stamp.put("stamp", fetchStamp(owner, connection, ticket, order.version, lease.era));
+        stamp.put("stamp", fetchStamp(owner, connection, ticket, order.version, lease.era, lease.generation));
         return stamp;
     }
 
@@ -314,8 +807,10 @@ public final class ConnectionCacheEngine {
             throw new IllegalStateException("Snapshot ordering unavailable.", error);
         }
     }
-    private String fetchStamp(String owner, String connection, String ticket, Map<String, String> version, long era) {
-        String body = era + ":" + ticket;
+    /** A scoped stamp also carries its data-mode generation; unscoped stamps keep three fields. */
+    private String fetchStamp(String owner, String connection, String ticket, Map<String, String> version, long era,
+            Long generation) {
+        String body = era + ":" + ticket + (generation == null ? "" : ":" + generation);
         String binding = connection + "\n" + owner + "\n" + version.get("generation")
             + "\n" + version.get("epoch") + "\n" + version.get("identity") + "\n" + body;
         ByteBuffer digest = ByteBuffer.wrap(stampMac.doFinal(binding.getBytes(StandardCharsets.UTF_8)));
@@ -323,10 +818,13 @@ public final class ConnectionCacheEngine {
     }
     private Long stampedEra(String owner, String connection, Map<String, String> version, String stamp) {
         String[] fields = stamp.split(":", -1);
-        if (fields.length != 3) return null;
+        if (fields.length != 3 && fields.length != 4) return null;
         try {
             long era = Long.parseLong(fields[0]);
-            return stamp.equals(fetchStamp(owner, connection, fields[1], version, era)) ? era : null;
+            Long generation = fields.length == 4 ? Long.valueOf(fields[2]) : null;
+            if (!stamp.equals(fetchStamp(owner, connection, fields[1], version, era, generation))) return null;
+            // Only the current data mode's stamps publish; unscoped ones never read the mode record.
+            return generation == null || generation.equals(modeGeneration()) ? era : null;
         } catch (NumberFormatException invalid) { return null; }
     }
 
@@ -337,8 +835,16 @@ public final class ConnectionCacheEngine {
     }
     public synchronized void acquire(String owner, String connection, String action,
             Map<String, String> expected, String fetchTicket, Consumer<Map<String, Object>> success, Consumer<Exception> failure) {
+        acquire(owner, connection, action, expected, fetchTicket, null, null, success, failure);
+    }
+    public synchronized void acquire(String owner, String connection, String action,
+            Map<String, String> expected, String fetchTicket, Long readGeneration, String settlementLease,
+            Consumer<Map<String, Object>> success, Consumer<Exception> failure) {
         requireConnection(connection);
-        Pending pending = new Pending(owner, connection, action, expected, fetchTicket, success, failure);
+        if (readGeneration != null && !"read".equals(action))
+            throw new IllegalArgumentException("Generation is only accepted for credential reads.");
+        Pending pending = new Pending(owner, connection, action, expected, fetchTicket, readGeneration, settlementLease,
+            success, failure);
         if (leases.containsKey(connection)) queues.computeIfAbsent(connection, ignored -> new ArrayDeque<>()).add(pending);
         else start(pending);
     }
@@ -348,8 +854,23 @@ public final class ConnectionCacheEngine {
             boolean rejection = "reject".equals(pending.action) || "rejectDelete".equals(pending.action);
             if (rejection && (pending.expected == null || pending.fetchTicket == null))
                 throw new IllegalArgumentException("Rejection ownership required.");
-            if (pending.fetchTicket != null && !validFetch(pending.owner, connection, pending.fetchTicket))
-                throw new IllegalStateException("Account fetch superseded.");
+            // Cache capture can read a credential before the provider acquires a fetch ticket.
+            Long generation = pending.readGeneration;
+            if (pending.fetchTicket != null) {
+                if (!validFetch(pending.owner, connection, pending.fetchTicket))
+                    throw new IllegalStateException("Account fetch superseded.");
+                Long fetchGeneration = fetches.get(connection).generation;
+                if (generation != null && !generation.equals(fetchGeneration))
+                    throw new IllegalStateException("Account fetch superseded.");
+                generation = fetchGeneration;
+            }
+            if (generation != null && !liveCurrent(generation)) {
+                // Only the owner of an already-sent rotation may start storage while draining.
+                ModeLease settlement = modeLeases.get(pending.settlementLease);
+                if (!"refresh".equals(pending.action) || settlement == null || !settlement.settlement
+                        || settlement.generation != generation || !settlement.owner.equals(pending.owner))
+                    throw new IllegalStateException("Account fetch superseded.");
+            }
             boolean retireClaudePlan = "retireClaudePlan".equals(pending.action);
             if (retireClaudePlan && !"anthropic.plan".equals(connection))
                 throw new IllegalArgumentException("Invalid retirement.");
@@ -371,7 +892,8 @@ public final class ConnectionCacheEngine {
                 persistNotice(connection, state);
                 pending.success.accept(Collections.singletonMap("accepted", true)); next(connection); return;
             }
-            Lease lease = new Lease(pending.owner, connection, unique(), pending.action, pending.fetchTicket);
+            Lease lease = new Lease(pending.owner, connection, unique(), pending.action, pending.fetchTicket,
+                generation != null);
             if ("reconnect".equals(pending.action)) {
                 if ("active".equals(state.get("mode"))) {
                     state.put("previousSlot", state.get("slot"));
@@ -499,7 +1021,13 @@ public final class ConnectionCacheEngine {
                 throw new IllegalArgumentException("Invalid credential completion.");
             }
             return view(state);
-        } finally { leases.remove(connection); next(connection); }
+        } finally { releaseCredentialLease(lease); }
+    }
+    private void releaseCredentialLease(Lease lease) {
+        leases.remove(lease.connection);
+        // A waiting switch takes precedence over the next scoped transaction.
+        if (lease.scoped) advanceModeSwitch();
+        next(lease.connection);
     }
     public synchronized void queueLegacyCleanup(String owner, String connection, String ticket) {
         lease(owner, connection, ticket);
@@ -525,7 +1053,197 @@ public final class ConnectionCacheEngine {
         all.put(connection + ".retired", state.get("retired"));
         return commit(all);
     }
+    public synchronized String beginRecoveryPreferenceWrite(String owner) {
+        String token = UUID.randomUUID().toString();
+        recoveryPreferenceWrites.put(token, owner);
+        recoveryPreferenceRevision++;
+        return token;
+    }
+    public synchronized void finishRecoveryPreferenceWrite(String owner, String token) {
+        if (!owner.equals(recoveryPreferenceWrites.get(token))) return;
+        recoveryPreferenceWrites.remove(token);
+        recoveryPreferenceRevision++;
+    }
+    /** Null while a save is in flight: its outcome is not yet readable. */
+    public synchronized Long readRecoveryPreferenceRevision() {
+        return recoveryPreferenceWrites.isEmpty() ? recoveryPreferenceRevision : null;
+    }
+    public synchronized boolean recoveryDeliveryCurrent(long revision, Long generation) {
+        return recoveryPreferenceWrites.isEmpty() && recoveryPreferenceRevision == revision && liveCurrent(generation);
+    }
+    public synchronized String beginSurfaceSettingsWrite(String owner) {
+        return beginSurfaceSettingsWrite(owner, true);
+    }
+    /**
+     * Begins a settings save, retiring every launcher read tagged before it. One that leaves the
+     * watch summary's content alone ([watch] false) keeps the authority of watch input built
+     * under any revision since the last save that may change it, in flight and once it settles.
+     */
+    public synchronized String beginSurfaceSettingsWrite(String owner, boolean watch) {
+        String token = unique();
+        surfaceSettingsWrites.put(token, new SettingsWrite(owner, watch));
+        surfaceSettingsRevision++;
+        if (watch) watchSettingsFloor = surfaceSettingsRevision;
+        return token;
+    }
+    /** The settled revision after this save, or null while another save is in flight. */
+    public synchronized Long finishSurfaceSettingsWrite(String owner, String token) {
+        SettingsWrite write = surfaceSettingsWrites.get(token);
+        if (write != null && write.owner.equals(owner)) {
+            surfaceSettingsWrites.remove(token);
+            surfaceSettingsRevision++;
+        }
+        if (!surfaceSettingsWrites.isEmpty()) return null;
+        surfaceSettingsSettled = surfaceSettingsRevision;
+        return surfaceSettingsRevision;
+    }
+    /** Whether watch input built under settled [settingsRevision] still holds; launcher-only saves keep it. */
+    private boolean watchSettingsCurrent(long settingsRevision) {
+        return settingsRevision >= watchSettingsFloor && settingsRevision <= surfaceSettingsSettled;
+    }
+    /**
+     * Starts a load before it reads settings or provider data: its ordinal, the settled settings
+     * revision (null while a save is in flight) and the committed launcher publication it observes.
+     * [committed] reads the stored ticket, so the order survives process death.
+     */
+    public synchronized Map<String, Object> beginWidgetLoad(LongSupplier committed) {
+        long observed = committed.getAsLong();
+        widgetIssued = Math.max(widgetIssued, observed);
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("load", ++snapshotLoads);
+        view.put("settingsRevision", surfaceSettingsWrites.isEmpty() ? surfaceSettingsRevision : null);
+        view.put("observed", observed);
+        return view;
+    }
+    /**
+     * Records [load]'s source-validated snapshot as the shared accepted input, whether or not a
+     * surface publishes it. False when a newer load was accepted or its source is retired.
+     */
+    public synchronized boolean acceptSnapshotLoad(long load, Long generation,
+            Map<String, Map<String, String>> versions, Map<String, Long> attemptClockEras,
+            Map<String, ? extends Map<String, ?>> payloadOrders, Map<String, String> emptyCacheOrders) {
+        return acceptSnapshotLoad(load, generation, versions, attemptClockEras, payloadOrders, emptyCacheOrders,
+            () -> true);
+    }
+    /**
+     * As above; [retire] durably records, under this lock and before the acceptance is visible,
+     * that stored rows committed under an older load lost their first-delivery authority, so a
+     * restart cannot renew them. False, without accepting, when it cannot confirm that record.
+     */
+    public synchronized boolean acceptSnapshotLoad(long load, Long generation,
+            Map<String, Map<String, String>> versions, Map<String, Long> attemptClockEras,
+            Map<String, ? extends Map<String, ?>> payloadOrders, Map<String, String> emptyCacheOrders,
+            BooleanSupplier retire) {
+        if (load < acceptedSnapshotLoad || load > snapshotLoads || !surfaceCurrent(generation, null,
+                new WidgetSelection(versions, attemptClockEras, payloadOrders, emptyCacheOrders))) {
+            return false;
+        }
+        if ((widgetDelivery == null || !Objects.equals(widgetDelivery.authority.load, load))
+                && !retire.getAsBoolean()) {
+            return false;
+        }
+        acceptedSnapshotLoad = load;
+        return true;
+    }
+    /**
+     * A launcher ticket for the accepted [load], or null when a newer load was accepted, a
+     * settings save retired [settingsRevision], its mode generation changed or its selection is
+     * stale. The accepted load can take fresh tickets for the same snapshot without loading again.
+     */
+    public synchronized Long issueWidgetPublication(String owner, long load, Long generation,
+            long settingsRevision, long committed, Map<String, Map<String, String>> versions,
+            Map<String, Long> attemptClockEras, Map<String, ? extends Map<String, ?>> payloadOrders,
+            Map<String, String> emptyCacheOrders) {
+        WidgetSelection selection = new WidgetSelection(versions, attemptClockEras, payloadOrders, emptyCacheOrders);
+        if (load != acceptedSnapshotLoad || !surfaceCurrent(generation, settingsRevision, selection)) return null;
+        widgetIssued = Math.max(widgetIssued, committed) + 1;
+        widgetPending = new WidgetTicket(owner, widgetIssued, load, generation, settingsRevision, selection);
+        return widgetIssued;
+    }
+    /** The newest ticket for a publication without a load, such as a fixture write. */
+    public synchronized long reserveWidgetPublication(String owner, long committed) {
+        widgetIssued = Math.max(widgetIssued, committed) + 1;
+        widgetPending = new WidgetTicket(owner, widgetIssued, null, null, null, null);
+        return widgetIssued;
+    }
+    /**
+     * Runs [commit] only for the newest pending ticket while everything it was issued against is
+     * still current: accepted load, mode generation, settings revision and selection. Null when
+     * superseded or retired; either way the ticket is spent.
+     */
+    public synchronized Boolean commitWidgetPublication(long ticket, Long generation, BooleanSupplier commit) {
+        WidgetTicket pending = widgetPending;
+        if (pending == null || pending.ticket != ticket) return null;
+        widgetPending = null;
+        if (generation != null && !operationCurrent(generation)) return null;
+        if (pending.load != null && (pending.load != acceptedSnapshotLoad
+                || !surfaceCurrent(pending.generation, pending.settingsRevision, pending.selection))) return null;
+        // Even a failed disk commit leaves these rows in memory, so their delivery keeps this authority.
+        widgetDelivery = pending.load == null ? null : new WidgetDelivery(pending, ticket);
+        return commit.getAsBoolean();
+    }
+    /** Spends [owner]'s pending [ticket] when its publication exits before the commit attempt. */
+    public synchronized void retireWidgetPublication(String owner, long ticket) {
+        if (widgetPending != null && widgetPending.ticket == ticket && widgetPending.owner.equals(owner)) {
+            widgetPending = null;
+        }
+    }
+    /**
+     * Marks the rows a failed load [observed] stale under a fresh ticket, so an older redraw cannot
+     * hide the flag. Null when those rows were replaced, a newer publication is pending or [mark]
+     * found no rows. [committed] reads the stored ticket under this lock.
+     */
+    public synchronized Boolean markWidgetStale(long observed, Long generation, LongSupplier committed,
+            LongFunction<Boolean> mark) {
+        long stored = committed.getAsLong();
+        widgetIssued = Math.max(widgetIssued, stored);
+        if (observed != stored || widgetPending != null
+                || (generation != null && !operationCurrent(generation))) return null;
+        Boolean marked = mark.apply(widgetIssued + 1);
+        if (marked != null) {
+            widgetIssued++;
+            // The flag-only write keeps the rows, and their delivery authority, under the new ticket.
+            if (widgetDelivery != null && widgetDelivery.sequence == stored) widgetDelivery.sequence = widgetIssued;
+        }
+        return marked;
+    }
+    private boolean surfaceCurrent(Long generation, Long settingsRevision, WidgetSelection selection) {
+        return (generation == null || operationCurrent(generation))
+            && (settingsRevision == null
+                || (surfaceSettingsWrites.isEmpty() && settingsRevision == surfaceSettingsRevision))
+            && (selection == null || selection.versions == null || validAll(selection.versions,
+                selection.attemptClockEras, selection.payloadOrders, selection.emptyCacheOrders));
+    }
+    public synchronized List<String> readUnrecordedRecoveries() { return new ArrayList<>(unrecordedRecoveries); }
+    public synchronized void recordUnrecordedRecoveries(List<String> occurrences) { unrecordedRecoveries.addAll(occurrences); }
+    public synchronized void forgetUnrecordedRecoveries(List<String> occurrences) { unrecordedRecoveries.removeAll(occurrences); }
     public synchronized void detach(String owner) {
+        // A detached engine's save can no longer finish; its outcome is unknown.
+        if (recoveryPreferenceWrites.values().removeIf(owner::equals)) recoveryPreferenceRevision++;
+        // Only one that may change the watch summary's content retires watch input.
+        boolean watch = surfaceSettingsWrites.values().stream()
+            .anyMatch(write -> write.owner.equals(owner) && write.watch);
+        if (surfaceSettingsWrites.values().removeIf(write -> write.owner.equals(owner))) {
+            surfaceSettingsRevision++;
+            if (watch) watchSettingsFloor = surfaceSettingsRevision;
+            if (surfaceSettingsWrites.isEmpty()) surfaceSettingsSettled = surfaceSettingsRevision;
+        }
+        // A detached engine can no longer commit its pending ticket.
+        if (widgetPending != null && widgetPending.owner.equals(owner)) widgetPending = null;
+        modeAdmissions.removeIf(request -> request.owner.equals(owner));
+        modeImports.removeIf(request -> request.owner.equals(owner));
+        if (activeModeImport != null && activeModeImport.owner.equals(owner)) {
+            activeModeImport = null;
+            advanceModeImport();
+        }
+        modeSwitches.removeIf(request -> request.owner.equals(owner));
+        // A detached engine's sent OAuth refresh can no longer store its rotation.
+        modeLeases.values().removeIf(lease -> {
+            if (!lease.owner.equals(owner)) return false;
+            if (lease.settlement) unresolvedModeEffect = true;
+            return true;
+        });
+        advanceModeSwitch();
         for (ArrayDeque<FetchPending> queue : fetchQueues.values()) queue.removeIf(pending -> pending.owner.equals(owner));
         for (String connection : new ArrayList<>(fetches.keySet())) {
             FetchLease lease = fetches.get(connection);
@@ -545,7 +1263,7 @@ public final class ConnectionCacheEngine {
                     state.remove("previousSlot"); state.remove("previousIdentity"); state.remove("previousMode"); state.remove("pendingSlot"); persist(connection, state);
                 } catch (Exception ignored) { fenced.add(connection); }
             }
-            leases.remove(connection); next(connection);
+            releaseCredentialLease(lease);
         }
     }
     public synchronized boolean valid(String connection, Map<String, String> expected) {
@@ -553,6 +1271,18 @@ public final class ConnectionCacheEngine {
     }
     public synchronized boolean validAll(Map<String, Map<String, String>> versions) {
         return validAll(versions, Collections.emptyMap(), Collections.emptyMap(), Collections.emptyMap());
+    }
+    /**
+     * Also admits a recovery post, when {@code recoveryPreferenceRevision} is given: the saved
+     * choice must be settled at that revision and {@code recoveryModeGeneration}, if given, the
+     * Live generation with admission open.
+     */
+    public synchronized boolean validAll(Map<String, Map<String, String>> versions,
+            Map<String, Long> attemptClockEras, Map<String, ? extends Map<String, ?>> payloadOrders,
+            Map<String, String> emptyCacheOrders, Long recoveryPreferenceRevision, Long recoveryModeGeneration) {
+        if (recoveryPreferenceRevision != null
+                && !recoveryDeliveryCurrent(recoveryPreferenceRevision, recoveryModeGeneration)) return false;
+        return validAll(versions, attemptClockEras, payloadOrders, emptyCacheOrders);
     }
     public synchronized boolean validAll(Map<String, Map<String, String>> versions,
             Map<String, Long> attemptClockEras, Map<String, ? extends Map<String, ?>> payloadOrders,
@@ -613,7 +1343,12 @@ public final class ConnectionCacheEngine {
     }
     public synchronized Map<String, Object> readSnapshotPair(String connection, Map<String, String> expected,
             boolean forSelection) {
-        if (!valid(connection, expected)) return Collections.singletonMap("valid", false);
+        return readSnapshotPair(connection, expected, forSelection, null);
+    }
+    public synchronized Map<String, Object> readSnapshotPair(String connection, Map<String, String> expected,
+            boolean forSelection, Long generation) {
+        // A regular read can also purge an unsupported payload and advance its epoch.
+        if (!liveCurrent(generation) || !valid(connection, expected)) return Collections.singletonMap("valid", false);
         Map<String, String> state = state(connection);
         // Selection must see the floor without attempting another storage write.
         if (!forSelection && state.containsKey("snapshot") && !"1".equals(state.get("snapshotVersion"))) {
@@ -650,7 +1385,11 @@ public final class ConnectionCacheEngine {
     }
     public synchronized Map<String, Object> writeSnapshotOrdered(String owner, String connection, Map<String, String> expected,
             String snapshot, long generatedAt, String stamp) {
-        if (!valid(connection, expected)) return writeResult("superseded", null);
+        return writeSnapshotOrdered(owner, connection, expected, snapshot, generatedAt, stamp, null);
+    }
+    public synchronized Map<String, Object> writeSnapshotOrdered(String owner, String connection, Map<String, String> expected,
+            String snapshot, long generatedAt, String stamp, Long generation) {
+        if (!liveCurrent(generation) || !valid(connection, expected)) return writeResult("superseded", null);
         Map<String, String> state = state(connection);
         Long confirmedEra = confirmedEra(state);
         Long minimumEra = minimumEra(connection, state, confirmedEra);
@@ -745,7 +1484,11 @@ public final class ConnectionCacheEngine {
     }
     /** Upgrade legacy millisecond ordering without rewriting or racing a newer payload. */
     public synchronized boolean upgradeSnapshotTimestamp(String connection, Map<String, String> expected, String snapshot, long generatedAt) {
-        if (!valid(connection, expected)) return false;
+        return upgradeSnapshotTimestamp(connection, expected, snapshot, generatedAt, null);
+    }
+    public synchronized boolean upgradeSnapshotTimestamp(String connection, Map<String, String> expected, String snapshot,
+            long generatedAt, Long generation) {
+        if (!liveCurrent(generation) || !valid(connection, expected)) return false;
         Map<String, String> state = state(connection);
         if (!snapshot.equals(state.get("snapshot"))) return false;
         if ("microseconds".equals(state.get("snapshotTimeUnit"))) return true;
@@ -755,6 +1498,10 @@ public final class ConnectionCacheEngine {
         return true;
     }
     public synchronized void clearSnapshot(String connection, Map<String, String> expected) {
+        clearSnapshot(connection, expected, null);
+    }
+    public synchronized void clearSnapshot(String connection, Map<String, String> expected, Long generation) {
+        if (!liveCurrent(generation)) return;
         Map<String, String> state = state(connection);
         if (expected != null && !same(state, expected, false)) return;
         if ("legacy".equals(state.get("mode"))) return;
@@ -799,29 +1546,122 @@ public final class ConnectionCacheEngine {
         }
     }
     private static final class FetchLease {
-        final String owner, ticket;
+        final String owner, ticket; final Long generation;
         ClockOrder order;
         long era;
-        FetchLease(String owner, String ticket) { this.owner = owner; this.ticket = ticket; }
-    }
-    private static final class FetchPending {
-        final String owner, connection; final Consumer<Map<String, Object>> success;
-        FetchPending(String owner, String connection, Consumer<Map<String, Object>> success) {
-            this.owner = owner; this.connection = connection; this.success = success;
+        FetchLease(String owner, String ticket, Long generation) {
+            this.owner = owner; this.ticket = ticket; this.generation = generation;
         }
     }
+    private static final class FetchPending {
+        final String owner, connection; final Long generation; final Consumer<Map<String, Object>> success;
+        final Consumer<Exception> failure;
+        FetchPending(String owner, String connection, Long generation, Consumer<Map<String, Object>> success,
+                Consumer<Exception> failure) {
+            this.owner = owner; this.connection = connection; this.generation = generation; this.success = success;
+            this.failure = failure;
+        }
+    }
+    private static final class ModeImport {
+        final String owner;
+        final String token = unique();
+        final Consumer<String> ready;
+        final Consumer<Exception> failure;
+        ModeImport(String owner, Consumer<String> ready, Consumer<Exception> failure) {
+            this.owner = owner; this.ready = ready; this.failure = failure;
+        }
+    }
+
+    /** A settings save in flight: its engine, and whether it may change watch content. */
+    private static final class SettingsWrite {
+        final String owner;
+        final boolean watch;
+        SettingsWrite(String owner, boolean watch) {
+            this.owner = owner; this.watch = watch;
+        }
+    }
+    private static final class ModeLease {
+        final String owner;
+        final long generation;
+        final boolean settlement;
+        ModeLease(String owner, long generation, boolean settlement) {
+            this.owner = owner; this.generation = generation; this.settlement = settlement;
+        }
+    }
+    private static final class ModeAdmission {
+        final String owner;
+        final Consumer<Map<String, Object>> success;
+        final Consumer<Exception> failure;
+        ModeAdmission(String owner, Consumer<Map<String, Object>> success, Consumer<Exception> failure) {
+            this.owner = owner; this.success = success; this.failure = failure;
+        }
+    }
+
+    private static final class ModeSwitch {
+        final String owner, mode; final Consumer<Map<String, Object>> success; final Consumer<Exception> failure;
+        ModeSwitch(String owner, String mode, Consumer<Map<String, Object>> success, Consumer<Exception> failure) {
+            this.owner = owner; this.mode = mode; this.success = success; this.failure = failure;
+        }
+    }
+    /** Process-local mode storage for hosts without a durable mode backend. */
+    private static final class MemoryBackend implements Backend {
+        private Map<String, String> values = Collections.emptyMap();
+        @Override public Map<String, String> read() { return values; }
+        @Override public boolean commit(Map<String, String> next) { values = new LinkedHashMap<>(next); return true; }
+    }
+    private static final class WidgetSelection {
+        final Map<String, Map<String, String>> versions;
+        final Map<String, Long> attemptClockEras;
+        final Map<String, ? extends Map<String, ?>> payloadOrders;
+        final Map<String, String> emptyCacheOrders;
+        WidgetSelection(Map<String, Map<String, String>> versions, Map<String, Long> attemptClockEras,
+                Map<String, ? extends Map<String, ?>> payloadOrders, Map<String, String> emptyCacheOrders) {
+            this.versions = versions; this.attemptClockEras = attemptClockEras;
+            this.payloadOrders = payloadOrders; this.emptyCacheOrders = emptyCacheOrders;
+        }
+    }
+    /** An issued launcher ticket and what it was issued against; a null load is unordered. */
+    private static final class WidgetTicket {
+        final String owner;
+        final long ticket;
+        final Long load, generation, settingsRevision;
+        final WidgetSelection selection;
+        WidgetTicket(String owner, long ticket, Long load, Long generation, Long settingsRevision,
+                WidgetSelection selection) {
+            this.owner = owner; this.ticket = ticket; this.load = load; this.generation = generation;
+            this.settingsRevision = settingsRevision; this.selection = selection;
+        }
+    }
+    /** The accepted load and settings revision a watch ticket was issued against. */
+    private static final class WatchAuthority {
+        // A newer accepted load that finds the published summary still valid adopts it.
+        long load;
+        final long settingsRevision;
+        WatchAuthority(long load, long settingsRevision) { this.load = load; this.settingsRevision = settingsRevision; }
+    }
+    /** The authority committed launcher rows need for each widget's first delivery. */
+    private static final class WidgetDelivery {
+        final WidgetTicket authority;
+        long sequence;
+        WidgetDelivery(WidgetTicket authority, long sequence) { this.authority = authority; this.sequence = sequence; }
+    }
     private static final class Lease {
-        final String owner, connection, ticket, action, fetchTicket; String slot;
-        Lease(String owner, String connection, String ticket, String action, String fetchTicket) {
+        final String owner, connection, ticket, action, fetchTicket;
+        final boolean scoped;
+        String slot;
+        Lease(String owner, String connection, String ticket, String action, String fetchTicket, boolean scoped) {
             this.owner = owner; this.connection = connection; this.ticket = ticket; this.action = action; this.fetchTicket = fetchTicket;
+            this.scoped = scoped;
         }
     }
     private static final class Pending {
-        final String owner, connection, action, fetchTicket; final Map<String, String> expected;
+        final String owner, connection, action, fetchTicket, settlementLease; final Map<String, String> expected;
+        final Long readGeneration;
         final Consumer<Map<String, Object>> success; final Consumer<Exception> failure;
         Pending(String owner, String connection, String action, Map<String, String> expected, String fetchTicket,
-                Consumer<Map<String, Object>> success, Consumer<Exception> failure) {
+                Long readGeneration, String settlementLease, Consumer<Map<String, Object>> success, Consumer<Exception> failure) {
             this.owner = owner; this.connection = connection; this.action = action; this.expected = expected; this.fetchTicket = fetchTicket;
+            this.readGeneration = readGeneration; this.settlementLease = settlementLease;
             this.success = success; this.failure = failure;
         }
     }

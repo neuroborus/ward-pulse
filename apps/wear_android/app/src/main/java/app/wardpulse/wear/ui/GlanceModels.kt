@@ -44,8 +44,9 @@ fun glanceRefreshChrome(
             summary.providers.any { it.status == PulseStatus.RATE_LIMITED }
 
     // Precedence is load-bearing (`WEAR_GLANCE_DESIGN.md`): a rate limit already reads as a
-    // gray, disabled control, while stale and mock data have no channel but this line.
+    // gray, disabled control, while stale, demo and mock data have no channel but this line.
     val detail = when {
+        summary.dataMode == WatchDataMode.DEMO -> "Demo data"
         summary.dataMode == WatchDataMode.MOCK -> "Mock data"
         summary.isStale -> "Stale"
         rateLimited -> "Rate limited"

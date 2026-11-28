@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../sync/automatic_poll.dart';
+import '../sync/data_mode.dart';
 
 /// Android owns atomic lifecycle/cache transactions across Flutter engines.
 abstract interface class ConnectionCachePlatform {
@@ -266,16 +267,28 @@ final class ConnectionCredentialStorage
   _ConnectionFetchLease? get _fetchLease =>
       Zone.current[_fetchZoneKey] as _ConnectionFetchLease?;
   String? get _fetchTicket => _fetchLease?.ticket;
-  Future<bool> isFetchCurrent() async =>
-      _fetchTicket == null ||
+  Future<bool> isFetchCurrent() async {
+    final ticket = _fetchTicket;
+    return ticket == null || await _validFetch(ticket);
+  }
+
+  Future<bool> _validFetch(String ticket, {bool forAdmission = false}) async =>
       await platform.invoke('validFetch', {
-            'connection': connection,
-            'fetchTicket': _fetchTicket,
-          }) ==
-          true;
+        'connection': connection,
+        'fetchTicket': ticket,
+        if (forAdmission) 'forAdmission': true,
+      }) ==
+      true;
+
   @override
   Future<void> admitAutomatic(CredentialVersion expected) async {
-    final context = AutomaticPollContext.current;
+    // Cache-only work is always denied natively, even outside a poll, so it
+    // reads the cache instead of reaching a transport.
+    final context =
+        AutomaticPollContext.current ??
+        ((DataModeOperation.current?.cacheOnly ?? false)
+            ? AutomaticPollContext(origin: AutomaticPollOrigin.resetWake)
+            : null);
     if (context != null) await _claimAutomatic(context, expected);
     final ticket = _fetchTicket;
     final observation = ConnectionFetchObservation._forConnection(connection);
@@ -312,6 +325,9 @@ final class ConnectionCredentialStorage
               'fetchTicket': _fetchTicket,
               'expected': expected.values,
               'intervalMillis': interval.inMilliseconds,
+              // Cache-only work reads cadence without admitting a poll.
+              if (DataModeOperation.current?.cacheOnly ?? false)
+                'cacheOnly': true,
             }))!
             as Map,
       );
@@ -325,6 +341,9 @@ final class ConnectionCredentialStorage
         at.toInt(),
         isUtc: true,
       );
+    }
+    if (result['sample'] case final num sample) {
+      context.samples[connection] = sample.toInt();
     }
     if (result['admitted'] != true) {
       final skipped = AutomaticPollSkipped(
@@ -345,10 +364,13 @@ final class ConnectionCredentialStorage
 
   @override
   Future<R> serializeFetch<R>(Future<R> Function() operation) async {
+    final dataMode = DataModeOperation.current;
     final String ticket;
     try {
       final lease = await platform.invoke('acquireFetch', {
         'connection': connection,
+        // Binds the network reservation to the operation's data mode.
+        ...?dataMode?.fetchArguments,
       });
       ticket = (lease as Map)['fetchTicket'] as String;
     } catch (_, stackTrace) {
@@ -357,8 +379,22 @@ final class ConnectionCredentialStorage
     final lease = _ConnectionFetchLease(ticket);
     final observation = ConnectionFetchObservation._forConnection(connection);
     int? reportAt;
+    late R value;
+    var releasedCurrent = false;
     try {
-      late R value;
+      if (dataMode != null) {
+        // Native may have granted this ticket before delivering its reply.
+        final bool admitted;
+        try {
+          admitted = await _validFetch(ticket, forAdmission: true);
+        } catch (_, stackTrace) {
+          Error.throwWithStackTrace(
+            ConnectionFetchRetired(connection),
+            stackTrace,
+          );
+        }
+        if (!admitted) throw ConnectionFetchRetired(connection);
+      }
       Object? failure;
       StackTrace? failureStack;
       try {
@@ -373,12 +409,7 @@ final class ConnectionCredentialStorage
       var current = false;
       StackTrace? validationStack;
       try {
-        current =
-            await platform.invoke('validFetch', {
-              'connection': connection,
-              'fetchTicket': ticket,
-            }) ==
-            true;
+        current = await _validFetch(ticket);
       } catch (_, stackTrace) {
         validationStack = stackTrace;
       }
@@ -397,19 +428,27 @@ final class ConnectionCredentialStorage
         );
       }
       if (!current) throw ConnectionFetchRetired(connection);
-      return value;
     } finally {
       final generatedAt = reportAt ?? observation?._reportedAt;
       try {
-        await platform.invoke('releaseFetch', {
-          'connection': connection,
-          'fetchTicket': ticket,
-          if (generatedAt != null) 'reportAtMillis': generatedAt,
-        });
+        releasedCurrent =
+            await platform.invoke('releaseFetch', {
+              'connection': connection,
+              'fetchTicket': ticket,
+              if (generatedAt != null) 'reportAtMillis': generatedAt,
+            }) ==
+            true;
       } catch (_) {
         /* Detached engines cannot publish or retain a network reservation. */
       }
+      if (dataMode != null && !releasedCurrent) {
+        lease.failedRead?._failedReadLeaseRetired = true;
+      }
     }
+    if (dataMode != null && !releasedCurrent) {
+      throw ConnectionFetchRetired(connection);
+    }
+    return value;
   }
 
   String _identity(String value) =>
@@ -418,15 +457,25 @@ final class ConnectionCredentialStorage
     String action, [
     CredentialVersion? expected,
   ]) async {
+    final dataMode = DataModeOperation.current;
+    final readGeneration = action == 'read' ? dataMode?.generation : null;
+    final ticket = _fetchTicket;
+    final settlementLease =
+        dataMode != null && ticket != null && action == 'refresh'
+            ? DataModeOperation.credentialSettlementLease
+            : null;
     final result = await platform.invoke('acquire', {
       'connection': connection,
       'action': action,
-      if (_fetchTicket != null &&
-          (action == 'refresh' ||
+      if (readGeneration != null) 'generation': readGeneration,
+      if (ticket != null &&
+          (readGeneration != null ||
+              action == 'refresh' ||
               action == 'reject' ||
               action == 'rejectDelete' ||
               (action == 'delete' && expected != null)))
-        'fetchTicket': _fetchTicket,
+        'fetchTicket': ticket,
+      if (settlementLease != null) 'settlementLease': settlementLease,
       if (expected != null) 'expected': expected.values,
     });
     return Map<String, Object?>.from(result! as Map);

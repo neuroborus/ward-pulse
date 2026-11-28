@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 
 import '../providers/claude_account_store.dart';
 import '../providers/connection_lifecycle.dart';
+import 'data_mode.dart';
 
 enum ClaudeAccountFailure {
   authentication,
@@ -93,16 +94,21 @@ final class IoClaudeHttpTransport implements ClaudeHttpTransport {
     final deadline = timeout ?? _defaultTimeout;
     var configuringRequest = false;
     try {
+      DataModeOperation.admitTransport();
       final request = await _client.openUrl(method, uri).timeout(deadline);
       configuringRequest = true;
       headers.forEach(request.headers.set);
-      if (body != null) {
-        final bytes = utf8.encode(body);
-        request.contentLength = bytes.length;
-        request.add(bytes);
-      }
-      configuringRequest = false;
-      final response = await request.close().timeout(deadline);
+      final payload = body == null ? null : utf8.encode(body);
+      if (payload != null) request.contentLength = payload.length;
+      // Ownership is rechecked after setup; a retired operation never sends.
+      final response = await DataModeOperation.sendRequest(
+        request,
+        write: () {
+          if (payload != null) request.add(payload);
+          configuringRequest = false;
+        },
+        timeout: deadline,
+      );
       final bytes = <int>[];
       await for (final chunk in response.timeout(deadline)) {
         if (bytes.length + chunk.length > _maximumResponseBytes) {
@@ -287,9 +293,19 @@ final class ClaudeAccountClient {
     required ClaudeSessionChanged onSessionChanged,
   }) async {
     var current = session;
+    // A sent refresh settles and persists its rotation before a mode switch.
+    Future<ClaudeAccountSession> rotate(ClaudeAccountSession prior) =>
+        DataModeOperation.settle(
+          () => refresh(prior),
+          onSessionChanged,
+          // An explicit account action replaced the session; nothing is lost.
+          superseded:
+              (error) =>
+                  error is ClaudeAccountException &&
+                  error.failure == ClaudeAccountFailure.cancelled,
+        );
     if (_needsRefresh(current)) {
-      current = await refresh(current);
-      await onSessionChanged(current);
+      current = await rotate(current);
     }
 
     try {
@@ -298,8 +314,7 @@ final class ClaudeAccountClient {
       if (error.failure != ClaudeAccountFailure.authentication) {
         rethrow;
       }
-      current = await refresh(current);
-      await onSessionChanged(current);
+      current = await rotate(current);
       try {
         return await _reportFor(current);
       } on ClaudeAccountException catch (retry) {
